@@ -49,8 +49,13 @@ jobs:
       - name: 部署到 Cloudflare
         run: npx wrangler deploy
 
-      # 可选: 仅当 GitHub 里配置了 AUTH_TOKEN 等同名 secret 时, 才同步 Worker 运行时密钥
+      # 可选: 仅当配置了 AUTH_TOKEN secret 时, 才同步 Worker 运行时密钥 (if 中不能引用 secrets, 改在脚本里判断)
       - name: 同步运行时密钥
-        if: ${{ secrets.AUTH_TOKEN != '' }}
+        env:
+          AIOA_AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
         run: |
-          printf '%s' "${{ secrets.AUTH_TOKEN }}" | npx wrangler secret put AUTH_TOKEN
+          if [ -z "$AIOA_AUTH_TOKEN" ]; then
+            echo "未配置 AUTH_TOKEN secret, 跳过运行时密钥同步"
+            exit 0
+          fi
+          printf '%s' "$AIOA_AUTH_TOKEN" | npx wrangler secret put AUTH_TOKEN
