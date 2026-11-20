@@ -61,6 +61,12 @@ class ProxyCore(private val context: Context) {
         |secret: ${quote(secret)}
         |profile:
         |  store-selected: true
+        |dns:
+        |  enable: true
+        |  ipv6: true
+        |  default-nameserver: $DNS_SERVERS
+        |  nameserver: $DNS_SERVERS
+        |  proxy-server-nameserver: $DNS_SERVERS
         |proxy-providers:
         |  ${ProxyController.PROVIDER}:
         |    type: http
@@ -87,6 +93,8 @@ class ProxyCore(private val context: Context) {
         private const val SECRET_BYTES = 16
         private const val READY_POLL_MS = 100L
         private const val SUBSCRIPTION_REFRESH_SEC = 86_400
+        // 安卓没有 /etc/resolv.conf, Go 程序默认去问 [::1]:53 必然失败, 订阅域名解析不了, 必须显式给 DNS
+        private const val DNS_SERVERS = "[223.5.5.5, 119.29.29.29]"
 
         // 内核日志里最近的报错/警告, 订阅下载或解析失败时给界面看
         fun recentErrors(context: Context, max: Int): List<String> {

@@ -1,5 +1,7 @@
 # HX-AIOA
 
+<p align="center"><img src="docs/assets/hero.webp" width="320" alt="HX-AIOA"></p>
+
 个人 All In One App: 随处打开, 实时双工消息, 可组合的微页面。当前阶段只验证消息推送链路。
 
 ## 架构

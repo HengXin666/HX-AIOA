@@ -23,6 +23,9 @@
     <string name="section_proxy">订阅代理</string>
     <string name="section_update">更新</string>
     <string name="section_system">系统权限</string>
+    <string name="section_about">关于</string>
+    <string name="about_desc">最终之作坐镇御坂网络: 消息, 邮件, 运维告警, AI 与远程电脑, 统统汇进一个入口。</string>
+    <string name="about_repo">github.com/HengXin666/HX-AIOA</string>
     <string name="config_subscription">订阅链接 (留空则直连)</string>
     <string name="proxy_link">消息长连接也走代理</string>
     <string name="action_optimize">立即优选节点</string>

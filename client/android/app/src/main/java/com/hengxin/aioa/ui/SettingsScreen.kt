@@ -1,15 +1,18 @@
 package com.hengxin.aioa.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -22,6 +25,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -69,7 +74,22 @@ fun SettingsScreen(model: SettingsModel, actions: SystemActions, onSaved: () -> 
         OutlinedButton(onClick = actions.notificationSettings) { Text(stringResource(R.string.action_notify_settings)) }
         OutlinedButton(onClick = actions.battery) { Text(stringResource(R.string.action_battery)) }
         OutlinedButton(onClick = actions.appSettings) { Text(stringResource(R.string.action_app_settings)) }
+
+        Section(stringResource(R.string.section_about))
+        About(model.version)
     }
+}
+
+@Composable
+private fun About(version: String) {
+    Image(
+        painterResource(R.drawable.about_art),
+        contentDescription = stringResource(R.string.app_name),
+        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)),
+    )
+    Text("${stringResource(R.string.app_name)} $version", style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.about_desc), style = MaterialTheme.typography.bodyMedium)
+    Text(stringResource(R.string.about_repo), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 }
 
 @Composable

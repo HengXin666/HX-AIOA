@@ -66,7 +66,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         }
         ConfigStore.save(app, config)
         LinkService.start(app, Constants.ACTION_RELOAD)
-        proxyMessage = if (config.proxyEnabled) "已保存, 正在启动代理内核并下载订阅..." else "已保存, 当前为直连"
+        proxyMessage = if (config.proxyEnabled) "已保存, 正在启动代理内核..." else "已保存, 当前为直连"
         pollProxy()
         return true
     }
@@ -119,14 +119,20 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // 内核在 :link 进程里重启需要几秒, 这里轮询直到有结果
+    // 内核在 :link 进程里重启并拉取订阅, 这里逐秒显示进度, 结束时给出明确结论
     private fun pollProxy() {
         viewModelScope.launch {
-            repeat(POLL_TIMES) {
+            for (step in 1..POLL_TIMES) {
                 delay(POLL_STEP_MS)
                 proxy = withContext(Dispatchers.IO) { loadProxy() }
-                if (proxy.nodes.isNotEmpty()) return@launch
+                if (proxy.nodes.isNotEmpty()) {
+                    proxyMessage = "订阅解析出 ${proxy.nodes.size} 个节点, 当前 ${proxy.current ?: "未选择"}"
+                    return@launch
+                }
+                val stage = if (proxy.running) "内核已启动, 正在拉取订阅" else "正在启动代理内核"
+                proxyMessage = "$stage... ${step * POLL_STEP_MS / MS_PER_SEC}s"
             }
+            proxyMessage = if (proxy.running) "订阅拉取超时或失败, 原因见上方报错" else "代理内核没有启动成功, 原因见上方报错"
         }
     }
 
@@ -142,8 +148,9 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
-        const val POLL_TIMES = 10
-        const val POLL_STEP_MS = 1500L
+        const val POLL_TIMES = 40
+        const val POLL_STEP_MS = 1000L
+        const val MS_PER_SEC = 1000L
         const val MAX_ERRORS = 3
     }
 }
