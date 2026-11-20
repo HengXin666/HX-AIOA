@@ -38,12 +38,13 @@ function loadDotEnv() {
 }
 
 function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`);
+  const i = Math.max(process.argv.indexOf(`--${name}`), process.argv.indexOf(`-${name}`));
   return i > 0 ? process.argv[i + 1] : fallback;
 }
 
+// 同时认 -x 与 --x 两种写法
 function hasFlag(name) {
-  return process.argv.includes(`--${name}`);
+  return process.argv.includes(`--${name}`) || process.argv.includes(`-${name}`);
 }
 
 loadDotEnv();
