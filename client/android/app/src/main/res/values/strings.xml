@@ -39,4 +39,5 @@
     <string name="node_more">还有 %1$d 个节点未显示</string>
     <string name="battery_already">已在电池优化白名单。已打开省电策略页, 请选 \"无限制\"</string>
     <string name="battery_open_failed">无法打开设置页, 请在系统设置里搜索 \"省电策略\"</string>
+    <string name="update_need_permission">新版本已下载, 点此允许安装未知应用, 允许后返回 HX-AIOA 自动继续</string>
 </resources>

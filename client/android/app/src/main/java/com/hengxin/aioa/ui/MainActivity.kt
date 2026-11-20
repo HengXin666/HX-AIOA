@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.update.Updater
 import com.hengxin.aioa.link.LinkService
 
 class MainActivity : ComponentActivity() {
@@ -72,6 +73,16 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         chat.resume()
+        resumePendingUpdate()
+    }
+
+    // 从 "安装未知应用" 授权页回来后, 用已下载的安装包继续安装
+    private fun resumePendingUpdate() {
+        if (!packageManager.canRequestPackageInstalls()) return
+        val context = applicationContext
+        Thread {
+            if (Updater.hasPending(context)) runCatching { Updater(context).update { } }
+        }.start()
     }
 
     override fun onStop() {

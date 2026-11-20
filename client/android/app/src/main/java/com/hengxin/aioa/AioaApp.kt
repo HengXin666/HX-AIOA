@@ -8,11 +8,13 @@ import android.app.NotificationManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.provider.Settings
+import com.hengxin.aioa.update.Updater
 
 class AioaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Thread { runCatching { Updater.cleanup(this) } }.start()
         createChannels()
     }
 

@@ -23,7 +23,7 @@ class InstallReceiver : BroadcastReceiver() {
                 runCatching { context.startActivity(confirm) }
                 notify(context, context.getString(R.string.update_confirm), confirm)
             }
-            PackageInstaller.STATUS_SUCCESS -> Unit
+            PackageInstaller.STATUS_SUCCESS -> Updater.cleanup(context)
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
                 notify(context, context.getString(R.string.update_failed, message), null)

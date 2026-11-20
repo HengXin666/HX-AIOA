@@ -57,6 +57,11 @@ class Updater(private val context: Context) {
                     return false
                 }
                 val apk = prepare(manifest, progress)
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    progress.on("已下载 ${manifest.versionName}, 需要允许本应用安装未知应用, 允许后返回会自动继续")
+                    InstallPermission.request(context)
+                    return false
+                }
                 progress.on("正在安装 ${manifest.versionName}")
                 install(apk)
                 return true
@@ -65,7 +70,11 @@ class Updater(private val context: Context) {
     }
 
     private fun prepare(manifest: UpdateManifest, progress: Progress): File {
-        val target = File(dir(), APK_FILE)
+        val target = File(dir(), "$APK_PREFIX${manifest.versionCode}$APK_SUFFIX")
+        if (target.exists() && sha256(target).equals(manifest.apk.sha256, ignoreCase = true)) {
+            progress.on("复用已下载的安装包")
+            return target
+        }
         val base = File(context.applicationInfo.sourceDir)
         val patch = manifest.patches.firstOrNull { it.fromSha256 == sha256(base) }
         if (patch != null) {
@@ -92,7 +101,7 @@ class Updater(private val context: Context) {
         }
         val sessionId = installer.createSession(params)
         installer.openSession(sessionId).use { session ->
-            session.openWrite(APK_FILE, 0, apk.length()).use { out ->
+            session.openWrite(SESSION_NAME, 0, apk.length()).use { out ->
                 apk.inputStream().use { it.copyTo(out) }
                 session.fsync(out)
             }
@@ -104,7 +113,6 @@ class Updater(private val context: Context) {
             )
             session.commit(callback.intentSender)
         }
-        apk.delete()
     }
 
     private fun fetchTo(file: UpdateFile, target: File): File {
@@ -135,9 +143,30 @@ class Updater(private val context: Context) {
 
     companion object {
         private const val LOCK_FILE = "lock"
-        private const val APK_FILE = "update.apk"
+        private const val SESSION_NAME = "base.apk"
+        private const val APK_PREFIX = "update-"
+        private const val APK_SUFFIX = ".apk"
         private const val PATCH_FILE = "update.patch"
         private const val KB = 1024
+
+        // 已下载但还没装上的版本, 回到前台时据此自动继续安装
+        fun hasPending(context: Context): Boolean {
+            val current = Updater(context).currentVersion()
+            return cached(context).any { it.second > current }
+        }
+
+        // 升级完成后删掉安装包和补丁: 启动时版本号已不小于缓存的就清掉
+        fun cleanup(context: Context) {
+            val current = Updater(context).currentVersion()
+            cached(context).filter { it.second <= current }.forEach { it.first.delete() }
+            File(File(context.cacheDir, Constants.UPDATE_DIR), PATCH_FILE).delete()
+        }
+
+        private fun cached(context: Context): List<Pair<File, Long>> =
+            File(context.cacheDir, Constants.UPDATE_DIR).listFiles().orEmpty().mapNotNull { file ->
+                val code = file.name.removePrefix(APK_PREFIX).removeSuffix(APK_SUFFIX).toLongOrNull()
+                if (file.name.startsWith(APK_PREFIX) && code != null) file to code else null
+            }
 
         fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
