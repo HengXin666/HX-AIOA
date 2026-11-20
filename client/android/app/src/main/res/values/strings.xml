@@ -10,5 +10,8 @@
     <string name="action_send">发送</string>
     <string name="action_battery">电池白名单</string>
     <string name="action_app_settings">自启动设置</string>
-    <string name="no_config">未配置服务端地址, 请在 local.properties 中设置 aioa.server 与 aioa.token。</string>
+    <string name="no_config">首次使用, 请填写服务端地址与令牌。</string>
+    <string name="config_server">服务端地址, 例如 https://aioa.example.com</string>
+    <string name="config_token">令牌</string>
+    <string name="action_save">保存并连接</string>
 </resources>

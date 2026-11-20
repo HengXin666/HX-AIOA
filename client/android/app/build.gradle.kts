@@ -1,17 +1,14 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
-val localProps = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
-}
-
-fun localString(key: String): String = "\"${localProps.getProperty(key, "")}\""
+// 签名与版本号只来自环境变量, CI 中由 GitHub Secrets 注入; 本地没有时退回 debug 签名
+val keystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+val keystorePassword: String? = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias: String = System.getenv("ANDROID_KEY_ALIAS") ?: "aioa"
+val ciBuildNumber: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.hengxin.aioa"
@@ -21,10 +18,20 @@ android {
         applicationId = "com.hengxin.aioa"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-        buildConfigField("String", "AIOA_SERVER", localString("aioa.server"))
-        buildConfigField("String", "AIOA_TOKEN", localString("aioa.token"))
+        versionCode = ciBuildNumber
+        versionName = "0.1.$ciBuildNumber"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storeType = "pkcs12"
+                storePassword = keystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = keystorePassword
+            }
+        }
     }
 
     buildTypes {
@@ -32,13 +39,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (keystorePath != null) "release" else "debug")
         }
     }
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     compileOptions {

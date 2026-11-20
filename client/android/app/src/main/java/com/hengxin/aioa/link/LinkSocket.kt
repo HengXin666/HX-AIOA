@@ -5,8 +5,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Handler
 import android.os.Looper
-import com.hengxin.aioa.BuildConfig
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 // 单条长连接: 协议层 ping 保活 (服务端不计费也不唤醒), 网络切换立即重连, 失败指数退避
 class LinkSocket(
-    context: Context,
+    private val context: Context,
     private val device: String,
     private val since: () -> Long,
     private val listener: Listener,
@@ -47,11 +47,9 @@ class LinkSocket(
         }
     }
 
-    val configured: Boolean get() = BuildConfig.AIOA_SERVER.isNotEmpty()
-
     // 注册网络回调时系统会立刻回调一次 onAvailable, 由它发起首次连接
     fun start() {
-        if (running || !configured) return
+        if (running) return
         running = true
         connectivity.registerDefaultNetworkCallback(networkCallback)
     }
@@ -77,9 +75,11 @@ class LinkSocket(
     private fun connect() {
         if (!running) return
         socket?.cancel()
-        val url = BuildConfig.AIOA_SERVER.toHttpUrl().newBuilder()
+        val config = ConfigStore.load(context) ?: return
+        val base = runCatching { config.server.toHttpUrl() }.getOrNull() ?: return
+        val url = base.newBuilder()
             .addPathSegment(Constants.WS_PATH)
-            .addQueryParameter(Constants.QUERY_TOKEN, BuildConfig.AIOA_TOKEN)
+            .addQueryParameter(Constants.QUERY_TOKEN, config.token)
             .addQueryParameter(Constants.QUERY_DEVICE, device)
             .addQueryParameter(Constants.QUERY_SINCE, since().toString())
             .build()

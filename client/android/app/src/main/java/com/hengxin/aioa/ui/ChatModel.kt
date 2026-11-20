@@ -8,6 +8,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.AppConfig
+import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.link.LinkService
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
@@ -24,9 +27,23 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private var lastSeq = 0L
     private val socket = LinkSocket(app, device, { lastSeq }, this)
 
-    val configured: Boolean get() = socket.configured
+    var configured by mutableStateOf(ConfigStore.load(app) != null)
+        private set
 
-    fun resume() = socket.start()
+    fun resume() {
+        if (configured) socket.start()
+    }
+
+    fun saveConfig(server: String, token: String): Boolean {
+        val config = AppConfig(server.trim(), token.trim())
+        if (!config.valid) return false
+        val app = getApplication<Application>()
+        ConfigStore.save(app, config)
+        configured = true
+        LinkService.start(app)
+        socket.start()
+        return true
+    }
 
     fun pause() {
         socket.stop()

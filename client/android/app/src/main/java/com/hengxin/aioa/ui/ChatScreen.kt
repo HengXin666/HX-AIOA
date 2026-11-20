@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.R
@@ -46,7 +47,7 @@ fun ChatScreen(
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
         Header(model.online, onBattery, onAppSettings)
         if (!model.configured) {
-            Text(stringResource(R.string.no_config), Modifier.padding(PAD))
+            ConfigForm(model::saveConfig)
             return@Column
         }
         MessageList(model.messages, model.device, Modifier.weight(1f))
@@ -107,5 +108,30 @@ private fun Composer(onSend: (String) -> Boolean) {
         Button(onClick = { if (onSend(text)) text = "" }, Modifier.padding(start = 8.dp)) {
             Text(stringResource(R.string.action_send))
         }
+    }
+}
+
+@Composable
+private fun ConfigForm(onSave: (String, String) -> Boolean) {
+    var server by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().padding(PAD), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.no_config))
+        OutlinedTextField(
+            value = server,
+            onValueChange = { server = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.config_server)) },
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = token,
+            onValueChange = { token = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.config_token)) },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+        )
+        Button(onClick = { onSave(server, token) }) { Text(stringResource(R.string.action_save)) }
     }
 }

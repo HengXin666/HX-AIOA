@@ -49,7 +49,9 @@ npm run typecheck          # protocol + server + web
 npm run build -w client/web
 ```
 
-安卓端: 用 Android Studio 打开 `client/android/` 构建。
+安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml` 与 `docs/android-signing.md`。
+
+- 密钥, 令牌, 服务端地址不得写进 APK 或仓库, 仓库是公开的。
 
 ## 6. 性能约束 (修改推送链路时必读)
 
