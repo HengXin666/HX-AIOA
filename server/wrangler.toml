@@ -12,9 +12,9 @@ tag = "v1"
 new_sqlite_classes = ["Hub"]
 
 # 绑定自己的域名, workers.dev 在中国大陆多数无法直连
-# [[routes]]
-# pattern = "aioa.example.com"
-# custom_domain = true
+[[routes]]
+pattern = "aioa.woa.qzz.io"
+custom_domain = true
 
 # 以下用 wrangler secret put 设置, 不写进仓库:
 # AUTH_TOKEN            必填, 客户端令牌
