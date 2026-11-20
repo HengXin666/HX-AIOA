@@ -1,0 +1,73 @@
+export const PROTOCOL_VERSION = 1;
+
+export const PING_TEXT = "ping";
+export const PONG_TEXT = "pong";
+
+export const WS_PATH = "/ws";
+export const API_SEND_PATH = "/api/send";
+export const API_MESSAGES_PATH = "/api/messages";
+export const HEALTH_PATH = "/health";
+
+export const QUERY_TOKEN = "token";
+export const QUERY_DEVICE = "device";
+export const QUERY_SINCE = "since";
+export const QUERY_LIMIT = "limit";
+
+export const ANDROID_DEVICE_PREFIX = "android";
+
+export type TextBody = { kind: "text"; text: string };
+export type Body = TextBody;
+
+export type SendFrame = { t: "send"; cid: string; body: Body };
+export type AckFrame = { t: "ack"; seq: number };
+export type RegFrame = { t: "reg"; pushToken: string };
+export type ClientFrame = SendFrame | AckFrame | RegFrame;
+
+export type WelcomeFrame = { t: "welcome"; head: number };
+export type MsgFrame = {
+  t: "msg";
+  seq: number;
+  ts: number;
+  src: string;
+  body: Body;
+  cid?: string;
+};
+export type SentFrame = { t: "sent"; cid: string; seq: number; ts: number };
+export type ErrFrame = { t: "err"; code: string; text: string };
+export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame;
+
+export type SendRequest = { src?: string; body: Body };
+export type SendResult = { seq: number; ts: number };
+
+export function isBody(value: unknown): value is Body {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return v.kind === "text" && typeof v.text === "string";
+}
+
+export function parseClientFrame(raw: string): ClientFrame | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof data !== "object" || data === null) return null;
+  const f = data as Record<string, unknown>;
+  switch (f.t) {
+    case "send":
+      return typeof f.cid === "string" && isBody(f.body)
+        ? { t: "send", cid: f.cid, body: f.body }
+        : null;
+    case "ack":
+      return typeof f.seq === "number" ? { t: "ack", seq: f.seq } : null;
+    case "reg":
+      return typeof f.pushToken === "string" ? { t: "reg", pushToken: f.pushToken } : null;
+    default:
+      return null;
+  }
+}
+
+export function previewOf(body: Body): string {
+  return body.text;
+}

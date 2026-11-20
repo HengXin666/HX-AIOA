@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HX-AIOA</string>
+    <string name="channel_link">后台连接</string>
+    <string name="channel_message">新消息</string>
+    <string name="link_running">消息通道运行中</string>
+    <string name="status_online">在线</string>
+    <string name="status_offline">重连中</string>
+    <string name="input_hint">说点什么...</string>
+    <string name="action_send">发送</string>
+    <string name="action_battery">电池白名单</string>
+    <string name="action_app_settings">自启动设置</string>
+    <string name="no_config">未配置服务端地址, 请在 local.properties 中设置 aioa.server 与 aioa.token。</string>
+</resources>

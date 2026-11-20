@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "搭建服务端, Web 端, 安卓端骨架, 实测推送延迟与后台功耗",
+  "goal": "搭建服务端, Web 端, 安卓端骨架, 实测推送延迟与后台功耗",
+  "successEvidence": [
+    "真机实测: 送达延迟 p95 不超过 3 秒; 锁屏 8 小时耗电接近零; :link 进程内存占用极小"
+  ],
+  "stopCondition": "真机数据达标则进入 Agent 层; 不达标则评估接入 MiPush 为主通道",
+  "nonGoals": [
+    "Agent 层, 微页面组件, 多用户"
+  ],
+  "scope": "protocol, server, client/web, client/android, tools",
+  "changeKinds": [
+    "new-feature"
+  ],
+  "riskHints": [
+    "国产 ROM 后台限制, 大陆访问 Cloudflare 的延迟"
+  ]
+}

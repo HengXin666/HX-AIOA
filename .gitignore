@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env.local
+*.log
+
+# 安卓
+client/android/.gradle/
+client/android/build/
+client/android/app/build/
+client/android/local.properties
+client/android/.idea/
+*.iml

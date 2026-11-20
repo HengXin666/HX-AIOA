@@ -1,0 +1,24 @@
+name = "hx-aioa"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# 免费计划只能使用 SQLite 存储的 Durable Object
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]
+
+# 绑定自己的域名, workers.dev 在中国大陆多数无法直连
+# [[routes]]
+# pattern = "aioa.example.com"
+# custom_domain = true
+
+# 以下用 wrangler secret put 设置, 不写进仓库:
+# AUTH_TOKEN            必填, 客户端令牌
+# MIPUSH_APP_SECRET     可选, 小米推送 AppSecret
+# MIPUSH_PACKAGE        可选, 安卓包名
+# WXPUSHER_APP_TOKEN    可选, WxPusher 应用 token
+# WXPUSHER_UID          可选, WxPusher 用户 UID

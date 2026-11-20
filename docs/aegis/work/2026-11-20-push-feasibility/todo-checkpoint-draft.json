@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-20-push-feasibility",
+  "currentTodo": "用户部署到 Cloudflare 并在红米真机实测",
+  "completedTodos": [],
+  "activeSlice": "initial",
+  "evidenceRefs": [],
+  "blockedOn": null,
+  "nextStep": "部署后运行 tools/bench.mjs, 再做锁屏耗电实验",
+  "updatedAt": "2026-11-20"
+}

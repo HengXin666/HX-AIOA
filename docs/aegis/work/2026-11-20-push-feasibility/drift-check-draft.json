@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-20-push-feasibility",
+  "taskIntentRef": "docs/aegis/work/2026-11-20-push-feasibility/task-intent-draft.json",
+  "baselineRefs": [],
+  "scopeStatus": "not-yet-verified",
+  "compatStatus": "not-yet-verified",
+  "retirementStatus": "not-yet-verified",
+  "newRiskSignals": [
+    "国产 ROM 后台限制, 大陆访问 Cloudflare 的延迟"
+  ],
+  "decision": "needs-verification"
+}

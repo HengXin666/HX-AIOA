@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [
+    "server/src/hub.ts 为消息唯一真源"
+  ],
+  "invariants": [
+    "消息 seq 单调递增, 客户端按 since 补拉不丢消息"
+  ],
+  "compatBoundary": "Compatibility boundary not yet refined.",
+  "nonGoals": [
+    "Agent 层, 微页面组件, 多用户"
+  ]
+}
