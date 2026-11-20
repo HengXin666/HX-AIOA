@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "client/android/**"
+      - "tools/release.py"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -16,14 +17,15 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APK_NAME: HX-AIOA-${{ github.run_number }}.apk
+  VERSION: ${{ github.run_number }}
+  TAG: android-${{ github.run_number }}
+  MIHOMO_VERSION: v1.19.34
+  # 为最近几个版本生成增量补丁, 更旧的版本走完整包
+  PATCH_FROM_COUNT: 3
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: client/android
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +37,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 下载代理内核
+        run: |
+          dir=client/android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p "$dir"
+          curl -fsSL "https://github.com/MetaCubeX/mihomo/releases/download/$MIHOMO_VERSION/mihomo-android-arm64-v8-$MIHOMO_VERSION.gz" \
+            | gunzip > "$dir/libmihomo.so"
+          chmod +x "$dir/libmihomo.so"
 
       - name: 还原签名密钥
         env:
@@ -48,24 +62,47 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
 
       - name: 编译 Release
+        working-directory: client/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: 整理产物
-        run: cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$APK_NAME"
+      - name: 下载旧版本用于增量补丁
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/old" "$RUNNER_TEMP/out"
+          cp client/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/HX-AIOA-$VERSION.apk"
+          : > "$RUNNER_TEMP/old.args"
+          for tag in $(gh release list --limit 20 --json tagName --jq '.[].tagName' | grep '^android-' | head -n "$PATCH_FROM_COUNT"); do
+            v="${tag#android-}"
+            if gh release download "$tag" --pattern "HX-AIOA-$v.apk" --dir "$RUNNER_TEMP/old"; then
+              echo "--old $v=$RUNNER_TEMP/old/HX-AIOA-$v.apk" >> "$RUNNER_TEMP/old.args"
+            fi
+          done
+
+      - name: 生成补丁与 update.json
+        run: |
+          pip install --quiet bsdiff4
+          python tools/release.py \
+            --apk "$RUNNER_TEMP/out/HX-AIOA-$VERSION.apk" \
+            --version "$VERSION" \
+            --base-url "https://github.com/${{ github.repository }}/releases/download/$TAG" \
+            --out "$RUNNER_TEMP/out" \
+            --notes "$(git log -1 --pretty=%s)" \
+            $(cat "$RUNNER_TEMP/old.args")
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APK_NAME }}
-          path: ${{ runner.temp }}/${{ env.APK_NAME }}
+          name: HX-AIOA-${{ github.run_number }}
+          path: ${{ runner.temp }}/out/
 
       - name: 发布到 Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "android-${{ github.run_number }}" "$RUNNER_TEMP/$APK_NAME" \
+          gh release create "$TAG" "$RUNNER_TEMP"/out/* \
             --target "${{ github.sha }}" \
-            --title "安卓 #${{ github.run_number }}" \
-            --notes "提交 ${{ github.sha }}" \
+            --title "安卓 #$VERSION" \
+            --notes "$(git log -1 --pretty=%s)" \
             --latest

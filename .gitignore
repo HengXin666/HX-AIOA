@@ -12,3 +12,4 @@ client/android/app/build/
 client/android/local.properties
 client/android/.idea/
 *.iml
+client/android/app/src/main/jniLibs/

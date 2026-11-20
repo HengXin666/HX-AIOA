@@ -1,0 +1,75 @@
+package com.hengxin.aioa.net
+
+import android.content.Context
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.SystemClock
+import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.ConfigStore
+
+// 节点优选: 启动时, 每小时, 网络切换和连接断开时测一次全部节点延迟, 选最快的
+// 选中结果由 mihomo 的 store-selected 落盘, 重启后直接沿用, 不必等测速
+// onChanged 只在代理可用性变化时回调 (启动, 重载), 让长连接改走新路径
+class NodePicker(private val context: Context, private val onChanged: () -> Unit) {
+
+    private val thread = HandlerThread(THREAD_NAME).apply { start() }
+    private val handler = Handler(thread.looper)
+    private val core = ProxyCore(context)
+    private var lastRun = 0L
+    private val periodic = Runnable { optimizeNow(); schedule() }
+
+    fun start() = handler.post {
+        val config = ConfigStore.load(context)
+        if (config != null && core.start(config)) {
+            optimizeNow()
+            onChanged()
+        }
+        schedule()
+    }
+
+    fun reload() = handler.post {
+        handler.removeCallbacks(periodic)
+        core.stop()
+        val config = ConfigStore.load(context)
+        if (config != null && core.start(config)) optimizeNow()
+        onChanged()
+        schedule()
+    }
+
+    // 连接失败等场景调用, 有防抖, 不会频繁测速
+    fun optimizeSoon() = handler.post {
+        if (SystemClock.elapsedRealtime() - lastRun >= Constants.PROXY_OPTIMIZE_DEBOUNCE_MS) optimizeNow()
+    }
+
+    fun stop() {
+        handler.removeCallbacksAndMessages(null)
+        handler.post { core.stop() }
+        thread.quitSafely()
+    }
+
+    private fun schedule() {
+        handler.removeCallbacks(periodic)
+        handler.postDelayed(periodic, Constants.PROXY_OPTIMIZE_INTERVAL_MS)
+    }
+
+    private fun optimizeNow() {
+        if (!ProxyCore.listening()) return
+        lastRun = SystemClock.elapsedRealtime()
+        val controller = ProxyController(context)
+        val delays = controller.groupDelay()
+        val best = delays.minByOrNull { it.value } ?: return
+        val current = controller.current()
+        val currentDelay = current?.let { delays[it] }
+        // 当前节点仍可用且与最快的差距不大就不切, 避免频繁切换打断长连接
+        val switched = (currentDelay == null || currentDelay - best.value > SWITCH_TOLERANCE_MS) &&
+            controller.select(best.key)
+        val node = if (switched || current == null) best.key else current
+        val delay = if (switched || currentDelay == null) best.value else currentDelay
+        ProxyStatusStore.save(context, ProxyStatus(node, delay, System.currentTimeMillis(), delays.size))
+    }
+
+    private companion object {
+        const val THREAD_NAME = "node-picker"
+        const val SWITCH_TOLERANCE_MS = 80
+    }
+}

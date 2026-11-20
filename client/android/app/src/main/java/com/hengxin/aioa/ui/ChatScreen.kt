@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui
 
+import android.text.format.DateFormat
+import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,68 +32,142 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
 import com.hengxin.aioa.proto.ServerFrame
 
-private val BUBBLE_SHAPE = RoundedCornerShape(12.dp)
-private val PAD = 12.dp
+internal val PAD = 12.dp
+private val BUBBLE_MINE = RoundedCornerShape(14.dp, 4.dp, 14.dp, 14.dp)
+private val BUBBLE_OTHER = RoundedCornerShape(4.dp, 14.dp, 14.dp, 14.dp)
+private val ONLINE = Color(0xFF34C759)
+private val OFFLINE = Color(0xFFFF9500)
+
+// 列表项: 时间分隔, 新消息分隔线, 气泡
+private sealed interface Item {
+    data class Time(val ts: Long) : Item
+    data object Divider : Item
+    data class Bubble(val msg: ServerFrame.Msg) : Item
+}
 
 @Composable
-fun ChatScreen(
-    model: ChatModel,
-    onBattery: () -> Unit,
-    onAppSettings: () -> Unit,
-) {
+fun ChatScreen(model: ChatModel, onSettings: () -> Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-        Header(model.online, onBattery, onAppSettings)
-        if (!model.configured) {
-            ConfigForm(model::saveConfig)
-            return@Column
-        }
-        MessageList(model.messages, model.device, Modifier.weight(1f))
+        Header(model.online, onSettings)
+        MessageList(model, Modifier.weight(1f))
         Composer(model::send)
     }
 }
 
 @Composable
-private fun Header(online: Boolean, onBattery: () -> Unit, onAppSettings: () -> Unit) {
+private fun Header(online: Boolean, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = PAD), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
+        Box(Modifier.padding(start = 8.dp).size(8.dp).background(if (online) ONLINE else OFFLINE, CircleShape))
         Text(
             stringResource(if (online) R.string.status_online else R.string.status_offline),
-            Modifier.padding(start = 8.dp).weight(1f),
+            Modifier.padding(start = 4.dp).weight(1f),
             fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.outline,
         )
-        TextButton(onClick = onBattery) { Text(stringResource(R.string.action_battery)) }
-        TextButton(onClick = onAppSettings) { Text(stringResource(R.string.action_app_settings)) }
+        TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
+    }
+}
+
+private fun buildRows(messages: List<ServerFrame.Msg>, dividerSeq: Long, isMine: (ServerFrame.Msg) -> Boolean): List<Item> {
+    val rows = ArrayList<Item>(messages.size * 2)
+    var prevTs = 0L
+    var dividerPlaced = false
+    for (msg in messages) {
+        if (!dividerPlaced && msg.seq > dividerSeq && !isMine(msg)) {
+            rows.add(Item.Divider)
+            dividerPlaced = true
+        }
+        if (msg.ts - prevTs > Constants.TIME_GAP_MS) rows.add(Item.Time(msg.ts))
+        prevTs = msg.ts
+        rows.add(Item.Bubble(msg))
+    }
+    return rows
+}
+
+@Composable
+private fun MessageList(model: ChatModel, modifier: Modifier) {
+    val rows = buildRows(model.messages, model.dividerSeq, model::isMine)
+    val state = rememberLazyListState()
+    var positioned by remember(model.loaded) { mutableStateOf(false) }
+    // 每次打开先停在 "以下是新消息", 之后来新消息滚到底
+    LaunchedEffect(model.loaded, rows.size) {
+        if (rows.isEmpty() || !model.loaded) return@LaunchedEffect
+        val divider = rows.indexOf(Item.Divider)
+        if (!positioned) {
+            state.scrollToItem(if (divider >= 0) divider else rows.size - 1)
+            positioned = true
+        } else {
+            state.animateScrollToItem(rows.size - 1)
+        }
+    }
+    LazyColumn(modifier.fillMaxWidth().padding(horizontal = PAD), state, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(rows.size, key = { i -> rowKey(rows[i]) }) { i ->
+            when (val row = rows[i]) {
+                is Item.Time -> TimeLabel(row.ts)
+                Item.Divider -> NewDivider()
+                is Item.Bubble -> Bubble(row.msg, model.isMine(row.msg))
+            }
+        }
+    }
+}
+
+private fun rowKey(row: Item): String = when (row) {
+    is Item.Time -> "t${row.ts}"
+    Item.Divider -> "divider"
+    is Item.Bubble -> "m${row.msg.seq}"
+}
+
+@Composable
+private fun TimeLabel(ts: Long) {
+    val context = LocalContext.current
+    val text = if (DateUtils.isToday(ts)) {
+        DateFormat.getTimeFormat(context).format(ts)
+    } else {
+        DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME)
+    }
+    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text(text, fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
     }
 }
 
 @Composable
-private fun MessageList(messages: List<ServerFrame.Msg>, me: String, modifier: Modifier) {
-    val state = rememberLazyListState()
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) state.animateScrollToItem(messages.size - 1)
-    }
-    LazyColumn(modifier.fillMaxWidth().padding(horizontal = PAD), state, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(messages, key = { it.seq }) { msg -> Bubble(msg, msg.src == me) }
+private fun NewDivider() {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+        Text(
+            stringResource(R.string.new_messages),
+            Modifier.padding(horizontal = 8.dp),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
     }
 }
 
 @Composable
 private fun Bubble(msg: ServerFrame.Msg, mine: Boolean) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
-        Column(
-            Modifier.widthIn(max = 320.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, BUBBLE_SHAPE)
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+    ) {
+        if (!mine) Text(msg.src, fontSize = 11.sp, color = colors.outline, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+        Box(
+            Modifier.widthIn(max = 300.dp)
+                .background(if (mine) colors.primaryContainer else colors.surfaceVariant, if (mine) BUBBLE_MINE else BUBBLE_OTHER)
                 .padding(horizontal = PAD, vertical = 8.dp),
         ) {
-            Text(msg.text)
-            Text("#${msg.seq} · ${msg.src}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+            Text(msg.text, color = if (mine) colors.onPrimaryContainer else colors.onSurfaceVariant)
         }
     }
 }
@@ -103,35 +181,10 @@ private fun Composer(onSend: (String) -> Boolean) {
             onValueChange = { text = it },
             modifier = Modifier.weight(1f),
             placeholder = { Text(stringResource(R.string.input_hint)) },
-            singleLine = true,
+            maxLines = 4,
         )
-        Button(onClick = { if (onSend(text)) text = "" }, Modifier.padding(start = 8.dp)) {
+        Button(onClick = { if (onSend(text)) text = "" }, Modifier.padding(start = 8.dp), enabled = text.isNotBlank()) {
             Text(stringResource(R.string.action_send))
         }
-    }
-}
-
-@Composable
-private fun ConfigForm(onSave: (String, String) -> Boolean) {
-    var server by remember { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxWidth().padding(PAD), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.no_config))
-        OutlinedTextField(
-            value = server,
-            onValueChange = { server = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.config_server)) },
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = token,
-            onValueChange = { token = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.config_token)) },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-        )
-        Button(onClick = { onSave(server, token) }) { Text(stringResource(R.string.action_save)) }
     }
 }

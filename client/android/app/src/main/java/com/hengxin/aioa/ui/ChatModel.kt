@@ -2,21 +2,26 @@ package com.hengxin.aioa.ui
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
-import com.hengxin.aioa.config.AppConfig
 import com.hengxin.aioa.config.ConfigStore
-import com.hengxin.aioa.link.LinkService
+import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
-// 界面进程只在前台时持有自己的连接, 退到后台立即断开, 后台推送全部交给 :link 进程
+// 打开界面: 先从本地库秒出历史, 再用 since=本地最大序号 只补拉增量; 后台推送全部交给 :link 进程
 class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     val device = AioaApp.deviceId(app, Constants.DEVICE_UI)
@@ -24,30 +29,44 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     var online by mutableStateOf(false)
         private set
 
-    private var lastSeq = 0L
-    private val socket = LinkSocket(app, device, { lastSeq }, this)
-
+    // 本次打开时的已读位置, 用于画 "以下是新消息" 分隔线, 会话内保持不变
+    var dividerSeq by mutableLongStateOf(Long.MAX_VALUE)
+        private set
+    var loaded by mutableStateOf(false)
+        private set
     var configured by mutableStateOf(ConfigStore.load(app) != null)
         private set
 
-    fun resume() {
-        if (configured) socket.start()
-    }
+    private val db = MessageDb.get(app)
 
-    fun saveConfig(server: String, token: String): Boolean {
-        val config = AppConfig(server.trim(), token.trim())
-        if (!config.valid) return false
-        val app = getApplication<Application>()
-        ConfigStore.save(app, config)
-        configured = true
-        LinkService.start(app)
-        socket.start()
-        return true
+    @Volatile
+    private var lastSeq = 0L
+    private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
+
+    fun resume() {
+        NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
+        viewModelScope.launch {
+            val (history, readSeq) = withContext(Dispatchers.IO) { db.recent(Constants.HISTORY_PAGE) to db.readSeq() }
+            merge(history)
+            if (!loaded) {
+                dividerSeq = readSeq
+                loaded = true
+            }
+            markRead()
+            if (configured) socket.start()
+        }
     }
 
     fun pause() {
         socket.stop()
         online = false
+        // 下次打开时重新计算分隔线
+        loaded = false
+    }
+
+    fun onConfigSaved() {
+        configured = ConfigStore.load(getApplication<Application>()) != null
+        socket.restart()
     }
 
     fun send(text: String): Boolean {
@@ -56,15 +75,33 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         return socket.send(Frames.send(UUID.randomUUID().toString(), body))
     }
 
+    fun isMine(msg: ServerFrame.Msg): Boolean = msg.src.startsWith(Constants.DEVICE_PREFIX)
+
     override fun onStatus(online: Boolean) {
         this.online = online
     }
 
     override fun onFrame(frame: ServerFrame) {
-        if (frame !is ServerFrame.Msg || frame.seq <= lastSeq) return
-        lastSeq = frame.seq
-        messages.add(frame)
+        if (frame !is ServerFrame.Msg) return
         socket.send(Frames.ack(frame.seq))
+        merge(listOf(frame))
+        viewModelScope.launch(Dispatchers.IO) {
+            db.insert(frame)
+            db.markRead(frame.seq)
+        }
+    }
+
+    // 按序号去重合并, 保持有序
+    private fun merge(incoming: List<ServerFrame.Msg>) {
+        val fresh = incoming.filter { it.seq > lastSeq }
+        if (fresh.isEmpty()) return
+        messages.addAll(fresh)
+        lastSeq = fresh.last().seq
+    }
+
+    private fun markRead() {
+        val seq = lastSeq
+        viewModelScope.launch(Dispatchers.IO) { db.markRead(seq) }
     }
 
     override fun onCleared() {

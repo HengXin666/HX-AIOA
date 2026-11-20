@@ -20,6 +20,8 @@ android {
         targetSdk = 35
         versionCode = ciBuildNumber
         versionName = "0.1.$ciBuildNumber"
+        // 代理内核只打包 arm64, 红米等现代机型足够
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     signingConfigs {
@@ -41,6 +43,15 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName(if (keystorePath != null) "release" else "debug")
         }
+    }
+
+    // 内核以 libmihomo.so 形式放在 jniLibs, 需要解压到磁盘才能作为可执行文件运行
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 
     buildFeatures {
@@ -65,4 +76,5 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.kotlinx.coroutines.android)
 }

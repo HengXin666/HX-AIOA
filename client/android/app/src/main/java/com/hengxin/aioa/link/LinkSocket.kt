@@ -4,13 +4,14 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.net.Net
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -23,6 +24,7 @@ class LinkSocket(
     private val device: String,
     private val since: () -> Long,
     private val listener: Listener,
+    private val forLink: Boolean,
 ) {
     interface Listener {
         fun onFrame(frame: ServerFrame)
@@ -30,14 +32,18 @@ class LinkSocket(
     }
 
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
-    private val handler = Handler(Looper.getMainLooper())
-    private val client = OkHttpClient.Builder()
+    // 建连 (含读配置, 探测本机代理端口) 放在后台线程, 回调统一切回主线程
+    private val handler = Handler(worker.looper)
+    private val main = Handler(Looper.getMainLooper())
+    private val client = Net.base.newBuilder()
         .pingInterval(Constants.PING_INTERVAL_SEC, TimeUnit.SECONDS)
         .build()
 
     @Volatile
     private var socket: WebSocket? = null
     private var retryMs = Constants.RECONNECT_MIN_MS
+
+    @Volatile
     private var running = false
     private val reconnectTask = Runnable { connect() }
 
@@ -65,6 +71,11 @@ class LinkSocket(
 
     fun send(text: String): Boolean = socket?.send(text) ?: false
 
+    // 代理可用性变化后调用, 让连接按新路径重建
+    fun restart() {
+        handler.post { reconnectNow() }
+    }
+
     private fun reconnectNow() {
         if (!running) return
         handler.removeCallbacks(reconnectTask)
@@ -83,7 +94,8 @@ class LinkSocket(
             .addQueryParameter(Constants.QUERY_DEVICE, device)
             .addQueryParameter(Constants.QUERY_SINCE, since().toString())
             .build()
-        socket = client.newWebSocket(Request.Builder().url(url).build(), SocketListener())
+        val routed = client.newBuilder().proxy(Net.proxy(context, forLink)).build()
+        socket = routed.newWebSocket(Request.Builder().url(url).build(), SocketListener())
     }
 
     private fun scheduleReconnect() {
@@ -95,15 +107,13 @@ class LinkSocket(
 
     private inner class SocketListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            handler.post {
-                retryMs = Constants.RECONNECT_MIN_MS
-                listener.onStatus(true)
-            }
+            handler.post { retryMs = Constants.RECONNECT_MIN_MS }
+            main.post { listener.onStatus(true) }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             val frame = Frames.parse(text) ?: return
-            handler.post { listener.onFrame(frame) }
+            main.post { listener.onFrame(frame) }
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = lost(webSocket)
@@ -113,9 +123,13 @@ class LinkSocket(
         private fun lost(webSocket: WebSocket) {
             handler.post {
                 if (webSocket !== socket) return@post
-                listener.onStatus(false)
+                main.post { listener.onStatus(false) }
                 scheduleReconnect()
             }
         }
+    }
+
+    private companion object {
+        val worker: HandlerThread by lazy { HandlerThread("link-socket").apply { start() } }
     }
 }
