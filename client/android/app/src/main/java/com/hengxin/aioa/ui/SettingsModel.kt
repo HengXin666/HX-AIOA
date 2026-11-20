@@ -101,7 +101,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         updateText = "正在检查, ${updateRoute()}..."
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { Updater(app).update { text -> viewModelScope.launch { updateText = text } } }
+                runCatching { Updater(app).update(foreground = true) { text -> viewModelScope.launch { updateText = text } } }
             }
             result.exceptionOrNull()?.let { updateText = "检查失败 (${updateRoute()}): ${it.message}" }
             updating = false

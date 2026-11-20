@@ -30,7 +30,7 @@ class LinkService : Service(), LinkSocket.Listener {
     private val io = Executors.newSingleThreadExecutor()
     private val updateTask = object : Runnable {
         override fun run() {
-            io.execute { runCatching { Updater(this@LinkService).update { } } }
+            io.execute { runCatching { Updater(this@LinkService).update(foreground = false) { } } }
             handler.postDelayed(this, Constants.UPDATE_INTERVAL_MS)
         }
     }

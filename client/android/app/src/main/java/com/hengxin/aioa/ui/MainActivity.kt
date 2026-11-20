@@ -78,10 +78,9 @@ class MainActivity : ComponentActivity() {
 
     // 从 "安装未知应用" 授权页回来后, 用已下载的安装包继续安装
     private fun resumePendingUpdate() {
-        if (!packageManager.canRequestPackageInstalls()) return
         val context = applicationContext
         Thread {
-            if (Updater.hasPending(context)) runCatching { Updater(context).update { } }
+            if (Updater.takePermissionResume(context)) runCatching { Updater(context).update(foreground = true) { } }
         }.start()
     }
 

@@ -32,7 +32,7 @@
     <string name="current_version">当前版本 %1$s</string>
     <string name="action_check_update">检查更新</string>
     <string name="update_confirm">新版本已下载, 点击安装</string>
-    <string name="update_failed">更新安装失败: %1$s</string>
+    <string name="update_failed">静默安装失败 (%1$s), 点此用系统安装界面安装</string>
     <string name="notify_hint">要像微信那样顶部弹出: 点下面按钮进入 \"新消息\" 通知设置, 打开 \"悬浮通知\" (部分系统叫 \"横幅通知\"), \"锁屏通知\", \"响铃\", \"振动\"。红米默认把第三方应用的悬浮通知关掉, 只给通知权限不够, 代码也无法替你打开。</string>
     <string name="action_notify_settings">消息通知设置</string>
     <string name="update_route">更新下载: %1$s</string>
