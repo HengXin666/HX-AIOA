@@ -12,9 +12,11 @@ tag = "v1"
 new_sqlite_classes = ["Hub"]
 
 # 绑定自己的域名, workers.dev 在中国大陆多数无法直连
+# 用 zone 内惯用的 route 模式 (与该 zone 其它子域一致), 不声明 custom_domain,
+# 否则会与页面上已存在的 cdn.woa.qzz.io CNAME 争抢记录, 部署时报 100117
 [[routes]]
-pattern = "aioa.woa.qzz.io"
-custom_domain = true
+pattern = "aioa.woa.qzz.io/*"
+zone_name = "woa.qzz.io"
 
 # 以下用 wrangler secret put 设置, 不写进仓库:
 # AUTH_TOKEN            必填, 客户端令牌

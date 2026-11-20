@@ -1,0 +1,56 @@
+name: 服务端部署
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: 安装依赖
+        working-directory: .
+        run: npm ci
+
+      - name: 类型检查
+        working-directory: .
+        run: npm run typecheck
+
+      - name: 检查部署凭据
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::缺少 CLOUDFLARE_API_TOKEN, 配置方法见 docs/cloudflare-deploy.md"
+            exit 1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID, 配置方法见 docs/cloudflare-deploy.md"
+            exit 1
+          fi
+
+      - name: 部署到 Cloudflare
+        run: npx wrangler deploy
+
+      # 可选: 仅当 GitHub 里配置了 AUTH_TOKEN 等同名 secret 时, 才同步 Worker 运行时密钥
+      - name: 同步运行时密钥
+        if: ${{ secrets.AUTH_TOKEN != '' }}
+        run: |
+          printf '%s' "${{ secrets.AUTH_TOKEN }}" | npx wrangler secret put AUTH_TOKEN
