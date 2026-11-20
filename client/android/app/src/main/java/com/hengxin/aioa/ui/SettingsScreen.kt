@@ -1,6 +1,6 @@
 package com.hengxin.aioa.ui
 
-import android.text.format.DateUtils
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.R
+
+private const val MAX_NODES_SHOWN = 30
 
 class SystemActions(
     val battery: () -> Unit,
@@ -53,14 +55,12 @@ fun SettingsScreen(model: SettingsModel, actions: SystemActions, onSaved: () -> 
             Text(stringResource(R.string.proxy_link), Modifier.weight(1f))
             Switch(checked = model.proxyLink, onCheckedChange = { model.proxyLink = it })
         }
-        Text(proxyLine(model), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         Button(onClick = { if (model.save()) onSaved() }) { Text(stringResource(R.string.action_save)) }
-        OutlinedButton(onClick = model::optimize, enabled = model.subscription.isNotBlank()) {
-            Text(stringResource(R.string.action_optimize))
-        }
+        ProxyPanel(model)
 
         Section(stringResource(R.string.section_update))
         Text(stringResource(R.string.current_version, model.version))
+        Text(stringResource(R.string.update_route, model.updateRoute()), style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = model::checkUpdate, enabled = !model.updating) { Text(stringResource(R.string.action_check_update)) }
         if (model.updateText.isNotEmpty()) Text(model.updateText, style = MaterialTheme.typography.bodySmall)
 
@@ -73,11 +73,42 @@ fun SettingsScreen(model: SettingsModel, actions: SystemActions, onSaved: () -> 
 }
 
 @Composable
-private fun proxyLine(model: SettingsModel): String {
-    if (!model.coreAvailable) return stringResource(R.string.proxy_core_missing)
-    val status = model.proxyStatus ?: return stringResource(R.string.proxy_idle)
-    val ago = DateUtils.getRelativeTimeSpanString(status.at).toString()
-    return stringResource(R.string.proxy_status, status.node, status.delayMs, status.nodes, ago)
+private fun ProxyPanel(model: SettingsModel) {
+    val view = model.proxy
+    val hint = MaterialTheme.colorScheme.outline
+    Text(view.summary, style = MaterialTheme.typography.bodyMedium)
+    view.errors.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+    if (model.proxyMessage.isNotEmpty()) Text(model.proxyMessage, style = MaterialTheme.typography.bodySmall)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = model::optimize, enabled = view.running && !model.proxyBusy) {
+            Text(stringResource(R.string.action_optimize))
+        }
+        OutlinedButton(onClick = model::refreshSubscription, enabled = view.running && !model.proxyBusy) {
+            Text(stringResource(R.string.action_refresh_sub))
+        }
+        TextButton(onClick = model::refreshProxy) { Text(stringResource(R.string.action_refresh)) }
+    }
+    if (view.nodes.isEmpty()) return
+    Text(stringResource(R.string.node_tap_hint), style = MaterialTheme.typography.bodySmall, color = hint)
+    view.nodes.take(MAX_NODES_SHOWN).forEach { node ->
+        val selected = node.name == view.current
+        Row(
+            Modifier.fillMaxWidth().clickable(enabled = !model.proxyBusy) { model.choose(node) }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                (if (selected) "● " else "") + node.name,
+                Modifier.weight(1f),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Text(node.type, Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodySmall, color = hint)
+            Text(if (node.delayMs > 0) "${node.delayMs} ms" else "--", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (view.nodes.size > MAX_NODES_SHOWN) {
+        Text(stringResource(R.string.node_more, view.nodes.size - MAX_NODES_SHOWN), style = MaterialTheme.typography.bodySmall, color = hint)
+    }
 }
 
 @Composable

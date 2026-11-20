@@ -53,23 +53,11 @@ class NodePicker(private val context: Context, private val onChanged: () -> Unit
     }
 
     private fun optimizeNow() {
-        if (!ProxyCore.listening()) return
         lastRun = SystemClock.elapsedRealtime()
-        val controller = ProxyController(context)
-        val delays = controller.groupDelay()
-        val best = delays.minByOrNull { it.value } ?: return
-        val current = controller.current()
-        val currentDelay = current?.let { delays[it] }
-        // 当前节点仍可用且与最快的差距不大就不切, 避免频繁切换打断长连接
-        val switched = (currentDelay == null || currentDelay - best.value > SWITCH_TOLERANCE_MS) &&
-            controller.select(best.key)
-        val node = if (switched || current == null) best.key else current
-        val delay = if (switched || currentDelay == null) best.value else currentDelay
-        ProxyStatusStore.save(context, ProxyStatus(node, delay, System.currentTimeMillis(), delays.size))
+        NodeOptimizer.run(context)
     }
 
     private companion object {
         const val THREAD_NAME = "node-picker"
-        const val SWITCH_TOLERANCE_MS = 80
     }
 }

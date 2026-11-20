@@ -30,6 +30,25 @@ class ProxyController(context: Context) {
         return json.keys().asSequence().associateWith { json.optInt(it) }.filterValues { it > 0 }
     }
 
+    // 订阅解析出的全部节点, 带最近一次测速结果 (0 表示未测或超时)
+    fun nodes(): List<NodeInfo> {
+        val url = base().addPathSegment("providers").addPathSegment("proxies").addPathSegment(PROVIDER).build()
+        val list = call(Request.Builder().url(url).get())?.optJSONArray("proxies") ?: return emptyList()
+        return (0 until list.length()).map { i ->
+            val o = list.getJSONObject(i)
+            val history = o.optJSONArray("history")
+            val delay = if (history != null && history.length() > 0) history.getJSONObject(history.length() - 1).optInt("delay") else 0
+            NodeInfo(o.optString("name"), o.optString("type"), delay)
+        }
+    }
+
+    // 让内核立刻重新下载订阅
+    fun refreshSubscription(): Boolean = send(
+        Request.Builder()
+            .url(base().addPathSegment("providers").addPathSegment("proxies").addPathSegment(PROVIDER).build())
+            .put("".toRequestBody(JSON)),
+    )
+
     fun current(): String? = call(Request.Builder().url(groupUrl()).get())?.optString("now")?.ifEmpty { null }
 
     fun select(name: String): Boolean = send(
@@ -59,8 +78,11 @@ class ProxyController(context: Context) {
         client.newCall(builder.header(AUTH, "Bearer $secret").build()).execute().use { it.isSuccessful }
     }.getOrDefault(false)
 
-    private companion object {
-        const val AUTH = "Authorization"
-        val JSON = "application/json".toMediaType()
+    companion object {
+        const val PROVIDER = "sub"
+        private const val AUTH = "Authorization"
+        private val JSON = "application/json".toMediaType()
     }
 }
+
+data class NodeInfo(val name: String, val type: String, val delayMs: Int)

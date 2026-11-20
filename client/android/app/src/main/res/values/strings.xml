@@ -25,14 +25,18 @@
     <string name="section_system">系统权限</string>
     <string name="config_subscription">订阅链接 (留空则直连)</string>
     <string name="proxy_link">消息长连接也走代理</string>
-    <string name="proxy_idle">尚未优选</string>
-    <string name="proxy_core_missing">安装包未内置代理内核, 当前为直连</string>
-    <string name="proxy_status">当前节点 %1$s, %2$d ms, 共 %3$d 个可用节点, %4$s优选</string>
     <string name="action_optimize">立即优选节点</string>
     <string name="current_version">当前版本 %1$s</string>
     <string name="action_check_update">检查更新</string>
     <string name="update_confirm">新版本已下载, 点击安装</string>
     <string name="update_failed">更新安装失败: %1$s</string>
-    <string name="notify_hint">红米/MIUI 默认关闭横幅和锁屏通知, 请在 \"新消息\" 渠道里打开 \"悬浮通知\", \"锁屏通知\", \"响铃\", \"振动\"。</string>
+    <string name="notify_hint">要像微信那样顶部弹出: 点下面按钮进入 \"新消息\" 通知设置, 打开 \"悬浮通知\" (部分系统叫 \"横幅通知\"), \"锁屏通知\", \"响铃\", \"振动\"。红米默认把第三方应用的悬浮通知关掉, 只给通知权限不够, 代码也无法替你打开。</string>
     <string name="action_notify_settings">消息通知设置</string>
+    <string name="update_route">更新下载: %1$s</string>
+    <string name="action_refresh_sub">重新下载订阅</string>
+    <string name="action_refresh">刷新</string>
+    <string name="node_tap_hint">点节点可手动切换, 选中的会被记住</string>
+    <string name="node_more">还有 %1$d 个节点未显示</string>
+    <string name="battery_already">已在电池优化白名单。已打开省电策略页, 请选 \"无限制\"</string>
+    <string name="battery_open_failed">无法打开设置页, 请在系统设置里搜索 \"省电策略\"</string>
 </resources>

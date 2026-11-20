@@ -62,7 +62,7 @@ class ProxyCore(private val context: Context) {
         |profile:
         |  store-selected: true
         |proxy-providers:
-        |  sub:
+        |  ${ProxyController.PROVIDER}:
         |    type: http
         |    url: ${quote(subscription)}
         |    path: ./providers/sub.yaml
@@ -70,7 +70,7 @@ class ProxyCore(private val context: Context) {
         |proxy-groups:
         |  - name: ${Constants.PROXY_GROUP}
         |    type: select
-        |    use: [sub]
+        |    use: [${ProxyController.PROVIDER}]
         |rules:
         |  - MATCH,${Constants.PROXY_GROUP}
         |""".trimMargin()
@@ -87,6 +87,15 @@ class ProxyCore(private val context: Context) {
         private const val SECRET_BYTES = 16
         private const val READY_POLL_MS = 100L
         private const val SUBSCRIPTION_REFRESH_SEC = 86_400
+
+        // 内核日志里最近的报错/警告, 订阅下载或解析失败时给界面看
+        fun recentErrors(context: Context, max: Int): List<String> {
+            val file = File(File(context.filesDir, HOME_DIR), LOG_FILE)
+            if (!file.exists()) return emptyList()
+            return file.readLines().filter { "level=error" in it || "level=warning" in it }
+                .takeLast(max)
+                .map { line -> line.substringAfter("msg=", line).trim('"') }
+        }
 
         fun secret(context: Context): String {
             val file = File(File(context.filesDir, HOME_DIR), SECRET_FILE)

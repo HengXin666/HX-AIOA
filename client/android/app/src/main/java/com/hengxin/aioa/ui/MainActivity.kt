@@ -6,7 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -23,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.R
 import com.hengxin.aioa.link.LinkService
 
 class MainActivity : ComponentActivity() {
@@ -51,9 +54,10 @@ class MainActivity : ComponentActivity() {
                             settings,
                             actions,
                             onSaved = {
+                                // 首次配置保存后进入聊天; 之后的修改留在设置页, 方便看代理状态
+                                val first = !chat.configured
                                 chat.onConfigSaved()
-                                showSettings = false
-                                chat.resume()
+                                if (first) chat.resume()
                             },
                             onBack = if (chat.configured) ({ showSettings = false }) else null,
                         )
@@ -75,19 +79,32 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    // 已在白名单时系统请求弹窗不会再出现, 所以改为打开红米的省电策略页
     @SuppressLint("BatteryLife")
     private fun requestBatteryWhitelist() {
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            .setData(Uri.fromParts(SCHEME_PACKAGE, packageName, null))
-        runCatching { startActivity(intent) }
+        val power = getSystemService(PowerManager::class.java)
+        if (!power.isIgnoringBatteryOptimizations(packageName)) {
+            val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.fromParts(SCHEME_PACKAGE, packageName, null))
+            if (tryStart(request)) return
+        }
+        val miui = Intent().setClassName(MIUI_POWER_PKG, MIUI_POWER_ACTIVITY)
+            .putExtra("package_name", packageName)
+            .putExtra("package_label", getString(R.string.app_name))
+        val opened = tryStart(miui) || tryStart(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) || tryStart(appDetails())
+        val tip = if (opened) R.string.battery_already else R.string.battery_open_failed
+        Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
     }
 
-    // 红米的自启动开关在应用详情页里, 没有稳定的直达入口
+    // 先试红米的自启动管理页, 不行再退回应用详情页
     private fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-            .setData(Uri.fromParts(SCHEME_PACKAGE, packageName, null))
-        runCatching { startActivity(intent) }
+        tryStart(Intent().setClassName(MIUI_SECURITY_PKG, MIUI_AUTOSTART_ACTIVITY)) || tryStart(appDetails())
     }
+
+    private fun appDetails() = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        .setData(Uri.fromParts(SCHEME_PACKAGE, packageName, null))
+
+    private fun tryStart(intent: Intent): Boolean = runCatching { startActivity(intent) }.isSuccess
 
     // MIUI 默认关闭 "悬浮通知" 和 "锁屏通知", 代码无法打开, 只能直达渠道设置页让用户手动开
     private fun openNotificationSettings() {
@@ -101,5 +118,9 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val SCHEME_PACKAGE = "package"
+        const val MIUI_POWER_PKG = "com.miui.powerkeeper"
+        const val MIUI_POWER_ACTIVITY = "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
+        const val MIUI_SECURITY_PKG = "com.miui.securitycenter"
+        const val MIUI_AUTOSTART_ACTIVITY = "com.miui.permcenter.autostart.AutoStartManagementActivity"
     }
 }

@@ -64,7 +64,10 @@ class Notifier(private val context: Context) {
             .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_LIGHTS)
             .setVibrate(Constants.VIBRATE_PATTERN)
             .build()
-        NotificationManagerCompat.from(context).notify(Constants.NOTIFY_ID_MESSAGE, notification)
+        // 先撤掉旧的再发, 系统把它当作新通知, 每条都会重新弹横幅
+        val manager = NotificationManagerCompat.from(context)
+        manager.cancel(Constants.NOTIFY_ID_MESSAGE)
+        manager.notify(Constants.NOTIFY_ID_MESSAGE, notification)
     }
 
     private companion object {
