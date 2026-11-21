@@ -65,15 +65,22 @@ private fun Section(title: String) {
 
 @Composable
 private fun Overview() {
-    val cpu = rememberFeed(23f, 8f)
-    val temp = rememberFeed(61f, 4f)
+    val live = rememberLive()
+    val mockCpu = rememberFeed(23f, 8f)
+    val mockTemp = rememberFeed(61f, 4f)
+    val liveCpu = live?.series("cpu").orEmpty()
+    val cpu = if (liveCpu.size > 1) liveCpu else mockCpu
+    val mem = live?.last("mem") ?: 61f
+    val temp = live?.series("temp")?.takeIf { it.size > 1 } ?: mockTemp
+    val host = live?.subject?.uppercase() ?: "NAS-01"
+    val src = if (live != null) "探针" else "Beszel"
     Column(verticalArrangement = Arrangement.spacedBy(Aioa.metrics.gap)) {
         Text("总览", Aioa.colors.text, 26)
         Section("正在发生")
         AdaptiveGrid(Tile.entries, span = { if (it == Tile.TEMP) Int.MAX_VALUE else 1 }) { tile ->
             when (tile) {
-                Tile.CPU -> StatCard("cpu", "CPU", cpu.last(), "%", trend = cpu, delta = "4 核 · NAS-01", source = "Beszel")
-                Tile.MEM -> StatCard("memory-stick", "内存", 61f, "%", delta = "9.8 / 16 GB", source = "Beszel")
+                Tile.CPU -> StatCard("cpu", "CPU", cpu.last(), "%", trend = cpu, delta = host, source = src)
+                Tile.MEM -> StatCard("memory-stick", "内存", mem, "%", delta = host, source = src)
                 Tile.TEMP -> TempCard(temp)
                 Tile.DISK -> StatCard("hard-drive", "存储", 72f, "%", delta = "5.8 / 8 TB", source = "Beszel")
                 Tile.NET -> StatCard("activity", "今日消息", 18f, "条", delta = "比昨天 +3", source = "HX-AIOA")

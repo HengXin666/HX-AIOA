@@ -23,21 +23,26 @@ import {
   KEY_PENDING_SEQ,
   KEY_PUSH_TOKEN,
   MAX_TEXT_LENGTH,
+  ABNORMAL_CLOSE,
+  NO_STATUS_CLOSE,
+  NORMAL_CLOSE,
   UNKNOWN_DEVICE,
 } from "./constants";
 import type { Env } from "./env";
 import { hasFallback, sendFallback } from "./notify";
+import { type Attachment, MetricRouter, isProbe } from "./metrics";
 import { MessageStore } from "./store";
 
-type Attachment = { device: string };
 
 // 单实例消息中枢, 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
   private readonly store: MessageStore;
+  private readonly metrics: MetricRouter;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.store = new MessageStore(ctx.storage.sql);
+    this.metrics = new MetricRouter(() => this.ctx.getWebSockets());
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -70,7 +75,22 @@ export class Hub extends DurableObject<Env> {
   }
 
   override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-    ws.close(code, reason);
+    this.release(ws);
+    // 1005 / 1006 是保留码, 不能用于主动关闭
+    try {
+      ws.close(code === ABNORMAL_CLOSE || code === NO_STATUS_CLOSE ? NORMAL_CLOSE : code, reason);
+    } catch {
+      // 已关闭
+    }
+  }
+
+  override async webSocketError(ws: WebSocket): Promise<void> {
+    this.release(ws);
+  }
+
+  private release(ws: WebSocket): void {
+    ws.serializeAttachment({ device: (ws.deserializeAttachment() as Attachment).device, watch: [], offer: [] });
+    this.metrics.rebalance();
   }
 
   override async alarm(): Promise<void> {
@@ -105,8 +125,22 @@ export class Hub extends DurableObject<Env> {
   }
 
   private async handle(ws: WebSocket, frame: ClientFrame): Promise<void> {
-    const { device } = ws.deserializeAttachment() as Attachment;
+    const att = ws.deserializeAttachment() as Attachment;
+    const { device } = att;
     switch (frame.t) {
+      case "watch":
+        ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
+        this.metrics.primeWatcher(ws, frame.subjects.filter((s) => !(att.watch ?? []).includes(s)));
+        this.metrics.rebalance();
+        return;
+      case "offer":
+        if (!isProbe(att)) return;
+        ws.serializeAttachment({ ...att, offer: frame.subjects, demand: [] } satisfies Attachment);
+        this.metrics.rebalance();
+        return;
+      case "metric":
+        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) this.metrics.relay(frame);
+        return;
       case "send": {
         try {
           const r = await this.post(device, frame.body, frame.cid);
@@ -139,6 +173,7 @@ export class Hub extends DurableObject<Env> {
   private broadcast(frame: ServerFrame): void {
     const text = JSON.stringify(frame);
     for (const ws of this.ctx.getWebSockets()) {
+      if (isProbe(ws.deserializeAttachment() as Attachment)) continue;
       try {
         ws.send(text);
       } catch {

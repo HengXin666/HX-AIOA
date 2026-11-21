@@ -32,3 +32,7 @@
 ```
 
 每个页面 x 设备 x 明暗输出 PNG 到 `gallery/build/screenshots`, 后续接入 CI 对比。
+
+## 连真数据
+
+设置 `AIOA_SERVER`, `AIOA_TOKEN`, `AIOA_SUBJECT` 后画廊总览页的 CPU 和内存改用探针实时数据, 详见 `docs/metrics.md`。

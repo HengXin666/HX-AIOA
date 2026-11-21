@@ -131,7 +131,9 @@ fun LineChart(
             val hi = points.indices.maxBy { points[it].value }
             val lo = points.indices.minBy { points[it].value }
             label(measurer.measure(fmt(points[hi].value) + unit, small), x(hi), y(points[hi].value) - 14.dp.toPx())
-            label(measurer.measure(fmt(points[lo].value) + unit, small), x(lo), y(points[lo].value) + 3.dp.toPx())
+            val loText = measurer.measure(fmt(points[lo].value) + unit, small)
+            val loY = minOf(y(points[lo].value) + 3.dp.toPx(), bottom - loText.size.height)
+            label(loText, x(lo) + 8.dp.toPx() + loText.size.width / 2, loY)
         }
         if (progress.value >= 1f) drawCircle(c.accent, 3.dp.toPx(), Offset(x(last), y(points[last].value)))
 

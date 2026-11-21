@@ -26,3 +26,7 @@ export const ERR_NEED_WS = "需要 WebSocket 升级请求";
 export const PUSH_TITLE = "HX-AIOA";
 export const MIPUSH_ENDPOINT = "https://api.xmpush.xiaomi.com/v3/message/regid";
 export const WXPUSHER_ENDPOINT = "https://wxpusher.zjiecode.com/api/send/message";
+
+export const NORMAL_CLOSE = 1000;
+export const NO_STATUS_CLOSE = 1005;
+export const ABNORMAL_CLOSE = 1006;

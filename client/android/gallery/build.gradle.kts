@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":ui"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.org.json)
 }
 
 compose.desktop {

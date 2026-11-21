@@ -1,5 +1,6 @@
 package com.hengxin.aioa.proto
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val KEY_T = "t"
@@ -10,13 +11,17 @@ private const val KEY_BODY = "body"
 private const val KEY_KIND = "kind"
 private const val KEY_TEXT = "text"
 private const val KIND_TEXT = "text"
+private const val KEY_POINTS = "points"
 
 sealed interface ServerFrame {
     data class Welcome(val head: Long) : ServerFrame
     data class Msg(val seq: Long, val ts: Long, val src: String, val text: String, val cid: String?) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String) : ServerFrame
+    data class Metric(val subject: String, val points: List<MetricPoint>, val history: Boolean) : ServerFrame
 }
+
+data class MetricPoint(val ts: Long, val values: Map<String, Double>)
 
 // 与 protocol/src/index.ts 保持一致, 协议改动先改那边
 object Frames {
@@ -37,9 +42,23 @@ object Frames {
             )
             "sent" -> ServerFrame.Sent(o.optString(KEY_CID), o.getLong(KEY_SEQ), o.getLong(KEY_TS))
             "err" -> ServerFrame.Err(o.optString("code"), o.optString(KEY_TEXT))
+            "metric" -> parseMetric(o)
             else -> null
         }
     }
+
+    private fun parseMetric(o: JSONObject): ServerFrame.Metric {
+        val arr = o.optJSONArray(KEY_POINTS) ?: JSONArray()
+        val points = (0 until arr.length()).map { i ->
+            val p = arr.getJSONObject(i)
+            val v = p.getJSONObject("values")
+            MetricPoint(p.getLong(KEY_TS), v.keys().asSequence().associateWith { v.getDouble(it) })
+        }
+        return ServerFrame.Metric(o.optString("subject"), points, o.optBoolean("history"))
+    }
+
+    /** 声明当前在看的主体, 空列表表示不看了; 页面离开或进入后台时必须发空列表。 */
+    fun watch(subjects: List<String>): String = JSONObject().put(KEY_T, "watch").put("subjects", JSONArray(subjects)).toString()
 
     fun send(cid: String, text: String): String = JSONObject()
         .put(KEY_T, "send")
