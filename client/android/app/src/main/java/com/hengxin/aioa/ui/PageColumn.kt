@@ -32,7 +32,7 @@ fun PageColumn(title: String, content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun Section(title: String) {
+fun PageSection(title: String) {
     Spacer(Modifier.height(4.dp))
     Text(title, Aioa.colors.text, SECTION_SP)
 }

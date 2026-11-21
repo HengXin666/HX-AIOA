@@ -20,14 +20,14 @@ fun MePage(prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onSettin
     val context = LocalContext.current
     val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     PageColumn("我的") {
-        Section("外观")
+        PageSection("外观")
         Card {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Group("明暗") { ThemeMode.entries.forEach { m -> Chip(m.label, prefs.mode == m) { setPrefs(prefs.copy(mode = m)) } } }
                 AppearanceEditor(prefs.resolve(Aioa.tokens.dark)) { setPrefs(prefs.with(it)) }
             }
         }
-        Section("通用")
+        PageSection("通用")
         Card {
             SettingRow("plug", "连接与代理", "服务端, 订阅, 通知", onSettings)
             SettingRow("refresh-cw", "版本", version.orEmpty())

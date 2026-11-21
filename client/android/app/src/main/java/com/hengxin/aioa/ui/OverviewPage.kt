@@ -35,12 +35,12 @@ fun OverviewPage(chat: ChatModel, open: (Tab) -> Unit) {
         .takeLast(ALERTS_SHOWN).reversed()
     PageColumn("总览") {
         Status(chat.online, metrics.probes.size)
-        Section("需要我")
+        PageSection("需要我")
         if (alerts.isEmpty()) {
             Card { Text("一切正常, 没有需要处理的事", Aioa.colors.textSecondary, 14) }
         }
         alerts.forEach { Alert(it) { open(Tab.CHAT) } }
-        Section("正在发生")
+        PageSection("正在发生")
         val tiles = metrics.probes.map { HomeTile.Cpu(it) } + HomeTile.Messages
         AdaptiveGrid(tiles) { tile ->
             when (tile) {

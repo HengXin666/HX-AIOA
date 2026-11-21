@@ -53,7 +53,7 @@ fun NoProbe() {
 private fun Probe(state: MetricsState, subject: String) {
     val cpu = state.series(subject, KEY_CPU)
     val tiles = MetricTile.entries.filter { it != MetricTile.TEMP || state.series(subject, KEY_TEMP).isNotEmpty() }
-    Section(subject)
+    PageSection(subject)
     if (cpu.isEmpty()) {
         StatCard("cpu", "CPU", 0f, PERCENT, state = CardState.Loading, source = SOURCE_PROBE)
         return

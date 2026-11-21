@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [],
+  "invariants": [
+    "指标不写 SQLite",
+    "后台 :link 进程不参与指标"
+  ],
+  "compatBoundary": "Compatibility boundary not yet refined.",
+  "nonGoals": [
+    "探针派发, CF 探针面板调研 (#11)"
+  ]
+}
