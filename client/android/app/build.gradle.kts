@@ -12,7 +12,7 @@ val ciBuildNumber: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.hengxin.aioa"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.hengxin.aioa"
@@ -63,12 +63,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+}
+
+kotlin {
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
 
 dependencies {
+    implementation(project(":ui"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.okhttp)
     implementation(libs.androidx.activity.compose)
