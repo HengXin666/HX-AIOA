@@ -14,6 +14,11 @@ export const QUERY_SINCE = "since";
 export const QUERY_LIMIT = "limit";
 
 export const ANDROID_DEVICE_PREFIX = "android";
+export const PROBE_DEVICE_PREFIX = "probe";
+
+export const METRIC_LIVE_INTERVAL_MS = 2000;
+export const MAX_SUBJECTS = 64;
+export const MAX_METRIC_POINTS = 1440;
 
 export type TextBody = { kind: "text"; text: string };
 export type Body = TextBody;
@@ -21,7 +26,12 @@ export type Body = TextBody;
 export type SendFrame = { t: "send"; cid: string; body: Body };
 export type AckFrame = { t: "ack"; seq: number };
 export type RegFrame = { t: "reg"; pushToken: string };
-export type ClientFrame = SendFrame | AckFrame | RegFrame;
+// 懒更新指标: 客户端声明在看哪些主体, 探针声明能提供哪些主体, 服务端只在有人看时向探针要数据
+export type WatchFrame = { t: "watch"; subjects: string[] };
+export type OfferFrame = { t: "offer"; subjects: string[] };
+export type MetricPoint = { ts: number; values: Record<string, number> };
+export type MetricFrame = { t: "metric"; subject: string; points: MetricPoint[]; history?: boolean };
+export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame;
 
 export type WelcomeFrame = { t: "welcome"; head: number };
 export type MsgFrame = {
@@ -34,7 +44,8 @@ export type MsgFrame = {
 };
 export type SentFrame = { t: "sent"; cid: string; seq: number; ts: number };
 export type ErrFrame = { t: "err"; code: string; text: string };
-export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame;
+export type DemandFrame = { t: "demand"; subjects: string[]; intervalMs: number };
+export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame;
 
 export type SendRequest = { src?: string; body: Body };
 export type SendResult = { seq: number; ts: number };
@@ -63,9 +74,30 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       return typeof f.seq === "number" ? { t: "ack", seq: f.seq } : null;
     case "reg":
       return typeof f.pushToken === "string" ? { t: "reg", pushToken: f.pushToken } : null;
+    case "watch":
+    case "offer":
+      return isSubjects(f.subjects) ? { t: f.t, subjects: f.subjects } : null;
+    case "metric":
+      return typeof f.subject === "string" && isPoints(f.points)
+        ? { t: "metric", subject: f.subject, points: f.points, history: f.history === true }
+        : null;
     default:
       return null;
   }
+}
+
+function isSubjects(v: unknown): v is string[] {
+  return Array.isArray(v) && v.length <= MAX_SUBJECTS && v.every((s) => typeof s === "string");
+}
+
+function isPoints(v: unknown): v is MetricPoint[] {
+  if (!Array.isArray(v) || v.length > MAX_METRIC_POINTS) return false;
+  return v.every((p) => {
+    if (typeof p !== "object" || p === null) return false;
+    const { ts, values } = p as Record<string, unknown>;
+    if (typeof ts !== "number" || typeof values !== "object" || values === null) return false;
+    return Object.values(values).every((x) => typeof x === "number");
+  });
 }
 
 export function previewOf(body: Body): string {

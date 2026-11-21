@@ -1,0 +1,108 @@
+package com.hengxin.aioa.kit
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+/** 颜色令牌, 组件只引用这里的名字, 不写死色值。 */
+@Immutable
+data class AioaColors(
+    val background: Color,
+    val surface: Color,
+    val surfaceAlt: Color,
+    val border: Color,
+    val text: Color,
+    val textSecondary: Color,
+    val accent: Color,
+    val onAccent: Color,
+    val success: Color,
+    val warning: Color,
+    val danger: Color,
+)
+
+/** 尺寸令牌: 圆角, 间距, 是否紧凑。 */
+@Immutable
+data class AioaMetrics(
+    val radius: Dp,
+    val gap: Dp,
+    val padding: Dp,
+)
+
+@Immutable
+data class AioaTokens(val colors: AioaColors, val metrics: AioaMetrics, val dark: Boolean)
+
+/** 用户在设置页可改的外观, 只是对默认令牌的覆盖。 */
+@Immutable
+data class Appearance(
+    val dark: Boolean = false,
+    val accent: Color? = null,
+    val radius: Dp = DEFAULT_RADIUS,
+    val compact: Boolean = false,
+)
+
+val DEFAULT_RADIUS = 16.dp
+
+/** 极简风格 (对标 ChatGPT): 中性黑白灰, 强调色只用在关键处。 */
+object Minimal {
+    val light = AioaColors(
+        background = Color(0xFFFFFFFF),
+        surface = Color(0xFFF4F4F4),
+        surfaceAlt = Color(0xFFEAEAEA),
+        border = Color(0xFFE5E5E5),
+        text = Color(0xFF0D0D0D),
+        textSecondary = Color(0xFF6B6B6B),
+        accent = Color(0xFF0D0D0D),
+        onAccent = Color(0xFFFFFFFF),
+        success = Color(0xFF1A9F4B),
+        warning = Color(0xFFE08600),
+        danger = Color(0xFFD93025),
+    )
+    val dark = AioaColors(
+        background = Color(0xFF212121),
+        surface = Color(0xFF2F2F2F),
+        surfaceAlt = Color(0xFF3A3A3A),
+        border = Color(0xFF3D3D3D),
+        text = Color(0xFFECECEC),
+        textSecondary = Color(0xFF9B9B9B),
+        accent = Color(0xFFECECEC),
+        onAccent = Color(0xFF0D0D0D),
+        success = Color(0xFF34C759),
+        warning = Color(0xFFFF9F0A),
+        danger = Color(0xFFFF453A),
+    )
+}
+
+/** 由外观设置算出最终令牌。 */
+fun tokensOf(a: Appearance): AioaTokens {
+    val base = if (a.dark) Minimal.dark else Minimal.light
+    val colors = a.accent?.let { base.copy(accent = it, onAccent = contrastOn(it)) } ?: base
+    val metrics = if (a.compact) {
+        AioaMetrics(radius = a.radius, gap = 8.dp, padding = 12.dp)
+    } else {
+        AioaMetrics(radius = a.radius, gap = 12.dp, padding = 16.dp)
+    }
+    return AioaTokens(colors, metrics, a.dark)
+}
+
+/** 按亮度选黑或白作为强调色上的文字色。 */
+fun contrastOn(c: Color): Color {
+    val luminance = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+    return if (luminance > 0.55f) Color(0xFF0D0D0D) else Color(0xFFFFFFFF)
+}
+
+val LocalTokens = staticCompositionLocalOf { tokensOf(Appearance()) }
+
+object Aioa {
+    val tokens: AioaTokens @Composable get() = LocalTokens.current
+    val colors: AioaColors @Composable get() = LocalTokens.current.colors
+    val metrics: AioaMetrics @Composable get() = LocalTokens.current.metrics
+}
+
+@Composable
+fun AioaTheme(appearance: Appearance, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalTokens provides tokensOf(appearance), content = content)
+}
