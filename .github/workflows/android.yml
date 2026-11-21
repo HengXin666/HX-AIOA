@@ -7,6 +7,11 @@ on:
       - "client/android/**"
       - "tools/release.py"
       - ".github/workflows/android.yml"
+  # PR 只编译并上传 APK 产物, 不发布
+  pull_request:
+    paths:
+      - "client/android/**"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
@@ -67,12 +72,16 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: 下载旧版本用于增量补丁
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: 收集安装包
         run: |
           mkdir -p "$RUNNER_TEMP/old" "$RUNNER_TEMP/out"
           cp client/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/HX-AIOA-$VERSION.apk"
+
+      - name: 下载旧版本用于增量补丁
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           : > "$RUNNER_TEMP/old.args"
           for tag in $(gh release list --limit 20 --json tagName --jq '.[].tagName' | grep '^android-' | head -n "$PATCH_FROM_COUNT"); do
             v="${tag#android-}"
@@ -82,6 +91,7 @@ jobs:
           done
 
       - name: 生成补丁与 update.json
+        if: github.event_name != 'pull_request'
         run: |
           pip install --quiet bsdiff4
           python tools/release.py \
@@ -98,6 +108,7 @@ jobs:
           path: ${{ runner.temp }}/out/
 
       - name: 发布到 Releases
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

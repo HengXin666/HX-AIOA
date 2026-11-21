@@ -18,14 +18,16 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.config.AppearanceStore
+import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.AioaTheme
 import com.hengxin.aioa.update.Updater
 import com.hengxin.aioa.link.LinkService
 
@@ -45,28 +47,31 @@ class MainActivity : ComponentActivity() {
         if (chat.configured) LinkService.start(this)
         val actions = SystemActions(::requestBatteryWhitelist, ::openAppSettings, ::openNotificationSettings)
         setContent {
-            val scheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-            MaterialTheme(colorScheme = scheme) {
-                Surface {
-                    var showSettings by rememberSaveable { mutableStateOf(false) }
-                    var showMetrics by rememberSaveable { mutableStateOf(false) }
-                    if (chat.configured && showMetrics && !showSettings) {
-                        MetricsScreen(chat.metrics) { showMetrics = false }
-                    } else if (!chat.configured || showSettings) {
-                        BackHandler(enabled = chat.configured) { showSettings = false }
-                        SettingsScreen(
-                            settings,
-                            actions,
-                            onSaved = {
-                                // 首次配置保存后进入聊天; 之后的修改留在设置页, 方便看代理状态
-                                val first = !chat.configured
-                                chat.onConfigSaved()
-                                if (first) chat.resume()
-                            },
-                            onBack = if (chat.configured) ({ showSettings = false }) else null,
-                        )
-                    } else {
-                        ChatScreen(chat, onMetrics = { showMetrics = true }) { showSettings = true }
+            var prefs by remember { mutableStateOf(AppearanceStore.load(this)) }
+            val appearance = prefs.resolve(isSystemInDarkTheme())
+            AioaTheme(appearance) {
+                MaterialTheme(colorScheme = materialScheme(Aioa.colors, appearance.dark)) {
+                    Surface {
+                        var showSettings by rememberSaveable { mutableStateOf(false) }
+                        if (!chat.configured || showSettings) {
+                            BackHandler(enabled = chat.configured) { showSettings = false }
+                            SettingsScreen(
+                                settings,
+                                actions,
+                                onSaved = {
+                                    // 首次配置保存后进入主界面; 之后的修改留在设置页, 方便看代理状态
+                                    val first = !chat.configured
+                                    chat.onConfigSaved()
+                                    if (first) chat.resume()
+                                },
+                                onBack = if (chat.configured) ({ showSettings = false }) else null,
+                            )
+                        } else {
+                            Shell(chat, prefs, { next ->
+                                prefs = next
+                                AppearanceStore.save(this, next)
+                            }) { showSettings = true }
+                        }
                     }
                 }
             }

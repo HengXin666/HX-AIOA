@@ -2,7 +2,9 @@
 
 <p align="center"><img src="docs/assets/hero.webp" width="320" alt="HX-AIOA"></p>
 
-个人 All In One App: 随处打开, 实时双工消息, 可组合的微页面。当前阶段只验证消息推送链路。
+个人 All In One App: 随处打开, 实时双工消息, 一眼看清自己的服务器和服务。
+
+安卓端四栏: 总览 (需要我 / 正在发生), 消息, 资源 (探针实时指标), 我的 (外观与连接设置); 手机底部导航, 平板侧边导航。
 
 ## 架构
 
@@ -12,10 +14,12 @@ Web / 平板 ──WebSocket──┐
 安卓 :link 进程 ─WebSocket┘                    │
                                                └── ACK 超时 → 兜底推送 (MiPush / WxPusher)
 外部 Agent ──HTTP POST /api/send──┘
+探针 ──WebSocket (有人看时才推指标)──┘
 ```
 
 - 每条消息有递增序号 `seq`, 客户端重连时带上 `since` 补拉。
 - 安卓 `:link` 进程收到消息后回 `ack`; 1.5 秒内没收到 `ack`, 服务端走兜底推送。
+- 实时指标采用懒更新, 不写数据库, 见 `docs/metrics.md`。
 - 详细协议见 `protocol/README.md`。
 
 ## 快速开始
@@ -33,6 +37,9 @@ npx wrangler deploy
 cd client/web
 cp .env.example .env.local   # 填服务端地址与 token
 npm run dev
+
+# 探针 (在要监控的机器上, Node 22+)
+AIOA_SERVER=https://你的域名 AIOA_TOKEN=xxx AIOA_SUBJECT=nas-01 node tools/probe.mjs
 
 # 延迟压测
 node tools/bench.mjs --url https://你的域名 --token xxx --count 50

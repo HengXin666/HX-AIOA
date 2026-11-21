@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,7 +21,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,17 +52,17 @@ private sealed interface Item {
 }
 
 @Composable
-fun ChatScreen(model: ChatModel, onMetrics: () -> Unit, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-        Header(model.online, onMetrics, onSettings)
+fun ChatScreen(model: ChatModel) {
+    Column(Modifier.fillMaxSize()) {
+        Header(model.online)
         MessageList(model, Modifier.weight(1f))
         Composer(model::send)
     }
 }
 
 @Composable
-private fun Header(online: Boolean, onMetrics: () -> Unit, onSettings: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = PAD), verticalAlignment = Alignment.CenterVertically) {
+private fun Header(online: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = PAD, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
         Box(Modifier.padding(start = 8.dp).size(8.dp).background(if (online) ONLINE else OFFLINE, CircleShape))
         Text(
@@ -74,8 +71,6 @@ private fun Header(online: Boolean, onMetrics: () -> Unit, onSettings: () -> Uni
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.outline,
         )
-        TextButton(onClick = onMetrics) { Text(stringResource(R.string.metrics)) }
-        TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
     }
 }
 
