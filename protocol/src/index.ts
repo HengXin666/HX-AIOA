@@ -44,8 +44,9 @@ export type MsgFrame = {
 };
 export type SentFrame = { t: "sent"; cid: string; seq: number; ts: number };
 export type ErrFrame = { t: "err"; code: string; text: string };
+export type ProbesFrame = { t: "probes"; subjects: string[] };
 export type DemandFrame = { t: "demand"; subjects: string[]; intervalMs: number };
-export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame;
+export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame | ProbesFrame;
 
 export type SendRequest = { src?: string; body: Body };
 export type SendResult = { seq: number; ts: number };

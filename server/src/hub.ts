@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   ANDROID_DEVICE_PREFIX,
+  PROBE_DEVICE_PREFIX,
   PING_TEXT,
   PONG_TEXT,
   QUERY_DEVICE,
@@ -59,6 +60,7 @@ export class Hub extends DurableObject<Env> {
     server.serializeAttachment({ device } satisfies Attachment);
 
     this.reply(server, { t: "welcome", head: this.store.head() });
+    if (!device.startsWith(PROBE_DEVICE_PREFIX)) this.reply(server, this.metrics.probes());
     if (Number.isFinite(since)) {
       for (const frame of this.store.since(since, HISTORY_MAX_LIMIT)) this.reply(server, frame);
     }

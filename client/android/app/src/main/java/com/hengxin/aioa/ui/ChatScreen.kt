@@ -55,16 +55,16 @@ private sealed interface Item {
 }
 
 @Composable
-fun ChatScreen(model: ChatModel, onSettings: () -> Unit) {
+fun ChatScreen(model: ChatModel, onMetrics: () -> Unit, onSettings: () -> Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-        Header(model.online, onSettings)
+        Header(model.online, onMetrics, onSettings)
         MessageList(model, Modifier.weight(1f))
         Composer(model::send)
     }
 }
 
 @Composable
-private fun Header(online: Boolean, onSettings: () -> Unit) {
+private fun Header(online: Boolean, onMetrics: () -> Unit, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = PAD), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
         Box(Modifier.padding(start = 8.dp).size(8.dp).background(if (online) ONLINE else OFFLINE, CircleShape))
@@ -74,6 +74,7 @@ private fun Header(online: Boolean, onSettings: () -> Unit) {
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.outline,
         )
+        TextButton(onClick = onMetrics) { Text(stringResource(R.string.metrics)) }
         TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
     }
 }
