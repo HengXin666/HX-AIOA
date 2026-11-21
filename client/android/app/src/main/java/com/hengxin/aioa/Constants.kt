@@ -14,6 +14,10 @@ object Constants {
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
     const val NORMAL_CLOSE = 1000
+    const val CONNECT_STALL_MS = 20_000L
+    const val PROBE_TIMEOUT_MS = 5000L
+    const val WATCHDOG_INTERVAL_MS = 5 * 60_000L
+    const val WATCHDOG_WAKE_MS = 10_000L
 
     // 渠道 id 一旦创建, 重要性等设置就由用户掌控, 改设置只能换新 id
     const val CHANNEL_LINK = "link"
@@ -46,5 +50,6 @@ object Constants {
 
     const val ACTION_RELOAD = "com.hengxin.aioa.RELOAD"
     const val ACTION_OPTIMIZE = "com.hengxin.aioa.OPTIMIZE"
+    const val ACTION_WATCHDOG = "com.hengxin.aioa.WATCHDOG"
     const val ACTION_INSTALL_RESULT = "com.hengxin.aioa.INSTALL_RESULT"
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.R
@@ -75,6 +76,10 @@ fun SettingsScreen(model: SettingsModel, actions: SystemActions, onSaved: () -> 
         OutlinedButton(onClick = actions.battery) { Text(stringResource(R.string.action_battery)) }
         OutlinedButton(onClick = actions.appSettings) { Text(stringResource(R.string.action_app_settings)) }
 
+        Section(stringResource(R.string.section_link_log))
+        Text(stringResource(R.string.link_log_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        model.proxy.linkLog.forEach { Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
+
         Section(stringResource(R.string.section_about))
         About(model.version)
     }
@@ -97,13 +102,14 @@ private fun ProxyPanel(model: SettingsModel) {
     val view = model.proxy
     val hint = MaterialTheme.colorScheme.outline
     Text(view.summary, style = MaterialTheme.typography.bodyMedium)
+    if (view.subStatus.isNotEmpty()) Text(view.subStatus, style = MaterialTheme.typography.bodySmall)
     view.errors.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     if (model.proxyMessage.isNotEmpty()) Text(model.proxyMessage, style = MaterialTheme.typography.bodySmall)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = model::optimize, enabled = view.running && !model.proxyBusy) {
             Text(stringResource(R.string.action_optimize))
         }
-        OutlinedButton(onClick = model::refreshSubscription, enabled = view.running && !model.proxyBusy) {
+        OutlinedButton(onClick = model::refreshSubscription, enabled = !model.proxyBusy) {
             Text(stringResource(R.string.action_refresh_sub))
         }
         TextButton(onClick = model::refreshProxy) { Text(stringResource(R.string.action_refresh)) }

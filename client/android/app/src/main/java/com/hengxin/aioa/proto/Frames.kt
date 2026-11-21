@@ -20,6 +20,7 @@ sealed interface ServerFrame {
 
 // 与 protocol/src/index.ts 保持一致, 协议改动先改那边
 object Frames {
+    const val PING = "ping"
     const val PONG = "pong"
 
     fun parse(raw: String): ServerFrame? {

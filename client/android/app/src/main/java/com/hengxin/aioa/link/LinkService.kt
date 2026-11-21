@@ -26,6 +26,7 @@ class LinkService : Service(), LinkSocket.Listener {
     private lateinit var db: MessageDb
     private lateinit var notifier: Notifier
     private lateinit var picker: NodePicker
+    private lateinit var watchdog: LinkWatchdog
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val updateTask = object : Runnable {
@@ -48,8 +49,11 @@ class LinkService : Service(), LinkSocket.Listener {
         val device = AioaApp.deviceId(application, Constants.DEVICE_LINK)
         socket = LinkSocket(this, device, db::maxSeq, this, forLink = true)
         picker = NodePicker(this) { handler.post { socket.restart() } }
+        watchdog = LinkWatchdog(this) { socket.check() }
+        LinkLog.add(this, "后台服务启动")
         socket.start()
         picker.start()
+        watchdog.start()
         handler.postDelayed(updateTask, UPDATE_FIRST_DELAY_MS)
     }
 
@@ -63,6 +67,8 @@ class LinkService : Service(), LinkSocket.Listener {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        LinkLog.add(this, "后台服务被销毁")
+        watchdog.stop()
         socket.stop()
         picker.stop()
         io.shutdown()

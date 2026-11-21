@@ -10,11 +10,13 @@ import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.AppConfig
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.link.LinkLog
 import com.hengxin.aioa.link.LinkService
 import com.hengxin.aioa.net.NodeInfo
 import com.hengxin.aioa.net.NodeOptimizer
 import com.hengxin.aioa.net.ProxyController
 import com.hengxin.aioa.net.ProxyCore
+import com.hengxin.aioa.net.Subscription
 import com.hengxin.aioa.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -27,6 +29,8 @@ data class ProxyView(
     val current: String? = null,
     val nodes: List<NodeInfo> = emptyList(),
     val errors: List<String> = emptyList(),
+    val subStatus: String = "",
+    val linkLog: List<String> = emptyList(),
 )
 
 class SettingsModel(app: Application) : AndroidViewModel(app) {
@@ -85,7 +89,11 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshSubscription() = proxyJob("正在重新下载订阅...") {
-        if (ProxyController(app).refreshSubscription()) "订阅已更新" else "订阅更新失败, 看下方报错"
+        val url = ConfigStore.load(app)?.subscription.orEmpty()
+        if (url.isBlank()) return@proxyJob "未配置订阅"
+        val status = Subscription.download(app, url)
+        if (!status.ok) return@proxyJob status.text
+        if (ProxyController(app).refreshSubscription()) status.text else "${status.text}, 但内核重读失败, 看下方报错"
     }
 
     fun refreshProxy() {
@@ -138,13 +146,15 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadProxy(): ProxyView {
         val errors = ProxyCore.recentErrors(app, MAX_ERRORS)
-        if (!coreAvailable) return ProxyView(summary = "安装包未内置代理内核, 当前直连")
-        if (ConfigStore.load(app)?.proxyEnabled != true) return ProxyView(summary = "未配置订阅, 当前直连")
-        if (!ProxyCore.listening()) return ProxyView(summary = "代理内核未运行, 当前直连", errors = errors)
+        val log = LinkLog.recent(app, MAX_LOG_LINES)
+        val sub = Subscription.status(app)?.let { "${LinkLog.clock(it.at)} ${it.text}" }.orEmpty()
+        if (!coreAvailable) return ProxyView(summary = "安装包未内置代理内核, 当前直连", linkLog = log)
+        if (ConfigStore.load(app)?.proxyEnabled != true) return ProxyView(summary = "未配置订阅, 当前直连", linkLog = log)
+        if (!ProxyCore.listening()) return ProxyView(summary = "代理内核未运行, 当前直连", errors = errors, subStatus = sub, linkLog = log)
         val controller = ProxyController(app)
         val nodes = controller.nodes().sortedWith(compareBy({ it.delayMs <= 0 }, { it.delayMs }))
         val summary = if (nodes.isEmpty()) "内核运行中, 但订阅没有解析出节点" else "内核运行中, 订阅解析出 ${nodes.size} 个节点"
-        return ProxyView(true, summary, controller.current(), nodes, if (nodes.isEmpty()) errors else emptyList())
+        return ProxyView(true, summary, controller.current(), nodes, if (nodes.isEmpty()) errors else emptyList(), sub, log)
     }
 
     private companion object {
@@ -152,5 +162,6 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         const val POLL_STEP_MS = 1000L
         const val MS_PER_SEC = 1000L
         const val MAX_ERRORS = 3
+        const val MAX_LOG_LINES = 40
     }
 }

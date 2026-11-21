@@ -8,11 +8,11 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.SecureRandom
 
-// 内置 mihomo 内核: 由它解析订阅 (Clash YAML, base64 分享链接等) 并承载所有节点协议
+// 内置 mihomo 内核: 解析 App 下载好的订阅文件 (Clash YAML, base64 分享链接等) 并承载所有节点协议
 // 二进制随 APK 以 libmihomo.so 的名字放在 nativeLibraryDir, 由 :link 进程以子进程方式拉起
 class ProxyCore(private val context: Context) {
 
-    private val home = File(context.filesDir, HOME_DIR)
+    private val home = home(context)
     private val executable = File(context.applicationInfo.nativeLibraryDir, BINARY_NAME)
     private var process: Process? = null
 
@@ -23,7 +23,7 @@ class ProxyCore(private val context: Context) {
         if (!available || !config.proxyEnabled) return false
         home.mkdirs()
         val configFile = File(home, CONFIG_FILE)
-        configFile.writeText(buildConfig(config.subscription, secret(context)))
+        configFile.writeText(buildConfig(secret(context)))
         // 上次进程被杀后残留的内核还占着端口: 直接让它重载新配置
         if (listening()) return ProxyController(context).reload(configFile.absolutePath)
         process = runCatching {
@@ -49,7 +49,7 @@ class ProxyCore(private val context: Context) {
         return false
     }
 
-    private fun buildConfig(subscription: String, secret: String): String = """
+    private fun buildConfig(secret: String): String = """
         |mixed-port: ${Constants.PROXY_PORT}
         |bind-address: ${Constants.LOOPBACK}
         |allow-lan: false
@@ -69,10 +69,8 @@ class ProxyCore(private val context: Context) {
         |  proxy-server-nameserver: $DNS_SERVERS
         |proxy-providers:
         |  ${ProxyController.PROVIDER}:
-        |    type: http
-        |    url: ${quote(subscription)}
-        |    path: ./providers/sub.yaml
-        |    interval: $SUBSCRIPTION_REFRESH_SEC
+        |    type: file
+        |    path: ${Subscription.PROVIDER_PATH}
         |proxy-groups:
         |  - name: ${Constants.PROXY_GROUP}
         |    type: select
@@ -92,13 +90,14 @@ class ProxyCore(private val context: Context) {
         private const val SECRET_FILE = "secret"
         private const val SECRET_BYTES = 16
         private const val READY_POLL_MS = 100L
-        private const val SUBSCRIPTION_REFRESH_SEC = 86_400
         // 安卓没有 /etc/resolv.conf, Go 程序默认去问 [::1]:53 必然失败, 订阅域名解析不了, 必须显式给 DNS
         private const val DNS_SERVERS = "[223.5.5.5, 119.29.29.29]"
 
+        fun home(context: Context) = File(context.filesDir, HOME_DIR)
+
         // 内核日志里最近的报错/警告, 订阅下载或解析失败时给界面看
         fun recentErrors(context: Context, max: Int): List<String> {
-            val file = File(File(context.filesDir, HOME_DIR), LOG_FILE)
+            val file = File(home(context), LOG_FILE)
             if (!file.exists()) return emptyList()
             return file.readLines().filter { "level=error" in it || "level=warning" in it }
                 .takeLast(max)
@@ -106,7 +105,7 @@ class ProxyCore(private val context: Context) {
         }
 
         fun secret(context: Context): String {
-            val file = File(File(context.filesDir, HOME_DIR), SECRET_FILE)
+            val file = File(home(context), SECRET_FILE)
             if (file.exists()) return file.readText()
             val bytes = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
             val value = bytes.joinToString("") { "%02x".format(it) }
