@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [],
+  "invariants": [
+    "metric 不逐条落库",
+    "只用休眠 WebSocket",
+    "管理员不能读子号内容"
+  ],
+  "compatBoundary": "旧 /ws, /api/send, /api/messages 与 AUTH_TOKEN 继续可用",
+  "nonGoals": [
+    "安卓端适配 (另一个 agent 负责)"
+  ]
+}

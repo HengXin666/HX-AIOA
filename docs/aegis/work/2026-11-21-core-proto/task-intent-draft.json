@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "协议 + 服务端 + Web 最小适配达到基础版, 覆盖 #2-#7 #9§6 #11 的核心能力",
+  "goal": "协议 + 服务端 + Web 最小适配达到基础版, 覆盖 #2-#7 #9§6 #11 的核心能力",
+  "successEvidence": [
+    "npm run typecheck + web build 通过; tools/e2e-v1.mjs 在 wrangler dev 下全部通过"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "安卓端适配 (另一个 agent 负责)"
+  ],
+  "scope": "protocol, server, client/web, tools, docs",
+  "changeKinds": [
+    "feature"
+  ],
+  "riskHints": [
+    "DO 免费额度每天 10 万行写入; 安卓端尚未适配 v1 协议"
+  ]
+}
