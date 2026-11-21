@@ -22,9 +22,15 @@ private val CONTENT_MAX = 1040.dp
 
 /** 应用骨架: 手机底部导航, 平板左侧导航栏, 大屏内容限宽居中。 */
 @Composable
-fun AppScaffold(items: List<NavItem>, selected: String, onSelect: (String) -> Unit, content: @Composable () -> Unit) {
+fun AppScaffold(
+    items: List<NavItem>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
     val c = Aioa.colors
-    Adaptive(Modifier.fillMaxSize().background(c.background)) {
+    Adaptive(Modifier.fillMaxSize().background(c.background).then(modifier)) {
         if (LocalWidthClass.current == WidthClass.Compact) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { content() }

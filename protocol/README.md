@@ -20,6 +20,9 @@ wss://<域名>/ws?token=<令牌>&device=<设备 id>&since=<已收到的最大 se
 | `send` | `cid`, `body` | 发送消息, `cid` 由客户端生成用于去重与回执 |
 | `ack` | `seq` | 确认已收到并展示到 `seq` |
 | `reg` | `pushToken` | 上报厂商推送 token (例如 MiPush regId) |
+| `watch` | `subjects` | 当前在看的指标主体, 整体替换, 空表示不看 |
+| `offer` | `subjects` | 仅探针: 能提供的主体 |
+| `metric` | `subject`, `points`, `history?` | 仅探针: 指标点 |
 
 服务端 → 客户端:
 
@@ -29,6 +32,11 @@ wss://<域名>/ws?token=<令牌>&device=<设备 id>&since=<已收到的最大 se
 | `msg` | `seq`, `ts`, `src`, `body`, `cid?` | 一条消息 |
 | `sent` | `cid`, `seq`, `ts` | 发送回执 |
 | `err` | `code`, `text` | 错误 |
+| `probes` | `subjects` | 在线探针的主体, 连上时发一次, 变化时再发 |
+| `metric` | `subject`, `points`, `history?` | 转发自探针, 只发给在看的连接 |
+| `demand` | `subjects`, `intervalMs` | 仅探针: 需要实时推送的主体 |
+
+指标细节见 `docs/metrics.md`。
 
 `body` 目前只有 `{ "kind": "text", "text": "..." }`, 后续微页面组件会扩展为 `{ "kind": "ui", "tree": ... }`。
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-21-basic-v1",
+  "currentTodo": "Define first execution slice.",
+  "completedTodos": [],
+  "activeSlice": "initial",
+  "evidenceRefs": [],
+  "blockedOn": null,
+  "nextStep": "等 PR #13 CI, 用户真机验证",
+  "updatedAt": "2026-11-21"
+}

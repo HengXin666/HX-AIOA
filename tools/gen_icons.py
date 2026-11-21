@@ -9,7 +9,8 @@ from pathlib import Path
 LUCIDE_VERSION = "1.77.0"
 ICONS = [
     "activity", "alert-triangle", "bell", "check", "cpu", "gauge", "hard-drive",
-    "memory-stick", "moon", "refresh-cw", "server", "sun", "thermometer", "wifi-off",
+    "memory-stick", "message-circle", "moon", "palette", "plug", "refresh-cw", "server", "settings", "sun",
+    "thermometer", "user", "wifi-off",
 ]
 OUT = Path(__file__).resolve().parent.parent / "client/android/ui/src/commonMain/kotlin/com/hengxin/aioa/kit/LucideIcons.kt"
 

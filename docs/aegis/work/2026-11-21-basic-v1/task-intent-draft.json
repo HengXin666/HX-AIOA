@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "一个有完整基础功能的版本: 探针实时指标 (有人看才推), 安卓总览/消息/资源/我的, 外观可自定义, 告警走消息",
+  "goal": "一个有完整基础功能的版本: 探针实时指标 (有人看才推), 安卓总览/消息/资源/我的, 外观可自定义, 告警走消息",
+  "successEvidence": [
+    "typecheck + web build 通过; wrangler dev 本地跑通探针 → 指标 → 告警; PR CI 编译安卓通过"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "探针派发, CF 探针面板调研 (#11)"
+  ],
+  "scope": "protocol, server, tools/probe.mjs, client/android (ui kit, gallery, app), CI",
+  "changeKinds": [
+    "feature"
+  ],
+  "riskHints": [
+    "安卓整包只能在 CI 编译; 真机未验证"
+  ]
+}

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -20,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -33,12 +31,13 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.AioaTheme
-import com.hengxin.aioa.kit.Appearance
 import com.hengxin.aioa.kit.AppScaffold
-import com.hengxin.aioa.kit.DEFAULT_RADIUS
+import com.hengxin.aioa.kit.Appearance
+import com.hengxin.aioa.kit.AppearanceEditor
+import com.hengxin.aioa.kit.Chip
+import com.hengxin.aioa.kit.Group
 import com.hengxin.aioa.kit.NavItem
 import com.hengxin.aioa.kit.Text
-import com.hengxin.aioa.kit.pressable
 
 /** 预览设备, 尺寸为逻辑分辨率 (dp)。 */
 enum class Device(val title: String, val size: DpSize) {
@@ -49,14 +48,11 @@ enum class Device(val title: String, val size: DpSize) {
 
 private val NAV = listOf(
     NavItem("overview", "总览", "gauge"),
-    NavItem("feed", "动态", "activity"),
-    NavItem("agent", "Agent", "cpu"),
+    NavItem("chat", "消息", "message-circle"),
     NavItem("res", "资源", "server"),
-    NavItem("me", "我的", "bell"),
+    NavItem("me", "我的", "user"),
 )
 private val STAGE = DpSize(820.dp, 880.dp)
-private val ACCENTS = listOf(null, Color(0xFF10A37F), Color(0xFF3A7BF6), Color(0xFFD97757), Color(0xFFA86BFF))
-private val RADII = listOf(8, 12, 16, 20, 24)
 
 fun main() = application {
     Window(
@@ -121,40 +117,8 @@ private fun Controls(
             Chip("明亮", !a.dark) { set(a.copy(dark = false)) }
             Chip("黑夜", a.dark) { set(a.copy(dark = true)) }
         }
-        Group("主题色") {
-            ACCENTS.forEach { color ->
-                val fill = color ?: c.text
-                Box(
-                    Modifier.size(28.dp).clip(CircleShape).background(fill)
-                        .border(if (a.accent == color) 3.dp else 0.dp, c.textSecondary, CircleShape)
-                        .pressable { set(a.copy(accent = color)) },
-                )
-            }
-        }
-        Group("圆角") { RADII.forEach { r -> Chip("$r", a.radius == r.dp) { set(a.copy(radius = r.dp)) } } }
-        Group("密度") {
-            Chip("标准", !a.compact) { set(a.copy(compact = false)) }
-            Chip("紧凑", a.compact) { set(a.copy(compact = true)) }
-        }
-        Chip("恢复默认", false) { set(Appearance(dark = a.dark, radius = DEFAULT_RADIUS)) }
+        AppearanceEditor(a, set)
         Text("改代码后窗口自动刷新 (热重载)。按住图表可看数值。", c.textSecondary, 12)
     }
 }
 
-@Composable
-private fun Group(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, Aioa.colors.textSecondary, 12)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { content() }
-    }
-}
-
-@Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val c = Aioa.colors
-    val shape = RoundedCornerShape(50)
-    Box(
-        Modifier.pressable(onClick).clip(shape).background(if (selected) c.accent else c.surface)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) { Text(label, if (selected) c.onAccent else c.text, 13) }
-}
