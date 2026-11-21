@@ -16,8 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
-import com.hengxin.aioa.kit.AdaptiveGrid
 import com.hengxin.aioa.kit.Card
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import com.hengxin.aioa.kit.AdaptiveGrid
 import com.hengxin.aioa.kit.CardHeader
 import com.hengxin.aioa.kit.CardState
 import com.hengxin.aioa.kit.Icon
@@ -32,6 +34,7 @@ import kotlin.random.Random
 
 private const val TICK_MS = 2000L
 private const val HISTORY = 24
+private const val TICK_SECONDS = (TICK_MS / 1000).toInt()
 
 /** 画廊里的页面, 每个页面是一组用 mock 数据驱动的组件。 */
 enum class Page(val title: String, val content: @Composable () -> Unit) {
@@ -92,7 +95,7 @@ private fun TempCard(temp: List<Float>) {
             Spacer(Modifier.width(3.dp))
             Text("°C", Aioa.colors.textSecondary, 14)
         }
-        LineChart(temp.mapIndexed { i, v -> Point("-${(HISTORY - 1 - i) * 2}s", v) }, "°C", threshold = 65f)
+        LineChart(timeline(temp), "°C", threshold = 65f)
     }
 }
 
@@ -104,7 +107,17 @@ private fun States() {
         StatCard("server", "空", 0f, "", state = CardState.Empty)
         StatCard("wifi-off", "错误", 0f, "", state = CardState.Error("GPU-01 无法连接"))
         StatCard("thermometer", "过期", 58f, "°C", state = CardState.Stale("10 分钟前"))
+        Text("悬停 / 按住", Aioa.colors.text, 18)
+        Card { LineChart(timeline(List(HISTORY) { 60f + (it % 5) * 0.8f }), "°C", pinned = HISTORY / 2) }
     }
+}
+
+private val CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss")
+
+/** 给每个点配上真实时刻, 间隔与模拟数据刷新一致。 */
+private fun timeline(values: List<Float>): List<Point> {
+    val now = LocalTime.now()
+    return values.mapIndexed { i, v -> Point(now.minusSeconds(((values.size - 1 - i) * TICK_SECONDS).toLong()).format(CLOCK), v) }
 }
 
 @Composable
