@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-21-core-proto",
+  "currentTodo": "Define first execution slice.",
+  "completedTodos": [],
+  "activeSlice": "initial",
+  "evidenceRefs": [],
+  "blockedOn": null,
+  "nextStep": "写 protocol 与 docs/api-v1.md",
+  "updatedAt": "2026-11-21"
+}

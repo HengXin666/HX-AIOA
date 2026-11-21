@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-21-core-proto",
+  "requiredBaselineRefs": [],
+  "deliveredContextRefs": [],
+  "acknowledgedBeforePlanRefs": [],
+  "citedInPlanRefs": [],
+  "missingRefs": [],
+  "decision": "continue"
+}

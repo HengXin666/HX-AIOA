@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-21-core-proto",
+  "taskIntentRef": "docs/aegis/work/2026-11-21-core-proto/task-intent-draft.json",
+  "baselineRefs": [],
+  "scopeStatus": "not-yet-verified",
+  "compatStatus": "not-yet-verified",
+  "retirementStatus": "not-yet-verified",
+  "newRiskSignals": [
+    "DO 免费额度每天 10 万行写入; 安卓端尚未适配 v1 协议"
+  ],
+  "decision": "needs-verification"
+}

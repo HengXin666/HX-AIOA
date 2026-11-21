@@ -25,3 +25,13 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-21 | artifact | docs/aegis/work/2026-11-21-basic-v1/impact-statement-draft.json | 安卓基础版: 懒更新指标, 四栏导航, 外观设置, 探针告警 impact statement draft |
 | 2026-11-21 | artifact | docs/aegis/work/2026-11-21-basic-v1/todo-checkpoint-draft.json | 安卓基础版: 懒更新指标, 四栏导航, 外观设置, 探针告警 todo checkpoint draft |
 | 2026-11-21 | artifact | docs/aegis/work/2026-11-21-basic-v1/drift-check-draft.json | 安卓基础版: 懒更新指标, 四栏导航, 外观设置, 探针告警 drift check draft |
+| 2026-11-21 | work | docs/aegis/work/2026-11-21-core-proto/10-intent.md | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 intent |
+| 2026-11-21 | work | docs/aegis/work/2026-11-21-core-proto/20-checkpoint.md | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 checkpoint |
+| 2026-11-21 | work | docs/aegis/work/2026-11-21-core-proto/90-evidence.md | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 evidence |
+| 2026-11-21 | work | docs/aegis/work/2026-11-21-core-proto/99-reflection.md | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 reflection |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/task-intent-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 task intent draft |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/baseline-read-set-hint.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 baseline read-set hint |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/baseline-usage-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 baseline usage draft |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/impact-statement-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 impact statement draft |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/todo-checkpoint-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 todo checkpoint draft |
+| 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/drift-check-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 drift check draft |
