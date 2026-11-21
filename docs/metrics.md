@@ -21,6 +21,7 @@ CPU, 内存这类指标只在有人看时才需要实时, 所以采用懒更新,
 | 探针 → Hub | `{t:"offer", subjects}` | 能提供的主体 |
 | 探针 → Hub → 客户端 | `{t:"metric", subject, points:[{ts, values}], history?}` | 指标点, values 为 名字 → 数值 |
 | Hub → 探针 | `{t:"demand", subjects, intervalMs}` | 需要实时推送的主体, 空表示停 |
+| Hub → 客户端 | `{t:"probes", subjects}` | 在线探针的主体列表, 连上时发一次, 变化时再发 |
 
 定义在 `protocol/src/index.ts`, 安卓镜像在 `Frames.kt`。
 
@@ -41,3 +42,7 @@ cd client/android && AIOA_SERVER=http://localhost:8787 AIOA_TOKEN=devtoken AIOA_
 ```
 
 画廊设置了这三个环境变量就显示真数据, 否则用模拟数据。
+
+## 安卓
+
+聊天页顶部 "资源" 进入资源页。页面可见时通过界面进程那条前台连接 watch 所有在线探针, 返回或切到后台 (连接断开) 即取消; 后台 :link 进程不参与指标, 不增加耗电。

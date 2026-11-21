@@ -42,6 +42,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     @Volatile
     private var lastSeq = 0L
     private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
+    val metrics = MetricsState { socket.send(Frames.watch(it)) }
 
     fun resume() {
         NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
@@ -79,10 +80,11 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onStatus(online: Boolean) {
         this.online = online
+        if (online) metrics.onOnline()
     }
 
     override fun onFrame(frame: ServerFrame) {
-        if (frame !is ServerFrame.Msg) return
+        if (metrics.onFrame(frame) || frame !is ServerFrame.Msg) return
         socket.send(Frames.ack(frame.seq))
         merge(listOf(frame))
         viewModelScope.launch(Dispatchers.IO) {

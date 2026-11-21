@@ -49,7 +49,10 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = scheme) {
                 Surface {
                     var showSettings by rememberSaveable { mutableStateOf(false) }
-                    if (!chat.configured || showSettings) {
+                    var showMetrics by rememberSaveable { mutableStateOf(false) }
+                    if (chat.configured && showMetrics && !showSettings) {
+                        MetricsScreen(chat.metrics) { showMetrics = false }
+                    } else if (!chat.configured || showSettings) {
                         BackHandler(enabled = chat.configured) { showSettings = false }
                         SettingsScreen(
                             settings,
@@ -63,7 +66,7 @@ class MainActivity : ComponentActivity() {
                             onBack = if (chat.configured) ({ showSettings = false }) else null,
                         )
                     } else {
-                        ChatScreen(chat) { showSettings = true }
+                        ChatScreen(chat, onMetrics = { showMetrics = true }) { showSettings = true }
                     }
                 }
             }

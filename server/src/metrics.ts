@@ -3,6 +3,7 @@ import {
   PROBE_DEVICE_PREFIX,
   type DemandFrame,
   type MetricFrame,
+  type ProbesFrame,
 } from "@hx-aioa/protocol";
 
 export type Attachment = {
@@ -19,6 +20,7 @@ export const isProbe = (a: Attachment) => a.device.startsWith(PROBE_DEVICE_PREFI
 // 懒更新调度: 指标只转发不落库, 只缓存每个主体的最后一个点, 休眠后丢失也无妨 (探针下次会补历史)
 export class MetricRouter {
   private readonly latest = new Map<string, MetricFrame>();
+  private offered: string[] | null = null;
 
   constructor(private readonly sockets: () => WebSocket[]) {}
 
@@ -29,6 +31,7 @@ export class MetricRouter {
   // 有人看的主体集合变化后, 给每个探针重算需求, 只在变化时下发
   rebalance(): void {
     const all = this.sockets();
+    this.announce(all);
     const wanted = new Set(all.flatMap((ws) => this.att(ws).watch ?? []));
     for (const ws of all) {
       const a = this.att(ws);
@@ -39,6 +42,23 @@ export class MetricRouter {
       const frame: DemandFrame = { t: "demand", subjects: demand, intervalMs: METRIC_LIVE_INTERVAL_MS };
       send(ws, frame);
     }
+  }
+
+  // 在线探针变化时告诉所有客户端, 让界面知道有哪些主体可看
+  private announce(all: WebSocket[]): void {
+    const now = this.online(all);
+    if (this.offered && sameSet(now, this.offered)) return;
+    this.offered = now;
+    const frame: ProbesFrame = { t: "probes", subjects: now };
+    for (const ws of all) if (!isProbe(this.att(ws))) send(ws, frame);
+  }
+
+  probes(): ProbesFrame {
+    return { t: "probes", subjects: this.online(this.sockets()) };
+  }
+
+  private online(all: WebSocket[]): string[] {
+    return [...new Set(all.flatMap((ws) => this.att(ws).offer ?? []))].sort();
   }
 
   relay(frame: MetricFrame): void {

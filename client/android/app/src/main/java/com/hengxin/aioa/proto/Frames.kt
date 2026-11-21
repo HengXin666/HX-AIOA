@@ -19,6 +19,7 @@ sealed interface ServerFrame {
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String) : ServerFrame
     data class Metric(val subject: String, val points: List<MetricPoint>, val history: Boolean) : ServerFrame
+    data class Probes(val subjects: List<String>) : ServerFrame
 }
 
 data class MetricPoint(val ts: Long, val values: Map<String, Double>)
@@ -31,6 +32,10 @@ object Frames {
     fun parse(raw: String): ServerFrame? {
         if (raw == PONG) return null
         val o = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        return runCatching { decode(o) }.getOrNull()
+    }
+
+    private fun decode(o: JSONObject): ServerFrame? {
         return when (o.optString(KEY_T)) {
             "welcome" -> ServerFrame.Welcome(o.optLong("head"))
             "msg" -> ServerFrame.Msg(
@@ -43,9 +48,12 @@ object Frames {
             "sent" -> ServerFrame.Sent(o.optString(KEY_CID), o.getLong(KEY_SEQ), o.getLong(KEY_TS))
             "err" -> ServerFrame.Err(o.optString("code"), o.optString(KEY_TEXT))
             "metric" -> parseMetric(o)
+            "probes" -> ServerFrame.Probes(strings(o.optJSONArray("subjects")))
             else -> null
         }
     }
+
+    private fun strings(a: JSONArray?): List<String> = a?.let { arr -> (0 until arr.length()).map { arr.getString(it) } }.orEmpty()
 
     private fun parseMetric(o: JSONObject): ServerFrame.Metric {
         val arr = o.optJSONArray(KEY_POINTS) ?: JSONArray()
