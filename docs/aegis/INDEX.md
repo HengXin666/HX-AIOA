@@ -49,3 +49,13 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/impact-statement-draft.json | 安卓 我的 → 数据源 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/todo-checkpoint-draft.json | 安卓 我的 → 数据源 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/drift-check-draft.json | 安卓 我的 → 数据源 页面 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/10-intent.md | 安卓 GitHub 页面 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/20-checkpoint.md | 安卓 GitHub 页面 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/90-evidence.md | 安卓 GitHub 页面 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/99-reflection.md | 安卓 GitHub 页面 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/task-intent-draft.json | 安卓 GitHub 页面 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/baseline-read-set-hint.json | 安卓 GitHub 页面 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/baseline-usage-draft.json | 安卓 GitHub 页面 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/impact-statement-draft.json | 安卓 GitHub 页面 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/todo-checkpoint-draft.json | 安卓 GitHub 页面 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/drift-check-draft.json | 安卓 GitHub 页面 drift check draft |

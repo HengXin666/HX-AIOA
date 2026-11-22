@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "安卓原生 GitHub 列表页, 仓库详情页, 总览卡与资源页入口, 按 /api/v1/github 接口约定实现",
+  "goal": "安卓原生 GitHub 列表页, 仓库详情页, 总览卡与资源页入口, 按 /api/v1/github 接口约定实现",
+  "successEvidence": [
+    ":app:compileReleaseKotlin 编译通过"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "不改设置页与通知"
+  ],
+  "scope": "client/android 下 GitHub 页面新文件, Shell/Overview/Metrics 入口, 图标生成脚本",
+  "changeKinds": [],
+  "riskHints": []
+}

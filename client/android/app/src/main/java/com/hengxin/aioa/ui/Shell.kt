@@ -27,19 +27,34 @@ enum class Tab(val label: String, val icon: String) {
 
 private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
-/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先回总览再退出。 */
+/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先退子页, 再回总览, 最后退出。 */
 @Composable
 fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit, onSettings: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
     // "我的" 下的子页; 子页自己处理返回键, 回到 "我的"
     var meSub by rememberSaveable { mutableStateOf(false) }
+    // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏
+    var github by rememberSaveable { mutableStateOf<String?>(null) }
+    val openGithub = { github = "" }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
-    AppScaffold(NAV, tab.name, { key -> tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+    AppScaffold(NAV, tab.name, { key -> github = null; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+        val gh = github
+        if (gh != null) {
+            if (gh.isEmpty()) {
+                GithubPage(chat.github, { github = null }, { github = it }) {
+                    github = null
+                    chat.sources.startAdd(Constants.SOURCE_GITHUB)
+                    meSub = true
+                    tab = Tab.ME
+                }
+            } else GithubRepoPage(chat.github, gh) { github = "" }
+            return@AppScaffold
+        }
         when (tab) {
-            Tab.OVERVIEW -> OverviewPage(chat) { tab = it }
+            Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
             Tab.CHAT -> ChatScreen(chat)
             Tab.AGENT -> AgentPage(chat)
-            Tab.RESOURCES -> MetricsPage(chat)
+            Tab.RESOURCES -> MetricsPage(chat, openGithub)
             Tab.ME -> if (meSub) SourcesPage(chat.sources) { meSub = false } else MePage(prefs, setPrefs, onNotes, onSettings) { meSub = true }
         }
     }

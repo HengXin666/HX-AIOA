@@ -1,0 +1,230 @@
+package com.hengxin.aioa.ui
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.hengxin.aioa.Constants
+import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.proto.SourceRef
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+private const val GET = "GET"
+private const val POST = "POST"
+private const val F_URL = "url"
+private const val F_AT = "at"
+private const val F_TITLE = "title"
+private const val F_AUTHOR = "author"
+private const val F_NUMBER = "number"
+private const val F_STATUS = "status"
+private const val F_BRANCH = "branch"
+private const val F_WORKFLOW = "workflow"
+private const val F_UPDATED = "updatedAt"
+// webhook 常常一次推好几条, 合并成一次刷新
+private const val EVENT_DEBOUNCE_MS = 1500L
+// 总览卡的动态取自最近活跃的几个仓库
+private const val RECENT_REPOS = 3
+const val GITHUB_RECENT_SHOWN = 3
+
+enum class CiStatus { SUCCESS, FAILURE, RUNNING, CANCELLED, UNKNOWN }
+
+data class GhPush(val at: Long, val by: String, val branch: String, val commits: Int)
+
+data class GhCi(val status: CiStatus, val workflow: String, val branch: String, val url: String?, val at: Long)
+
+data class GhRepo(
+    val repo: String,
+    val url: String,
+    val description: String?,
+    val stars: Int,
+    val openPrs: Int,
+    val openIssues: Int,
+    val lastPush: GhPush?,
+    val ci: GhCi?,
+    val updatedAt: Long,
+) {
+    /** 最近一次活动时间, 用于排序。 */
+    val active: Long get() = maxOf(updatedAt, lastPush?.at ?: 0L, ci?.at ?: 0L)
+}
+
+data class GhPr(val number: Int, val title: String, val author: String, val url: String, val draft: Boolean, val updatedAt: Long)
+
+data class GhIssue(val number: Int, val title: String, val author: String, val url: String, val updatedAt: Long, val labels: List<String>)
+
+data class GhRun(val workflow: String, val branch: String, val status: CiStatus, val url: String, val at: Long)
+
+data class GhActivity(val ts: Long, val kind: String, val title: String, val url: String?, val repo: String)
+
+data class GhDetail(val repo: GhRepo, val prs: List<GhPr>, val issues: List<GhIssue>, val runs: List<GhRun>, val timeline: List<GhActivity>)
+
+/** GitHub 页的状态: 仓库列表, 详情缓存, 同步; 页面可见时收到 github 事件就刷新。 */
+class GithubState(private val context: Context, private val scope: CoroutineScope) {
+    var repos by mutableStateOf<List<GhRepo>>(emptyList())
+        private set
+    var loaded by mutableStateOf(false)
+        private set
+    var refreshing by mutableStateOf(false)
+        private set
+    var syncing by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+    /** 服务端是否已经从 GitHub 回填过。 */
+    var synced by mutableStateOf(true)
+        private set
+    var recent by mutableStateOf<List<GhActivity>>(emptyList())
+        private set
+    val details = mutableStateMapOf<String, GhDetail>()
+    val detailErrors = mutableStateMapOf<String, String>()
+
+    // 正在显示的详情页仓库与可见页面数; 没人看时不因事件刷新
+    private var openRepo: String? = null
+    private var watchers = 0
+    private var eventJob: Job? = null
+
+    val openPrs: Int get() = repos.sumOf { it.openPrs }
+    val openIssues: Int get() = repos.sumOf { it.openIssues }
+    val ciFailures: Int get() = repos.count { it.ci?.status == CiStatus.FAILURE }
+    val latestCi: GhCi? get() = repos.mapNotNull { it.ci }.maxByOrNull { it.at }
+
+    fun refresh(withRecent: Boolean = false) {
+        refreshing = true
+        io {
+            val r = Api.call(context, GET, listOf(Constants.GITHUB_REPOS_PATH))
+            val list = r.body?.optJSONArray("repos")?.let { objects(it).map(::repo) }?.sortedByDescending { it.active }
+            val recentList = if (withRecent && list != null) loadRecent(list) else null
+            withContext(Dispatchers.Main) {
+                refreshing = false
+                loaded = true
+                error = r.error
+                if (list != null) {
+                    repos = list
+                    synced = r.body?.optBoolean("synced", true) ?: true
+                }
+                recentList?.let { recent = it }
+            }
+        }
+    }
+
+    fun loadDetail(name: String) = io {
+        val (owner, repo) = name.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        val r = Api.call(context, GET, listOf(Constants.GITHUB_REPOS_PATH, owner, repo))
+        val d = r.body?.let { detail(it, name) }
+        withContext(Dispatchers.Main) {
+            if (d != null) {
+                details[name] = d
+                detailErrors.remove(name)
+            } else detailErrors[name] = r.error ?: "没有拿到仓库详情"
+        }
+    }
+
+    /** 让服务端从 GitHub 回填, 完成后重新拉列表; 失败时把服务端的中文报错交给 onError。 */
+    fun sync(onError: (String) -> Unit) {
+        if (syncing) return
+        syncing = true
+        io {
+            val r = Api.call(context, POST, listOf(Constants.GITHUB_SYNC_PATH), JSONObject())
+            val fail = r.error ?: r.body?.optString("error")?.ifEmpty { null }
+                ?: if (r.body?.optBoolean("ok", true) == false) "同步失败" else null
+            withContext(Dispatchers.Main) {
+                syncing = false
+                if (fail != null) onError(fail) else {
+                    refresh(withRecent = true)
+                    openRepo?.let { loadDetail(it) }
+                }
+            }
+        }
+    }
+
+    /** 页面可见期间登记, 离开时注销; repo 非空表示详情页。 */
+    fun attach(repo: String?) {
+        watchers++
+        if (repo != null) openRepo = repo
+    }
+
+    fun detach(repo: String?) {
+        watchers = (watchers - 1).coerceAtLeast(0)
+        if (repo != null && openRepo == repo) openRepo = null
+    }
+
+    /** 实时流里的事件。只在主线程调用。 */
+    fun onEvent(source: SourceRef) {
+        if (!isGithub(source) || watchers == 0) return
+        eventJob?.cancel()
+        eventJob = scope.launch {
+            delay(EVENT_DEBOUNCE_MS)
+            refresh(withRecent = true)
+            openRepo?.let { loadDetail(it) }
+        }
+    }
+
+    private fun isGithub(s: SourceRef): Boolean =
+        s.type == Constants.SOURCE_GITHUB || s.id == Constants.SOURCE_GITHUB || s.icon == Constants.SOURCE_GITHUB
+
+    private fun loadRecent(list: List<GhRepo>): List<GhActivity> {
+        val found = list.take(RECENT_REPOS).mapNotNull { r ->
+            val (owner, name) = r.repo.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            Api.call(context, GET, listOf(Constants.GITHUB_REPOS_PATH, owner, name)).body?.let { detail(it, r.repo) }
+        }
+        scope.launch(Dispatchers.Main) { found.forEach { details[it.repo.repo] = it } }
+        return found.flatMap { it.timeline }.sortedByDescending { it.ts }.take(GITHUB_RECENT_SHOWN)
+    }
+
+    private fun detail(o: JSONObject, name: String): GhDetail {
+        val summary = o.optJSONObject("repo")?.let(::repo) ?: repos.firstOrNull { it.repo == name } ?: GhRepo(name, "", null, 0, 0, 0, null, null, 0)
+        return GhDetail(
+            summary,
+            arr(o, "prs").map { GhPr(it.optInt(F_NUMBER), it.optString(F_TITLE), it.optString(F_AUTHOR), it.optString(F_URL), it.optBoolean("draft"), it.optLong(F_UPDATED)) },
+            arr(o, "issues").map {
+                val labels = it.optJSONArray("labels")?.let { l -> (0 until l.length()).map { i -> l.optString(i) } }.orEmpty()
+                GhIssue(it.optInt(F_NUMBER), it.optString(F_TITLE), it.optString(F_AUTHOR), it.optString(F_URL), it.optLong(F_UPDATED), labels)
+            },
+            arr(o, "runs").map { GhRun(it.optString(F_WORKFLOW), it.optString(F_BRANCH), ci(it.optString(F_STATUS)), it.optString(F_URL), it.optLong(F_AT)) },
+            arr(o, "timeline").map { GhActivity(it.optLong("ts"), it.optString("kind"), it.optString(F_TITLE), opt(it, F_URL), name) },
+        )
+    }
+
+    private fun repo(o: JSONObject): GhRepo {
+        val name = o.optString("repo")
+        return GhRepo(
+            name,
+            o.optString(F_URL).ifEmpty { GH_WEB_ROOT + name },
+            opt(o, "description"),
+            o.optInt("stars"),
+            o.optInt("openPrs"),
+            o.optInt("openIssues"),
+            o.optJSONObject("lastPush")?.let { GhPush(it.optLong(F_AT), it.optString("by"), it.optString(F_BRANCH), it.optInt("commits")) },
+            o.optJSONObject("ci")?.let { GhCi(ci(it.optString(F_STATUS)), it.optString(F_WORKFLOW), it.optString(F_BRANCH), opt(it, F_URL), it.optLong(F_AT)) },
+            o.optLong(F_UPDATED),
+        )
+    }
+
+    private fun ci(s: String): CiStatus = runCatching { CiStatus.valueOf(s.uppercase()) }.getOrDefault(CiStatus.UNKNOWN)
+
+    private fun opt(o: JSONObject, key: String): String? = if (o.isNull(key)) null else o.optString(key).ifEmpty { null }
+
+    private fun arr(o: JSONObject, key: String): List<JSONObject> = o.optJSONArray(key)?.let(::objects).orEmpty()
+
+    private fun objects(a: JSONArray): List<JSONObject> = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+
+    private fun io(block: suspend () -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { block() }.onFailure {
+                withContext(Dispatchers.Main) {
+                    refreshing = false
+                    syncing = false
+                    loaded = true
+                    error = "解析失败: ${it.message ?: it.javaClass.simpleName}"
+                }
+            }
+        }
+    }
+}

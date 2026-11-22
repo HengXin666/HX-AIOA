@@ -91,6 +91,8 @@ object Constants {
     const val KEYS_PATH = "api/v1/keys"
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
+    const val GITHUB_REPOS_PATH = "api/v1/github/repos"
+    const val GITHUB_SYNC_PATH = "api/v1/github/sync"
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"

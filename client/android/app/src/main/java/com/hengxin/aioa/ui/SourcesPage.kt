@@ -77,7 +77,7 @@ fun SubPage(title: String, onBack: () -> Unit, action: Pair<String, () -> Unit>?
 @Composable
 private fun SourceList(state: SourcesState, onBack: () -> Unit) {
     var showing by remember { mutableStateOf<SourceItem?>(null) }
-    SubPage(TITLE, onBack, "添加" to state::startAdd) {
+    SubPage(TITLE, onBack, "添加" to { state.startAdd() }) {
         state.error?.let { ErrorCard(it) }
         if (state.items.isEmpty()) {
             Card { StateBody(if (state.loaded) CardState.Empty else CardState.Loading, "还没有数据源, 点添加接入 GitHub 等") {} }
@@ -130,6 +130,10 @@ private fun SourceDetail(s: SourceItem, kind: SourceType?, close: () -> Unit, de
 @Composable
 private fun SourceAdd(state: SourcesState) {
     var picked by remember { mutableStateOf<SourceType?>(null) }
+    LaunchedEffect(state.addType, state.types) {
+        val want = state.addType ?: return@LaunchedEffect
+        state.types.firstOrNull { it.type == want }?.let { picked = it; state.addType = null }
+    }
     SubPage("添加数据源", { state.back() }) {
         state.error?.let { ErrorCard(it) }
         val kind = picked

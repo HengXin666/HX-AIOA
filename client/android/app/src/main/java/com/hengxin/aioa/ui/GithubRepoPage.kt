@@ -1,0 +1,120 @@
+package com.hengxin.aioa.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.Card
+import com.hengxin.aioa.kit.CardState
+import com.hengxin.aioa.kit.Chip
+import com.hengxin.aioa.kit.Dot
+import com.hengxin.aioa.kit.Icon
+import com.hengxin.aioa.kit.Paragraph
+import com.hengxin.aioa.kit.StateBody
+import com.hengxin.aioa.kit.Text
+
+private enum class RepoTab(val label: String) { TIMELINE("动态"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
+
+/** 仓库详情: 分段看动态, PR, Issue, CI; 每条点开浏览器, 返回键回列表。 */
+@Composable
+fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var tab by rememberSaveable(repo) { mutableStateOf(RepoTab.TIMELINE) }
+    LaunchedEffect(repo) { state.loadDetail(repo) }
+    WatchGithub(state, repo)
+    BackHandler(onBack = onBack)
+    val detail = state.details[repo]
+    val summary = detail?.repo ?: state.repos.firstOrNull { it.repo == repo }
+    val url = summary?.url?.ifEmpty { null } ?: GH_WEB_ROOT + repo
+    GhRefreshBox(false, { state.loadDetail(repo) }) {
+        SubPage(repo.substringAfter('/'), onBack, "在 GitHub 打开" to { openUrl(context, url) }) {
+            summary?.let { RepoHeader(it) }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RepoTab.entries.forEach { t -> Chip(t.label + count(detail, t), tab == t) { tab = t } }
+            }
+            val error = state.detailErrors[repo]
+            Card {
+                val shown = when {
+                    detail != null -> if (rows(detail, tab) == 0) CardState.Empty else CardState.Ready
+                    error != null -> CardState.Error(error)
+                    else -> CardState.Loading
+                }
+                StateBody(shown, emptyText(tab), { state.loadDetail(repo) }) {
+                    if (detail != null) TabBody(detail, tab) { openUrl(context, it) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepoHeader(r: GhRepo) {
+    val c = Aioa.colors
+    Card {
+        Text(r.repo, c.textSecondary, GH_META_SP)
+        r.description?.let { Paragraph(it, c.text, 14) }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconCount(ICON_STAR, r.stars, "星")
+            IconCount(ICON_PR, r.openPrs, LABEL_PR)
+            IconCount(ICON_ISSUE, r.openIssues, LABEL_ISSUE)
+        }
+        CiLine(r.ci)
+        pushLine(r.lastPush)?.let { Text(it, c.textSecondary, GH_META_SP) }
+    }
+}
+
+@Composable
+private fun TabBody(d: GhDetail, tab: RepoTab, open: (String?) -> Unit) {
+    when (tab) {
+        RepoTab.TIMELINE -> d.timeline.sortedByDescending { it.ts }.forEach { a ->
+            GhRow(activityIcon(a.kind), a.title, ago(a.ts)) { open(a.url) }
+        }
+        RepoTab.PRS -> d.prs.forEach { p ->
+            val meta = metaOf("#${p.number}", p.author, if (p.draft) "草稿" else "", ago(p.updatedAt))
+            GhRow(ICON_PR, p.title, meta) { open(p.url) }
+        }
+        RepoTab.ISSUES -> d.issues.forEach { i ->
+            val meta = metaOf("#${i.number}", i.author, ago(i.updatedAt), *i.labels.toTypedArray())
+            GhRow(ICON_ISSUE, i.title, meta) { open(i.url) }
+        }
+        RepoTab.CI -> d.runs.forEach { r -> RunRow(r) { open(r.url) } }
+    }
+}
+
+@Composable
+private fun RunRow(r: GhRun, onClick: () -> Unit) {
+    val c = Aioa.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Dot(ciColor(r.status))
+        val meta = metaOf(r.branch, ciLabel(r.status), ago(r.at))
+        GhRow(ICON_RUN, r.workflow.ifEmpty { LABEL_CI }, meta, c.textSecondary, onClick)
+    }
+}
+
+private fun rows(d: GhDetail, tab: RepoTab): Int = when (tab) {
+    RepoTab.TIMELINE -> d.timeline.size
+    RepoTab.PRS -> d.prs.size
+    RepoTab.ISSUES -> d.issues.size
+    RepoTab.CI -> d.runs.size
+}
+
+private fun count(d: GhDetail?, tab: RepoTab): String = if (d == null || tab == RepoTab.TIMELINE) "" else " ${rows(d, tab)}"
+
+private fun emptyText(tab: RepoTab): String = when (tab) {
+    RepoTab.TIMELINE -> "还没有动态, 配好 Webhook 后这里会实时出现"
+    RepoTab.PRS -> "没有开放的 PR"
+    RepoTab.ISSUES -> "没有开放的 Issue"
+    RepoTab.CI -> "还没有 CI 记录"
+}
