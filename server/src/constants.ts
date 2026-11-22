@@ -95,7 +95,8 @@ export const GITHUB_WEB = "https://github.com";
 export const KV_GITHUB_SYNCED = "githubSyncedAt";
 export const KV_GITHUB_PICKS = "githubPicks";
 export const KV_GITHUB_LOGIN = "githubLogin";
-export const KV_GITHUB_ACTIVITY_ETAG = "githubActivityEtag";
+// 解析规则变化时换键名, 让下一次同步重新拉全量并改写旧行
+export const KV_GITHUB_ACTIVITY_ETAG = "githubActivityEtag:2";
 export const KV_GITHUB_ACTIVITY_SYNCED = "githubActivitySyncedAt";
 export const ERR_NO_GITHUB_TOKEN = "服务端没有配置 GITHUB_TOKEN";
 export const GITHUB_ADAPTER = "github";

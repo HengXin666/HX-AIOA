@@ -8,7 +8,11 @@ type Row = { body: string };
 
 const tsOf = (raw: unknown) => Date.parse(s(raw)) || 0;
 
-// GitHub 用户事件 → 一行动态; 认不出的类型归为 other, 不丢
+const ACTIONS: Record<string, string> = { opened: "打开", closed: "关闭", merged: "合并", reopened: "重新打开", created: "创建", published: "发布", edited: "编辑" };
+const verb = (a: string) => ACTIONS[a] ?? a;
+const join = (...parts: string[]) => parts.filter(Boolean).join(" ");
+
+// GitHub 用户事件 → 一行动态; 2025 年起事件载荷精简 (推送不带提交, PR 不带标题), 缺的字段用分支与编号补
 export function activityOf(e: Obj): GithubActivityItem | null {
   const id = s(e.id);
   const repo = s(obj(e.repo).name);
@@ -19,33 +23,40 @@ export function activityOf(e: Obj): GithubActivityItem | null {
   const item = (kind: GithubActivityKind, title: string, url = repoUrl, extra: Partial<GithubActivityItem> = {}): GithubActivityItem => ({ ...base, kind, title, url, ...extra });
   const pr = obj(p.pull_request);
   const issue = obj(p.issue);
+  const prNo = num(p.number) ?? num(pr.number);
+  const prUrl = s(pr.html_url) || (prNo ? `${repoUrl}/pull/${prNo}` : repoUrl);
+  const prRefs = s(obj(pr.head).ref) && s(obj(pr.base).ref) ? `(${s(obj(pr.head).ref)} → ${s(obj(pr.base).ref)})` : "";
   switch (s(e.type)) {
     case "PushEvent": {
       const branch = s(p.ref).replace(/^refs\/heads\//, "");
-      const commits = num(p.size) ?? (Array.isArray(p.commits) ? p.commits.length : 0);
+      const commits = num(p.size) ?? (Array.isArray(p.commits) ? p.commits.length : undefined);
       const head = s(p.head);
-      const first = obj(Array.isArray(p.commits) ? p.commits.at(-1) : undefined);
-      const msg = s(first.message).split("\n")[0];
-      const title = `推送 ${commits} 个提交到 ${branch}${msg ? `: ${msg}` : ""}`;
-      return item("push", title, head ? `${repoUrl}/commit/${head}` : repoUrl, { commits });
+      const before = s(p.before);
+      const last = obj(Array.isArray(p.commits) ? p.commits.at(-1) : undefined);
+      const msg = s(last.message).split("\n")[0] ?? "";
+      const title = `推送到 ${branch}${commits ? ` (${commits} 个提交)` : ""}${msg ? `: ${msg}` : ""}`;
+      const url = before && head ? `${repoUrl}/compare/${before.slice(0, 12)}...${head.slice(0, 12)}` : head ? `${repoUrl}/commit/${head}` : repoUrl;
+      return item("push", title, url, commits ? { commits } : {});
     }
     case "PullRequestEvent":
-      return item("pr", `${s(p.action)} PR #${num(pr.number) ?? ""} ${s(pr.title)}`, s(pr.html_url) || repoUrl);
+      return item("pr", join(verb(s(p.action)), `PR #${prNo ?? ""}`, s(pr.title) || prRefs), prUrl);
     case "PullRequestReviewEvent":
-      return item("review", `评审 PR #${num(pr.number) ?? ""} ${s(pr.title)}`, s(obj(p.review).html_url) || s(pr.html_url) || repoUrl);
+      return item("review", join("评审", `PR #${prNo ?? ""}`, s(pr.title)), s(obj(p.review).html_url) || prUrl);
     case "PullRequestReviewCommentEvent":
     case "IssueCommentEvent":
     case "CommitCommentEvent": {
       const c = obj(p.comment);
-      const target = num(issue.number) ?? num(pr.number);
-      return item("comment", `评论${target ? ` #${target}` : ""} ${s(issue.title) || s(pr.title)}`.trim(), s(c.html_url) || repoUrl);
+      const target = num(issue.number) ?? prNo;
+      return item("comment", join("评论", target ? `#${target}` : "", s(issue.title) || s(pr.title)), s(c.html_url) || repoUrl);
     }
-    case "IssuesEvent":
-      return item("issue", `${s(p.action)} Issue #${num(issue.number) ?? ""} ${s(issue.title)}`, s(issue.html_url) || repoUrl);
+    case "IssuesEvent": {
+      const n = num(issue.number) ?? num(p.number);
+      return item("issue", join(verb(s(p.action)), `Issue #${n ?? ""}`, s(issue.title)), s(issue.html_url) || (n ? `${repoUrl}/issues/${n}` : repoUrl));
+    }
     case "CreateEvent":
-      return item("create", `创建 ${s(p.ref_type)} ${s(p.ref)}`.trim(), repoUrl);
+      return item("create", join("创建", s(p.ref_type), s(p.ref)), repoUrl);
     case "DeleteEvent":
-      return item("delete", `删除 ${s(p.ref_type)} ${s(p.ref)}`.trim(), repoUrl);
+      return item("delete", join("删除", s(p.ref_type), s(p.ref)), repoUrl);
     case "ReleaseEvent": {
       const r = obj(p.release);
       return item("release", `发布 ${s(r.tag_name) || s(r.name)}`, s(r.html_url) || repoUrl);
@@ -76,7 +87,7 @@ export function statsOf(items: GithubActivityItem[]): GithubActivityStats {
 }
 
 
-// 一行一个事件, 按 id 去重, 已有的不再写
+// 一行一个事件, 按 id 去重, 内容没变的不重写
 export class ActivityStore {
   constructor(private readonly sql: SqlStorage) {
     sql.exec("CREATE TABLE IF NOT EXISTS gh_activity (id TEXT PRIMARY KEY, ts INTEGER NOT NULL, body TEXT NOT NULL)");
@@ -84,7 +95,7 @@ export class ActivityStore {
 
   add(items: GithubActivityItem[], now = Date.now()): number {
     let n = 0;
-    for (const i of items) n += this.sql.exec("INSERT OR IGNORE INTO gh_activity (id, ts, body) VALUES (?, ?, ?)", i.id, i.ts, JSON.stringify(i)).rowsWritten;
+    for (const i of items) n += this.sql.exec("INSERT INTO gh_activity (id, ts, body) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body WHERE body != excluded.body", i.id, i.ts, JSON.stringify(i)).rowsWritten;
     this.sql.exec("DELETE FROM gh_activity WHERE ts < ?", now - KEEP_MS);
     return n;
   }
