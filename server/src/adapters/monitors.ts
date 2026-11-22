@@ -1,4 +1,5 @@
 import { severityFromText } from "@hx-aioa/protocol";
+import { beszelSystem } from "./metrics";
 import { type Adapter, CRITICAL, FIRING, INFO, RESOLVED, WARNING, event, hostOf, isObj, s } from "./types";
 
 // Uptime Kuma: heartbeat.status 0 掉线, 1 恢复, 2 等待, 3 维护; 测试通知没有 heartbeat
@@ -24,6 +25,8 @@ const BESZEL_ON = /\bon (\S+?)\.?$/i;
 // Beszel 通过 shoutrrr 的 generic 地址发出 {title, message}, 标题形如 "CPU usage above threshold on nas" / "Connection to nas is down"
 export const beszel: Adapter = ({ body, source }) => {
   if (!isObj(body)) return "Beszel 请求体必须是 JSON";
+  // 拉取 systems 记录时带 info, 转成指标; 告警通知只有 title/message
+  if (isObj(body.info)) return beszelSystem(body, source.subject);
   const title = s(body.title) || s(body.message) || "Beszel 告警";
   const message = s(body.message);
   const system = BESZEL_CONN.exec(title)?.[1] ?? BESZEL_ON.exec(title)?.[1] ?? source.subject ?? "beszel";

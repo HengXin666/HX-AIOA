@@ -1,4 +1,4 @@
-import { BUTTON_TASK_PREFIX, validateSpace, type ButtonAction, type Space, type SpaceState, type SpaceWithState } from "@hx-aioa/protocol";
+import { BUTTON_TASK_PREFIX, parseSpaceState, validateSpace, type ButtonAction, type Space, type SpaceWithState } from "@hx-aioa/protocol";
 import { KV_SPACES } from "./constants";
 
 const MAX_SPACES = 12;
@@ -44,26 +44,16 @@ export class Spaces {
     return true;
   }
 
+  async get(id: string): Promise<SpaceWithState | null> {
+    return (await this.all())[id] ?? null;
+  }
+
   async setState(id: string, raw: unknown): Promise<SpaceWithState | string | null> {
     const all = await this.all();
     const cur = all[id];
     if (!cur) return null;
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return "state 必须是对象";
-    const r = raw as Record<string, unknown>;
-    const strs = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === "string");
-    const state: SpaceState = { ...cur.state };
-    if (r.hidden !== undefined) {
-      if (typeof r.hidden !== "boolean") return "hidden 必须是布尔值";
-      state.hidden = r.hidden;
-    }
-    if (r.hiddenPanels !== undefined) {
-      if (!strs(r.hiddenPanels)) return "hiddenPanels 必须是字符串数组";
-      state.hiddenPanels = r.hiddenPanels as string[];
-    }
-    if (r.order !== undefined) {
-      if (!strs(r.order)) return "order 必须是字符串数组";
-      state.order = r.order as string[];
-    }
+    const state = parseSpaceState(raw, cur, cur.state);
+    if (typeof state === "string") return state;
     const next = { ...cur, state };
     await this.save({ ...all, [id]: next });
     return next;

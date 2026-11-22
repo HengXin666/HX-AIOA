@@ -1,4 +1,6 @@
 import {
+  defaultUnits,
+  normalizeMetricValues,
   METRIC_LIVE_INTERVAL_MS,
   PROBE_DEVICE_PREFIX,
   type DemandFrame,
@@ -64,11 +66,16 @@ export class MetricRouter {
     return [...new Set(all.flatMap((ws) => attOf(ws).offer ?? []))].sort();
   }
 
-  relay(frame: MetricFrame): void {
+  // 不论来自探针还是 HTTP, 转发前统一换成标准字段名, 组件绑定与来源无关
+  relay(raw: MetricFrame): void {
+    const frame: MetricFrame = { ...raw, points: raw.points.map((p) => ({ ts: p.ts, values: normalizeMetricValues(p.values) })) };
     const last = frame.points[frame.points.length - 1];
     if (last && !frame.history) {
-      this.latest.set(frame.subject, { t: "metric", subject: frame.subject, points: [last] });
-      this.persist(frame.subject, last.ts, last.values);
+      // 同一主体的字段可能来自不同来源 (如 Prometheus 每条只带一个字段), 最新值按字段合并
+      const prev = this.latest.get(frame.subject)?.points[0]?.values;
+      const merged = { ts: last.ts, values: { ...prev, ...last.values } };
+      this.latest.set(frame.subject, { t: "metric", subject: frame.subject, points: [merged] });
+      this.persist(frame.subject, merged.ts, merged.values);
     }
     const text = JSON.stringify(frame);
     for (const ws of this.watchers(frame.subject)) trySend(ws, text);
@@ -76,8 +83,9 @@ export class MetricRouter {
 
   // HTTP 写入的 metric 事件: 不进收件箱, 转成 metric 帧发给在看的连接
   ingest(subject: string, data: MetricData, ts: number): void {
-    if (data.units) this.units.set(subject, data.units);
-    this.relay({ t: "metric", subject, points: [{ ts, values: data.values }] });
+    const values = normalizeMetricValues(data.values);
+    this.units.set(subject, defaultUnits(values, { ...this.units.get(subject), ...data.units }));
+    this.relay({ t: "metric", subject, points: [{ ts, values }] });
   }
 
   private persist(subject: string, ts: number, values: Record<string, number>): void {

@@ -10,6 +10,7 @@ import {
   type SourceTypeInfo,
 } from "@hx-aioa/protocol";
 import { github } from "./github";
+import { netdata, prometheus } from "./metrics";
 import { beszel, healthchecks, uptimeKuma } from "./monitors";
 import { type Adapter, type HookInput, INFO, NORMAL, RESOLVED, SUMMARY_PREVIEW, clip, event, isObj } from "./types";
 
@@ -51,6 +52,8 @@ export const ADAPTERS: Record<HookAdapter, Adapter> = {
   "uptime-kuma": uptimeKuma,
   beszel,
   healthchecks,
+  netdata,
+  prometheus,
 };
 
 // 内置来源类型; 新增一种来源 = 写一个适配器 + 在这里登记, 客户端读 GET /api/v1/source-types 即可展示
@@ -72,7 +75,15 @@ export const SOURCE_TYPE_INFOS: SourceTypeInfo[] = [
     setup: "通知类型选 Webhook, 地址填 webhookUrls[\"uptime-kuma\"] 并带 ?key=",
     rules: [{ name: "Uptime Kuma 等待中先不提醒", enabled: true, when: { sources: ["uptime-kuma"], severities: ["warning"] }, action: "aggregate", aggregateSec: 300 }],
   },
-  { type: "beszel", adapter: "beszel", name: "Beszel", icon: "server", setup: "通知地址用 generic://域名/api/v1/hooks/beszel/{keyId}?key=..." },
+  {
+    type: "beszel",
+    adapter: "beszel",
+    name: "Beszel",
+    icon: "server",
+    setup: "告警: 通知地址用 generic://域名/api/v1/hooks/beszel/{keyId}?key=...; 指标: puller 拉 /api/collections/systems/records, itemsPath 填 items",
+  },
+  { type: "netdata", adapter: "netdata", name: "Netdata", icon: "activity", setup: "puller 拉 /api/v1/allmetrics?format=json, 来源上填 subject 为主机名" },
+  { type: "prometheus", adapter: "prometheus", name: "Prometheus", icon: "chart-line", setup: "puller 拉 /api/v1/query, itemsPath 填 data.result, 查询里用 label_replace 打上 field 标签" },
   { type: "healthchecks", adapter: "healthchecks", name: "Healthchecks", icon: "heart-pulse", setup: "Webhook 集成, 请求体见文档的推荐模板" },
   { type: "agent", name: "Agent", icon: "bot", setup: "用 agent scope 的 key 连 /api/v1/stream?role=agent" },
   { type: "probe", name: "探针", icon: "cpu", setup: "tools/probe.mjs" },

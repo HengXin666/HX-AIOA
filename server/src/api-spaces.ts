@@ -1,7 +1,8 @@
-import { PATH_SPACE, PATH_SPACE_STATE, PATH_SPACES } from "@hx-aioa/protocol";
-import { CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, POST, PUT } from "./constants";
+import { PATH_SPACE, PATH_SPACE_DATA, PATH_SPACE_STATE, PATH_SPACES } from "@hx-aioa/protocol";
+import { CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, POST, PUT, RECENT_SCAN } from "./constants";
 import { OWNER, type ReqCtx, type Route, keyIdOf, route } from "./core";
 import { fail, json, readJson } from "./http";
+import { resolveSpaceData } from "./space-data";
 
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const idParam = (c: ReqCtx) => decodeURIComponent(c.params[0] ?? "");
@@ -30,6 +31,13 @@ export const SPACE_ROUTES: Route[] = [
     const r = await c.core.spaces.setState(idParam(c), await readJson(c.req));
     if (r === null) return notFound();
     if (typeof r === "string") return fail(400, r);
+    // 其他设备同步排序与尺寸
+    c.core.sockets.toV1Clients({ t: "space_update", id: r.id, space: r });
     return json({ space: r });
+  }),
+  route(GET, PATH_SPACE_DATA, OWNER, async (c) => {
+    const space = await c.core.spaces.get(idParam(c));
+    if (!space) return notFound();
+    return json(resolveSpaceData(space, c.core.metrics, c.core.store.recent(RECENT_SCAN)));
   }),
 ];
