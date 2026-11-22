@@ -47,7 +47,7 @@ const total = (g: Groups, k: string) => (g ?? []).reduce((n, r) => n + (r.sum[k]
 // 结果只缓存在内存: 10 分钟内重复打开不再请求 CF
 let cache: { at: number; body: CfUsage } | null = null;
 
-async function gql<T>(env: Env, query: string, variables: Record<string, string>): Promise<T> {
+export async function gql<T>(env: Env, query: string, variables: Record<string, string | string[]>): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${env.CF_API_TOKEN}` },
