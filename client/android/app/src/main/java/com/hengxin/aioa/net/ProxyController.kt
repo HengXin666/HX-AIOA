@@ -74,6 +74,15 @@ class ProxyController(context: Context) {
         .host(Constants.LOOPBACK)
         .port(Constants.PROXY_CONTROLLER_PORT)
 
+    // 诊断用: 原样返回状态码和正文开头
+    fun raw(vararg segments: String): String = runCatching {
+        val b = base()
+        segments.forEach { b.addPathSegment(it) }
+        client.newCall(Request.Builder().url(b.build()).header(AUTH, "Bearer $secret").build()).execute().use { resp ->
+            "HTTP ${resp.code} " + resp.body?.string().orEmpty().take(RAW_MAX)
+        }
+    }.getOrElse { "出错: ${it.message}" }
+
     private fun call(builder: Request.Builder): JSONObject? = runCatching {
         client.newCall(builder.header(AUTH, "Bearer $secret").build()).execute().use { resp ->
             if (!resp.isSuccessful) null else JSONObject(resp.body?.string().orEmpty())
@@ -86,6 +95,7 @@ class ProxyController(context: Context) {
 
     companion object {
         const val PROVIDER = "sub"
+        private const val RAW_MAX = 400
         private const val AUTH = "Authorization"
         private val JSON = "application/json".toMediaType()
     }
