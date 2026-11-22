@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [],
+  "invariants": [
+    "SettingsModel 只在进入相关子页时创建, 不提前拉起代理内核"
+  ],
+  "compatBoundary": "Compatibility boundary not yet refined.",
+  "nonGoals": [
+    "不改 Notifier, GitHub 与总览页, SettingsModel"
+  ]
+}

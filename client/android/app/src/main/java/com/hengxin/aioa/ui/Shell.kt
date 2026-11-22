@@ -16,6 +16,9 @@ import com.hengxin.aioa.config.AppearancePrefs
 import com.hengxin.aioa.kit.AioaColors
 import com.hengxin.aioa.kit.AppScaffold
 import com.hengxin.aioa.kit.NavItem
+import com.hengxin.aioa.ui.settings.MeDeps
+import com.hengxin.aioa.ui.settings.MeHost
+import com.hengxin.aioa.ui.settings.SettingsPage
 
 enum class Tab(val label: String, val icon: String) {
     OVERVIEW("总览", "gauge"),
@@ -27,20 +30,36 @@ enum class Tab(val label: String, val icon: String) {
 
 private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
-/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先回总览再退出。 */
+/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先退子页, 再回总览, 最后退出。 */
 @Composable
-fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit, onSettings: () -> Unit) {
+fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
-    // "我的" 下的子页; 子页自己处理返回键, 回到 "我的"
-    var meSub by rememberSaveable { mutableStateOf(false) }
+    // 从 GitHub 空状态跳来时直接进数据源页
+    var meStart by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
+    // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏
+    var github by rememberSaveable { mutableStateOf<String?>(null) }
+    val openGithub = { github = "" }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
-    AppScaffold(NAV, tab.name, { key -> tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+    AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+        val gh = github
+        if (gh != null) {
+            if (gh.isEmpty()) {
+                GithubPage(chat.github, { github = null }, { github = it }) {
+                    github = null
+                    chat.sources.startAdd(Constants.SOURCE_GITHUB)
+                    meStart = SettingsPage.SOURCES
+                    tab = Tab.ME
+                }
+            } else GithubRepoPage(chat.github, gh) { github = "" }
+            return@AppScaffold
+        }
         when (tab) {
-            Tab.OVERVIEW -> OverviewPage(chat) { tab = it }
+            Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
             Tab.CHAT -> ChatScreen(chat)
             Tab.AGENT -> AgentPage(chat)
-            Tab.RESOURCES -> MetricsPage(chat)
-            Tab.ME -> if (meSub) SourcesPage(chat.sources) { meSub = false } else MePage(prefs, setPrefs, onNotes, onSettings) { meSub = true }
+            Tab.RESOURCES -> MetricsPage(chat, openGithub)
+            // "我的" 的子页自己处理返回键, 逐级回到列表
+            Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart)
         }
     }
 }

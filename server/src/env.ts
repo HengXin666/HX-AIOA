@@ -8,4 +8,5 @@ export interface Env {
   MIPUSH_PACKAGE?: string;
   WXPUSHER_APP_TOKEN?: string;
   WXPUSHER_UID?: string;
+  GITHUB_TOKEN?: string;
 }

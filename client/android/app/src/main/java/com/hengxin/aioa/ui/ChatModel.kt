@@ -6,7 +6,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.AioaApp
@@ -14,6 +13,7 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
+import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.proto.ServerFrame
@@ -49,9 +49,10 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val feed = FeedState(socket::send)
     val spaces = SpacesState(app, viewModelScope, metrics)
     val sources = SourcesState(app, viewModelScope)
+    val github = GithubState(app, viewModelScope)
 
     fun resume() {
-        NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
+        NotifyKit.clearMessages(getApplication<Application>())
         viewModelScope.launch {
             val (history, readSeq) = withContext(Dispatchers.IO) { db.recent(Constants.HISTORY_PAGE) to db.readSeq() }
             merge(history)
@@ -96,7 +97,10 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame)) return
-        if (frame is ServerFrame.Ev) sources.onEvent(frame.ev.source.id, frame.ev.title)
+        if (frame is ServerFrame.Ev) {
+            sources.onEvent(frame.ev.source.id, frame.ev.title)
+            github.onEvent(frame.ev.source)
+        }
         // v1 的事件同时进消息列表 (压成一行), 保持消息页与旧版一致
         if (frame is ServerFrame.Ev && frame.ev.kind != Constants.KIND_METRIC) accept(frame.ev.toMsg())
         if (feed.onFrame(frame) || frame !is ServerFrame.Msg) return

@@ -32,18 +32,18 @@ private sealed interface HomeTile {
 
 /** 总览三层: 需要我 (等待确认的任务与重要告警), 正在发生 (动态与资源), 值得一看 (报告与摘要)。 */
 @Composable
-fun OverviewPage(chat: ChatModel, open: (Tab) -> Unit) {
+fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
     WatchProbes(chat.metrics)
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
     PageColumn("总览") {
         Status(chat.online, chat.metrics.probes.size, feed.v1)
-        if (feed.v1) V1Layers(chat, state, open) else LegacyLayers(chat, state, open)
+        if (feed.v1) V1Layers(chat, state, openGithub, open) else LegacyLayers(chat, state, open)
     }
 }
 
 @Composable
-private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit) {
+private fun V1Layers(chat: ChatModel, state: CardState, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
     val answer = rememberAnswer(chat)
     feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }.forEach { task ->
@@ -52,6 +52,7 @@ private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit) {
     LayerSection(TITLE_NEED_ME, "少而重要", items(feed, Constants.PRIORITY_NEED_ME), state, "一切正常, 没有需要处理的事") { open(Tab.CHAT) }
     LayerSection(TITLE_HAPPENING, "值得知道, 不必立即处理", items(feed, Constants.PRIORITY_HAPPENING), state, "暂时风平浪静") { open(Tab.CHAT) }
     ResourceTiles(chat, open)
+    GithubOverviewCard(chat.github, openGithub)
     LayerSection("值得一看", "日报, 周报与摘要", items(feed, Constants.PRIORITY_WORTH_READING), state, "今天没有新内容") { open(Tab.CHAT) }
 }
 

@@ -10,7 +10,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
@@ -58,25 +56,17 @@ class MainActivity : ComponentActivity() {
             AioaTheme(appearance) {
                 MaterialTheme(colorScheme = materialScheme(Aioa.colors, appearance.dark)) {
                     Surface {
-                        var showSettings by rememberSaveable { mutableStateOf(false) }
-                        if (!chat.configured || showSettings) {
-                            BackHandler(enabled = chat.configured) { showSettings = false }
-                            SettingsScreen(
-                                settings,
-                                actions,
-                                onSaved = {
-                                    // 首次配置保存后进入主界面; 之后的修改留在设置页, 方便看代理状态
-                                    val first = !chat.configured
-                                    chat.onConfigSaved()
-                                    if (first) chat.resume()
-                                },
-                                onBack = if (chat.configured) ({ showSettings = false }) else null,
-                            )
+                        if (!chat.configured) {
+                            // 首次配置保存后进入主界面; 之后的修改都在 "我的" 里
+                            SettingsScreen(settings) {
+                                chat.onConfigSaved()
+                                chat.resume()
+                            }
                         } else {
-                            Shell(chat, prefs, { next ->
+                            Shell(chat, { settings }, actions, prefs, { next ->
                                 prefs = next
                                 AppearanceStore.save(this, next)
-                            }, ::showHistory) { showSettings = true }
+                            }, ::showHistory)
                         }
                         notes?.let { NotesSheet(it, ::closeNotes) }
                     }

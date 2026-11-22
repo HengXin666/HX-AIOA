@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "功能不变, 我的与设置页改为分组列表加独立子页的极简风格, 返回键逐级回退, 平板两栏",
+  "goal": "功能不变, 我的与设置页改为分组列表加独立子页的极简风格, 返回键逐级回退, 平板两栏",
+  "successEvidence": [
+    ":app:compileReleaseKotlin 通过; docs/settings-map.md 列出旧位置到新位置全部功能"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "不改 Notifier, GitHub 与总览页, SettingsModel"
+  ],
+  "scope": "client/android/app/src/main/java/com/hengxin/aioa/ui (MePage, SettingsScreen, Shell, MainActivity, settings 子包)",
+  "changeKinds": [],
+  "riskHints": []
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "实现 GET github/repos, 详情, POST github/sync, webhook 同步更新状态与定时回填",
+  "goal": "实现 GET github/repos, 详情, POST github/sync, webhook 同步更新状态与定时回填",
+  "successEvidence": [],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "不改 client/android"
+  ],
+  "scope": "protocol/src/v1/github.ts, server/src/github/, server/src/api-github.ts, tools/e2e-github.mjs, docs",
+  "changeKinds": [],
+  "riskHints": []
+}

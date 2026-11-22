@@ -14,6 +14,7 @@ import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.net.NodePicker
+import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.shouldNotify
@@ -37,8 +38,8 @@ class LinkService : Service(), LinkSocket.Listener {
 
     override fun onCreate() {
         super.onCreate()
-        notifier = Notifier(this)
         db = MessageDb.get(this)
+        notifier = Notifier(this, db)
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
@@ -88,20 +89,25 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         when (frame) {
             is ServerFrame.Welcome -> replayHead = frame.head
-            is ServerFrame.Msg -> store(frame, notify = true)
-            is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) {
-                store(frame.ev.toMsg(), notify = frame.ev.shouldNotify() && frame.ev.seq > replayHead)
-            }
+            is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application)) notifier.message(frame.src, frame)
+            is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) onEvent(frame.ev)
+            is ServerFrame.Task -> notifier.task(frame.task)
             else -> Unit
         }
     }
 
-    private fun store(msg: ServerFrame.Msg, notify: Boolean) {
+    // 补拉的旧事件不提醒; 界面在前台, 已恢复或安静路由时仍交给通知层, 只用来更新或撤掉已有的那条
+    private fun onEvent(ev: Envelope) {
+        val msg = ev.toMsg()
+        if (!store(msg) || ev.seq <= replayHead) return
+        notifier.event(ev, msg, loud = ev.shouldNotify() && !AioaApp.uiForeground(application))
+    }
+
+    // 入库并确认; 返回是否是别处发来的新消息
+    private fun store(msg: ServerFrame.Msg): Boolean {
         val fresh = db.insert(msg)
         socket.send(Frames.ack(msg.seq))
-        if (!notify || !fresh || msg.src.startsWith(Constants.DEVICE_PREFIX)) return
-        if (AioaApp.uiForeground(application)) return
-        notifier.showUnread(db.unread(Constants.DEVICE_PREFIX, Constants.NOTIFY_MAX_LINES), db.unreadCount(Constants.DEVICE_PREFIX))
+        return fresh && !msg.src.startsWith(Constants.DEVICE_PREFIX)
     }
 
     companion object {

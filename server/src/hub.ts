@@ -13,6 +13,7 @@ import {
   parseClientFrame,
   parseStreamFrame,
   type ClientFrame,
+  type GithubSyncResult,
   type StreamClientFrame,
   type StreamRole,
 } from "@hx-aioa/protocol";
@@ -45,6 +46,7 @@ import {
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
 import type { Env } from "./env";
+import { GithubService } from "./github/service";
 import { buildOverview } from "./group";
 import { ApiFail, fail } from "./http";
 import { toMsgFrame } from "./legacy";
@@ -74,7 +76,9 @@ export class Hub extends DurableObject<Env> {
     const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers);
     const spaces = new Spaces(ctx.storage);
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
-    this.core = { env, store, registry: new Registry(sql), config, pipeline, agents, metrics, sockets, spaces };
+    const registry = new Registry(sql);
+    const github = new GithubService(env, sql, ctx.storage, registry);
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -107,6 +111,11 @@ export class Hub extends DurableObject<Env> {
       for (const ev of this.core.store.since(since, HISTORY_MAX_LIMIT)) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));
     }
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 时什么也不做
+  async githubSync(): Promise<GithubSyncResult | null> {
+    return this.core.github.sync();
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {

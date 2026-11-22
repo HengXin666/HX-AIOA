@@ -35,9 +35,21 @@ object Constants {
     const val CHANNEL_MESSAGE = "message_v2"
     const val CHANNEL_MESSAGE_LEGACY = "message"
     const val CHANNEL_UPDATE = "update"
+    const val CHANNEL_ALERT = "alert"
+    const val CHANNEL_AGENT = "agent"
+    const val CHANNEL_GITHUB = "github"
+    const val CHANNEL_REPORT = "report"
+    // 同一类通知共用一个 id, 用 tag 区分来源或去重键, 不会撞号
     const val NOTIFY_ID_LINK = 1
     const val NOTIFY_ID_MESSAGE = 2
     const val NOTIFY_ID_UPDATE = 3
+    const val NOTIFY_ID_ALERT = 4
+    const val NOTIFY_ID_AGENT = 5
+    const val NOTIFY_ID_EVENT = 6
+    const val GROUP_MESSAGE = "com.hengxin.aioa.group.MESSAGE"
+    const val GROUP_ALERT = "com.hengxin.aioa.group.ALERT"
+    const val GROUP_AGENT = "com.hengxin.aioa.group.AGENT"
+    const val GROUP_EVENT = "com.hengxin.aioa.group.EVENT"
     val VIBRATE_PATTERN = longArrayOf(0, 250, 150, 250)
 
     const val HISTORY_PAGE = 300
@@ -91,6 +103,9 @@ object Constants {
     const val KEYS_PATH = "api/v1/keys"
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
+    const val SOURCE_AGENT = "agent"
+    const val GITHUB_REPOS_PATH = "api/v1/github/repos"
+    const val GITHUB_SYNC_PATH = "api/v1/github/sync"
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"
@@ -104,4 +119,5 @@ object Constants {
     const val ACTION_WATCHDOG = "com.hengxin.aioa.WATCHDOG"
     const val ACTION_PROXY_DEMAND = "com.hengxin.aioa.PROXY_DEMAND"
     const val ACTION_INSTALL_RESULT = "com.hengxin.aioa.INSTALL_RESULT"
+    const val ACTION_AGENT_ACT = "com.hengxin.aioa.AGENT_ACT"
 }

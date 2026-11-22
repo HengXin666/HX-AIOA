@@ -49,3 +49,44 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/impact-statement-draft.json | 安卓 我的 → 数据源 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/todo-checkpoint-draft.json | 安卓 我的 → 数据源 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/drift-check-draft.json | 安卓 我的 → 数据源 页面 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/10-intent.md | GitHub 页面接口 (服务端) intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/20-checkpoint.md | GitHub 页面接口 (服务端) checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/90-evidence.md | GitHub 页面接口 (服务端) evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/99-reflection.md | GitHub 页面接口 (服务端) reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/task-intent-draft.json | GitHub 页面接口 (服务端) task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/baseline-read-set-hint.json | GitHub 页面接口 (服务端) baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/baseline-usage-draft.json | GitHub 页面接口 (服务端) baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/impact-statement-draft.json | GitHub 页面接口 (服务端) impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/todo-checkpoint-draft.json | GitHub 页面接口 (服务端) todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/drift-check-draft.json | GitHub 页面接口 (服务端) drift check draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/evidence-bundle-draft-e2e-github.json | 2026-11-22-github-page-api evidence e2e-github |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/10-intent.md | 安卓我的与设置页 UI 重做 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/20-checkpoint.md | 安卓我的与设置页 UI 重做 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/90-evidence.md | 安卓我的与设置页 UI 重做 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/99-reflection.md | 安卓我的与设置页 UI 重做 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/task-intent-draft.json | 安卓我的与设置页 UI 重做 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/baseline-read-set-hint.json | 安卓我的与设置页 UI 重做 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/baseline-usage-draft.json | 安卓我的与设置页 UI 重做 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/impact-statement-draft.json | 安卓我的与设置页 UI 重做 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/todo-checkpoint-draft.json | 安卓我的与设置页 UI 重做 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/drift-check-draft.json | 安卓我的与设置页 UI 重做 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/10-intent.md | 安卓通知: 自有图标与按内容分样式 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/20-checkpoint.md | 安卓通知: 自有图标与按内容分样式 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/90-evidence.md | 安卓通知: 自有图标与按内容分样式 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/99-reflection.md | 安卓通知: 自有图标与按内容分样式 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/task-intent-draft.json | 安卓通知: 自有图标与按内容分样式 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/baseline-read-set-hint.json | 安卓通知: 自有图标与按内容分样式 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/baseline-usage-draft.json | 安卓通知: 自有图标与按内容分样式 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/impact-statement-draft.json | 安卓通知: 自有图标与按内容分样式 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/todo-checkpoint-draft.json | 安卓通知: 自有图标与按内容分样式 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/drift-check-draft.json | 安卓通知: 自有图标与按内容分样式 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/10-intent.md | 安卓 GitHub 页面 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/20-checkpoint.md | 安卓 GitHub 页面 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/90-evidence.md | 安卓 GitHub 页面 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-github/99-reflection.md | 安卓 GitHub 页面 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/task-intent-draft.json | 安卓 GitHub 页面 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/baseline-read-set-hint.json | 安卓 GitHub 页面 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/baseline-usage-draft.json | 安卓 GitHub 页面 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/impact-statement-draft.json | 安卓 GitHub 页面 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/todo-checkpoint-draft.json | 安卓 GitHub 页面 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/drift-check-draft.json | 安卓 GitHub 页面 drift check draft |

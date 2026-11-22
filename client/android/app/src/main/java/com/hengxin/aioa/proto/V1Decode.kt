@@ -27,7 +27,7 @@ internal object V1Decode {
             seq = o.optLong("seq"),
             ts = o.optLong("ts"),
             kind = kind,
-            source = SourceRef(src.optString(KEY_ID), src.optString(KEY_NAME).ifEmpty { src.optString(KEY_ID) }, opt(src, "icon")),
+            source = SourceRef(src.optString(KEY_ID), src.optString(KEY_NAME).ifEmpty { src.optString(KEY_ID) }, opt(src, "icon"), opt(src, "type")),
             subject = opt(o, KEY_SUBJECT),
             channel = opt(o, "channel"),
             priority = o.optString("priority", Constants.PRIORITY_HAPPENING),
@@ -42,6 +42,7 @@ internal object V1Decode {
             url = opt(data, KEY_URL),
             values = numbers(data.optJSONObject("values")),
             task = task,
+            dedupeKey = opt(o, "dedupeKey"),
         )
     }
 

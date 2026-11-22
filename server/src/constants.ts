@@ -83,3 +83,15 @@ export const POST = "POST";
 export const PUT = "PUT";
 export const PATCH = "PATCH";
 export const DELETE = "DELETE";
+
+export const GITHUB_KEEP = 30;
+export const GITHUB_SYNC_RUNS = 10;
+export const GITHUB_SYNC_MAX_REPOS = 10;
+export const GITHUB_PAGE_SIZE = 100;
+export const GITHUB_API = "https://api.github.com";
+export const GITHUB_USER_AGENT = "HX-AIOA";
+export const GITHUB_SUBJECT_PREFIX = "github:";
+export const GITHUB_WEB = "https://github.com";
+export const KV_GITHUB_SYNCED = "githubSyncedAt";
+export const ERR_NO_GITHUB_TOKEN = "服务端没有配置 GITHUB_TOKEN";
+export const GITHUB_ADAPTER = "github";

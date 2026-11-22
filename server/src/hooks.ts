@@ -1,6 +1,6 @@
 import { isHookAdapter, type HookAdapter, type IngestResult, type KeyInfo, type SourceRef } from "@hx-aioa/protocol";
 import { parseHookBody, runAdapter, typeInfo } from "./adapters";
-import { GITHUB_SIGNATURE_HEADER } from "./adapters/github";
+import { GITHUB_EVENT_HEADER, GITHUB_SIGNATURE_HEADER } from "./adapters/github";
 import { writeEvent } from "./api-events";
 import { credentialOf, hmac, safeEqual } from "./auth";
 import {
@@ -13,6 +13,7 @@ import {
   ERR_NOT_FOUND,
   ERR_RATE,
   ERR_UNAUTHORIZED,
+  GITHUB_ADAPTER,
   HEADER_CONTENT_TYPE,
 } from "./constants";
 import type { Core, Principal } from "./core";
@@ -52,6 +53,7 @@ export async function handleHook(core: Core, req: Request, url: URL, adapter: st
   const input = { body, headers: req.headers, source: { name: source.name, ...(info?.subject ? { subject: info.subject } : {}), ...(info?.mapping ? { mapping: info.mapping } : {}) } };
   const events = runAdapter(adapter as HookAdapter, input);
   if (typeof events === "string") return fail(400, events);
+  if (adapter === GITHUB_ADAPTER) core.github.apply(req.headers.get(GITHUB_EVENT_HEADER) ?? "", body);
   const who: Principal = { owner: false, key };
   const results: IngestResult[] = [];
   for (const ev of events) results.push(await writeEvent(core, who, ev, { source, sourceInfo: info }));

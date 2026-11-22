@@ -114,6 +114,17 @@ class Updater(private val context: Context) {
     private fun fetchTo(file: UpdateFile, target: File, label: String, progress: Progress): File {
         // 安装包较大, 配了订阅就先拉起代理, 避免直连慢速下载长时间占着网络
         ProxyDemand.ensure(context)
+        try {
+            downloadFile(file, target, label, progress)
+        } finally {
+            Installer.clearProgress(context)
+        }
+        progress.on("下载完成, 正在校验...")
+        verify(target, file.sha256)
+        return target
+    }
+
+    private fun downloadFile(file: UpdateFile, target: File, label: String, progress: Progress) {
         Net.client(context).newCall(Request.Builder().url(file.url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("下载失败 ${resp.code}")
             val total = file.size.coerceAtLeast(1)
@@ -131,14 +142,12 @@ class Updater(private val context: Context) {
                         if (percent >= shown + PROGRESS_STEP) {
                             shown = percent
                             progress.on("下载$label $percent% (${mb(done)} / ${mb(total)} MB)")
+                            Installer.progress(context, label, percent.toInt())
                         }
                     }
                 }
             }
         }
-        progress.on("下载完成, 正在校验...")
-        verify(target, file.sha256)
-        return target
     }
 
     private fun mb(bytes: Long) = "%.1f".format(bytes / BYTES_PER_MB)
