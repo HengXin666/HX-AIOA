@@ -15,6 +15,7 @@ export const KEY_ACKED_SEQ = "ackedSeq";
 export const KEY_PUSH_TOKEN = "pushToken";
 export const KV_RULES = "rules";
 export const KV_SETTINGS = "settings";
+export const KV_SPACES = "spaces";
 export const KV_TIMERS = "timers";
 export const KV_AGG_PREFIX = "agg:";
 export const TIMER_FALLBACK = "fallback";

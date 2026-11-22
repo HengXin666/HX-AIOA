@@ -1,4 +1,4 @@
-# HX-AIOA API v1: 工作台 (设计草案, 未实现)
+# HX-AIOA API v1: 工作台 (已实现单账号版本)
 
 从 [api-v1.md](api-v1.md) §7 拆出, 类型真源为 `protocol/src/v1/space.ts`。
 

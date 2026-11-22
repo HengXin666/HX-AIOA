@@ -111,6 +111,12 @@ export class StreamLink implements Backend {
       case "task":
         s.ingestTask(f.task);
         break;
+      case "task_log":
+        if (s.logs.has(f.taskId)) s.appendLog(f.taskId, f.entry);
+        break;
+      case "agents":
+        s.setAgents(f.agents);
+        break;
       case "metric":
         s.ingestPoints(f.subject, f.points);
         break;

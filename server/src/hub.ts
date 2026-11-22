@@ -53,6 +53,7 @@ import { Pipeline } from "./pipeline";
 import { Registry } from "./registry";
 import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
 import { EventStore } from "./store";
+import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
 import { Timers } from "./timers";
 
@@ -71,8 +72,9 @@ export class Hub extends DurableObject<Env> {
     const sockets = new Sockets(all);
     this.timers = new Timers(ctx.storage);
     const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers);
-    const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers);
-    this.core = { env, store, registry: new Registry(sql), config, pipeline, agents, metrics, sockets };
+    const spaces = new Spaces(ctx.storage);
+    const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
+    this.core = { env, store, registry: new Registry(sql), config, pipeline, agents, metrics, sockets, spaces };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -99,6 +101,7 @@ export class Hub extends DurableObject<Env> {
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
     sendFrame(server, this.core.metrics.probes());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
+    if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
     const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
     if (Number.isFinite(since)) {
       for (const ev of this.core.store.since(since, HISTORY_MAX_LIMIT)) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));

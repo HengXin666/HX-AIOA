@@ -28,3 +28,8 @@ export const QUERY_BEFORE = "before";
 export const QUERY_STATE = "state";
 export const QUERY_AGENT = "agent";
 export const QUERY_SUBJECTS = "subjects";
+export const PATH_SPACES = `${API_V1}/spaces`;
+export const PATH_SPACE = `${API_V1}/spaces/{id}`;
+export const PATH_SPACE_STATE = `${API_V1}/spaces/{id}/state`;
+// 工作台按钮动作的 taskId 前缀: button:<spaceId>:<itemId>
+export const BUTTON_TASK_PREFIX = "button:";

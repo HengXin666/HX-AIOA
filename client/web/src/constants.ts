@@ -1,3 +1,4 @@
+import { PATH_RULES, PATH_SETTINGS, PATH_SOURCES, PATH_SPACES, PATH_TASKS } from "@hx-aioa/protocol";
 export const SERVER_URL: string = import.meta.env.VITE_AIOA_SERVER ?? "";
 export const AUTH_TOKEN: string = import.meta.env.VITE_AIOA_TOKEN ?? "";
 
@@ -22,11 +23,11 @@ export const STORAGE_SAVED = "aioa.saved";
 export const STORAGE_DONE = "aioa.done";
 
 // 接口路径集中在这里, 服务端调整时只改一处
-export const RULES_PATH = "/api/v1/rules";
-export const SETTINGS_PATH = "/api/v1/settings";
-export const SPACES_PATH = "/api/v1/spaces";
-export const TASKS_PATH = "/api/v1/tasks";
-export const SOURCES_PATH = "/api/v1/sources";
+export const RULES_PATH = PATH_RULES;
+export const SETTINGS_PATH = PATH_SETTINGS;
+export const SPACES_PATH = PATH_SPACES;
+export const TASKS_PATH = PATH_TASKS;
+export const SOURCES_PATH = PATH_SOURCES;
 
 export const STALE_FACTOR = 2;
 export const STALE_CHECK_MS = 15_000;

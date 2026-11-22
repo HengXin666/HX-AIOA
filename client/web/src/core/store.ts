@@ -1,4 +1,4 @@
-import type {
+import type { AgentStatus,
   Bind,
   Envelope,
   MetricPoint,
@@ -15,6 +15,7 @@ export type Listener = () => void;
 
 export const TOPIC_SPACES = "app|spaces";
 export const TOPIC_LINK = "app|link";
+export const TOPIC_AGENTS = "app|agents";
 export const TOPIC_TASKS = `${ANY}|${FIELD_TASK}`;
 export const TOPIC_EVENTS = `${ANY}|${FIELD_EVENTS}`;
 
@@ -34,6 +35,7 @@ export class Store {
   readonly tasks = new Map<string, TaskSnapshot>();
   readonly logs = new Map<string, TaskLogEntry[]>();
   spaces: Space[] = [];
+  agents: AgentStatus[] = [];
   overview: Overview | null = null;
   private listeners = new Map<string, Set<Listener>>();
 
@@ -150,6 +152,11 @@ export class Store {
   setLog(taskId: string, log: TaskLogEntry[]): void {
     this.logs.set(taskId, log);
     this.emit(topicOf(taskId, FIELD_TASK));
+  }
+
+  setAgents(list: AgentStatus[]): void {
+    this.agents = list;
+    this.emit(TOPIC_AGENTS);
   }
 
   upsertSpace(space: Space): void {

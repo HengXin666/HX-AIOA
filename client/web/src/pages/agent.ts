@@ -3,7 +3,7 @@ import { CLS, FIELD_TASK, TASKS_PATH, TXT_LOADING } from "../constants";
 import { promptBox, replyForm, TASK_STATE_TEXT, taskCard } from "../components/cards";
 import { api, hasServer } from "../core/api";
 import { button, h, timeText } from "../core/dom";
-import { topicOf, TOPIC_TASKS } from "../core/store";
+import { topicOf, TOPIC_AGENTS, TOPIC_TASKS } from "../core/store";
 import { emptyNote, keyedRegion, pageHead, section, type Env } from "./page";
 
 const GROUPS: { title: string; ic: string; states: TaskSnapshot["state"][] }[] = [
@@ -25,8 +25,17 @@ export function agentPage(root: HTMLElement, env: Env, id?: string): void {
     },
     () => [...env.store.tasks.values()].map((t) => `${t.id}:${t.state}:${t.progress}:${t.prompt?.id}`).join(),
   );
-  root.append(pageHead("Agent", "任务进度, 待确认与完整对话"), body.el);
+  const online = keyedRegion(
+    (el) => {
+      if (!env.store.agents.length) return;
+      el.append(h("div", { class: "row wrap" }, ...env.store.agents.map((a) => h("span", { class: a.online ? "chip on" : "chip" }, `${a.name} ${a.online ? "在线" : "离线"}`))));
+    },
+    () => env.store.agents.map((a) => `${a.id}:${a.online}`).join(),
+  );
+  root.append(pageHead("Agent", "任务进度, 待确认与完整对话"), online.el, body.el);
   env.scope.add(env.store.on(TOPIC_TASKS, body.update));
+  env.scope.add(env.store.on(TOPIC_AGENTS, online.update));
+  online.update();
   body.update();
 }
 

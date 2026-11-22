@@ -1,6 +1,7 @@
 import { API_MESSAGES_PATH, API_SEND_PATH, API_V1, PATH_HOOKS, QUERY_LIMIT, QUERY_SINCE, isBody, type SendRequest } from "@hx-aioa/protocol";
 import { AGENT_ROUTES } from "./api-agent";
 import { CONFIG_ROUTES } from "./api-config";
+import { SPACE_ROUTES } from "./api-spaces";
 import { EVENT_ROUTES, messageInput, originOf, writeEvent } from "./api-events";
 import { credentialOf, isOwnerToken } from "./auth";
 import {
@@ -24,7 +25,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {

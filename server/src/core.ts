@@ -6,6 +6,7 @@ import type { MetricRouter } from "./metrics";
 import type { Pipeline } from "./pipeline";
 import type { Registry } from "./registry";
 import type { Sockets } from "./sockets";
+import type { Spaces } from "./spaces";
 import type { EventStore } from "./store";
 
 // AUTH_TOKEN 视为母号的全权限凭证; 接入 key 只写不读, 按 scope 授权
@@ -20,6 +21,7 @@ export type Core = {
   agents: AgentService;
   metrics: MetricRouter;
   sockets: Sockets;
+  spaces: Spaces;
 };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };

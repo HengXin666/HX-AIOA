@@ -1,4 +1,5 @@
 import {
+  BUTTON_TASK_PREFIX,
   defaultPriority,
   type ActResult,
   type AgentInfo,
@@ -32,6 +33,7 @@ import { ApiFail } from "./http";
 import type { Pipeline } from "./pipeline";
 import { type Sockets, attOf, sendFrame } from "./sockets";
 import type { TaskStore } from "./taskstore";
+import type { Spaces } from "./spaces";
 import type { Timers } from "./timers";
 
 type Stored = TaskSnapshot & { keyId?: string; priority?: Priority };
@@ -50,6 +52,7 @@ export class AgentService {
     private readonly sockets: Sockets,
     private readonly pipeline: Pipeline,
     private readonly timers: Timers,
+    private readonly spaces: Spaces,
   ) {}
 
   register(info: AgentInfo, keyId: string | null, mode: "ws" | "http"): void {
@@ -201,6 +204,7 @@ export class AgentService {
 
   async act(input: UserActionInput, user: string): Promise<ActResult> {
     if (this.db.action(input.aid)) return { aid: input.aid, state: "duplicate" };
+    if (input.taskId.startsWith(BUTTON_TASK_PREFIX)) return this.press(input, user);
     const t = this.load(input.taskId);
     if (!t) throw new ApiFail(404, CODE_NOT_FOUND, "任务不存在");
     if (FINAL.includes(t.state)) throw new ApiFail(409, CODE_CONFLICT, "任务已结束");
@@ -237,6 +241,20 @@ export class AgentService {
       milestone = true;
     }
     await this.commit(t, entry, milestone);
+    return { aid: input.aid, state };
+  }
+
+  // 工作台按钮: 按声明找到 Agent 与命令, 每次按下重开同一个任务, 便于在任务里看到执行记录
+  private async press(input: UserActionInput, user: string): Promise<ActResult> {
+    const b = await this.spaces.button(input.taskId);
+    if (!b) throw new ApiFail(404, CODE_NOT_FOUND, "按钮不存在");
+    if (b.danger && !input.confirm) throw new ApiFail(409, CODE_NEED_CONFIRM, "危险动作需要二次确认");
+    const now = Date.now();
+    const prev = this.load(input.taskId);
+    const t: Stored = { id: input.taskId, agent: b.agent, title: b.command, state: "running", created: prev?.created ?? now, updated: now };
+    const action: UserAction = { ...input, kind: "reply", text: b.args ? `${b.command} ${JSON.stringify(b.args)}` : b.command, ts: now, user };
+    const state = this.dispatch(b.agent, action);
+    await this.commit(t, { ts: now, role: "user", kind: "button", text: b.command, data: { aid: input.aid, args: b.args } }, true);
     return { aid: input.aid, state };
   }
 

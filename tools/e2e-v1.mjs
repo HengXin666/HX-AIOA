@@ -176,6 +176,25 @@ check("GitHub 错误签名拒绝", ghBad.status === 401);
 const st = await api("PATCH", `${V1}/settings`, { tz: "Asia/Shanghai", quiet: { start: "23:00", end: "08:00" } });
 check("设置", st.data.settings?.quiet?.start === "23:00");
 
+const spaceId = `srv-${RUN}`;
+const btn = { id: "restart", type: "button", title: "重启", action: { agent: `dsh-${RUN}`, command: "restart", danger: true } };
+const space = { id: spaceId, title: "服务器", panels: [{ id: "nas", title: "NAS", refresh: { mode: "push" }, items: [{ id: "cpu", type: "value", bind: [{ subject: "nas", field: "cpu" }] }, btn] }] };
+const badSpace = await api(POST, `${V1}/spaces`, { ...space, panels: [{ ...space.panels[0], items: [{ id: "x", type: "sparkline" }] }] });
+check("工作台校验失败列出错误", badSpace.status === 400 && badSpace.data.errors?.length === 1, JSON.stringify(badSpace.data));
+const spaceUpd = client.next((f) => f.t === "space_update" && f.id === spaceId);
+check("下发工作台", (await api(POST, `${V1}/spaces`, space)).data.ok === true);
+check("客户端收到 space_update", !!(await spaceUpd));
+await api("PUT", `${V1}/spaces/${spaceId}/state`, { order: ["nas"] });
+await api(POST, `${V1}/spaces`, space);
+const spaces = (await api(GET, `${V1}/spaces`)).data.spaces;
+check("重新下发不覆盖用户排序", spaces.find((x) => x.id === spaceId)?.state?.order?.[0] === "nas");
+const pressId = `button:${spaceId}:restart`;
+const noConfirm = await api(POST, `${V1}/tasks/${encodeURIComponent(pressId)}/actions`, { aid: `b1-${RUN}`, kind: "reply" });
+check("危险按钮需要二次确认", noConfirm.status === 409);
+const press = await api(POST, `${V1}/tasks/${encodeURIComponent(pressId)}/actions`, { aid: `b2-${RUN}`, kind: "reply", confirm: true });
+check("按钮动作投递给 Agent", ["queued", "delivered"].includes(press.data.state), JSON.stringify(press.data));
+await api("DELETE", `${V1}/spaces/${spaceId}`);
+
 client.ws.close();
 console.log(failed ? `共 ${failed} 项失败` : "全部通过");
 process.exit(failed ? 1 : 0);
