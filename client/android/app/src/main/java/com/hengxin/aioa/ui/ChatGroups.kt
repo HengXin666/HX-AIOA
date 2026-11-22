@@ -169,16 +169,24 @@ class ChatGroups(
         messages.clear()
         pending.clear()
         hasMore = false
-        scope.launch {
-            val list = withContext(Dispatchers.IO) { db.inGroup(key, Constants.HISTORY_PAGE) }
-            if (open != key) return@launch
-            // 读库期间可能已有新消息追加进来, 合并去重
-            val merged = (list + messages).distinctBy { it.seq }.sortedBy { it.seq }
-            messages.clear()
-            messages.addAll(merged)
-            hasMore = list.size >= Constants.HISTORY_PAGE
-            list.lastOrNull()?.let { markRead(key, it.seq) }
-        }
+        fromDb(key, first = true)
+    }
+
+    /** 回到前台时重读正在看的群: 后台期间 :link 进程收进库的消息, 界面连接不会再补发。 */
+    fun refreshOpen() {
+        open?.let { fromDb(it, first = false) }
+    }
+
+    private fun fromDb(key: String, first: Boolean) = scope.launch {
+        val list = withContext(Dispatchers.IO) { db.inGroup(key, Constants.HISTORY_PAGE) }
+        if (open != key) return@launch
+        // 读库期间可能已有新消息追加进来, 合并去重; 已加载的更早几页保留
+        val merged = (list + messages).distinctBy { it.seq }.sortedBy { it.seq }
+        if (merged.size == messages.size) return@launch
+        messages.clear()
+        messages.addAll(merged)
+        if (first) hasMore = list.size >= Constants.HISTORY_PAGE
+        list.lastOrNull()?.let { markRead(key, it.seq) }
     }
 
     /** 上滑到顶时向前翻一页。 */

@@ -85,6 +85,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
             }
             markRead()
             groups.reload()
+            groups.refreshOpen()
             if (configured) {
                 groups.loadFolders()
                 groups.directory.load()
@@ -122,6 +123,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onStatus(online: Boolean) {
         this.online = online
         if (online) metrics.onOnline() else terms.onOffline()
+        if (online) groups.refreshOpen()
         if (online) CrashLog.take(getApplication())?.let { send(CRASH_TITLE + FENCE + "\n" + it + "\n" + FENCE) }
     }
 
