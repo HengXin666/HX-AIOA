@@ -90,7 +90,9 @@ export class Registry {
     return this.sql.exec<SourceRow>("SELECT id, body FROM source ORDER BY id").toArray().map((r) => JSON.parse(r.body) as SourceInfo);
   }
 
+  // 来源删除后其绑定的 key 一并作废, 否则 webhook 仍能以默认来源写入
   deleteSource(id: string): boolean {
+    for (const k of this.keys()) if (k.sourceId === id) this.deleteKey(k.id);
     return this.sql.exec("DELETE FROM source WHERE id = ?", id).rowsWritten > 0;
   }
 }
