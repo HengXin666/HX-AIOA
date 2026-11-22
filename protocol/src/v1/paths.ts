@@ -15,6 +15,7 @@ export const PATH_RULES_TEST = `${API_V1}/rules/test`;
 export const PATH_SETTINGS = `${API_V1}/settings`;
 export const PATH_KEYS = `${API_V1}/keys`;
 export const PATH_SOURCES = `${API_V1}/sources`;
+export const PATH_INTEGRATIONS = `${API_V1}/integrations`;
 export const PATH_SOURCE_TYPES = `${API_V1}/source-types`;
 export const PATH_HOOKS = `${API_V1}/hooks`;
 export const PATH_AGENTS = `${API_V1}/agents`;

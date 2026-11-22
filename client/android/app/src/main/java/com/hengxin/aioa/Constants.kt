@@ -102,6 +102,7 @@ object Constants {
     const val SOURCE_TYPES_PATH = "api/v1/source-types"
     const val EVENTS_PATH = "api/v1/events"
     const val KEYS_PATH = "api/v1/keys"
+    const val CHATS_API = "api/v1/chats"
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
     const val SOURCE_AGENT = "agent"

@@ -18,6 +18,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     ROOT("我的", "user"),
     ACCOUNT("账号", "user"),
     SOURCES("数据源", "send"),
+    INTEGRATIONS("接入总览", "bot"),
     SERVER("服务端", "server"),
     PROXY("代理", "plug"),
     LINK_LOG("连接日志", "file-text"),

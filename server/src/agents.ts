@@ -76,6 +76,17 @@ export class AgentService {
     });
   }
 
+  // 按注册时用的 key 分组, 给接入总览
+  byKey(): Map<string, AgentStatus[]> {
+    const keys = new Map(this.db.agents().map((r) => [r.info.id, r.keyId]));
+    const out = new Map<string, AgentStatus[]>();
+    for (const s of this.statuses()) {
+      const k = keys.get(s.id);
+      if (k) out.set(k, [...(out.get(k) ?? []), s]);
+    }
+    return out;
+  }
+
   broadcastAgents(): void {
     this.sockets.toV1Clients({ t: "agents", agents: this.statuses() });
   }

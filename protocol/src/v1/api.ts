@@ -98,3 +98,19 @@ export type ActResult = { aid: string; state: "queued" | "delivered" | "duplicat
 export type RuleTestResult = { route: RouteInfo };
 export type Settings = { tz?: string; quiet?: TimeWindow; wxpusherUid?: string } & Record<string, unknown>;
 export type ApiError = { error: string; code: string; errors?: string[] };
+
+// 接入总览: 每把 key 一行。push = 定时任务等单向推送的消息源; interactive = Codex 这类可双向交互的 Agent
+export type IntegrationKind = "push" | "interactive" | "probe" | "other";
+export type Integration = {
+  keyId: string;
+  name: string;
+  prefix: string;
+  kind: IntegrationKind;
+  scopes: Scope[];
+  group?: string;
+  reads: string[];
+  source?: { id: string; name: string; type: string };
+  agents: { id: string; name: string; online: boolean; lastSeen: number }[];
+  lastActive: number;
+  created: number;
+};
