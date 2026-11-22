@@ -36,3 +36,16 @@ export type GithubRepoDetail = {
 
 export type GithubReposResult = { repos: GithubRepoSummary[]; synced: boolean };
 export type GithubSyncResult = { ok: boolean; repos: number; error?: string };
+
+// 可选仓库: GITHUB_TOKEN 能看到的仓库, tracked 表示已在 GitHub 页面里
+export type GithubAvailableRepo = { repo: string; private: boolean; description?: string; pushedAt: number; tracked: boolean };
+export type GithubAvailableResult = { login: string; repos: GithubAvailableRepo[] };
+// PUT 整体替换关注列表
+export type GithubTrackedRequest = { repos: string[] };
+
+// 个人动态: 来自 GitHub 用户事件流, ETag 增量拉取, 保留 30 天
+export const GITHUB_ACTIVITY_KINDS = ["push", "pr", "review", "issue", "comment", "create", "delete", "release", "star", "fork", "other"] as const;
+export type GithubActivityKind = (typeof GITHUB_ACTIVITY_KINDS)[number];
+export type GithubActivityItem = { id: string; ts: number; kind: GithubActivityKind; repo: string; title: string; url: string; commits?: number };
+export type GithubActivityStats = { pushes: number; commits: number; prs: number; issues: number; comments: number; repos: number };
+export type GithubActivityResult = { login: string; since: number; until: number; items: GithubActivityItem[]; stats: GithubActivityStats; syncedAt?: number };

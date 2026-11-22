@@ -8,6 +8,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.net.Net
 import com.hengxin.aioa.proto.Frames
@@ -179,7 +180,7 @@ class LinkSocket(
             builder.addPathSegments(Constants.STREAM_PATH).addQueryParameter(Constants.QUERY_ROLE, Constants.ROLE_CLIENT)
         }
         val url = builder
-            .addQueryParameter(Constants.QUERY_TOKEN, config.token)
+            .addQueryParameter(Constants.QUERY_TOKEN, Auth.bearer(context, config))
             .addQueryParameter(Constants.QUERY_DEVICE, device)
             .addQueryParameter(Constants.QUERY_SINCE, since().toString())
             .build()

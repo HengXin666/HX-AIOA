@@ -83,6 +83,7 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
     var recent by mutableStateOf<List<GhActivity>>(emptyList())
         private set
     val details = mutableStateMapOf<String, GhDetail>()
+    val mine = GithubMine(context, scope)
     val detailErrors = mutableStateMapOf<String, String>()
 
     // 正在显示的详情页仓库与可见页面数; 没人看时不因事件刷新

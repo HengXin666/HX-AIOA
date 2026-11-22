@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.hengxin.aioa.R
+import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.config.ThemeMode
 import com.hengxin.aioa.kit.Aioa
@@ -80,17 +81,21 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
     val tick = rememberResumeTick()
     val config = remember(tick, summary.online) { ConfigStore.load(context) }
     val notify = remember(tick) { notificationsOn(context) }
+    val account = remember(tick, summary.online) { Auth.load(context) }
     val battery = remember(tick) { batteryWhitelisted(context) }
     val version = remember { appVersion(context) }
     val host = serverHost(config?.server.orEmpty())
     SettingsPageFrame(SettingsPage.ROOT.title, null) {
-        AccountCard(host, summary.online, selected == SettingsPage.SERVER) { open(SettingsPage.SERVER) }
+        val who = account?.let { it.display.ifEmpty { it.name } }
+        AccountCard(who, host, summary.online, selected == SettingsPage.ACCOUNT) { open(SettingsPage.ACCOUNT) }
         SettingsGroup("数据") {
             PageRow(SettingsPage.SOURCES, summary.sources?.let { "$it 个" }.orEmpty(), selected, open)
             RowDivider()
             NavRow(WORKSPACE_ICON, WORKSPACE_TITLE, if (summary.spaces > 0) "${summary.spaces} 个" else "未下发", onClick = openWorkspace)
         }
         SettingsGroup("连接") {
+            PageRow(SettingsPage.ACCOUNT, account?.let { it.display.ifEmpty { it.name } } ?: "未登录", selected, open)
+            RowDivider()
             PageRow(SettingsPage.SERVER, host.ifEmpty { "未配置" }, selected, open)
             RowDivider()
             PageRow(SettingsPage.PROXY, if (config?.proxyEnabled == true) "订阅" else TEXT_DIRECT, selected, open)
@@ -114,7 +119,7 @@ private fun PageRow(page: SettingsPage, value: String, selected: SettingsPage?, 
 }
 
 @Composable
-private fun AccountCard(host: String, online: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun AccountCard(who: String?, host: String, online: Boolean, selected: Boolean, onClick: () -> Unit) {
     val c = Aioa.colors
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(Aioa.metrics.radius))
@@ -129,7 +134,7 @@ private fun AccountCard(host: String, online: Boolean, selected: Boolean, onClic
             modifier = Modifier.size(56.dp).clip(CircleShape),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(R.string.app_name), c.text, NAME_SP, weight = FontWeight.SemiBold)
+            Text(who ?: stringResource(R.string.app_name), c.text, NAME_SP, weight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 StatusDot(online)
                 val state = stringResource(if (online) R.string.status_online else R.string.status_offline)
