@@ -81,15 +81,45 @@ export function messageInput(raw: Record<string, unknown>): EventInput | string 
   if (typeof text !== "string" || !text) return "需要 text";
   if (text.length > MAX_TEXT_LENGTH) return ERR_TOO_LONG;
   const title = typeof raw.title === "string" && raw.title ? raw.title : undefined;
+  // 只发了 text 但内容整段是 HTML: 当成 HTML 卡片, 摘要用去掉标签的文字
+  if (raw.html === undefined && looksHtml(text)) {
+    const plain = htmlToText(text).slice(0, MAX_SUMMARY_TEXT) || "HTML 卡片";
+    const data = textToEventData(plain, title);
+    if (text.length <= MAX_HTML_LENGTH) data.html = text;
+    return withMeta({ kind: "event", data }, raw);
+  }
   const data = textToEventData(text, title);
   if (raw.html !== undefined) {
     if (typeof raw.html !== "string" || raw.html.length > MAX_HTML_LENGTH) return "html 过大 (上限 64KB)";
     if (raw.html) data.html = raw.html;
   }
-  const input: EventInput = { kind: "event", data };
+  return withMeta({ kind: "event", data }, raw);
+}
+
+function withMeta(input: EventInput, raw: Record<string, unknown>): EventInput {
   for (const k of ["channel", "subject"] as const) if (typeof raw[k] === "string" && raw[k]) input[k] = raw[k] as string;
   if (typeof raw.priority === "string" && (PRIORITIES as readonly string[]).includes(raw.priority)) input.priority = raw.priority as Priority;
   return input;
+}
+
+const MAX_SUMMARY_TEXT = 500;
+const HTML_SHAPE = /^<(!doctype|html|div|section|article|table|p|h[1-6]|style|body|main|span|ul|ol)[\s>]/i;
+
+/** 整段以常见块级标签开头并以 > 结尾才算 HTML, 避免误伤正文里提到的 <tag>。 */
+export function looksHtml(text: string): boolean {
+  const t = text.trim();
+  return HTML_SHAPE.test(t) && t.endsWith(">");
+}
+
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    .replace(/[ \t\u3000]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
 }
 
 async function postEvents(c: ReqCtx): Promise<Response> {

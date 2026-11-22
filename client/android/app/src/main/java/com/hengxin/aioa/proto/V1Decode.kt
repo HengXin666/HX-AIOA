@@ -13,6 +13,18 @@ private const val KEY_URL = "url"
 private const val KEY_SUBJECT = "subject"
 private const val KEY_STATE = "state"
 private const val KEY_NAME = "name"
+private const val KEY_HTML = "html"
+private val HTML_SHAPE = Regex("^<(!doctype|html|div|section|article|table|p|h[1-6]|style|body|main|span|ul|ol)[\\s>]", RegexOption.IGNORE_CASE)
+private val HTML_DROP = Regex("<(style|script)[\\s\\S]*?</\\1>", RegexOption.IGNORE_CASE)
+private val HTML_BREAK = Regex("<(br|/p|/div|/li|/h[1-6]|/tr)[^>]*>", RegexOption.IGNORE_CASE)
+private val HTML_TAG = Regex("<[^>]+>")
+
+/** 与服务端同一规则: 整段以常见块级标签开头并以 > 结尾才算 HTML。 */
+fun looksHtml(text: String): Boolean = text.trim().let { HTML_SHAPE.containsMatchIn(it) && it.endsWith(">") }
+
+fun htmlText(html: String): String = html.replace(HTML_DROP, "").replace(HTML_BREAK, "\n").replace(HTML_TAG, "")
+    .replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
+    .lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
 
 // v1 帧解析: 只认识的字段才读, 多余字段与未知 kind 一律忽略, 缺必需字段时整帧丢弃
 internal object V1Decode {
@@ -22,6 +34,9 @@ internal object V1Decode {
         val data = o.optJSONObject("data") ?: JSONObject()
         val task = if (kind == Constants.KIND_TASK) task(data) else null
         val src = o.optJSONObject("source") ?: JSONObject()
+        // 旧推送方把整段 HTML 塞进了 summary: 当成 HTML 卡片, 摘要只留文字
+        val rawSummary = task?.summary ?: opt(data, KEY_SUMMARY)
+        val sniffed = rawSummary?.takeIf { !data.has(KEY_HTML) && looksHtml(it) }
         return Envelope(
             id = o.getString(KEY_ID),
             seq = o.optLong("seq"),
@@ -36,7 +51,7 @@ internal object V1Decode {
             resolved = o.optBoolean("resolved"),
             route = o.optJSONObject("route")?.let { opt(it, "action") },
             title = task?.title ?: data.optString(KEY_TITLE).ifEmpty { data.optString("text") },
-            summary = task?.summary ?: opt(data, KEY_SUMMARY),
+            summary = sniffed?.let(::htmlText) ?: rawSummary,
             severity = opt(data, "severity"),
             status = opt(data, "status"),
             url = opt(data, KEY_URL),
@@ -44,7 +59,7 @@ internal object V1Decode {
             task = task,
             dedupeKey = opt(o, "dedupeKey"),
             markdown = opt(data, "markdown"),
-            html = opt(data, "html"),
+            html = opt(data, KEY_HTML) ?: sniffed,
             cid = opt(o, "cid"),
             reply = o.optJSONObject("reply")?.let(::ref),
             fwd = o.optJSONObject("fwd")?.let { FwdInfo(it.optString("src"), it.optLong("ts")) },

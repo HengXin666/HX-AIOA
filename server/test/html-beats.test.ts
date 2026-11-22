@@ -3,6 +3,15 @@ import { test } from "node:test";
 import { parseClientFrame, parseEventInput } from "@hx-aioa/protocol";
 import { messageInput } from "../src/api-events";
 
+test("text 整段是 HTML 时自动当卡片", () => {
+  const r = messageInput({ text: "<div style=\"x\"><b>快报</b><br>第二行 &amp; 更多</div>", title: "LinuxDO" });
+  assert.ok(typeof r === "object" && r.kind === "event");
+  assert.ok(r.data.html?.startsWith("<div"));
+  assert.equal(r.data.summary, "快报\n第二行 & 更多");
+  const plain = messageInput({ text: "用 <div> 包起来" });
+  assert.ok(typeof plain === "object" && plain.kind === "event" && plain.data.html === undefined);
+});
+
 test("消息与事件可以带 HTML 卡片, 超过 64KB 拒绝", () => {
   const ok = messageInput({ text: "周报", html: "<h1>周报</h1>" });
   assert.equal(typeof ok === "object" && ok.kind === "event" && ok.data.html, "<h1>周报</h1>");

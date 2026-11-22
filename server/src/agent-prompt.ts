@@ -49,6 +49,7 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     '{ "text": "支持 **Markdown** 的正文", "title": "可选标题" }',
     "```",
     '- 不写 channel 就发到本群。需要主人马上处理的加 `"priority": "need_me"`。',
+    '- 想自己排版 (卡片, 周报) 就另加 `"html": "<div>...</div>"`, `text` 仍写一句纯文字摘要 (通知用)。HTML 不执行脚本, 不联网: 样式写内联, 图片用 data:, 上限 64KB。',
     "",
     "### 发日报 / 周报 (长文)",
     `POST ${base}/api/v1/events`,
