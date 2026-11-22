@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": ["protocol", "server", "client/web"],
   "scripts": {
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "gen:tokens": "node tools/gen-tokens.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

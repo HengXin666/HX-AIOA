@@ -1,0 +1,82 @@
+/* 由 tools/gen-tokens.mjs 生成, 请勿手改, 改 design/tokens.json */
+
+:root {
+  --color-background: #FFFFFF;
+  --color-surface: #F4F4F4;
+  --color-surface-alt: #EAEAEA;
+  --color-border: #E5E5E5;
+  --color-text: #0D0D0D;
+  --color-text-secondary: #6B6B6B;
+  --color-accent: #0D0D0D;
+  --color-on-accent: #FFFFFF;
+  --color-success: #1A9F4B;
+  --color-warning: #E08600;
+  --color-danger: #D93025;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --shadow-none: none;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 17px;
+  --font-size-xl: 22px;
+  --font-size-display: 32px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 28px;
+  --gap: 12px;
+  --pad: 16px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --color-background: #212121;
+  --color-surface: #2F2F2F;
+  --color-surface-alt: #3A3A3A;
+  --color-border: #3D3D3D;
+  --color-text: #ECECEC;
+  --color-text-secondary: #9B9B9B;
+  --color-accent: #ECECEC;
+  --color-on-accent: #0D0D0D;
+  --color-success: #34C759;
+  --color-warning: #FF9F0A;
+  --color-danger: #FF453A;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --color-background: #212121;
+    --color-surface: #2F2F2F;
+    --color-surface-alt: #3A3A3A;
+    --color-border: #3D3D3D;
+    --color-text: #ECECEC;
+    --color-text-secondary: #9B9B9B;
+    --color-accent: #ECECEC;
+    --color-on-accent: #0D0D0D;
+    --color-success: #34C759;
+    --color-warning: #FF9F0A;
+    --color-danger: #FF453A;
+    color-scheme: dark;
+  }
+}
+
+:root[data-density="compact"] {
+  --gap: 8px;
+  --pad: 12px;
+}
+
