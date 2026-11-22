@@ -62,3 +62,4 @@ export const PATH_PROBES = `${API_V1}/probes`;
 export const PATH_SHELL_TICKET = `${API_V1}/shell/ticket`;
 export const PATH_CF_USAGE = `${API_V1}/cf/usage`;
 export const PATH_CF_ZONES = `${API_V1}/cf/zones`;
+export const PATH_CF_STORAGE = `${API_V1}/cf/storage`;
