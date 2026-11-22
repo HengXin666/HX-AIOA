@@ -1,10 +1,20 @@
 package com.hengxin.aioa.ui
 
 import com.hengxin.aioa.kit.AnimatedItems
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.hengxin.aioa.kit.Chip
+import com.hengxin.aioa.proto.Envelope
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.AdaptiveGrid
@@ -35,26 +45,47 @@ private sealed interface HomeTile {
 @Composable
 fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
-    WatchProbes(chat.metrics)
+    val spaces = chat.spaces.spaces
+    var board by rememberSaveable { mutableStateOf(BOARD_DAILY) }
+    val picked = spaces.firstOrNull { it.id == board }
+    WatchProbes(chat.metrics, picked?.metricSubjects().orEmpty())
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
+    var detail by remember { mutableStateOf<Envelope?>(null) }
+    detail?.let { ev -> EventSheet(ev, { detail = null }) { detail = null; open(Tab.CHAT) } }
     PageColumn("总览") {
         Status(chat.online, chat.metrics.probes.size, feed.v1)
-        if (feed.v1) V1Layers(chat, state, openGithub, open) else LegacyLayers(chat, state, open)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BOARDS.forEach { (id, label) -> Chip(label, board == id) { board = id } }
+            spaces.forEach { s -> Chip(s.title, board == s.id) { board = s.id } }
+        }
+        when {
+            picked != null -> SpacesSection(chat, picked.id)
+            board == BOARD_DEV -> DevBoard(chat, openGithub, open)
+            board == BOARD_SERVERS -> ServerBoard(chat, open)
+            feed.v1 -> V1Layers(chat, state, open) { id -> detail = findEvent(feed, id) }
+            else -> LegacyLayers(chat, state, open)
+        }
     }
 }
 
+private const val BOARD_DAILY = "#daily"
+private const val BOARD_DEV = "#dev"
+private const val BOARD_SERVERS = "#servers"
+private val BOARDS = listOf(BOARD_DAILY to "日常", BOARD_DEV to "开发", BOARD_SERVERS to "服务器")
+
+private fun findEvent(feed: FeedState, id: String): Envelope? = feed.layers.values.flatten().firstOrNull { it.ev.id == id }?.ev
+
 @Composable
-private fun V1Layers(chat: ChatModel, state: CardState, openGithub: () -> Unit, open: (Tab) -> Unit) {
+private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit, show: (String) -> Unit) {
     val feed = chat.feed
     val answer = rememberAnswer(chat)
     AnimatedItems(feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }, { it.id }) { task ->
         TaskCard(task.toCard(feed.pending[task.id]), onOption = { answer(task, it) }) { open(Tab.AGENT) }
     }
-    LayerSection(TITLE_NEED_ME, "少而重要", items(feed, Constants.PRIORITY_NEED_ME), state, "一切正常, 没有需要处理的事") { open(Tab.CHAT) }
-    LayerSection(TITLE_HAPPENING, "值得知道, 不必立即处理", items(feed, Constants.PRIORITY_HAPPENING), state, "暂时风平浪静") { open(Tab.CHAT) }
+    LayerSection(TITLE_NEED_ME, "少而重要", items(feed, Constants.PRIORITY_NEED_ME), state, "一切正常, 没有需要处理的事") { show(it.id) }
+    LayerSection(TITLE_HAPPENING, "值得知道, 不必立即处理", items(feed, Constants.PRIORITY_HAPPENING), state, "暂时风平浪静") { show(it.id) }
     ResourceTiles(chat, open)
-    GithubOverviewCard(chat.github, openGithub)
-    LayerSection("值得一看", "日报, 周报与摘要", items(feed, Constants.PRIORITY_WORTH_READING), state, "今天没有新内容") { open(Tab.CHAT) }
+    LayerSection("值得一看", "日报, 周报与摘要", items(feed, Constants.PRIORITY_WORTH_READING), state, "今天没有新内容") { show(it.id) }
 }
 
 fun layerState(online: Boolean, loaded: Boolean, updatedAt: Long): CardState = when {

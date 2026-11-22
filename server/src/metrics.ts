@@ -41,6 +41,10 @@ export class MetricRouter {
     const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info };
     if (frame.last) card.last = frame.last;
     if (frame.avail !== undefined) card.avail = frame.avail;
+    if (frame.beats) {
+      card.beats = frame.beats;
+      card.beatsAt = frame.beatsAt;
+    }
     ws.serializeAttachment({ ...att, host: card } satisfies Attachment);
     this.broadcastHosts();
   }

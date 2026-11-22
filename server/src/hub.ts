@@ -100,7 +100,7 @@ export class Hub extends DurableObject<Env> {
     const github = new GithubService(env, sql, ctx.storage, registry);
     const terms = new Terminals(all, () => env.TOKEN_SECRET || env.AUTH_TOKEN, (text, loud) => this.termAudit(text, loud));
     const checkPassword = async (id: string, pw: string) => verifyPassword(pw, this.acct().dir.passOf(id) ?? "");
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql), terms, checkPassword };
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql), terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

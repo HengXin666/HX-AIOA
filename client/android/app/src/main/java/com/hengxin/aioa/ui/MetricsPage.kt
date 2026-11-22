@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.hengxin.aioa.ui.settings.CfUsageCard
 import com.hengxin.aioa.ui.term.AddHostDialog
 import com.hengxin.aioa.ui.term.ShellPasswordDialog
 import com.hengxin.aioa.ui.term.TerminalDialog
@@ -53,11 +54,7 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
     session?.let { (s, ticket) -> TerminalDialog(chat.terms, s, ticket) { session = null } }
     PageColumn("资源") {
         Card { SettingRow(ICON_GITHUB, GITHUB_TITLE, chat.github.repos.size.takeIf { it > 0 }?.let { "$it 个仓库" }.orEmpty(), openGithub) }
-        if (spaces.spaces.isNotEmpty()) {
-            PageSection("工作台")
-            SpacesSection(chat)
-            PageSection("探针")
-        }
+        CfUsageCard()
         val carded = state.hosts.map { it.subject }.toSet()
         Card { SettingRow("server", "添加主机", "一行命令安装探针", { adding = true }) }
         if (state.probes.isEmpty() && carded.isEmpty()) NoProbe()

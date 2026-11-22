@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.ui.chat.plainPreview
+
 import android.text.format.DateUtils
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.ButtonStyle
@@ -28,7 +30,9 @@ fun OverviewItem.toFeed(): FeedItem {
         else -> ev.source.icon ?: if (tone == Tone.Critical || tone == Tone.Warning) "alert-triangle" else "bell"
     }
     val title = if (ev.resolved) "已恢复: ${ev.title}" else ev.title
-    return FeedItem(ev.id, icon, title, ev.summary, ev.source.name, ago(ev.ts), if (ev.resolved) Tone.Info else tone, count)
+    // 列表里只放一两行摘要: 去掉 Markdown 标记, 点开再完整渲染
+    val summary = ev.summary?.let(::plainPreview)?.ifBlank { null } ?: if (ev.html != null) "HTML 卡片, 点开查看" else null
+    return FeedItem(ev.id, icon, title, summary, ev.source.name, ago(ev.ts), if (ev.resolved) Tone.Info else tone, count)
 }
 
 fun TaskSnapshot.phase(): TaskPhase = when (state) {

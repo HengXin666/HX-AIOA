@@ -73,12 +73,20 @@ export async function writeEvent(core: Core, who: Principal, input: EventInput, 
   return out;
 }
 
+// HTML 卡片与报告同一上限
+const MAX_HTML_LENGTH = 64 * 1024;
+
 export function messageInput(raw: Record<string, unknown>): EventInput | string {
   const text = raw.text;
   if (typeof text !== "string" || !text) return "需要 text";
   if (text.length > MAX_TEXT_LENGTH) return ERR_TOO_LONG;
   const title = typeof raw.title === "string" && raw.title ? raw.title : undefined;
-  const input: EventInput = { kind: "event", data: textToEventData(text, title) };
+  const data = textToEventData(text, title);
+  if (raw.html !== undefined) {
+    if (typeof raw.html !== "string" || raw.html.length > MAX_HTML_LENGTH) return "html 过大 (上限 64KB)";
+    if (raw.html) data.html = raw.html;
+  }
+  const input: EventInput = { kind: "event", data };
   for (const k of ["channel", "subject"] as const) if (typeof raw[k] === "string" && raw[k]) input[k] = raw[k] as string;
   if (typeof raw.priority === "string" && (PRIORITIES as readonly string[]).includes(raw.priority)) input.priority = raw.priority as Priority;
   return input;
@@ -152,7 +160,7 @@ function reports(c: ReqCtx): Response {
   const limit = clampInt(c.url.searchParams.get(QUERY_LIMIT), REPORT_LIST_LIMIT, HISTORY_DEFAULT_LIMIT);
   const list = c.core.store.before(before, limit, "report").map((ev) => {
     if (ev.kind !== "report") return ev;
-    const { markdown: _m, blocks: _b, ...data } = ev.data;
+    const { markdown: _m, blocks: _b, html: _h, ...data } = ev.data;
     return { ...ev, data };
   });
   return json({ reports: list });

@@ -31,6 +31,8 @@ export type Core = {
   terms: Terminals;
   // 账号密码复核 (终端票据用), 只有主 Hub 有账号目录
   checkPassword: (userId: string, password: string) => Promise<boolean>;
+  // 本 DO 数据库当前大小 (字节)
+  dbSize: () => number;
 };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };

@@ -114,10 +114,7 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
             PageRow(SettingsPage.SYSTEM, if (battery) "已加白名单" else "待设置", selected, open)
             RowDivider()
             PageRow(SettingsPage.UPDATE, version, selected, open)
-            if (account?.role == "owner") {
-                RowDivider()
-                PageRow(SettingsPage.CF_USAGE, "", selected, open)
-            }
+
         }
         SettingsGroup { PageRow(SettingsPage.ABOUT, "", selected, open) }
     }

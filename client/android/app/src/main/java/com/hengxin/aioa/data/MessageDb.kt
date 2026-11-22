@@ -136,7 +136,8 @@ class MessageDb private constructor(context: Context) :
                     val x = c.getString(extra)?.let { runCatching { JSONObject(it) }.getOrNull() }
                     val reply = x?.optJSONObject(X_REPLY)?.let { MsgRef(it.optLong(C_SEQ), it.optString(C_SRC), it.optString(C_TEXT)) }
                     val fwd = x?.optJSONObject(X_FWD)?.let { FwdInfo(it.optString(C_SRC), it.optLong(C_TS)) }
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd))
+                    val html = x?.optString(X_HTML)?.ifEmpty { null }
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html))
                 }
             }
         }
@@ -148,13 +149,15 @@ class MessageDb private constructor(context: Context) :
         private const val C_EXTRA = "extra"
         private const val X_REPLY = "reply"
         private const val X_FWD = "fwd"
+        private const val X_HTML = "html"
 
         // 引用与转发的快照存成一列 JSON, 没有就是 null
         private fun extraOf(m: ServerFrame.Msg): String? {
-            if (m.reply == null && m.fwd == null) return null
+            if (m.reply == null && m.fwd == null && m.html == null) return null
             val o = JSONObject()
             m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
             m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
+            m.html?.let { o.put(X_HTML, it) }
             return o.toString()
         }
         private const val T_MSG = "msg"

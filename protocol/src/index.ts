@@ -53,8 +53,12 @@ export type MetricPoint = { ts: number; values: Record<string, number> };
 export type MetricFrame = { t: "metric"; subject: string; points: MetricPoint[]; history?: boolean };
 // 主机卡片: 服务端只放在探针那条连接的 attachment 里 (休眠也在), 不落库; 断开时记一行离线快照
 export type HostInfo = { hostname?: string; ip?: string; os?: string; arch?: string; cores?: number; memTotal?: number; diskTotal?: number; bootAt?: number; shell?: boolean };
-export type HostFrame = { t: "host"; subject: string; info: HostInfo; last?: MetricPoint; avail?: number };
-export type HostCard = { subject: string; online: boolean; seen: number; info: HostInfo; last?: MetricPoint; avail?: number };
+// beats: 心跳条, 从旧到新每格一个字符 (g 正常, y 延迟大, r 失联, n 无数据), 最后一格截至 beatsAt
+export type HostFrame = { t: "host"; subject: string; info: HostInfo; last?: MetricPoint; avail?: number; beats?: string; beatsAt?: number };
+export type HostCard = { subject: string; online: boolean; seen: number; info: HostInfo; last?: MetricPoint; avail?: number; beats?: string; beatsAt?: number };
+export const BEAT_SLOTS = 60;
+export const BEAT_SLOT_MS = 24 * 60_000;
+const BEATS_RE = /^[gyrn]{1,96}$/;
 export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame | HostFrame | TermFrame;
 
 export type WelcomeFrame = { t: "welcome"; head: number };
@@ -134,6 +138,10 @@ function parseHost(f: Record<string, unknown>): HostFrame | null {
   const out: HostFrame = { t: "host", subject: f.subject, info };
   if (f.last !== undefined && isPoints([f.last])) out.last = f.last as MetricPoint;
   if (typeof f.avail === "number" && f.avail >= 0 && f.avail <= 100) out.avail = f.avail;
+  if (typeof f.beats === "string" && BEATS_RE.test(f.beats) && typeof f.beatsAt === "number" && Number.isFinite(f.beatsAt)) {
+    out.beats = f.beats;
+    out.beatsAt = f.beatsAt;
+  }
   return out;
 }
 

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.LetterAvatar
+import com.hengxin.aioa.ui.chat.HtmlCard
 import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
 import com.hengxin.aioa.ui.chat.colorOf
@@ -102,7 +103,7 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                 }
                 msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
                 msg.reply?.let { QuoteBlock(it, fg, if (mine) fg else c.primary) { actions?.onJump?.invoke(it.seq) } }
-                MarkdownText(msg.text, md)
+                msg.html?.let { HtmlCard(it, Modifier.padding(vertical = 2.dp)) } ?: MarkdownText(msg.text, md)
                 Text(status ?: timeOf(msg.ts), Modifier.align(Alignment.End), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
             }
             if (actions != null) BubbleMenu(menu, { menu = false }, msg, actions, onCopy = { clipboard.setText(AnnotatedString(msg.text)) })

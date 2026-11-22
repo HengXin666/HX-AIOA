@@ -160,15 +160,46 @@ function hostInfo() {
   return info;
 }
 
-// 24 小时在线率: 每分钟记一次连接是否在线
+// 24 小时在线率与心跳条: 每分钟记一次 {时间, 是否在线, 最近一次 ping 往返毫秒}
 const upTicks = [];
+const STARTED = Date.now();
+const BEAT_SLOTS = 60;
+const BEAT_SLOT_MS = 24 * 60_000;
+const SLOW_RTT_MS = 1500;
+let rtt = 0;
+let pingAt = 0;
 
 function availability() {
-  return upTicks.length ? round((upTicks.filter(Boolean).length / upTicks.length) * 100) : 100;
+  return upTicks.length ? round((upTicks.filter((t) => t.up).length / upTicks.length) * 100) : 100;
+}
+
+// 每格 24 分钟, 共 24 小时: 有一次没连上记 r, 往返超过 1.5 秒记 y, 否则 g; 探针启动前的格子记 n
+function beats(now) {
+  let out = "";
+  for (let i = BEAT_SLOTS - 1; i >= 0; i--) {
+    const end = now - i * BEAT_SLOT_MS;
+    const start = end - BEAT_SLOT_MS;
+    if (end <= STARTED) {
+      out += "n";
+      continue;
+    }
+    const ticks = upTicks.filter((t) => t.ts > start && t.ts <= end);
+    if (ticks.some((t) => !t.up)) out += "r";
+    else if (ticks.some((t) => t.rtt > SLOW_RTT_MS)) out += "y";
+    else out += "g";
+  }
+  return out;
 }
 
 function sendHost() {
-  send({ t: "host", subject, info: hostInfo(), last: history[history.length - 1], avail: availability() });
+  const now = Date.now();
+  send({ t: "host", subject, info: hostInfo(), last: history[history.length - 1], avail: availability(), beats: beats(now), beatsAt: now });
+}
+
+function sendPing() {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  pingAt = Date.now();
+  ws.send("ping");
 }
 
 function remember(point) {
@@ -237,16 +268,22 @@ function connect() {
     console.log(`已连接, 提供主体 ${subject}`);
     send({ t: "offer", subjects: [subject] });
     sendHost();
-    ping = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send("ping"), PING_MS);
+    sendPing();
+    ping = setInterval(sendPing, PING_MS);
   };
   ws.onmessage = (e) => {
-    if (e.data === "pong") return;
+    if (e.data === "pong") {
+      if (pingAt) rtt = Date.now() - pingAt;
+      pingAt = 0;
+      return;
+    }
     const frame = JSON.parse(e.data);
     if (frame.t === "demand") onDemand(frame);
     else if (frame.t?.startsWith("term")) term?.handle(frame);
   };
   ws.onclose = () => {
     term?.closeAll();
+    pingAt = 0;
     clearInterval(ping);
     clearInterval(live);
     live = undefined;
@@ -261,7 +298,9 @@ function tick() {
   const point = sample();
   remember(point);
   checkAlerts(point);
-  upTicks.push(ws?.readyState === WebSocket.OPEN);
+  // 发出的 ping 超过一个周期还没回, 按慢处理
+  const pending = pingAt ? Date.now() - pingAt : 0;
+  upTicks.push({ ts: Date.now(), up: ws?.readyState === WebSocket.OPEN, rtt: Math.max(rtt, pending) });
   if (upTicks.length > HISTORY_POINTS) upTicks.shift();
 }
 

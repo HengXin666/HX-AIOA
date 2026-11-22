@@ -32,11 +32,14 @@ export type EventData = {
   severity: Severity;
   status?: EventStatus;
   url?: string;
+  // HTML 卡片 (周报之类): 客户端在沙箱里渲染, 不跑脚本不联网; 通知与列表仍用 title / summary
+  html?: string;
 };
 export type ReportData = {
   title: string;
   summary?: string;
   markdown?: string;
+  html?: string;
   blocks?: unknown[];
   refs?: string[];
   period?: string;
@@ -141,6 +144,10 @@ function parseEventData(d: Record<string, unknown>): EventData | string {
   if (typeof d.summary === "string" && d.summary) out.summary = d.summary;
   if (d.status) out.status = d.status as EventStatus;
   if (typeof d.url === "string" && d.url) out.url = d.url;
+  if (d.html !== undefined) {
+    if (typeof d.html !== "string" || d.html.length > MAX_REPORT_LENGTH) return "html 过大 (上限 64KB)";
+    if (d.html) out.html = d.html;
+  }
   return out;
 }
 
@@ -151,6 +158,7 @@ function parseReport(d: Record<string, unknown>): ReportData | string {
   const out: ReportData = { title: d.title };
   if (typeof d.summary === "string") out.summary = d.summary;
   if (typeof d.markdown === "string") out.markdown = d.markdown;
+  if (typeof d.html === "string" && d.html) out.html = d.html;
   if (Array.isArray(d.blocks)) out.blocks = d.blocks;
   if (Array.isArray(d.refs)) out.refs = d.refs.filter((x): x is string => typeof x === "string");
   if (typeof d.period === "string") out.period = d.period;

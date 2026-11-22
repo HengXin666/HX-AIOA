@@ -33,6 +33,8 @@ sealed interface ServerFrame {
         val group: String? = null,
         val reply: MsgRef? = null,
         val fwd: FwdInfo? = null,
+        // 推送方给的 HTML 卡片 (周报之类), 在沙箱 WebView 里渲染
+        val html: String? = null,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
@@ -74,6 +76,9 @@ data class HostCard(
     val avail: Double?,
     /** 探针本机开了终端且 key 有 probe:shell 权限。 */
     val shell: Boolean = false,
+    /** 心跳条: 每格 24 分钟, 从旧到新 (g/y/r/n), 最后一格截至 beatsAt。 */
+    val beats: String? = null,
+    val beatsAt: Long? = null,
 )
 
 // 与 protocol/src/index.ts 及 protocol/src/v1/frames.ts 保持一致, 协议改动先改那边; 未知 t 忽略
@@ -151,6 +156,8 @@ object Frames {
             last = h.optJSONObject("last")?.let { runCatching { point(it) }.getOrNull() },
             avail = if (h.has("avail")) h.optDouble("avail") else null,
             shell = info.optBoolean("shell"),
+            beats = h.optString("beats").ifEmpty { null },
+            beatsAt = if (h.has("beatsAt")) h.optLong("beatsAt") else null,
         )
     }
 

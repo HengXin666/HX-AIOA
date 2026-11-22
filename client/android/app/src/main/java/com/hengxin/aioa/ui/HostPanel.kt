@@ -28,10 +28,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private const val FIELD_CPU = "cpu"
+internal const val FIELD_CPU = "cpu"
 private const val FIELD_MEM = "mem"
-private const val FIELD_DISK = "disk"
-private const val FIELD_LOAD = "load"
+internal const val FIELD_DISK = "disk"
+internal const val FIELD_LOAD = "load"
 private const val FIELD_RX = "rx"
 private const val FIELD_TX = "tx"
 private const val KIB = 1024.0
@@ -39,7 +39,7 @@ private const val UNITS = "KMGT"
 private const val MINUTE_MS = 60_000L
 private const val HOUR_MIN = 60L
 private const val DAY_MIN = 1440L
-private const val PCT = 100.0
+internal const val PCT = 100.0
 private const val OFFLINE_ALPHA = 0.55f
 private const val CPU_LINE_ALERT = 90f
 private const val DASH = "-"
@@ -70,6 +70,7 @@ fun HostPanel(state: MetricsState, host: HostCard, onTerminal: (() -> Unit)? = n
             Text("在线率 ${host.avail?.let { "${one(it)}%" } ?: DASH} (24h)", c.textSecondary, 12, Modifier.weight(1f))
             host.bootAt?.takeIf { host.online }?.let { Text("已运行 ${uptime(it)}", c.textSecondary, 12) }
         }
+        beatsNow(host)?.let { HeartbeatBar(it) }
         if (onTerminal != null && host.online && host.shell) {
             Text("打开终端 ›", c.accent, 13, Modifier.clickable(onClick = onTerminal).padding(top = 4.dp), FontWeight.Medium)
         }
@@ -103,7 +104,7 @@ private fun status(h: HostCard, live: Boolean): String = when {
 
 private fun stamp(ms: Long) = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(ms))
 
-private fun one(v: Double) = if (v >= PCT) v.roundToInt().toString() else "%.1f".format(Locale.US, v)
+internal fun one(v: Double) = if (v >= PCT) v.roundToInt().toString() else "%.1f".format(Locale.US, v)
 
 private fun used(pct: Double?, total: Double?): String = when {
     pct == null -> DASH
@@ -112,7 +113,7 @@ private fun used(pct: Double?, total: Double?): String = when {
 }
 
 /** 字节数换成可读大小。 */
-private fun size(bytes: Double): String {
+internal fun size(bytes: Double): String {
     var v = bytes
     var unit = "B"
     for (u in UNITS) {
@@ -125,7 +126,7 @@ private fun size(bytes: Double): String {
 
 private fun rate(kbps: Double?): String = kbps?.let { size(it * KIB) + "/s" } ?: DASH
 
-private fun uptime(bootAt: Long): String {
+internal fun uptime(bootAt: Long): String {
     val min = (System.currentTimeMillis() - bootAt) / MINUTE_MS
     return when {
         min >= DAY_MIN -> "${min / DAY_MIN} 天 ${min % DAY_MIN / HOUR_MIN} 小时"

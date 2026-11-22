@@ -57,6 +57,7 @@ data class Envelope(
     val task: TaskSnapshot?,
     val dedupeKey: String? = null,
     val markdown: String? = null,
+    val html: String? = null,
     val cid: String? = null,
     val reply: MsgRef? = null,
     val fwd: FwdInfo? = null,

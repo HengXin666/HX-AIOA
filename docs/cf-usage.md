@@ -21,3 +21,7 @@ App "我的 → 系统 → CF 额度" (仅主账号)。服务端 `GET /api/v1/cf
 ## 提醒
 
 cron 每 30 分钟检查一次, 任一项用到 80% 时在 "CF 额度" 群发一条, 每天 (UTC) 最多一条。没配置 token 时不检查。
+
+## 存储
+
+点进额度页最下面的 "存储": 整个账号的 DO 存储 (`durableObjectsStorageGroups.max.storedBytes`, CF 统计有延迟) 对照免费 5 GB, 以及主 Hub 数据库当前大小 (`sql.databaseSize`, 实时)。存储不按天重置。

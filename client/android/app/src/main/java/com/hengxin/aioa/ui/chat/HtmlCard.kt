@@ -1,0 +1,125 @@
+package com.hengxin.aioa.ui.chat
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.view.MotionEvent
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+
+private const val MIME = "text/html"
+private const val UTF8 = "utf-8"
+private const val MIN_HEIGHT = 48
+private val CARD_SHAPE = RoundedCornerShape(10.dp)
+private val SCHEMES = setOf("http", "https")
+
+// 只给内容最基本的排版; 推送方的样式写在 HTML 里自己定
+private fun page(body: String) =
+    "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+        "<style>html,body{margin:0;padding:0;word-wrap:break-word}img{max-width:100%}</style></head><body>$body</body></html>"
+
+/** 沙箱 WebView: 不跑脚本, 不联网 (只能用内联样式和 data: 图片), 不读文件; 点链接交给浏览器。 */
+@SuppressLint("ClickableViewAccessibility")
+private fun sandbox(context: Context, onHeight: (Int) -> Unit): WebView = WebView(context).apply {
+    settings.javaScriptEnabled = false
+    settings.allowFileAccess = false
+    settings.allowContentAccess = false
+    settings.blockNetworkLoads = true
+    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+    isVerticalScrollBarEnabled = false
+    webViewClient = object : WebViewClient() {
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val url = request.url
+            if (url.scheme in SCHEMES) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            return true
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            view.postDelayed({ onHeight(view.contentHeight) }, 50)
+        }
+    }
+}
+
+private fun WebView.show(html: String) {
+    if (tag == html) return
+    tag = html
+    loadDataWithBaseURL(null, page(html), MIME, UTF8, null)
+}
+
+/** 消息里的 HTML 卡片: 内联最多 maxHeight 高, 超出可全屏看; 卡片内滑动交给外层列表。 */
+@SuppressLint("ClickableViewAccessibility")
+@Composable
+fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp) {
+    var height by remember { mutableIntStateOf(MIN_HEIGHT) }
+    var full by remember { mutableStateOf(false) }
+    val tall = height > maxHeight.value
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().clip(CARD_SHAPE)) {
+            AndroidView(
+                factory = { ctx ->
+                    sandbox(ctx) { height = maxOf(it, MIN_HEIGHT) }.apply {
+                        // 拖动不让 WebView 自己滚, 外层列表才能接住; 点按照常处理链接
+                        setOnTouchListener { _, e -> e.actionMasked == MotionEvent.ACTION_MOVE }
+                    }
+                },
+                update = { it.show(html) },
+                modifier = Modifier.fillMaxWidth().height(minOf(height.toFloat(), maxHeight.value).dp),
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+            Text(
+                if (tall) "展开全部" else "全屏查看",
+                Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(horizontal = 6.dp, vertical = 2.dp),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    if (full) HtmlViewer(html) { full = false }
+}
+
+/** 全屏看 HTML: 可以在里面滚动。 */
+@Composable
+fun HtmlViewer(html: String, title: String = "卡片", onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        BackHandler(onBack = onClose)
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).systemBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f), fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text("关闭", Modifier.clickable(onClick = onClose), fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            AndroidView({ ctx -> sandbox(ctx) {} }, Modifier.fillMaxWidth().weight(1f).background(Color.Transparent), update = { it.show(html) })
+        }
+    }
+}

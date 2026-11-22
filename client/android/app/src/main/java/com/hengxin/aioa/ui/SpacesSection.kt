@@ -62,7 +62,7 @@ private class AppSpaceSource(private val chat: ChatModel) : SpaceSource {
 
 /** 资源页顶部的工作台: 与 Web 渲染同一份 schema; 危险按钮与危险选项先二次确认。 */
 @Composable
-fun SpacesSection(chat: ChatModel) {
+fun SpacesSection(chat: ChatModel, only: String? = null) {
     val spaces = chat.spaces
     val source = remember(chat) { AppSpaceSource(chat) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
@@ -98,7 +98,9 @@ fun SpacesSection(chat: ChatModel) {
             override fun layout(space: Space, change: LayoutChange) = chat.spaces.change(space, change)
         }
     }
-    val current = spaces.currentId ?: spaces.spaces.firstOrNull()?.id
+    // 总览把每个工作台当一个看板: only 指定时只显示这一个
+    val shown = if (only != null) spaces.spaces.filter { it.id == only } else spaces.spaces
+    val current = only ?: spaces.currentId ?: shown.firstOrNull()?.id
     LaunchedEffect(current) { current?.let(spaces::prime) }
-    SpaceBoard(spaces.spaces, current, spaces.editing, source, handler, onPick = spaces::pick, onEdit = { spaces.editing = it })
+    SpaceBoard(shown, current, spaces.editing, source, handler, onPick = spaces::pick, onEdit = { spaces.editing = it })
 }
