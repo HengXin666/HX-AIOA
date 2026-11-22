@@ -3,6 +3,7 @@ import { HEADER_INTERNAL_USER } from "./accounts/constants";
 import { HUB_NAME } from "./constants";
 import type { Env } from "./env";
 import { json, preflight } from "./http";
+import { cleanupTempMail, MAIL_CLEANUP_CRON } from "./mail-cleanup";
 
 export { Hub } from "./hub";
 
@@ -17,7 +18,11 @@ export default {
     headers.delete(HEADER_INTERNAL_USER);
     return env.HUB.get(env.HUB.idFromName(HUB_NAME)).fetch(new Request(req, { headers }));
   },
-  async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (ctrl.cron === MAIL_CLEANUP_CRON) {
+      ctx.waitUntil(cleanupTempMail(env).then((n) => console.log("临时邮箱清理:", n)).catch((e) => console.error("临时邮箱清理失败:", e)));
+      return;
+    }
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
     if (env.GITHUB_TOKEN) ctx.waitUntil(hub.githubSync().then((r) => console.log("GitHub 定时同步:", JSON.stringify(r))));
     if (env.CF_API_TOKEN && env.CF_ACCOUNT_ID) ctx.waitUntil(hub.cfCheck().catch((e) => console.error("CF 额度检查失败:", e)));

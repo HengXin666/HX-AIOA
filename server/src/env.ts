@@ -13,4 +13,6 @@ export interface Env {
   // CF 额度页: 只读 Account Analytics token 与账号 id
   CF_API_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
+  // 可选, 临时邮箱库, 每天清理超期邮件
+  TEMP_MAIL_DB?: D1Database;
 }

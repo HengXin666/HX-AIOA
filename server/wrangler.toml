@@ -18,9 +18,15 @@ new_sqlite_classes = ["Hub"]
 # 绑定自己的域名, workers.dev 在中国大陆多数无法直连
 # 用 zone 内惯用的 route 模式 (与该 zone 其它子域一致), 不声明 custom_domain,
 # 否则会与页面上已存在的 cdn.woa.qzz.io CNAME 争抢记录, 部署时报 100117
-# 有 GITHUB_TOKEN 时每 30 分钟回填一次 GitHub 页面状态
+# 有 GITHUB_TOKEN 时每 30 分钟回填一次 GitHub 页面状态; 每天 03:00 (UTC+8) 清理临时邮箱超期邮件
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/30 * * * *", "0 19 * * *"]
+
+# 临时邮箱 (cloudflare_temp_email) 的库, 只用于定期清理超期邮件
+[[d1_databases]]
+binding = "TEMP_MAIL_DB"
+database_name = "temp-email-db"
+database_id = "eeda9a60-a925-400e-8020-ad76c731aab1"
 
 [[routes]]
 pattern = "aioa.woa.qzz.io/*"
