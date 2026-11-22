@@ -31,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,10 +46,32 @@ private const val MIN_HEIGHT = 48
 private val CARD_SHAPE = RoundedCornerShape(10.dp)
 private val SCHEMES = setOf("http", "https")
 
+private const val MQ_ON = "(min-width:0)"
+private const val MQ_OFF = "(max-width:0)"
+private val SCHEME_MQ = Regex("""\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)""", RegexOption.IGNORE_CASE)
+
+/** 卡片跟随 App 的明暗: 没写颜色的部分用 App 文字色; 推送方写的 prefers-color-scheme 按 App 主题生效。 */
+data class CardTheme(val dark: Boolean, val text: Int, val link: Int) {
+    val key get() = "$dark/$text/$link"
+}
+
+@Composable
+fun cardTheme(): CardTheme {
+    val c = MaterialTheme.colorScheme
+    return CardTheme(c.surface.luminance() < 0.5f, c.onSurface.toArgb(), c.primary.toArgb())
+}
+
+private fun css(argb: Int) = "#%06x".format(argb and 0xFFFFFF)
+
+// 系统 WebView 的 prefers-color-scheme 跟系统走, 不跟 App 内主题, 所以按 App 主题改写成恒真/恒假
+private fun adapt(body: String, dark: Boolean) =
+    SCHEME_MQ.replace(body) { m -> if (m.groupValues[1].equals("dark", true) == dark) MQ_ON else MQ_OFF }
+
 // 只给内容最基本的排版; 推送方的样式写在 HTML 里自己定
-private fun page(body: String) =
+private fun page(body: String, t: CardTheme) =
     "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-        "<style>html,body{margin:0;padding:0;word-wrap:break-word}img{max-width:100%}</style></head><body>$body</body></html>"
+        "<style>:root{color-scheme:${if (t.dark) "dark" else "light"}}html,body{margin:0;padding:0;word-wrap:break-word;color:${css(t.text)}}" +
+        "a{color:${css(t.link)}}img{max-width:100%}</style></head><body>${adapt(body, t.dark)}</body></html>"
 
 /** 沙箱 WebView: 不跑脚本, 不联网 (只能用内联样式和 data: 图片), 不读文件; 点链接交给浏览器。 */
 @SuppressLint("ClickableViewAccessibility")
@@ -71,10 +95,11 @@ private fun sandbox(context: Context, onHeight: (Int) -> Unit): WebView = WebVie
     }
 }
 
-private fun WebView.show(html: String) {
-    if (tag == html) return
-    tag = html
-    loadDataWithBaseURL(null, page(html), MIME, UTF8, null)
+private fun WebView.show(html: String, t: CardTheme) {
+    val key = t.key + html
+    if (tag == key) return
+    tag = key
+    loadDataWithBaseURL(null, page(html, t), MIME, UTF8, null)
 }
 
 /** 消息里的 HTML 卡片: 内联最多 maxHeight 高, 超出可全屏看; 卡片内滑动交给外层列表。 */
@@ -83,6 +108,7 @@ private fun WebView.show(html: String) {
 fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp) {
     var height by remember { mutableIntStateOf(MIN_HEIGHT) }
     var full by remember { mutableStateOf(false) }
+    val theme = cardTheme()
     val tall = height > maxHeight.value
     Column(modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().clip(CARD_SHAPE)) {
@@ -93,7 +119,7 @@ fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp
                         setOnTouchListener { _, e -> e.actionMasked == MotionEvent.ACTION_MOVE }
                     }
                 },
-                update = { it.show(html) },
+                update = { it.show(html, theme) },
                 modifier = Modifier.fillMaxWidth().height(minOf(height.toFloat(), maxHeight.value).dp),
             )
         }
@@ -114,12 +140,13 @@ fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp
 fun HtmlViewer(html: String, title: String = "卡片", onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         BackHandler(onBack = onClose)
+        val theme = cardTheme()
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).systemBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, Modifier.weight(1f), fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                 Text("关闭", Modifier.clickable(onClick = onClose), fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
             }
-            AndroidView({ ctx -> sandbox(ctx) {} }, Modifier.fillMaxWidth().weight(1f).background(Color.Transparent), update = { it.show(html) })
+            AndroidView({ ctx -> sandbox(ctx) {} }, Modifier.fillMaxWidth().weight(1f).background(Color.Transparent), update = { it.show(html, theme) })
         }
     }
 }
