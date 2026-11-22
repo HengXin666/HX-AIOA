@@ -14,6 +14,7 @@ class AioaApp : Application() {
         CrashLog.install(this)
         Thread { runCatching { Updater.cleanup(this) } }.start()
         Channels.create(this)
+        com.hengxin.aioa.config.SetupImport.apply(this)
     }
 
     companion object {
