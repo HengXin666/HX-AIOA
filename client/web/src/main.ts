@@ -19,6 +19,7 @@ import { overviewPage } from "./pages/overview";
 import type { Env, Page } from "./pages/page";
 import { readerPage, resourcesPage } from "./pages/resources";
 import { rulesPage } from "./pages/rules";
+import { sourcesPage } from "./pages/sources";
 import { AppearanceStore } from "./theme/appearance";
 
 const NAV = [
@@ -37,6 +38,7 @@ const ROUTES: Record<string, Page> = {
   me: mePage,
   "me/rules": rulesPage,
   "me/look": lookPage,
+  "me/sources": sourcesPage,
   read: readerPage,
 };
 
@@ -66,10 +68,11 @@ let scope = new Scope();
 
 function route(): void {
   const hash = location.hash.replace(/^#\/?/, "") || "overview";
-  const parts = hash.split("/");
-  const key = ROUTES[hash] ? hash : parts[0]!;
+  // 最长前缀匹配, 剩余部分作为参数: #/me/sources/new -> me/sources + new
+  let key = hash;
+  while (key && !ROUTES[key]) key = key.includes("/") ? key.slice(0, key.lastIndexOf("/")) : "";
   const page = ROUTES[key] ?? overviewPage;
-  const arg = ROUTES[hash] ? undefined : parts.slice(1).join("/") || undefined;
+  const arg = hash.slice(key.length + 1) || undefined;
   scope.dispose();
   scope = new Scope();
   const env: Env = { store, actions, scope, look };

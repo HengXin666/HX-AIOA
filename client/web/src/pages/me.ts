@@ -1,12 +1,13 @@
 import type { SourceInfo } from "@hx-aioa/protocol";
-import { CLS, SERVER_URL, SOURCES_PATH, STATUS_ONLINE } from "../constants";
+import { CLS, SERVER_URL, STATUS_ONLINE } from "../constants";
 import { orderedPanels } from "../components/space";
-import { api, hasServer } from "../core/api";
 import { h, icon } from "../core/dom";
+import { deleteSource, listSources } from "../core/sources";
 import { TOPIC_LINK, TOPIC_SPACES } from "../core/store";
 import { pageHead, section, type Env } from "./page";
+import { sourcePath } from "./sources";
 
-type Src = { name: string; icon?: string; type?: string; note: string };
+type Src = { name: string; icon?: string; type?: string; note: string; id?: string };
 
 function link(href: string, ic: string, title: string, sub: string): HTMLElement {
   return h("a", { class: "ev menu", href }, h("span", { class: "ev-ic" }, icon(ic)), h("div", { class: "ev-main" }, h("div", { class: "ev-title" }, title), h("div", { class: CLS.meta }, sub)), icon("chevron-right"));
@@ -14,6 +15,16 @@ function link(href: string, ic: string, title: string, sub: string): HTMLElement
 
 function srcRow(s: Src): HTMLElement {
   return h("div", { class: "ev" }, h("span", { class: "ev-ic" }, icon(s.icon ?? "plug")), h("div", { class: "ev-main" }, h("div", { class: "ev-title" }, s.name), h("div", { class: CLS.meta }, s.note)));
+}
+
+function registeredRow(s: SourceInfo, onDelete: () => void): HTMLElement {
+  return h(
+    "div",
+    { class: "ev" },
+    h("span", { class: "ev-ic" }, icon(s.icon ?? "plug")),
+    h("a", { class: "ev-main", href: sourcePath(s.id) }, h("div", { class: "ev-title" }, s.name), h("div", { class: CLS.meta }, `${s.type}${s.subject ? ` · ${s.subject}` : ""}`)),
+    h("button", { class: CLS.ghostSm, type: "button", "aria-label": "删除", onclick: onDelete }, icon("trash")),
+  );
 }
 
 // 本地能看到的来源: 事件里的 source 加上有指标的主体
@@ -49,12 +60,20 @@ export function mePage(root: HTMLElement, env: Env): void {
       ),
     );
   };
-  const drawSources = (list: Src[]) => sources.replaceChildren(...(list.length ? list.map(srcRow) : [h("div", { class: "meta pad" }, "还没有数据源")]));
-  if (hasServer() && env.actions.mode === "live") {
-    api<{ sources: SourceInfo[] }>(SOURCES_PATH)
-      .then((r) => drawSources(r.sources.map((s) => ({ name: s.name, icon: s.icon, note: `${s.type}${s.subject ? ` · ${s.subject}` : ""}` }))))
+  const add = link("#/me/sources/new", "plus", "添加数据源", "GitHub, 通用 Webhook, Uptime Kuma 等, 按步骤接入");
+  const remove = (s: SourceInfo) => {
+    if (!window.confirm(`删除 "${s.name}"? 绑定的接入 key 会一起作废。`)) return;
+    deleteSource(env.actions.mode, s.id).then(loadSources).catch(() => undefined);
+  };
+  const drawSources = (list: Src[], registered: SourceInfo[] = []) =>
+    sources.replaceChildren(add, ...registered.map((s) => registeredRow(s, () => remove(s))), ...list.map(srcRow), ...(list.length || registered.length ? [] : [h("div", { class: "meta pad" }, "还没有数据源")]));
+  const loadSources = () => {
+    if (env.actions.mode === "none") return drawSources(localSources(env));
+    listSources(env.actions.mode)
+      .then((r) => drawSources(env.actions.mode === "mock" ? localSources(env) : [], r))
       .catch(() => drawSources(localSources(env)));
-  } else drawSources(localSources(env));
+  };
+  loadSources();
 
   root.append(
     pageHead("我的", "数据源, 规则, 组件, 布局与设置"),
