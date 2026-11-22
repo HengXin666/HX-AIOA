@@ -67,6 +67,8 @@ class ChatGroups(
     var syncing by mutableStateOf(false)
         private set
     private var loadingOlder = false
+    /** 某个群被清空到 seq 时通知外层 (总览的今日消息等内存列表一起删)。 */
+    var onCleared: ((String, Long) -> Unit)? = null
 
     /** 下拉同步: 群资料, 收藏, 分组都重新拉一次。 */
     fun syncNow() {
@@ -119,6 +121,7 @@ class ChatGroups(
                     if (m.cleared > 0) db.clearGroup(m.channel, m.cleared)
                 }
             }
+            metas.filter { it.cleared > 0 }.forEach { m -> onCleared?.invoke(m.channel, m.cleared) }
             metas.firstOrNull { it.channel == open && it.cleared > 0 }?.let { m -> messages.removeAll { it.seq <= m.cleared } }
             reload()
         }
@@ -132,6 +135,7 @@ class ChatGroups(
             if (upTo > 0) {
                 withContext(Dispatchers.IO) { db.clearGroup(key, upTo) }
                 if (open == key) messages.removeAll { it.seq <= upTo }
+                onCleared?.invoke(key, upTo)
                 reload()
                 directory.refreshChats()
             }

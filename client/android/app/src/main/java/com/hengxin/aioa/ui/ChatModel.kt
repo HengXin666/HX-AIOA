@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.data.groupKey
+
 import com.hengxin.aioa.net.ApiCache
 import com.hengxin.aioa.proto.V1Decode
 import android.app.Application
@@ -59,7 +61,10 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val spaces = SpacesState(app, viewModelScope, metrics)
     val sources = SourcesState(app, viewModelScope)
     val github = GithubState(app, viewModelScope)
-    val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g -> g.directory.onMetas = { g.applyReads() } }
+    val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g ->
+        g.directory.onMetas = { g.applyReads() }
+        g.onCleared = { key, upTo -> messages.removeAll { it.seq <= upTo && it.groupKey() == key } }
+    }
 
     fun resume() {
         NotifyKit.clearMessages(getApplication<Application>())
