@@ -67,9 +67,9 @@ class FeedState(private val send: (String) -> Boolean) {
     }
 
     /** 回答任务的等待确认; 返回 false 表示没发出去 (离线)。 */
-    fun act(taskId: String, kind: String, option: String?, confirm: Boolean): Boolean {
+    fun act(taskId: String, kind: String, option: String?, confirm: Boolean, text: String? = null): Boolean {
         val aid = "a_" + UUID.randomUUID().toString().replace("-", "").take(AID_LENGTH)
-        if (!send(Frames.act(aid, taskId, kind, option, confirm = confirm))) {
+        if (!send(Frames.act(aid, taskId, kind, option, text, confirm))) {
             notice = "未连接服务端, 操作没有发出"
             return false
         }

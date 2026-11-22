@@ -31,7 +31,7 @@ CPU, 内存这类指标只在有人看时才需要实时, 所以采用懒更新,
 AIOA_SERVER=https://你的域名 AIOA_TOKEN=... AIOA_SUBJECT=nas-01 node tools/probe.mjs
 ```
 
-需要 Node 22 以上。目前采集 cpu, mem, load, temp (有温度传感器时)。
+需要 Node 22 以上。目前采集 cpu, mem, load, temp (有温度传感器时), 均为标准字段名 (`protocol/src/v1/metric-fields.ts`); Beszel, Netdata, Prometheus 的数据进入服务端时也换成同一套名字, 工作台组件不关心来源。
 
 告警阈值: `AIOA_ALERT_CPU`, `AIOA_ALERT_MEM` (百分比, 默认 90), `AIOA_ALERT_TEMP` (摄氏度, 默认 85), 设为 0 关闭。
 

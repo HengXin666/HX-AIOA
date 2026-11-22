@@ -1,4 +1,4 @@
-import type { Bind, Threshold } from "@hx-aioa/protocol";
+import { METRIC_FIELDS, type Bind, type Threshold } from "@hx-aioa/protocol";
 import { h } from "../core/dom";
 import type { Point, Store } from "../core/store";
 import { fmtNum, lastValue, levelOf, mountWidget, type Ctx } from "./frame";
@@ -21,7 +21,8 @@ export function thresholdFor(ctx: Ctx, b: Bind): Threshold {
 }
 
 export function unitFor(ctx: Ctx, b: Bind): string {
-  return typeof ctx.item.props?.unit === "string" ? ctx.item.props.unit : ctx.store.unitOf(b);
+  if (typeof ctx.item.props?.unit === "string") return ctx.item.props.unit;
+  return ctx.store.unitOf(b) || (METRIC_FIELDS[b.field]?.unit ?? "");
 }
 
 const hasSeries = (store: Store, binds: Bind[]) => () => binds.some((b) => store.seriesOf(b).length > 0);

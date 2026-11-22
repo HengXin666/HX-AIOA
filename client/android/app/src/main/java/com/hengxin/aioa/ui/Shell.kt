@@ -37,7 +37,7 @@ fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -
             Tab.OVERVIEW -> OverviewPage(chat) { tab = it }
             Tab.CHAT -> ChatScreen(chat)
             Tab.AGENT -> AgentPage(chat)
-            Tab.RESOURCES -> MetricsPage(chat.metrics)
+            Tab.RESOURCES -> MetricsPage(chat)
             Tab.ME -> MePage(prefs, setPrefs, onNotes, onSettings)
         }
     }

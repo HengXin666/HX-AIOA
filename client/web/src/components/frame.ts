@@ -36,7 +36,9 @@ export function mountWidget(ctx: Ctx, spec: WidgetSpec): HTMLElement {
   const head = item.title
     ? h("div", { class: "w-head" }, item.icon ? icon(item.icon) : null, h("span", { class: "w-title" }, item.title), badge)
     : null;
-  const root = h("section", { class: `widget w-${item.type}`, "data-item": item.id }, head, body);
+  // 每个图表都写明它回答的问题, 放在标题下
+  const question = item.question ? h("div", { class: "w-q" }, item.question) : null;
+  const root = h("section", { class: `widget w-${item.type}`, "data-item": item.id }, head, question, body);
   if (!head) root.append(badge);
   const limit = staleMs(ctx);
   let frame = 0;

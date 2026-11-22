@@ -36,17 +36,18 @@ fun Adaptive(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     }
 }
 
-/** 自适应网格: 每格不小于 minCell, 列数随宽度变化; span 让一项占多列 (如图表)。 */
+/** 自适应网格: 每格不小于 minCell, 列数随宽度变化但不超过 maxCols; span 让一项占多列 (如图表)。 */
 @Composable
 fun <T> AdaptiveGrid(
     items: List<T>,
     minCell: Dp = if (LocalWidthClass.current == WidthClass.Compact) 150.dp else 210.dp,
     span: (T) -> Int = { 1 },
+    maxCols: Int = Int.MAX_VALUE,
     content: @Composable (T) -> Unit,
 ) {
     val gap = Aioa.metrics.gap
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val cols = ((maxWidth + gap) / (minCell + gap)).toInt().coerceAtLeast(1)
+        val cols = ((maxWidth + gap) / (minCell + gap)).toInt().coerceIn(1, maxCols)
         val rows = mutableListOf<MutableList<T>>()
         var used = cols
         for (it in items) {

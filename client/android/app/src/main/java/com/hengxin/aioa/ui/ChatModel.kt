@@ -47,6 +47,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
     val metrics = MetricsState { socket.send(Frames.watch(it)) }
     val feed = FeedState(socket::send)
+    val spaces = SpacesState(app, viewModelScope, metrics)
 
     fun resume() {
         NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
@@ -93,7 +94,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
 
     override fun onFrame(frame: ServerFrame) {
-        if (metrics.onFrame(frame)) return
+        if (metrics.onFrame(frame) || spaces.onFrame(frame)) return
         // v1 的事件同时进消息列表 (压成一行), 保持消息页与旧版一致
         if (frame is ServerFrame.Ev && frame.ev.kind != Constants.KIND_METRIC) accept(frame.ev.toMsg())
         if (feed.onFrame(frame) || frame !is ServerFrame.Msg) return

@@ -52,6 +52,8 @@ export const ITEM_TYPES = [
   "list",
   "report",
   "button",
+  "chat",
+  "approval",
 ] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 

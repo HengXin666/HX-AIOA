@@ -146,12 +146,18 @@ export class Store {
     const arr = this.logs.get(taskId) ?? [];
     arr.push(entry);
     this.logs.set(taskId, arr);
-    this.emit(topicOf(taskId, FIELD_TASK));
+    this.emitLog(taskId);
   }
 
   setLog(taskId: string, log: TaskLogEntry[]): void {
     this.logs.set(taskId, log);
+    this.emitLog(taskId);
+  }
+
+  // 对话组件可能按 * 订阅, 日志变化也要通知
+  private emitLog(taskId: string): void {
     this.emit(topicOf(taskId, FIELD_TASK));
+    this.emit(TOPIC_TASKS);
   }
 
   setAgents(list: AgentStatus[]): void {

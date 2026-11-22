@@ -82,6 +82,11 @@ object Constants {
     const val ACT_APPROVE = "approve"
     const val ACT_REJECT = "reject"
     const val ACT_REPLY = "reply"
+    const val ACT_ASK = "ask"
+    const val SPACES_PATH = "api/v1/spaces"
+    const val TASKS_PATH = "api/v1/tasks"
+    // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
+    const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"
     const val STYLE_PRIMARY = "primary"
     const val ICON_ACTIVITY = "activity"

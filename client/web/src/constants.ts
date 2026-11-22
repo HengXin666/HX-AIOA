@@ -18,7 +18,7 @@ export const STATUS_NO_CONFIG = "未配置服务端地址";
 export const QUERY_MOCK = "mock";
 export const STORAGE_APPEARANCE = "aioa.appearance";
 export const STORAGE_SPACE = "aioa.space";
-export const STORAGE_ORDER = "aioa.order";
+export const STORAGE_LAYOUT = "aioa.layout";
 export const STORAGE_SAVED = "aioa.saved";
 export const STORAGE_DONE = "aioa.done";
 
