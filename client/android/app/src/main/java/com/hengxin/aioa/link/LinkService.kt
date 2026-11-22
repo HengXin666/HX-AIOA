@@ -91,7 +91,7 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         when (frame) {
             is ServerFrame.Welcome -> replayHead = frame.head
-            is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application)) notifier.message(frame.src, frame)
+            is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !MutedGroups.contains(this, frame.groupKey())) notifier.message(frame)
             is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) onEvent(frame.ev)
             is ServerFrame.Task -> notifier.task(frame.task)
             else -> Unit

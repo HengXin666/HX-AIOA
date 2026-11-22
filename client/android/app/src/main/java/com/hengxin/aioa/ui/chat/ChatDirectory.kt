@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.hengxin.aioa.data.GroupTitles
 import com.hengxin.aioa.data.MutedGroups
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.net.ApiCache
@@ -67,7 +68,11 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         metas = next
         onMetas?.invoke()
         val muted = next.values.filter { it.muted }.map { it.channel }.toSet()
-        scope.launch(Dispatchers.IO) { MutedGroups.write(context, muted) }
+        val titles = next.values.mapNotNull { m -> m.title?.let { m.channel to it } }.toMap()
+        scope.launch(Dispatchers.IO) {
+            MutedGroups.write(context, muted)
+            GroupTitles.write(context, titles)
+        }
     }
 
     fun title(key: String): String = metas[key]?.title ?: key
@@ -149,6 +154,12 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         Result.success(Onboard(parseAgent(b.getJSONObject("agent")), b.optString("prompt")))
     }
 
+    /** 清空群消息, 成功时返回清到的 seq; 在 IO 线程调用。 */
+    fun clear(channel: String): Result<Long> {
+        val r = Api.call(context, DELETE, listOf(CHATS, channel, MESSAGES))
+        return r.error?.let { Result.failure(Exception(it)) } ?: Result.success(r.body?.optLong("cleared") ?: 0L)
+    }
+
     private fun agentBody(name: String, brief: String, reads: List<String>) =
         JSONObject().put("name", name.trim()).put("brief", brief).put("reads", JSONArray(reads))
 
@@ -156,6 +167,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         const val CHATS = "api/v1/chats"
         const val FAVORITES = "api/v1/favorites"
         const val AGENTS = "agents"
+        const val MESSAGES = "messages"
         const val CACHE_CHATS = "chats"
         const val CACHE_FAVS = "favorites"
         const val TOPIC_FAVORITES = "favorites"

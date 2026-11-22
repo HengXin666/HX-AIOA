@@ -7,7 +7,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.data.GroupTitles
 import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.TaskSnapshot
@@ -39,25 +41,28 @@ class Notifier(private val context: Context, private val db: MessageDb) {
             ev.kind == Constants.KIND_REPORT -> events.report(ev)
             events.isAlert(ev) -> events.alert(ev)
             events.isGithub(ev) -> events.github(ev)
-            else -> message(ev.source.id, msg)
+            else -> message(msg)
         }
     }
 
     /** 单独推来的任务快照只用于撤掉已处理的待确认通知, 不新弹。 */
     fun task(task: TaskSnapshot) = events.task(task, task.agent, loud = false)
 
-    /** 普通消息: 同一来源合并为一条会话, 每条新消息都重新提醒一次 (横幅, 震动, 锁屏可见)。 */
-    fun message(sourceId: String, msg: ServerFrame.Msg) {
+    /** 普通消息: 同一个群合并为一条会话 (标题是群名, 每条显示发送者), 每条新消息都重新提醒一次 (横幅, 震动, 锁屏可见)。 */
+    fun message(msg: ServerFrame.Msg) {
         if (!NotifyKit.granted(context)) return
-        val history = db.unread(Constants.DEVICE_PREFIX, HISTORY_SCAN).filter { it.src == msg.src }
+        val key = msg.groupKey()
+        val title = GroupTitles.of(context, key)
+        val history = db.unread(Constants.DEVICE_PREFIX, HISTORY_SCAN).filter { it.groupKey() == key }
             .takeLast(Constants.NOTIFY_MAX_LINES).ifEmpty { listOf(msg) }
-        val sender = Person.Builder().setName(msg.src).setKey(sourceId).build()
-        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(msg.src)
-        history.forEach { style.addMessage(it.text, it.ts, sender) }
+        val people = HashMap<String, Person>()
+        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(title)
+            .setGroupConversation(history.any { it.src != title })
+        history.forEach { m -> style.addMessage(m.text, m.ts, people.getOrPut(m.src) { Person.Builder().setName(m.src).setKey(m.src).build() }) }
         val total = db.unreadCount(Constants.DEVICE_PREFIX)
         val notification = NotifyKit.builder(context, Constants.CHANNEL_MESSAGE, R.drawable.ic_stat_message)
-            .setContentTitle(msg.src)
-            .setContentText(msg.text)
+            .setContentTitle(title)
+            .setContentText(if (msg.src == title) msg.text else "${msg.src}: ${msg.text}")
             .setStyle(style)
             .setNumber(history.size)
             .setContentIntent(NotifyKit.openApp(context))
@@ -71,7 +76,7 @@ class Notifier(private val context: Context, private val db: MessageDb) {
             .setVibrate(Constants.VIBRATE_PATTERN)
             .build()
         // 先撤掉旧的再发, 系统把它当作新通知, 每条都会重新弹横幅
-        val tag = MESSAGE_TAG + sourceId
+        val tag = MESSAGE_TAG + key
         NotificationManagerCompat.from(context).cancel(tag, Constants.NOTIFY_ID_MESSAGE)
         NotifyKit.post(context, tag, Constants.NOTIFY_ID_MESSAGE, notification)
         NotifyKit.summary(

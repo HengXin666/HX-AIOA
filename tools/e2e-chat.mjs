@@ -119,6 +119,11 @@ const read2 = await api(PATCH, `${V1}/chats/${enc(GROUP)}`, { read: 5 });
 const read3 = await api(PATCH, `${V1}/chats/${enc(GROUP)}`, { read: 3 });
 check("已读只前进", read2.data?.chat?.read === 5 && read3.data?.chat?.read === 5, [read2.status, read2.data, read3.data]);
 
+const wipe = await api(DELETE, `${V1}/chats/${enc(GROUP)}/messages`);
+const left = await api(GET, `${V1}/chats/${enc(GROUP)}/messages`);
+const metaAfter = (await api(GET, `${V1}/chats`)).data.chats.find((m) => m.channel === GROUP);
+check("清空聊天记录", wipe.status === 200 && wipe.data.deleted > 0 && left.data.messages.length === 0 && metaAfter?.cleared === wipe.data.cleared, [wipe.data, left.data, metaAfter]);
+
 client.ws.close();
 console.log(failed ? `${failed} 项失败` : "全部通过");
 process.exit(failed ? 1 : 0);

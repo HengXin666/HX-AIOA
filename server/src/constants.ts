@@ -100,3 +100,7 @@ export const KV_GITHUB_ACTIVITY_ETAG = "githubActivityEtag:2";
 export const KV_GITHUB_ACTIVITY_SYNCED = "githubActivitySyncedAt";
 export const ERR_NO_GITHUB_TOKEN = "服务端没有配置 GITHUB_TOKEN";
 export const GITHUB_ADAPTER = "github";
+
+// 群键规则与安卓端 groupKey() 一致: 有 channel 用 channel, 本机发的归备忘, 否则按来源名
+export const MEMO_GROUP = "备忘";
+export const DEVICE_PREFIX = "android";

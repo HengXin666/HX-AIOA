@@ -85,7 +85,8 @@ class ChatGroups(
         val metas = directory.metas
         val fromDb = summaries.map { GroupRowData(it.key, metas[it.key], it.last, it.unread) }
         val known = fromDb.map { it.key }.toSet()
-        val empty = metas.values.filter { it.channel !in known }.map { GroupRowData(it.channel, it, null, 0) }
+        // 没消息的群只在建过资料时显示; 只剩已读 / 清空位置的 (比如清空过的测试群) 不占列表
+        val empty = metas.values.filter { it.channel !in known && it.configured }.map { GroupRowData(it.channel, it, null, 0) }
         return (fromDb + empty).sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
     }
 
@@ -107,13 +108,34 @@ class ChatGroups(
         }.filter { it.name.isNotEmpty() }
     }
 
-    /** 其它设备读过的群, 本机也算已读。 */
+    /** 群资料变了: 其它设备读过的群本机也算已读, 被清空的群删掉本地记录。 */
     fun applyReads() {
-        val metas = directory.metas.values.filter { it.read > 0 }
+        val metas = directory.metas.values.filter { it.read > 0 || it.cleared > 0 }
         if (metas.isEmpty()) return
         scope.launch {
-            withContext(Dispatchers.IO) { metas.forEach { db.markGroupRead(it.channel, it.read) } }
+            withContext(Dispatchers.IO) {
+                metas.forEach { m ->
+                    if (m.read > 0) db.markGroupRead(m.channel, m.read)
+                    if (m.cleared > 0) db.clearGroup(m.channel, m.cleared)
+                }
+            }
+            metas.firstOrNull { it.channel == open && it.cleared > 0 }?.let { m -> messages.removeAll { it.seq <= m.cleared } }
             reload()
+        }
+    }
+
+    /** 清空聊天记录: 服务端存档一起删, 其它设备收到 chat_sync 后也会删。 */
+    fun clearHistory(key: String, done: (String?) -> Unit) {
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { directory.clear(key) }
+            val upTo = r.getOrDefault(0L)
+            if (upTo > 0) {
+                withContext(Dispatchers.IO) { db.clearGroup(key, upTo) }
+                if (open == key) messages.removeAll { it.seq <= upTo }
+                reload()
+                directory.refreshChats()
+            }
+            done(r.exceptionOrNull()?.message)
         }
     }
 
