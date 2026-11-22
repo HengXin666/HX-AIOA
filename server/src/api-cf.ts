@@ -31,7 +31,7 @@ export type CfUsage = {
 };
 
 const STORAGE_QUERY = `query($a: String!, $d: Date!) { viewer { accounts(filter: {accountTag: $a}) {
-  durableObjectsStorageGroups(limit: 1, filter: {date_geq: $d}, orderBy: [date_DESC]) { dimensions { date } max { storedBytes } }
+  durableObjectsStorageGroups(limit: 31, filter: {date_geq: $d}, orderBy: [date_DESC]) { dimensions { date } max { storedBytes } }
 } } }`;
 
 const QUERY = `query($a: String!, $s: Time!, $e: Time!) { viewer { accounts(filter: {accountTag: $a}) {
@@ -60,9 +60,11 @@ async function gql<T>(env: Env, query: string, variables: Record<string, string>
 
 type StorageData = { viewer?: { accounts?: { durableObjectsStorageGroups?: { max: { storedBytes?: number } }[] }[] } };
 
+const STORAGE_DAYS = 30;
+
 // 存储另查一次: 失败不影响用量
 async function storedBytes(env: Env, now: number): Promise<{ storedBytes?: number; error?: string }> {
-  const day = new Date(now - DAY_MS * 2).toISOString().slice(0, 10);
+  const day = new Date(now - DAY_MS * STORAGE_DAYS).toISOString().slice(0, 10);
   try {
     const d = await gql<StorageData>(env, STORAGE_QUERY, { a: env.CF_ACCOUNT_ID!, d: day });
     const rows = d.viewer?.accounts?.[0]?.durableObjectsStorageGroups ?? [];
