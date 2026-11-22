@@ -31,7 +31,8 @@ object Constants {
     const val MAINTENANCE_WAKE_MS = 60_000L
 
     // 渠道 id 一旦创建, 重要性等设置就由用户掌控, 改设置只能换新 id
-    const val CHANNEL_LINK = "link"
+    const val CHANNEL_LINK = "link_v2"
+    const val CHANNEL_LINK_LEGACY = "link"
     const val CHANNEL_MESSAGE = "message_v2"
     const val CHANNEL_MESSAGE_LEGACY = "message"
     const val CHANNEL_UPDATE = "update"

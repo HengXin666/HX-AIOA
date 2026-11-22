@@ -16,8 +16,10 @@ object Channels {
     fun create(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.deleteNotificationChannel(Constants.CHANNEL_MESSAGE_LEGACY)
+        // 旧 link 渠道是 IMPORTANCE_MIN, 系统会折叠它, 大图标不显示; 换 link_v2 用 LOW (仍静音, 不弹出)
+        manager.deleteNotificationChannel(Constants.CHANNEL_LINK_LEGACY)
         val list = listOf(
-            channel(context, Constants.CHANNEL_LINK, R.string.channel_link, R.string.channel_link_desc, NotificationManager.IMPORTANCE_MIN)
+            channel(context, Constants.CHANNEL_LINK, R.string.channel_link, R.string.channel_link_desc, NotificationManager.IMPORTANCE_LOW)
                 .apply { setShowBadge(false) },
             loud(channel(context, Constants.CHANNEL_MESSAGE, R.string.channel_message, R.string.channel_message_desc, NotificationManager.IMPORTANCE_HIGH)),
             loud(channel(context, Constants.CHANNEL_ALERT, R.string.channel_alert, R.string.channel_alert_desc, NotificationManager.IMPORTANCE_HIGH)),

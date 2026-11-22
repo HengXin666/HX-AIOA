@@ -43,9 +43,10 @@ object NotifyKit {
 
     fun color(context: Context, @ColorRes id: Int): Int = ContextCompat.getColor(context, id)
 
+    // 大图标用应用插画的头像裁切 (res/drawable-nodpi/notify_large.webp); 整张自适应图标缩到 64dp 人物太小, 看不出来
     fun appIcon(context: Context): Bitmap? = largeIcon ?: runCatching {
         val size = context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
-        ContextCompat.getDrawable(context, R.mipmap.ic_launcher)?.toBitmap(size, size)
+        ContextCompat.getDrawable(context, R.drawable.notify_large)?.toBitmap(size, size)
     }.getOrNull()?.also { largeIcon = it }
 
     fun builder(context: Context, channel: String, @DrawableRes icon: Int, withLarge: Boolean = true): NotificationCompat.Builder {
