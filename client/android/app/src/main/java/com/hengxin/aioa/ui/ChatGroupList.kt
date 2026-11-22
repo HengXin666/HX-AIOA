@@ -167,11 +167,13 @@ private fun GroupRow(modifier: Modifier, r: GroupRowData, onOpen: () -> Unit, on
     ) {
         ChatAvatar(r.key, r.meta?.avatar, AVATAR)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // 名字区占满剩余宽度, 时间始终贴右
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(r.meta?.title ?: r.key, Modifier.weight(1f, fill = false), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                digestLabel(r.meta?.digest)?.let { Tag(it) }
-                Box(Modifier.weight(1f))
-                r.last?.let { Text(timeOfDay(it.ts), fontSize = 11.sp, color = c.outline) }
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.meta?.title ?: r.key, Modifier.weight(1f, fill = false), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    digestLabel(r.meta?.digest)?.let { Tag(it) }
+                }
+                r.last?.let { Text(timeOfDay(it.ts), Modifier.padding(start = 8.dp), fontSize = 11.sp, color = c.outline) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val last = r.last
