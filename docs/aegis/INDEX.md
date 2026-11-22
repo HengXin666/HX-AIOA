@@ -49,3 +49,13 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/impact-statement-draft.json | 安卓 我的 → 数据源 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/todo-checkpoint-draft.json | 安卓 我的 → 数据源 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/drift-check-draft.json | 安卓 我的 → 数据源 页面 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/10-intent.md | 安卓我的与设置页 UI 重做 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/20-checkpoint.md | 安卓我的与设置页 UI 重做 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/90-evidence.md | 安卓我的与设置页 UI 重做 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-settings-ui/99-reflection.md | 安卓我的与设置页 UI 重做 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/task-intent-draft.json | 安卓我的与设置页 UI 重做 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/baseline-read-set-hint.json | 安卓我的与设置页 UI 重做 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/baseline-usage-draft.json | 安卓我的与设置页 UI 重做 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/impact-statement-draft.json | 安卓我的与设置页 UI 重做 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/todo-checkpoint-draft.json | 安卓我的与设置页 UI 重做 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-settings-ui/drift-check-draft.json | 安卓我的与设置页 UI 重做 drift check draft |

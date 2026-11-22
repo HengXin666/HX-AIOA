@@ -16,6 +16,8 @@ import com.hengxin.aioa.config.AppearancePrefs
 import com.hengxin.aioa.kit.AioaColors
 import com.hengxin.aioa.kit.AppScaffold
 import com.hengxin.aioa.kit.NavItem
+import com.hengxin.aioa.ui.settings.MeDeps
+import com.hengxin.aioa.ui.settings.MeHost
 
 enum class Tab(val label: String, val icon: String) {
     OVERVIEW("总览", "gauge"),
@@ -29,10 +31,8 @@ private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
 /** 主界面: 手机底部五栏, 平板左侧导航; 返回键先回总览再退出。 */
 @Composable
-fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit, onSettings: () -> Unit) {
+fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
-    // "我的" 下的子页; 子页自己处理返回键, 回到 "我的"
-    var meSub by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
     AppScaffold(NAV, tab.name, { key -> tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
         when (tab) {
@@ -40,7 +40,8 @@ fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -
             Tab.CHAT -> ChatScreen(chat)
             Tab.AGENT -> AgentPage(chat)
             Tab.RESOURCES -> MetricsPage(chat)
-            Tab.ME -> if (meSub) SourcesPage(chat.sources) { meSub = false } else MePage(prefs, setPrefs, onNotes, onSettings) { meSub = true }
+            // "我的" 的子页自己处理返回键, 逐级回到列表
+            Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES })
         }
     }
 }
