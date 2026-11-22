@@ -5,10 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.link.NotifyKit
 
 // Android 8+ 安装 APK 需要 "安装未知应用" 授权; 前台直接打开授权页, 后台改发通知
 object InstallPermission {
@@ -24,13 +23,12 @@ object InstallPermission {
         // 后台进程的 startActivity 会被系统静默拦截, 所以通知总是发一条兜底
         runCatching { context.startActivity(intent) }
         val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = NotificationCompat.Builder(context, Constants.CHANNEL_UPDATE)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+        val notification = NotifyKit.builder(context, Constants.CHANNEL_UPDATE, R.drawable.ic_stat_update)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(context.getString(R.string.update_need_permission))
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(Constants.NOTIFY_ID_UPDATE, notification) }
+        NotifyKit.post(context, null, Constants.NOTIFY_ID_UPDATE, notification)
     }
 }

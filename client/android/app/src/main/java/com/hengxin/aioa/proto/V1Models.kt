@@ -2,7 +2,7 @@ package com.hengxin.aioa.proto
 
 // 协议 v1 的客户端视图, 只保留界面与通知用得到的字段; 对应 protocol/src/v1/{event,task,frames}.ts
 
-data class SourceRef(val id: String, val name: String, val icon: String?)
+data class SourceRef(val id: String, val name: String, val icon: String?, val type: String? = null)
 
 data class EventAction(val id: String, val label: String, val style: String?, val url: String?)
 
@@ -55,6 +55,7 @@ data class Envelope(
     val url: String?,
     val values: Map<String, Double>,
     val task: TaskSnapshot?,
+    val dedupeKey: String? = null,
 )
 
 data class OverviewItem(val ev: Envelope, val count: Int, val ids: List<String>)

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "client/android"
+  ],
+  "owners": [],
+  "invariants": [
+    ":link 进程不加载 Compose 类; 老渠道 message_v2 保留"
+  ],
+  "compatBoundary": "Compatibility boundary not yet refined.",
+  "nonGoals": [
+    "不改设置页布局与页面导航; 不改协议与服务端"
+  ]
+}
