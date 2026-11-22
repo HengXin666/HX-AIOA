@@ -21,6 +21,8 @@ import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.shouldNotify
 import com.hengxin.aioa.proto.toMsg
+import java.io.FileDescriptor
+import java.io.PrintWriter
 import java.util.concurrent.Executors
 
 // 运行在独立的 :link 进程, 不加载任何 UI 类: 一条长连接, 本地消息库, 按需的代理内核, 搭便车的低频维护
@@ -81,6 +83,9 @@ class LinkService : Service(), LinkSocket.Listener {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // adb shell dumpsys activity service com.hengxin.aioa/.link.LinkService [demand|reload|optimize]
+    override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) = Diag.dump(this, picker, args, writer)
 
     override fun onStatus(online: Boolean) {
         if (online) watchdog.onOnline() else picker.optimizeSoon()
