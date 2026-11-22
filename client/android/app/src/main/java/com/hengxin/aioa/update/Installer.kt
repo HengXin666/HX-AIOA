@@ -6,10 +6,10 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.link.NotifyKit
 import java.io.File
 
 // 两条安装路径:
@@ -20,6 +20,7 @@ object Installer {
     private const val APK_MIME = "application/vnd.android.package-archive"
     private const val SESSION_NAME = "base.apk"
     private const val AUTHORITY_SUFFIX = ".files"
+    private const val PERCENT_MAX = 100
 
     fun canSilent(context: Context): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && installerOf(context) == context.packageName
@@ -46,8 +47,7 @@ object Installer {
     }
 
     fun notify(context: Context, text: String, action: Intent?) {
-        val builder = NotificationCompat.Builder(context, Constants.CHANNEL_UPDATE)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+        val builder = NotifyKit.builder(context, Constants.CHANNEL_UPDATE, R.drawable.ic_stat_update)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(text)
             .setAutoCancel(true)
@@ -55,8 +55,26 @@ object Installer {
             val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             builder.setContentIntent(PendingIntent.getActivity(context, 0, action, flags))
         }
-        runCatching { NotificationManagerCompat.from(context).notify(Constants.NOTIFY_ID_UPDATE, builder.build()) }
+        NotifyKit.post(context, null, Constants.NOTIFY_ID_UPDATE, builder.build())
     }
+
+    /** 下载进度条: 只提醒一次, 之后静默刷新。 */
+    fun progress(context: Context, label: String, percent: Int) {
+        val n = NotifyKit.builder(context, Constants.CHANNEL_UPDATE, R.drawable.ic_stat_update)
+            .setContentTitle(context.getString(R.string.update_downloading))
+            .setContentText(context.getString(R.string.update_progress, label, percent))
+            .setProgress(PERCENT_MAX, percent, false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .build()
+        NotifyKit.post(context, null, Constants.NOTIFY_ID_UPDATE, n)
+    }
+
+    /** 下载结束 (成功或失败) 撤掉进度条, 后续的安装提示另发。 */
+    fun clearProgress(context: Context) = NotifyKit.cancel(context, null, Constants.NOTIFY_ID_UPDATE)
 
     private fun silent(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller

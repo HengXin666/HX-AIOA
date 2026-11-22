@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#E1F7FE</color>
+    <!-- 通知着色: 品牌色取自 App 图标里的天蓝, 告警按严重程度 -->
+    <color name="notify_brand">#FF2F8FD6</color>
+    <color name="notify_critical">#FFE5484D</color>
+    <color name="notify_warning">#FFF76B15</color>
+    <color name="notify_resolved">#FF30A46C</color>
 </resources>

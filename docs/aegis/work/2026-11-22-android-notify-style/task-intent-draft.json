@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "系统通知小图标换成自有单色矢量图标, 按消息, GitHub, 告警, Agent 待确认, 报告, 更新, 常驻连接分渠道与样式",
+  "goal": "系统通知小图标换成自有单色矢量图标, 按消息, GitHub, 告警, Agent 待确认, 报告, 更新, 常驻连接分渠道与样式",
+  "successEvidence": [
+    ":app:compileReleaseKotlin 通过; 图标预览人工确认可辨认"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "不改设置页布局与页面导航; 不改协议与服务端"
+  ],
+  "scope": "client/android 通知相关: link/Notifier, link/EventNotifier, link/NotifyKit, link/Channels, link/AgentActionReceiver, update/Installer, update/InstallPermission, res/drawable/ic_stat_*",
+  "changeKinds": [],
+  "riskHints": []
+}

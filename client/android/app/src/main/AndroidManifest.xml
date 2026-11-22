@@ -53,6 +53,11 @@
         </receiver>
 
         <receiver
+            android:name=".link.AgentActionReceiver"
+            android:exported="false"
+            android:process=":link" />
+
+        <receiver
             android:name=".update.InstallReceiver"
             android:exported="false">
             <intent-filter>

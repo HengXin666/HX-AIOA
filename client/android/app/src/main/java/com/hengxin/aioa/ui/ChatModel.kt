@@ -6,7 +6,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.AioaApp
@@ -14,6 +13,7 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
+import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.proto.ServerFrame
@@ -51,7 +51,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val sources = SourcesState(app, viewModelScope)
 
     fun resume() {
-        NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
+        NotifyKit.clearMessages(getApplication<Application>())
         viewModelScope.launch {
             val (history, readSeq) = withContext(Dispatchers.IO) { db.recent(Constants.HISTORY_PAGE) to db.readSeq() }
             merge(history)

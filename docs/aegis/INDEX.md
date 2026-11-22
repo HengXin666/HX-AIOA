@@ -49,3 +49,13 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/impact-statement-draft.json | 安卓 我的 → 数据源 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/todo-checkpoint-draft.json | 安卓 我的 → 数据源 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/drift-check-draft.json | 安卓 我的 → 数据源 页面 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/10-intent.md | 安卓通知: 自有图标与按内容分样式 intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/20-checkpoint.md | 安卓通知: 自有图标与按内容分样式 checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/90-evidence.md | 安卓通知: 自有图标与按内容分样式 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-android-notify-style/99-reflection.md | 安卓通知: 自有图标与按内容分样式 reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/task-intent-draft.json | 安卓通知: 自有图标与按内容分样式 task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/baseline-read-set-hint.json | 安卓通知: 自有图标与按内容分样式 baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/baseline-usage-draft.json | 安卓通知: 自有图标与按内容分样式 baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/impact-statement-draft.json | 安卓通知: 自有图标与按内容分样式 impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/todo-checkpoint-draft.json | 安卓通知: 自有图标与按内容分样式 todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-notify-style/drift-check-draft.json | 安卓通知: 自有图标与按内容分样式 drift check draft |
