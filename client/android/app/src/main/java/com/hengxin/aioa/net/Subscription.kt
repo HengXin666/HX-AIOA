@@ -17,7 +17,10 @@ object Subscription {
     private const val FILE_PATH = "providers/sub.yaml"
     private const val STATUS_FILE = "sub_status.json"
     private const val MAX_AGE_MS = 24 * 60 * 60_000L
-    private const val TIMEOUT_SEC = 20L
+    private const val TIMEOUT_SEC = 10L
+    private const val DIRECT_TRIES = 2
+    private val RELAY_PATH = listOf("api/v1/relay/subscription")
+    private val lock = Any()
     private const val SNIPPET = 60
     private const val HTTP_FORBIDDEN = 403
     private const val CF_HEADER = "cf-mitigated"
@@ -47,24 +50,44 @@ object Subscription {
         SubStatus(it.optBoolean("ok"), it.optLong("at"), it.optString("text"))
     }
 
+    // 同一进程里只跑一份, 重复点击或多处同时触发时等前一份结束直接用它的结果
     fun download(context: Context, url: String): SubStatus {
-        val routes = buildList {
-            add("直连" to Proxy.NO_PROXY)
-            if (ProxyCore.listening()) add("代理" to Net.proxy(context, forLink = false))
+        val started = now()
+        synchronized(lock) {
+            status(context)?.takeIf { it.at >= started }?.let { return it }
+            return downloadLocked(context, url)
         }
+    }
+
+    // 顺序: 直连试两个 UA, 再让服务端在境外代拉 (机场屏蔽国内 IP 时), 内核在跑时最后走代理
+    private fun downloadLocked(context: Context, url: String): SubStatus {
         val failures = mutableListOf<String>()
-        for ((routeName, proxy) in routes) {
+        for (ua in USER_AGENTS.take(DIRECT_TRIES)) {
+            val result = runCatching { fetch(url, Proxy.NO_PROXY, ua) }.getOrElse { Attempt(null, it.message ?: it.javaClass.simpleName) }
+            if (result.body != null) return done(context, result.body, "直连")
+            failures += "直连/$ua: ${result.error}"
+            if (result.fatal) break
+        }
+        val relayed = Api.call(context, "POST", RELAY_PATH, JSONObject().put("url", url))
+        val relayBody = relayed.body?.optString("body").orEmpty()
+        if (relayBody.isNotBlank() && !relayBody.trimStart().startsWith("<")) return done(context, relayBody, "服务端代拉")
+        failures += "服务端代拉: ${relayed.error ?: "返回内容不是订阅"}"
+        if (ProxyCore.listening()) {
+            val proxy = Net.proxy(context, forLink = false)
             for (ua in USER_AGENTS) {
+                val routeName = "代理"
                 val result = runCatching { fetch(url, proxy, ua) }.getOrElse { Attempt(null, it.message ?: it.javaClass.simpleName) }
-                if (result.body != null) {
-                    write(file(context), result.body)
-                    return save(context, SubStatus(true, now(), "订阅下载成功 ($routeName, ${result.body.length} 字节)"))
-                }
+                if (result.body != null) return done(context, result.body, routeName)
                 failures += "$routeName/$ua: ${result.error}"
                 if (result.fatal) break
             }
         }
         return save(context, SubStatus(false, now(), "订阅下载失败: " + failures.joinToString("; ")))
+    }
+
+    private fun done(context: Context, body: String, route: String): SubStatus {
+        write(file(context), body)
+        return save(context, SubStatus(true, now(), "订阅下载成功 ($route, ${body.length} 字节)"))
     }
 
     private class Attempt(val body: String?, val error: String, val fatal: Boolean = false)

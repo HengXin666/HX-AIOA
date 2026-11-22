@@ -14,10 +14,14 @@ object ProxyDemand {
     fun ensure(context: Context): Boolean {
         val config = ConfigStore.load(context) ?: return false
         if (!config.proxyEnabled || !ProxyCore(context).available) return false
+        val started = System.currentTimeMillis()
         LinkService.start(context, Constants.ACTION_PROXY_DEMAND)
         val deadline = System.currentTimeMillis() + Constants.PROXY_READY_TIMEOUT_MS * WAIT_FACTOR
         while (System.currentTimeMillis() < deadline) {
             if (ProxyCore.listening()) return true
+            // 订阅这次已经下载失败且没有旧文件, 内核不会起来, 不必干等到超时
+            val sub = Subscription.status(context)
+            if (sub != null && !sub.ok && sub.at >= started && !Subscription.file(context).exists()) return false
             Thread.sleep(POLL_MS)
         }
         return ProxyCore.listening()
