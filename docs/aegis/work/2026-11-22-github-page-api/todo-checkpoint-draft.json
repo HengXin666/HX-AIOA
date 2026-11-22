@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-22-github-page-api",
+  "currentTodo": "Define first execution slice.",
+  "completedTodos": [],
+  "activeSlice": "initial",
+  "evidenceRefs": [],
+  "blockedOn": null,
+  "nextStep": "安卓端按 docs/api-v1-github.md 接入",
+  "updatedAt": "2026-11-22"
+}

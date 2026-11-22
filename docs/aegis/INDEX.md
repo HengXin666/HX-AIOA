@@ -49,3 +49,14 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/impact-statement-draft.json | 安卓 我的 → 数据源 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/todo-checkpoint-draft.json | 安卓 我的 → 数据源 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-sources/drift-check-draft.json | 安卓 我的 → 数据源 页面 drift check draft |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/10-intent.md | GitHub 页面接口 (服务端) intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/20-checkpoint.md | GitHub 页面接口 (服务端) checkpoint |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/90-evidence.md | GitHub 页面接口 (服务端) evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-github-page-api/99-reflection.md | GitHub 页面接口 (服务端) reflection |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/task-intent-draft.json | GitHub 页面接口 (服务端) task intent draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/baseline-read-set-hint.json | GitHub 页面接口 (服务端) baseline read-set hint |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/baseline-usage-draft.json | GitHub 页面接口 (服务端) baseline usage draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/impact-statement-draft.json | GitHub 页面接口 (服务端) impact statement draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/todo-checkpoint-draft.json | GitHub 页面接口 (服务端) todo checkpoint draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/drift-check-draft.json | GitHub 页面接口 (服务端) drift check draft |
+| 2026-11-22 | artifact | docs/aegis/work/2026-11-22-github-page-api/evidence-bundle-draft-e2e-github.json | 2026-11-22-github-page-api evidence e2e-github |

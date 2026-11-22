@@ -34,7 +34,7 @@
 | `hxi_` | 邀请码 | `POST /invites` | 一次性, 带过期时间和角色 |
 | 无前缀 | 旧版 `AUTH_TOKEN` | 部署 secret | 兼容: 等价于母号 (owner) 的全权限凭证, 见 §9 |
 
-接入 key 的权限范围 (`scopes`): `messages:send` (发文本消息), `events:write` (写事件, webhook), `spaces:write` (下发工作台布局), `agent` (Agent 任务), `probe` (探针指标)。
+接入 key 的权限范围 (`scopes`): `messages:send` (发文本消息), `events:write` (写事件, webhook), `events:read` (只读 GitHub 页面接口), `spaces:write` (下发工作台布局), `agent` (Agent 任务), `probe` (探针指标)。
 
 ### 0.2 错误码
 
@@ -252,6 +252,8 @@ key 绑定 `sourceId` 后, 该 key 写入的事件自动带上来源信息 (`sou
 `POST /api/v1/messages` (scope `messages:send`): `{ "text": "备份完成", "title": "可选", "channel": "...", "to": [...], "priority": "happening" }`, 是 `event` 的简写。
 
 ### 3.4 Webhook 与拉取
+
+GitHub 页面 (仓库摘要, PR, Issue, CI, 动态) 的接口见 [api-v1-github.md](api-v1-github.md)。
 
 `POST /api/v1/hooks/{adapter}/{keyId}`, `adapter` 为 `generic` | `github` | `uptime-kuma` | `beszel` | `healthchecks`。鉴权: 带 `X-Hub-Signature-256` 时按 GitHub 方式用 `webhookSecret` 验签, 否则需要 `?key=hxk_...` 或 `Authorization: Bearer hxk_...` 且与路径中的 `keyId` 是同一把 key (scope `events:write`)。返回 `{ "results": [IngestResult] }`, 适配器判断无需入库时 `results` 为空。
 

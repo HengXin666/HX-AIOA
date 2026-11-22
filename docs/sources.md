@@ -8,6 +8,7 @@
 
 - `AUTH_TOKEN`: 客户端令牌, 也是管理数据源的凭证。
 - `TOKEN_SECRET`: 用来派生每把 key 的 Webhook Secret。没有它就无法做 GitHub 验签, 只能退回在地址里带 `?key=`。
+- `GITHUB_TOKEN` (可选): GitHub 只读令牌, 用于 GitHub 页面回填, 见第 2 节末尾。
 
 ## 2. 在 App 里接入 GitHub (推荐)
 
@@ -29,6 +30,18 @@
 - 仓库会写成关注对象 `github:owner/repo`, 与适配器产生的事件一致, 工作台和规则可以按它筛选。
 - 默认规则: GitHub 的 info 级动态 (push, star, CI 成功等) 只进摘要; CI 失败, 请求我 review 会提醒。可在 "规则" 里调整。
 - 在 "我的" 的数据源列表里点垃圾桶删除数据源, 绑定的 key 同时作废, GitHub 之后的推送会被拒绝 (401)。
+
+### GitHub 页面与 GITHUB_TOKEN (可选)
+
+App 的 GitHub 页面展示每个仓库的 stars, 开放 PR / Issue, 最近推送, CI 状态与动态, 接口见 [api-v1-github.md](api-v1-github.md)。只靠 webhook 时, 接入之前已经存在的 PR 和 Issue 看不到; 配上只读令牌后服务端会回填, 并每 30 分钟自动同步一次。
+
+1. 打开 GitHub Settings → Developer settings → Fine-grained personal access tokens → Generate new token。
+2. Repository access 选要展示的仓库 (或 All repositories)。
+3. Repository permissions 只给只读: Metadata, Contents, Issues, Pull requests, Actions 都选 Read-only, 其余保持 No access。
+4. 写进服务端: `npx wrangler secret put GITHUB_TOKEN`; 用 CI 部署的话, 在仓库 Settings → Secrets 里加 `AIOA_GITHUB_TOKEN`, 部署时会同步为 Worker 的 `GITHUB_TOKEN` (没配就跳过)。
+5. 在 App 里点 "同步", 或调用 `POST /api/v1/github/sync`。
+
+令牌只放 secret, 不要写进仓库或 App。
 
 不连服务端想先看流程: 打开 Web 端时加 `?mock=1`, 创建后约 3 秒会模拟收到 ping。
 
@@ -94,4 +107,4 @@ npx wrangler dev --port 8787
 AIOA_SERVER=http://127.0.0.1:8787 AIOA_TOKEN=test-owner-token node tools/e2e-github.mjs
 ```
 
-脚本会创建 github 来源, 签名发送 `ping` 与 `push`, 确认事件入库, 再确认错误签名, 无签名和删除来源后的推送都被拒绝。`wrangler dev` 会把返回地址的域名换成 `wrangler.toml` 里 routes 的域名, 脚本只取路径发往本地。
+脚本会创建 github 来源, 签名发送 `ping`, `push`, `pull_request`, `issues`, `workflow_run`, 确认事件入库, 校验 GitHub 页面接口的摘要与详情 (PR 关闭后从列表消失), 再确认错误签名, 无签名和删除来源后的推送都被拒绝。`wrangler dev` 会把返回地址的域名换成 `wrangler.toml` 里 routes 的域名, 脚本只取路径发往本地。

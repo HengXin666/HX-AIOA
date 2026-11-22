@@ -70,3 +70,14 @@ jobs:
             exit 0
           fi
           printf '%s' "$AIOA_TOKEN_SECRET" | npx wrangler secret put TOKEN_SECRET
+
+      # 可选: 配置了 AIOA_GITHUB_TOKEN secret 时同步为 Worker 的 GITHUB_TOKEN, 用于 GitHub 页面回填
+      - name: 同步 GitHub 只读令牌
+        env:
+          AIOA_GITHUB_TOKEN: ${{ secrets.AIOA_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$AIOA_GITHUB_TOKEN" ]; then
+            echo "未配置 AIOA_GITHUB_TOKEN secret, 跳过, GitHub 页面只靠 webhook 更新"
+            exit 0
+          fi
+          printf '%s' "$AIOA_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN
