@@ -24,6 +24,13 @@
 - `GET .../agents/{keyId}/prompt` → 不含 key 的提示词 (保存的使唤方式)。
 - `DELETE .../agents/{keyId}`: 删除来源并作废 key。
 
+## 接入总览
+
+`GET /api/v1/integrations` (母号) → `{ integrations: [Integration] }`, 每把 key 一行:
+- `kind`: `push` 单向推送的消息源 (定时任务, 群里接入的 Agent, webhook); `interactive` 可双向交互的 Agent (Codex 等, key 带 `agent` scope, 会注册并接收动作); `probe` 探针; `other`。
+- `group` 写入的群, `reads` 额外可读的群, `source` 绑定的来源, `agents` 用这把 key 注册的交互 Agent 及在线状态, `lastActive` 最近一次发消息或心跳。
+- 作废: 群里的 Agent 用 `DELETE /chats/{channel}/agents/{keyId}`, 其它用 `DELETE /keys/{id}`。
+
 ## 引用与转发 (长连接 send 帧)
 
 `{ t: "send", cid, body: { kind: "text", text }, reply?: seq, fwd?: seq, channel?: 群 }`

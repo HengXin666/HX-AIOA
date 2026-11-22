@@ -83,7 +83,7 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStatus(online: Boolean) {
-        if (!online) picker.optimizeSoon()
+        if (online) watchdog.onOnline() else picker.optimizeSoon()
     }
 
     override fun onNetwork() = watchdog.onNetworkChanged()

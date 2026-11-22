@@ -91,6 +91,8 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
         SettingsGroup("数据") {
             PageRow(SettingsPage.SOURCES, summary.sources?.let { "$it 个" }.orEmpty(), selected, open)
             RowDivider()
+            PageRow(SettingsPage.INTEGRATIONS, "", selected, open)
+            RowDivider()
             NavRow(WORKSPACE_ICON, WORKSPACE_TITLE, if (summary.spaces > 0) "${summary.spaces} 个" else "未下发", onClick = openWorkspace)
         }
         SettingsGroup("连接") {

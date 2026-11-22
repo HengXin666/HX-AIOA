@@ -34,6 +34,10 @@ class LinkWatchdog(
     @Volatile
     private var locked = false
 
+    // 离线 / 探测失败时为重连留着的唤醒锁; 重连成功就提前放掉, 不必等到超时
+    @Volatile
+    private var held: PowerManager.WakeLock? = null
+
     private val alarmReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, data: Intent) {
             LinkStats.hit(LinkStats.Key.ALARM)
@@ -99,8 +103,16 @@ class LinkWatchdog(
         val next = if (result == LinkSocket.Probe.SKIPPED) interval - socket.idleMs() else interval
         arm(next.coerceAtLeast(MIN_ARM_MS))
         LinkStats.flush(context)
-        // 离线时留着唤醒锁 (有超时) 给重连用, 其余情况立即释放
-        if (result != LinkSocket.Probe.OFFLINE && result != LinkSocket.Probe.DEAD && wake.isHeld) wake.release()
+        // 离线时留着唤醒锁 (有超时) 给重连用, 连上后由 onOnline 放掉; 其余情况立即释放
+        if (result == LinkSocket.Probe.OFFLINE || result == LinkSocket.Probe.DEAD) held = wake
+        else if (wake.isHeld) wake.release()
+    }
+
+    /** 长连接重新连上: 为重连留的唤醒锁不用再等超时。 */
+    fun onOnline() {
+        val w = held ?: return
+        held = null
+        runCatching { if (w.isHeld) w.release() }
     }
 
     private fun arm(delayMs: Long) {

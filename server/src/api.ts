@@ -2,6 +2,7 @@ import { API_MESSAGES_PATH, API_SEND_PATH, API_V1, PATH_HOOKS, QUERY_LIMIT, QUER
 import { AGENT_ROUTES } from "./api-agent";
 import { CHAT_ROUTES } from "./api-chats";
 import { CONFIG_ROUTES } from "./api-config";
+import { INTEGRATION_ROUTES } from "./api-integrations";
 import { GITHUB_ROUTES } from "./api-github";
 import { SPACE_ROUTES } from "./api-spaces";
 import { EVENT_ROUTES, messageInput, originOf, writeEvent } from "./api-events";
@@ -27,7 +28,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...INTEGRATION_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {
