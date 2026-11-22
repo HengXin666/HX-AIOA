@@ -1,6 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  ACCESS_PREFIX,
   ANDROID_DEVICE_PREFIX,
+  PATH_KEYS,
+  PATH_SOURCES,
   PING_TEXT,
   PONG_TEXT,
   PROBE_DEVICE_PREFIX,
@@ -16,7 +19,12 @@ import {
   type GithubSyncResult,
   type StreamClientFrame,
   type StreamRole,
+  type UserPublic,
 } from "@hx-aioa/protocol";
+import { handleAccounts } from "./accounts/api";
+import { ERR_MEMBER_NO_KEYS, HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from "./accounts/constants";
+import { Accounts, type Session } from "./accounts/service";
+import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
 import { messageInput } from "./api-events";
@@ -63,6 +71,7 @@ import { Timers } from "./timers";
 export class Hub extends DurableObject<Env> {
   private readonly core: Core;
   private readonly timers: Timers;
+  private accounts?: Accounts;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -82,10 +91,85 @@ export class Hub extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
+  // 主 Hub 才有账号目录; 子号 DO 只收主 Hub 转发来的请求
+  private acct(): Accounts {
+    this.accounts ??= new Accounts(this.ctx.storage.sql, this.env, (u, ids) => this.kickUser(u, ids));
+    return this.accounts;
+  }
+
+  private async kickUser(user: UserPublic, ids: string[]): Promise<void> {
+    if (user.role === "owner") return this.kick(ids);
+    await this.acct().userHub(user).kick(ids);
+  }
+
+  // RPC: 断开这些会话的长连接
+  async kick(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      for (const ws of this.ctx.getWebSockets(SESSION_TAG_PREFIX + id)) {
+        try {
+          sendFrame(ws, { t: "err", code: CODE_UNAUTHORIZED, text: KICK_REASON });
+          ws.close(KICK_CODE, KICK_REASON);
+        } catch {
+          // 已关闭
+        }
+      }
+    }
+  }
+
+  // RPC: 删号时清空该用户 DO 的全部数据
+  async wipe(): Promise<void> {
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(KICK_CODE, KICK_REASON);
+      } catch {
+        // 已关闭
+      }
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+
+  // 子号不能建接入 key 与来源: webhook 与 key 查找都在主 Hub, 子号 DO 里建了也用不上
+  private async forward(req: Request, url: URL, s: Session): Promise<Response> {
+    if ([PATH_KEYS, PATH_SOURCES].some((p) => url.pathname.startsWith(p))) {
+      await req.body?.cancel();
+      return fail(403, ERR_MEMBER_NO_KEYS, CODE_FORBIDDEN);
+    }
+    const headers = new Headers(req.headers);
+    headers.delete("Authorization");
+    headers.set(HEADER_INTERNAL_USER, encodeURIComponent(JSON.stringify(s)));
+    return this.acct().userHub(s.user).fetch(new Request(req, { headers }));
+  }
+
+  private async preAuth(req: Request, url: URL): Promise<Response | Principal | undefined> {
+    const internal = req.headers.get(HEADER_INTERNAL_USER);
+    if (internal) {
+      const s = JSON.parse(decodeURIComponent(internal)) as Session;
+      return { owner: true, user: s.user, session: s.session };
+    }
+    const acct = await handleAccounts(this.acct(), req, url, this.env.AUTH_TOKEN);
+    if (acct) return acct;
+    const cred = credentialOf(req, url);
+    if (!cred.startsWith(ACCESS_PREFIX)) return undefined;
+    const s = await this.acct().resolve(cred);
+    if (!s) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
+    if (s.user.role !== "owner") return this.forward(req, url, s);
+    return { owner: true, user: s.user, session: s.session };
+  }
+
   override async fetch(req: Request): Promise<Response> {
-    if (req.headers.get("Upgrade") !== "websocket") return handleHttp(this.core, req);
     const url = new URL(req.url);
-    const who = await principalOf(this.core, req, url);
+    let pre: Principal | undefined;
+    try {
+      const r = await this.preAuth(req, url);
+      if (r instanceof Response) return r;
+      pre = r;
+    } catch (e) {
+      if (e instanceof ApiFail) return fail(e.status, e.message, e.code);
+      throw e;
+    }
+    if (req.headers.get("Upgrade") !== "websocket") return handleHttp(this.core, req, pre);
+    const who = pre ?? (await principalOf(this.core, req, url));
     if (!who) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
     const v1 = url.pathname === STREAM_PATH;
     const device = url.searchParams.get(QUERY_DEVICE) || UNKNOWN_DEVICE;
@@ -94,13 +178,15 @@ export class Hub extends DurableObject<Env> {
     if (!role || !this.mayConnect(who, role, device)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
 
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
-    this.ctx.acceptWebSocket(server, [device]);
+    const session = who.owner ? who.session : undefined;
+    this.ctx.acceptWebSocket(server, session ? [device, SESSION_TAG_PREFIX + session] : [device]);
     const att: Attachment = { device, proto: v1 ? PROTO_V1 : PROTO_LEGACY, role };
     if (!who.owner) att.keyId = who.key.id;
     server.serializeAttachment(att);
 
     const head = this.core.store.head();
-    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role });
+    const me = who.owner && who.user ? { user: who.user, session } : {};
+    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me });
     else sendFrame(server, { t: "welcome", head });
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
     sendFrame(server, this.core.metrics.probes());

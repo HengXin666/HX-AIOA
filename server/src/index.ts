@@ -1,4 +1,5 @@
 import { HEALTH_PATH, PROTOCOL_VERSION } from "@hx-aioa/protocol";
+import { HEADER_INTERNAL_USER } from "./accounts/constants";
 import { HUB_NAME } from "./constants";
 import type { Env } from "./env";
 import { json, preflight } from "./http";
@@ -11,7 +12,10 @@ export default {
     if (req.method === "OPTIONS") return preflight();
     const url = new URL(req.url);
     if (url.pathname === HEALTH_PATH) return json({ ok: true, v: PROTOCOL_VERSION });
-    return env.HUB.get(env.HUB.idFromName(HUB_NAME)).fetch(req);
+    // 内部转发头只能由主 Hub 加, 外部传入的一律剥掉
+    const headers = new Headers(req.headers);
+    headers.delete(HEADER_INTERNAL_USER);
+    return env.HUB.get(env.HUB.idFromName(HUB_NAME)).fetch(new Request(req, { headers }));
   },
   async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (!env.GITHUB_TOKEN) return;
