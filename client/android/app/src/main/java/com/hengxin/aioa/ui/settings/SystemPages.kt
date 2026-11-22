@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
+import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.ui.SettingsModel
 import com.hengxin.aioa.ui.SystemActions
@@ -44,8 +45,7 @@ private fun postTest(context: Context) {
         Toast.makeText(context, "通知权限未开启, 请先进入渠道设置打开。", Toast.LENGTH_LONG).show()
         return
     }
-    val notification = NotificationCompat.Builder(context, Constants.CHANNEL_MESSAGE)
-        .setSmallIcon(android.R.drawable.stat_notify_chat)
+    val notification = NotifyKit.builder(context, Constants.CHANNEL_MESSAGE, R.drawable.ic_stat_message)
         .setContentTitle(context.getString(R.string.app_name))
         .setContentText(TEST_TEXT)
         .setStyle(NotificationCompat.BigTextStyle().bigText(TEST_TEXT))
