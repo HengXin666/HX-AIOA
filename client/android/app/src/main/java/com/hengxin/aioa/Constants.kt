@@ -119,6 +119,9 @@ object Constants {
     const val ME_PATH = "api/v1/me"
     const val ME_DEVICES_PATH = "api/v1/me/devices"
     const val ME_PASSWORD_PATH = "api/v1/me/password"
+    const val JOIN_PATH = "api/v1/join"
+    const val USERS_PATH = "api/v1/users"
+    const val INVITES_PATH = "api/v1/invites"
     const val SETTINGS_PATH = "api/v1/settings"
     // 消息分组 (群放进组) 存在账号设置里, 多端同步
     const val SETTING_CHAT_FOLDERS = "chatFolders"

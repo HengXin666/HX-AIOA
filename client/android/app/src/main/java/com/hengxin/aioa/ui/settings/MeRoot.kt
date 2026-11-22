@@ -97,6 +97,10 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
         }
         SettingsGroup("连接") {
             PageRow(SettingsPage.ACCOUNT, account?.let { it.display.ifEmpty { it.name } } ?: "未登录", selected, open)
+            if (account?.role == "owner" || account?.role == "admin") {
+                RowDivider()
+                PageRow(SettingsPage.MEMBERS, "", selected, open)
+            }
             RowDivider()
             PageRow(SettingsPage.SERVER, host.ifEmpty { "未配置" }, selected, open)
             RowDivider()

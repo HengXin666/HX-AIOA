@@ -41,16 +41,19 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var invite by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         SettingsPageFrame("连接服务端", null) {
             SettingsGroup { NoteRow("填写服务端地址, 再用账号登录即可开始接收消息。通知, 电池白名单, 代理节点等稍后在 \"我的\" 里设置。", Aioa.colors.textSecondary) }
             ServerFields(model, null, onSaved, withSave = false)
-            SettingsGroup("账号登录", "消息按账号隔离, 必须登录。") {
+            SettingsGroup("账号登录", "消息按账号隔离, 必须登录。新同学填管理员给的邀请码即注册新账号。") {
                 InputRow("用户名", name, "例如 Heng_Xin") { name = it }
                 RowDivider(false)
                 InputRow("密码", password, "至少 8 位", secret = true) { password = it }
+                RowDivider(false)
+                InputRow("邀请码", invite, "已有账号留空") { invite = it }
             }
             ProxyFields(model, onSaved, withSave = false)
             if (message.isNotEmpty()) SettingsGroup { NoteRow(message, Aioa.colors.danger) }
@@ -61,7 +64,10 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
                 }
                 busy = true
                 scope.launch {
-                    val r = withContext(Dispatchers.IO) { Auth.login(context, model.server, name, password) }
+                    val r = withContext(Dispatchers.IO) {
+                        if (invite.isBlank()) Auth.login(context, model.server, name, password)
+                        else Auth.join(context, model.server, invite, name, password)
+                    }
                     busy = false
                     if (r.session == null) message = r.error ?: "登录失败"
                     else if (model.save()) onSaved()

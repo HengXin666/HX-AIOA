@@ -74,6 +74,13 @@ object Auth {
         } ?: ""
     }
 
+    /** 用邀请码注册, 成功即登录; 需要审批时不登录, error 里给出提示。只能在后台线程调用。 */
+    fun join(context: Context, server: String, code: String, name: String, password: String): AuthReply {
+        val device = JSONObject().put("name", "${Build.MANUFACTURER} ${Build.MODEL}".trim()).put("platform", "android")
+        val body = JSONObject().put("code", code.trim()).put(K_NAME, name.trim()).put("password", password).put("device", device)
+        return locked(context) { post(context, server, Constants.JOIN_PATH, body) }
+    }
+
     /** 账号密码登录, 成功后写入会话。只能在后台线程调用。 */
     fun login(context: Context, server: String, name: String, password: String): AuthReply {
         val device = JSONObject().put("name", "${Build.MANUFACTURER} ${Build.MODEL}".trim()).put("platform", "android")
@@ -95,6 +102,7 @@ object Auth {
             .getOrElse { return AuthReply(null, "网络错误: ${it.message ?: it.javaClass.simpleName}") }
         if (code == HTTP_UNAUTHORIZED && path == Constants.AUTH_REFRESH_PATH) return AuthReply(null, UNAUTHORIZED)
         if (code !in 200..299 || json == null) return AuthReply(null, json?.optString(K_ERROR)?.ifEmpty { null } ?: "请求失败 (HTTP $code)")
+        if (json.optBoolean("pending")) return AuthReply(null, "注册成功, 等管理员审批通过后再登录")
         val user = json.optJSONObject(K_USER) ?: JSONObject()
         val s = AuthSession(
             user.optString(K_NAME), user.optString(K_DISPLAY), user.optString(K_ROLE), json.optString(K_SESSION),

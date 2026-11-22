@@ -17,6 +17,7 @@ const val TEXT_NOT_ALLOWED = "未允许"
 enum class SettingsPage(val title: String, val icon: String) {
     ROOT("我的", "user"),
     ACCOUNT("账号", "user"),
+    MEMBERS("成员与邀请", "user"),
     SOURCES("数据源", "send"),
     INTEGRATIONS("接入总览", "bot"),
     SERVER("服务端", "server"),
