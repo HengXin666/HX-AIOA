@@ -66,6 +66,10 @@ CONF
 chmod 600 "$DIR/env"
 
 NODE=$(command -v node)
+# 从非登录 shell (ssh 命令, 远程执行) 安装时补上用户会话的环境, 否则会误判成没有 systemd
+if [ "$(id -u)" != 0 ] && [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
 if command -v systemctl >/dev/null 2>&1 && $SC show-environment >/dev/null 2>&1; then
   cat > "$UNIT_DIR/$UNIT.service" <<SVC
 [Unit]
