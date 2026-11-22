@@ -42,12 +42,12 @@ export class Directory {
 
   // 用户 id 或用户名都可以
   find(ref: string): UserPublic | null {
-    const row = this.sql.exec<UserRow>("SELECT id, body, pass FROM acct_user WHERE id = ? OR name = ?", ref, ref).toArray()[0];
+    const row = this.sql.exec<UserRow>("SELECT id, body, pass FROM acct_user WHERE id = ? OR lower(name) = lower(?)", ref, ref).toArray()[0];
     return row ? (JSON.parse(row.body) as UserPublic) : null;
   }
 
   withPass(name: string): { user: UserPublic; pass: string } | null {
-    const row = this.sql.exec<UserRow>("SELECT id, body, pass FROM acct_user WHERE name = ?", name).toArray()[0];
+    const row = this.sql.exec<UserRow>("SELECT id, body, pass FROM acct_user WHERE lower(name) = lower(?)", name).toArray()[0];
     return row ? { user: JSON.parse(row.body) as UserPublic, pass: row.pass } : null;
   }
 
@@ -154,7 +154,7 @@ export class Directory {
   }
 
   group(ref: string): GroupInfo | null {
-    const row = this.sql.exec<BodyRow>("SELECT id, body FROM acct_group WHERE id = ? OR name = ?", ref, ref).toArray()[0];
+    const row = this.sql.exec<BodyRow>("SELECT id, body FROM acct_group WHERE id = ? OR lower(name) = lower(?)", ref, ref).toArray()[0];
     return row ? (JSON.parse(row.body) as GroupInfo) : null;
   }
 

@@ -36,7 +36,8 @@ test("访问令牌: 签名, 过期, 篡改", async () => {
 test("用户名与密码校验", () => {
   assert.equal(validName("mom"), true);
   assert.equal(validName("a"), false);
-  assert.equal(validName("Mom"), false);
+  assert.equal(validName("Heng_Xin"), true);
+  assert.equal(validName("heng xin"), false);
   assert.equal(validName("hx.lo-li_1"), true);
   assert.equal(validPassword("1234567"), false);
   assert.equal(validPassword("12345678"), true);

@@ -161,7 +161,7 @@ export function listGroups(a: Accounts, w: AcctWho): Response {
 
 export function createGroup(a: Accounts, w: AcctWho, b: Body): Response {
   needAdmin(w);
-  if (!validName(b.name)) throw new ApiFail(400, "bad_request", "群组名需为 2-32 位小写字母, 数字或 _ . -");
+  if (!validName(b.name)) throw new ApiFail(400, "bad_request", "群组名需为 2-32 位字母, 数字或 _ . -");
   if (a.dir.group(b.name)) throw new ApiFail(409, CODE_CONFLICT, ERR_GROUP_TAKEN);
   const g = a.dir.createGroup(b.name, (str(b.title) || b.name).slice(0, DISPLAY_MAX), members(a, b.members));
   a.dir.audit(w.actor, "create_group", g.id, g.name);
