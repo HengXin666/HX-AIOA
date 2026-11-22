@@ -25,22 +25,30 @@ private const val CPU_ALERT = 90f
 
 private enum class MetricTile { CPU, MEM, LOAD, TEMP }
 
-/** 资源页: 可见时 watch 所有在线探针, 离开 (切页, 进入后台断线) 即取消, 服务端随之让探针停推。 */
+/** 资源页: 上方是 Agent 下发的工作台, 下方是在线探针; 可见时 watch 两者用到的主体, 离开即取消, 服务端随之让探针停推。 */
 @Composable
-fun MetricsPage(state: MetricsState) {
-    WatchProbes(state)
+fun MetricsPage(chat: ChatModel) {
+    val state = chat.metrics
+    val spaces = chat.spaces
+    val current = spaces.spaces.firstOrNull { it.id == spaces.currentId } ?: spaces.spaces.firstOrNull()
+    WatchProbes(state, current?.metricSubjects().orEmpty())
     PageColumn("资源") {
+        if (spaces.spaces.isNotEmpty()) {
+            PageSection("工作台")
+            SpacesSection(chat)
+            PageSection("探针")
+        }
         if (state.probes.isEmpty()) NoProbe()
         state.probes.forEach { Probe(state, it) }
     }
 }
 
-/** 页面可见期间声明在看全部在线探针。 */
+/** 页面可见期间声明在看全部在线探针, 以及当前工作台绑定的主体。 */
 @Composable
-fun WatchProbes(state: MetricsState) {
-    val probes = state.probes
-    DisposableEffect(probes) {
-        state.watch(probes)
+fun WatchProbes(state: MetricsState, extra: Set<String> = emptySet()) {
+    val subjects = (state.probes + extra).distinct()
+    DisposableEffect(subjects) {
+        state.watch(subjects)
         onDispose { state.watch(emptyList()) }
     }
 }

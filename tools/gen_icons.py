@@ -11,6 +11,7 @@ ICONS = [
     "activity", "alert-triangle", "bell", "check", "cpu", "gauge", "hard-drive",
     "memory-stick", "message-circle", "moon", "palette", "plug", "refresh-cw", "server", "settings", "sun",
     "thermometer", "user", "wifi-off",
+    "bot", "chevron-down", "chevron-up", "file-text", "layout-dashboard", "maximize-2", "minimize-2", "send", "shield-check",
 ]
 OUT = Path(__file__).resolve().parent.parent / "client/android/ui/src/commonMain/kotlin/com/hengxin/aioa/kit/LucideIcons.kt"
 

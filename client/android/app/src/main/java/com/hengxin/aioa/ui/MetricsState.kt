@@ -40,6 +40,17 @@ class MetricsState(private val sendWatch: (List<String>) -> Boolean) {
         else -> false
     }
 
+    /** 服务端解析好的当前值: 同一时刻的字段合并, 更新的点追加, 不打乱实时推送的序列。 */
+    fun prime(subject: String, point: MetricPoint) {
+        val cur = samples[subject].orEmpty()
+        val last = cur.lastOrNull()
+        samples[subject] = when {
+            last == null || last.ts < point.ts -> (cur + point).takeLast(KEEP_POINTS)
+            last.ts == point.ts -> cur.dropLast(1) + last.copy(values = last.values + point.values)
+            else -> return
+        }
+    }
+
     fun series(subject: String, key: String): List<Pair<Long, Float>> =
         samples[subject].orEmpty().mapNotNull { p -> p.values[key]?.let { p.ts to it.toFloat() } }
 }
