@@ -42,7 +42,7 @@ object ConfigStore {
             subscription = it.optString(KEY_SUBSCRIPTION),
             proxyLink = it.optBoolean(KEY_PROXY_LINK, true),
         )
-    }?.takeIf { it.valid }
+    }?.takeIf { it.valid || (it.server.isNotBlank() && Auth.signedIn(context)) }
 
     fun save(context: Context, config: AppConfig) {
         JsonFile.write(

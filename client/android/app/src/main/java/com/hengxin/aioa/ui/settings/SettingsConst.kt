@@ -16,6 +16,7 @@ const val TEXT_NOT_ALLOWED = "未允许"
 /** "我的" 下的页面; ROOT 是分组列表, 其余每项一个独立子页, 父页都是 ROOT。 */
 enum class SettingsPage(val title: String, val icon: String) {
     ROOT("我的", "user"),
+    ACCOUNT("账号", "user"),
     SOURCES("数据源", "send"),
     SERVER("服务端", "server"),
     PROXY("代理", "plug"),

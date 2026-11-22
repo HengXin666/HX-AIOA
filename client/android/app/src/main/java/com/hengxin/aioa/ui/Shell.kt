@@ -28,6 +28,9 @@ enum class Tab(val label: String, val icon: String) {
     ME("我的", "user"),
 }
 
+// GitHub 叠层里的 "选择仓库" 页, 不会与 owner/repo 冲突
+private const val GH_PICK = "#pick"
+
 private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
 /** 主界面: 手机底部五栏, 平板左侧导航; 返回键先退子页, 再回总览, 最后退出。 */
@@ -43,8 +46,10 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
         val gh = github
         if (gh != null) {
-            if (gh.isEmpty()) {
-                GithubPage(chat.github, { github = null }, { github = it }) {
+            if (gh == GH_PICK) {
+                GithubPickPage(chat.github) { github = "" }
+            } else if (gh.isEmpty()) {
+                GithubPage(chat.github, { github = null }, { github = it }, { github = GH_PICK }) {
                     github = null
                     chat.sources.startAdd(Constants.SOURCE_GITHUB)
                     meStart = SettingsPage.SOURCES

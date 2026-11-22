@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.kit.ChatLine
 import com.hengxin.aioa.kit.ChatRole
@@ -143,7 +144,7 @@ class SpacesState(
         val config = ConfigStore.load(context) ?: return null
         val target = url ?: return null
         val req = Request.Builder().url(target)
-            .header("Authorization", "Bearer ${config.token}")
+            .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
             .method(method, body?.toString()?.toRequestBody(JSON_TYPE.toMediaType()))
             .build()
         Net.client(context).newCall(req).execute().use { res ->

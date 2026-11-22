@@ -33,20 +33,25 @@ fun GhRefreshBox(refreshing: Boolean, onRefresh: () -> Unit, content: @Composabl
 
 /** GitHub 列表页: 汇总 + 每个仓库一张卡; 右上角同步, 下拉刷新, 返回键回上一页。 */
 @Composable
-fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Unit, onAddSource: () -> Unit) {
+fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Unit, onPick: () -> Unit, onAddSource: () -> Unit) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { state.refresh(withRecent = true) }
+    LaunchedEffect(Unit) {
+        state.refresh(withRecent = true)
+        state.mine.loadToday()
+    }
     WatchGithub(state)
     BackHandler(onBack = onBack)
     val sync = { state.sync { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }
-    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true) }) {
+    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday() }) {
         SubPage(GITHUB_TITLE, onBack, (if (state.syncing) "同步中..." else "同步") to sync) {
             state.error?.let { ErrorCard(it) }
+            TodayCard(state.mine)
             when {
                 !state.loaded -> Card { StateBody(CardState.Loading) {} }
-                state.repos.isEmpty() && state.error == null -> EmptyRepos(state.synced, onAddSource)
+                state.repos.isEmpty() && state.error == null -> EmptyRepos(state.synced, onPick, onAddSource)
                 state.repos.isNotEmpty() -> {
                     Summary(state)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Chip("选择仓库", false, onPick) }
                     state.repos.forEach { RepoCard(it) { openRepo(it.repo) } }
                 }
             }
@@ -68,16 +73,19 @@ private fun Summary(state: GithubState) {
 }
 
 @Composable
-private fun EmptyRepos(synced: Boolean, onAddSource: () -> Unit) {
+private fun EmptyRepos(synced: Boolean, onPick: () -> Unit, onAddSource: () -> Unit) {
     val c = Aioa.colors
     Card {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(ICON_GITHUB, c.textSecondary)
             Text("还没有 GitHub 仓库", c.text, GH_ROW_SP)
         }
-        val hint = if (synced) "添加一个 GitHub 数据源 (填 owner/repo), 或在仓库里配置 Webhook。" else "已有数据源但还没同步, 点右上角同步从 GitHub 回填。"
+        val hint = if (synced) "从你的仓库里勾选要显示的, 或添加 GitHub 数据源 / 配置 Webhook。" else "已有数据源但还没同步, 点右上角同步从 GitHub 回填。"
         Paragraph(hint, c.textSecondary, 13)
-        Chip("添加 GitHub", true, onAddSource)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("选择我的仓库", true, onPick)
+            Chip("添加数据源", false, onAddSource)
+        }
     }
 }
 

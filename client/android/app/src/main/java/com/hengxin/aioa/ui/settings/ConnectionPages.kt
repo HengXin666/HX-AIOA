@@ -38,7 +38,7 @@ fun ColumnScope.ServerFields(model: SettingsModel, online: Boolean?, onSaved: ()
     SettingsGroup("服务端", "地址和令牌只保存在本机, 不会上传或打进安装包。") {
         InputRow("服务端地址", model.server, "https://aioa.example.com") { model.server = it }
         RowDivider(false)
-        InputRow("令牌", model.token, "必填", secret = true) { model.token = it }
+        InputRow("令牌", model.token, "旧版令牌, 已登录账号可留空", secret = true) { model.token = it }
     }
     if (withSave) PrimaryAction(stringResource(R.string.action_save)) { if (model.save()) onSaved() }
     if (online != null) {

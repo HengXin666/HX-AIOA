@@ -94,6 +94,7 @@ private fun Detail(p: SettingsPage, deps: MeDeps, onBack: (() -> Unit)?, toRoot:
     when (p) {
         SettingsPage.ROOT -> Unit
         SettingsPage.SOURCES -> Box(Modifier.fillMaxSize().background(Aioa.colors.background)) { SourcesPage(chat.sources, toRoot) }
+        SettingsPage.ACCOUNT -> AccountPage(deps.settings(), saved, onBack)
         SettingsPage.SERVER -> ServerPage(deps.settings(), chat.online, saved, onBack)
         SettingsPage.PROXY -> ProxyPage(deps.settings(), saved, onBack)
         SettingsPage.LINK_LOG -> LinkLogPage(deps.settings(), onBack)

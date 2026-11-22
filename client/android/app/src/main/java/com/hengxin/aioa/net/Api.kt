@@ -1,6 +1,7 @@
 package com.hengxin.aioa.net
 
 import android.content.Context
+import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,7 +28,7 @@ object Api {
         segments.forEachIndexed { i, s -> if (i == 0) b.addPathSegments(s) else b.addPathSegment(s) }
         query.forEach { (k, v) -> b.addQueryParameter(k, v) }
         val req = Request.Builder().url(b.build())
-            .header("Authorization", "Bearer ${config.token}")
+            .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
             .method(method, body?.toString()?.toRequestBody(JSON_TYPE.toMediaType()))
             .build()
         return runCatching {

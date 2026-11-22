@@ -25,6 +25,9 @@ export const PATH_TASKS = `${API_V1}/tasks`;
 export const PATH_GITHUB_REPOS = `${API_V1}/github/repos`;
 export const PATH_GITHUB_REPO = `${API_V1}/github/repos/{owner}/{name}`;
 export const PATH_GITHUB_SYNC = `${API_V1}/github/sync`;
+export const PATH_GITHUB_AVAILABLE = `${API_V1}/github/available`;
+export const PATH_GITHUB_TRACKED = `${API_V1}/github/tracked`;
+export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
 
 export const QUERY_KIND = "kind";
 export const QUERY_BEFORE = "before";
