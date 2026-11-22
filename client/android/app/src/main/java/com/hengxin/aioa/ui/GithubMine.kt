@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.net.ApiCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,8 +43,15 @@ class GithubMine(private val context: Context, private val scope: CoroutineScope
         val since = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
-        val r = Api.call(context, GET, listOf(Constants.GITHUB_ACTIVITY_PATH), query = mapOf("since" to since.toString()))
-        val o = r.body ?: return@io
+        // 先显示缓存 (同一天的), 再增量刷新; 跨天的缓存直接忽略
+        ApiCache.get(context, CACHE_TODAY, listOf(Constants.GITHUB_ACTIVITY_PATH), mapOf("since" to since.toString())) { o, cached ->
+            if (cached && objects(o.optJSONArray("items")).any { it.optLong("ts") < since }) return@get
+            val t = parseToday(o)
+            withContext(Dispatchers.Main) { today = t }
+        }
+    }
+
+    private fun parseToday(o: JSONObject): GhToday {
         val st = o.optJSONObject("stats") ?: JSONObject()
         val t = GhToday(
             o.optString("login"),
@@ -52,7 +60,7 @@ class GithubMine(private val context: Context, private val scope: CoroutineScope
             },
             GhMineStats(st.optInt("pushes"), st.optInt("commits"), st.optInt("prs"), st.optInt("issues"), st.optInt("comments"), st.optInt("repos")),
         )
-        withContext(Dispatchers.Main) { today = t }
+        return t
     }
 
     fun loadPicks() {
@@ -104,6 +112,7 @@ class GithubMine(private val context: Context, private val scope: CoroutineScope
     }
 
     private companion object {
+        const val CACHE_TODAY = "gh-today"
         const val GET = "GET"
         const val PUT = "PUT"
     }

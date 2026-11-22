@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.net.ApiCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,12 +62,19 @@ class SourcesState(private val context: Context, private val scope: CoroutineSco
     private var watchJob: Job? = null
 
     fun refresh() = io {
-        val list = Api.call(context, GET, listOf(Constants.SOURCES_PATH))
-        val kinds = Api.call(context, GET, listOf(Constants.SOURCE_TYPES_PATH))
+        val e1 = ApiCache.get(context, "sources", listOf(Constants.SOURCES_PATH)) { body, _ ->
+            val next = objects(body.optJSONArray("sources") ?: return@get).map(::item)
+            withContext(Dispatchers.Main) {
+                if (next != items.toList()) { items.clear(); items.addAll(next) }
+                loaded = true
+            }
+        }
+        val e2 = ApiCache.get(context, "source-types", listOf(Constants.SOURCE_TYPES_PATH)) { body, _ ->
+            val next = objects(body.optJSONArray("types") ?: return@get).map(::kind).sortedBy { it.type != Constants.SOURCE_GITHUB }
+            withContext(Dispatchers.Main) { types = next }
+        }
         withContext(Dispatchers.Main) {
-            list.body?.optJSONArray("sources")?.let { arr -> items.clear(); items.addAll(objects(arr).map(::item)) }
-            kinds.body?.optJSONArray("types")?.let { arr -> types = objects(arr).map(::kind).sortedBy { it.type != Constants.SOURCE_GITHUB } }
-            error = list.error ?: kinds.error
+            error = e1 ?: e2
             loaded = true
         }
     }

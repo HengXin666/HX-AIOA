@@ -56,7 +56,17 @@ data class Envelope(
     val values: Map<String, Double>,
     val task: TaskSnapshot?,
     val dedupeKey: String? = null,
+    val markdown: String? = null,
+    val cid: String? = null,
+    val reply: MsgRef? = null,
+    val fwd: FwdInfo? = null,
 )
+
+/** 引用的快照: 原消息的序号, 来源与摘要。 */
+data class MsgRef(val seq: Long, val src: String, val text: String)
+
+/** 转发: 原消息的来源与时间。 */
+data class FwdInfo(val src: String, val ts: Long)
 
 data class OverviewItem(val ev: Envelope, val count: Int, val ids: List<String>)
 

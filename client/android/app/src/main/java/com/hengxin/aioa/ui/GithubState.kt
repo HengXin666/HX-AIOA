@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.net.ApiCache
 import com.hengxin.aioa.proto.SourceRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val GET = "GET"
+private const val CACHE_REPOS = "gh-repos"
 private const val POST = "POST"
 private const val F_URL = "url"
 private const val F_AT = "at"
@@ -99,17 +101,22 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
     fun refresh(withRecent: Boolean = false) {
         refreshing = true
         io {
-            val r = Api.call(context, GET, listOf(Constants.GITHUB_REPOS_PATH))
-            val list = r.body?.optJSONArray("repos")?.let { objects(it).map(::repo) }?.sortedByDescending { it.active }
-            val recentList = if (withRecent && list != null) loadRecent(list) else null
+            // 先显示上次的列表, 服务端有变化再替换
+            var latest: List<GhRepo>? = null
+            val err = ApiCache.get(context, CACHE_REPOS, listOf(Constants.GITHUB_REPOS_PATH)) { body, _ ->
+                val list = body.optJSONArray("repos")?.let { objects(it).map(::repo) }?.sortedByDescending { it.active } ?: return@get
+                latest = list
+                withContext(Dispatchers.Main) {
+                    repos = list
+                    synced = body.optBoolean("synced", true)
+                    loaded = true
+                }
+            }
+            val recentList = latest?.takeIf { withRecent }?.let { loadRecent(it) }
             withContext(Dispatchers.Main) {
                 refreshing = false
                 loaded = true
-                error = r.error
-                if (list != null) {
-                    repos = list
-                    synced = r.body?.optBoolean("synced", true) ?: true
-                }
+                error = err
                 recentList?.let { recent = it }
             }
         }
@@ -117,14 +124,14 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
 
     fun loadDetail(name: String) = io {
         val (owner, repo) = name.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-        val r = Api.call(context, GET, listOf(Constants.GITHUB_REPOS_PATH, owner, repo))
-        val d = r.body?.let { detail(it, name) }
-        withContext(Dispatchers.Main) {
-            if (d != null) {
+        val err = ApiCache.get(context, "gh-repo-" + name.replace('/', '_'), listOf(Constants.GITHUB_REPOS_PATH, owner, repo)) { body, _ ->
+            val d = detail(body, name)
+            withContext(Dispatchers.Main) {
                 details[name] = d
                 detailErrors.remove(name)
-            } else detailErrors[name] = r.error ?: "没有拿到仓库详情"
+            }
         }
+        if (err != null) withContext(Dispatchers.Main) { if (details[name] == null) detailErrors[name] = err }
     }
 
     /** 让服务端从 GitHub 回填, 完成后重新拉列表; 失败时把服务端的中文报错交给 onError。 */

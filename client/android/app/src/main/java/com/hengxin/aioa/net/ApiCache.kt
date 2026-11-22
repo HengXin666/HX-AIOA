@@ -1,0 +1,110 @@
+package com.hengxin.aioa.net
+
+import android.content.Context
+import com.hengxin.aioa.config.Auth
+import com.hengxin.aioa.config.ConfigStore
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.File
+
+/** 缓存优先: 先拿磁盘上的上一份立刻显示, 再带 ETag 去服务端问, 没变 (304) 就不动。 */
+object ApiCache {
+    private const val DIR = "api-cache"
+    private const val ETAG = "ETag"
+    private const val IF_NONE_MATCH = "If-None-Match"
+    private const val NOT_MODIFIED = 304
+    private const val KEY_BODY = "body"
+    private const val KEY_ETAG = "etag"
+
+    /** 刷新结果: changed 为 false 表示和缓存一样, body 为 null 表示失败。 */
+    class Fresh(val body: JSONObject?, val changed: Boolean, val error: String?)
+
+    private fun file(context: Context, name: String) = File(File(context.filesDir, DIR).apply { mkdirs() }, "$name.json")
+
+    fun read(context: Context, name: String): JSONObject? =
+        runCatching { JSONObject(file(context, name).readText()).optJSONObject(KEY_BODY) }.getOrNull()
+
+    fun write(context: Context, name: String, body: JSONObject, etag: String? = null) {
+        val f = file(context, name)
+        val tmp = File(f.path + ".tmp")
+        tmp.writeText(JSONObject().put(KEY_BODY, body).put(KEY_ETAG, etag ?: "").toString())
+        tmp.renameTo(f)
+    }
+
+    private fun etagOf(context: Context, name: String): String? =
+        runCatching { JSONObject(file(context, name).readText()).optString(KEY_ETAG).ifEmpty { null } }.getOrNull()
+
+    /** 后台线程调用。服务端没给 ETag 时比较内容, 内容一样也算没变, 界面不重绘。 */
+    fun refresh(context: Context, name: String, segments: List<String>, query: Map<String, String> = emptyMap()): Fresh {
+        val url = urlOf(context, segments, query) ?: return Fresh(null, false, "还没有配置服务端")
+        val config = ConfigStore.load(context) ?: return Fresh(null, false, "还没有配置服务端")
+        val b = Request.Builder().url(url).header("Authorization", "Bearer ${Auth.bearer(context, config)}")
+        etagOf(context, name)?.let { b.header(IF_NONE_MATCH, it) }
+        return runCatching {
+            Net.client(context).newCall(b.build()).execute().use { res ->
+                if (res.code == NOT_MODIFIED) return@use Fresh(read(context, name), false, null)
+                val text = res.body?.string().orEmpty()
+                val json = runCatching { JSONObject(text) }.getOrNull()
+                if (!res.isSuccessful || json == null) {
+                    return@use Fresh(null, false, json?.optString("error")?.ifEmpty { null } ?: "请求失败 (HTTP ${res.code})")
+                }
+                val same = read(context, name)?.toString() == json.toString()
+                if (!same) write(context, name, json, res.header(ETAG))
+                Fresh(json, !same, null)
+            }
+        }.getOrElse { Fresh(null, false, "网络错误: ${it.message ?: it.javaClass.simpleName}") }
+    }
+
+    /**
+     * 缓存优先的 GET (后台线程调用): 有缓存先回调一次 (fromCache = true), 再问服务端,
+     * 内容变了才再回调; 返回错误信息, 成功为 null。页面因此二次打开不转圈, 没变化也不重绘。
+     */
+    suspend fun get(
+        context: Context,
+        name: String,
+        segments: List<String>,
+        query: Map<String, String> = emptyMap(),
+        onBody: suspend (body: JSONObject, fromCache: Boolean) -> Unit,
+    ): String? {
+        read(context, name)?.let { onBody(it, true) }
+        val fresh = refresh(context, name, segments, query)
+        if (fresh.changed && fresh.body != null) onBody(fresh.body, false)
+        return fresh.error
+    }
+
+    fun urlOf(context: Context, segments: List<String>, query: Map<String, String> = emptyMap()): HttpUrl? {
+        val config = ConfigStore.load(context) ?: return null
+        val b = runCatching { config.server.toHttpUrl().newBuilder() }.getOrNull() ?: return null
+        segments.forEachIndexed { i, s -> if (i == 0) b.addPathSegments(s) else b.addPathSegment(s) }
+        query.forEach { (k, v) -> b.addQueryParameter(k, v) }
+        return b.build()
+    }
+
+    /** 取二进制 (头像), 失败返回 null。 */
+    fun bytes(context: Context, segments: List<String>): ByteArray? {
+        val url = urlOf(context, segments) ?: return null
+        val config = ConfigStore.load(context) ?: return null
+        val req = Request.Builder().url(url).header("Authorization", "Bearer ${Auth.bearer(context, config)}").build()
+        return runCatching { Net.client(context).newCall(req).execute().use { if (it.isSuccessful) it.body?.bytes() else null } }.getOrNull()
+    }
+
+    /** 上传二进制, 返回服务端 JSON。 */
+    fun upload(context: Context, segments: List<String>, data: ByteArray, mime: String): ApiReply {
+        val url = urlOf(context, segments) ?: return ApiReply(null, "还没有配置服务端")
+        val config = ConfigStore.load(context) ?: return ApiReply(null, "还没有配置服务端")
+        val req = Request.Builder().url(url)
+            .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
+            .put(data.toRequestBody(mime.toMediaType()))
+            .build()
+        return runCatching {
+            Net.client(context).newCall(req).execute().use { res ->
+                val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()
+                if (res.isSuccessful) ApiReply(json ?: JSONObject(), null) else ApiReply(null, json?.optString("error") ?: "上传失败 (HTTP ${res.code})")
+            }
+        }.getOrElse { ApiReply(null, "网络错误: ${it.message}") }
+    }
+}

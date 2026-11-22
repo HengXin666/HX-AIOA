@@ -1,6 +1,24 @@
 package com.hengxin.aioa.ui.settings
 
 import android.app.Application
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.hengxin.aioa.net.ApiCache
+import com.hengxin.aioa.ui.chat.Avatars
+import com.hengxin.aioa.ui.chat.ChatAvatar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +45,8 @@ private const val DELETE = "DELETE"
 private const val GET = "GET"
 private const val POST = "POST"
 private const val PASSWORD_MIN = 8
+private const val PATCH = "PATCH"
+private const val SETTING_AVATAR = "avatar"
 
 private data class Device(val id: String, val name: String, val platform: String, val current: Boolean)
 
@@ -52,6 +72,19 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     var oldPw by remember { mutableStateOf("") }
     var newPw by remember { mutableStateOf("") }
     val c = Aioa.colors
+    var avatar by remember { mutableStateOf<String?>(null) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        message = "正在上传头像..."
+        scope.launch {
+            val r = Avatars.encode(context, uri)?.let { Avatars.upload(context, it) } ?: Result.failure(Exception("读不了这张图片"))
+            r.onSuccess { id ->
+                val saved = withContext(Dispatchers.IO) { Api.call(context, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(SETTING_AVATAR, id)) }
+                if (saved.error == null) avatar = id
+                message = saved.error ?: "头像已更新"
+            }.onFailure { message = "头像上传失败: ${it.message}" }
+        }
+    }
 
     // 登录状态变化后让常驻连接与界面连接都换上新凭证
     val changed = {
@@ -62,6 +95,12 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
 
     LaunchedEffect(session?.session) {
         if (session == null) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            ApiCache.get(context, "settings", listOf(Constants.SETTINGS_PATH)) { body, _ ->
+                val id = body.optJSONObject("settings")?.optString(SETTING_AVATAR)?.ifEmpty { null }
+                withContext(Dispatchers.Main) { avatar = id }
+            }
+        }
         val r = withContext(Dispatchers.IO) { Api.call(context, GET, listOf(Constants.ME_PATH)) }
         val arr = r.body?.optJSONArray("devices")
         devices = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it) }.map {
@@ -103,6 +142,14 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
                 }
             }
         } else {
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                        ChatAvatar(session.name, avatar, 72.dp)
+                    }
+                    Text("点头像更换", fontSize = 12.sp, color = c.textSecondary, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
             SettingsGroup("当前账号") {
                 InfoRow("用户名", session.name)
                 RowDivider(false)

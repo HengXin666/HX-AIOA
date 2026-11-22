@@ -21,7 +21,16 @@ sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
     data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null) : ServerFrame
     // group: 事件的 channel, 即消息所在的群; 旧消息与本机发出的没有
-    data class Msg(val seq: Long, val ts: Long, val src: String, val text: String, val cid: String?, val group: String? = null) : ServerFrame
+    data class Msg(
+        val seq: Long,
+        val ts: Long,
+        val src: String,
+        val text: String,
+        val cid: String?,
+        val group: String? = null,
+        val reply: MsgRef? = null,
+        val fwd: FwdInfo? = null,
+    ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
     data class Metric(val subject: String, val points: List<MetricPoint>, val history: Boolean) : ServerFrame
@@ -34,6 +43,7 @@ sealed interface ServerFrame {
     data class SpaceUpdate(val id: String, val deleted: Boolean, val raw: String) : ServerFrame
     data class Settings(val raw: String) : ServerFrame
     data class Agents(val agents: List<AgentStatus>) : ServerFrame
+    data class ChatSync(val topic: String, val channel: String?) : ServerFrame
     data class TaskLog(val taskId: String, val role: String, val kind: String, val text: String?, val ts: Long) : ServerFrame
 }
 
@@ -70,6 +80,7 @@ object Frames {
             T_OVERVIEW -> ServerFrame.OverviewFrame(V1Decode.overview(o.getJSONObject(T_OVERVIEW)))
             "space_update" -> ServerFrame.SpaceUpdate(o.optString("id"), o.optBoolean("deleted"), o.toString())
             "settings" -> ServerFrame.Settings(o.optJSONObject("settings")?.toString() ?: "{}")
+            "chat_sync" -> ServerFrame.ChatSync(o.optString("topic"), o.optString("channel").ifEmpty { null })
             "agents" -> ServerFrame.Agents(V1Decode.agents(o.optJSONArray("agents")))
             "task_log" -> o.getJSONObject("entry").let { e ->
                 ServerFrame.TaskLog(o.getString("taskId"), e.optString("role"), e.optString("kind"), e.optString(KEY_TEXT).ifEmpty { null }, e.optLong(KEY_TS))
@@ -91,11 +102,17 @@ object Frames {
     /** 声明当前在看的主体, 空列表表示不看了; 页面离开或进入后台时必须发空列表。 */
     fun watch(subjects: List<String>): String = JSONObject().put(KEY_T, "watch").put("subjects", JSONArray(subjects)).toString()
 
-    fun send(cid: String, text: String): String = JSONObject()
-        .put(KEY_T, "send")
-        .put(KEY_CID, cid)
-        .put(KEY_BODY, JSONObject().put(KEY_KIND, KIND_TEXT).put(KEY_TEXT, text))
-        .toString()
+    /** 发消息: channel 为目标群 (备忘不写), reply / fwd 为被引用 / 被转发消息的 seq。 */
+    fun send(cid: String, text: String, channel: String? = null, reply: Long? = null, fwd: Long? = null): String {
+        val o = JSONObject()
+            .put(KEY_T, "send")
+            .put(KEY_CID, cid)
+            .put(KEY_BODY, JSONObject().put(KEY_KIND, KIND_TEXT).put(KEY_TEXT, text))
+        channel?.let { o.put("channel", it) }
+        reply?.let { o.put("reply", it) }
+        fwd?.let { o.put("fwd", it) }
+        return o.toString()
+    }
 
     fun ack(seq: Long): String = JSONObject().put(KEY_T, "ack").put(KEY_SEQ, seq).toString()
 
