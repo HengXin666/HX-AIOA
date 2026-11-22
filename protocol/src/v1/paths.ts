@@ -37,3 +37,20 @@ export const PATH_SPACE_STATE = `${API_V1}/spaces/{id}/state`;
 export const PATH_SPACE_DATA = `${API_V1}/spaces/{id}/data`;
 // 工作台按钮动作的 taskId 前缀: button:<spaceId>:<itemId>
 export const BUTTON_TASK_PREFIX = "button:";
+
+// 账号 (§1): 初始化, 登录, 我, 邀请, 用户管理, 群组, 审计
+export const PATH_SETUP = `${API_V1}/setup`;
+export const PATH_AUTH_LOGIN = `${API_V1}/auth/login`;
+export const PATH_AUTH_REFRESH = `${API_V1}/auth/refresh`;
+export const PATH_AUTH_LOGOUT = `${API_V1}/auth/logout`;
+export const PATH_JOIN = `${API_V1}/join`;
+export const PATH_ME = `${API_V1}/me`;
+export const PATH_ME_PASSWORD = `${API_V1}/me/password`;
+export const PATH_ME_DEVICE = `${API_V1}/me/devices/{id}`;
+export const PATH_INVITES = `${API_V1}/invites`;
+export const PATH_USERS = `${API_V1}/users`;
+export const PATH_USER = `${API_V1}/users/{id}`;
+export const PATH_USER_APPROVE = `${API_V1}/users/{id}/approve`;
+export const PATH_GROUPS = `${API_V1}/groups`;
+export const PATH_GROUP = `${API_V1}/groups/{id}`;
+export const PATH_AUDIT = `${API_V1}/audit`;

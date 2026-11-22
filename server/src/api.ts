@@ -57,12 +57,12 @@ async function legacy(core: Core, req: Request, url: URL, who: Principal): Promi
   return null;
 }
 
-export async function handleHttp(core: Core, req: Request): Promise<Response> {
+export async function handleHttp(core: Core, req: Request, pre?: Principal): Promise<Response> {
   const url = new URL(req.url);
   try {
     const hook = HOOK_RE.exec(url.pathname);
     if (hook && req.method === POST) return await handleHook(core, req, url, hook[1] ?? "", hook[2] ?? "");
-    const who = await principalOf(core, req, url);
+    const who = pre ?? (await principalOf(core, req, url));
     if (!who) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
     if (!who.owner && !core.registry.allow(who.key)) return fail(429, ERR_RATE, CODE_RATE_LIMITED);
     if (!url.pathname.startsWith(API_V1)) return (await legacy(core, req, url, who)) ?? fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);

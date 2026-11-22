@@ -81,3 +81,14 @@ jobs:
             exit 0
           fi
           printf '%s' "$AIOA_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN
+
+      # 可选: 配置了 SETUP_CODE secret 时同步到 Worker, 首次 POST /api/v1/setup 建母号要用
+      - name: 同步母号初始化口令
+        env:
+          AIOA_SETUP_CODE: ${{ secrets.SETUP_CODE }}
+        run: |
+          if [ -z "$AIOA_SETUP_CODE" ]; then
+            echo "未配置 SETUP_CODE secret, 跳过, 母号初始化不可用"
+            exit 0
+          fi
+          printf '%s' "$AIOA_SETUP_CODE" | npx wrangler secret put SETUP_CODE

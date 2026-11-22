@@ -1,4 +1,4 @@
-import type { KeyInfo, Scope } from "@hx-aioa/protocol";
+import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
 import type { Config } from "./config";
 import type { Env } from "./env";
@@ -11,7 +11,8 @@ import type { Spaces } from "./spaces";
 import type { EventStore } from "./store";
 
 // AUTH_TOKEN 视为母号的全权限凭证; 接入 key 只写不读, 按 scope 授权
-export type Principal = { owner: true } | { owner: false; key: KeyInfo };
+// 账号登录的设备在自己的 DO 里同样视为 owner, user / session 用于审计与踢下线
+export type Principal = { owner: true; user?: UserPublic; session?: string } | { owner: false; key: KeyInfo };
 
 export type Core = {
   env: Env;
