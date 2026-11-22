@@ -15,7 +15,10 @@ import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.proto.Frames
+import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.proto.ServerFrame
+import com.hengxin.aioa.proto.TaskSnapshot
+import com.hengxin.aioa.proto.toMsg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +46,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private var lastSeq = 0L
     private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
     val metrics = MetricsState { socket.send(Frames.watch(it)) }
+    val feed = FeedState(socket::send)
 
     fun resume() {
         NotificationManagerCompat.from(getApplication<Application>()).cancel(Constants.NOTIFY_ID_MESSAGE)
@@ -76,6 +80,11 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         return socket.send(Frames.send(UUID.randomUUID().toString(), body))
     }
 
+    fun answer(task: TaskSnapshot, option: TaskOption, confirm: Boolean = false) {
+        val (kind, picked) = actionOf(option)
+        feed.act(task.id, kind, picked, confirm)
+    }
+
     fun isMine(msg: ServerFrame.Msg): Boolean = msg.src.startsWith(Constants.DEVICE_PREFIX)
 
     override fun onStatus(online: Boolean) {
@@ -84,7 +93,14 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
 
     override fun onFrame(frame: ServerFrame) {
-        if (metrics.onFrame(frame) || frame !is ServerFrame.Msg) return
+        if (metrics.onFrame(frame)) return
+        // v1 的事件同时进消息列表 (压成一行), 保持消息页与旧版一致
+        if (frame is ServerFrame.Ev && frame.ev.kind != Constants.KIND_METRIC) accept(frame.ev.toMsg())
+        if (feed.onFrame(frame) || frame !is ServerFrame.Msg) return
+        accept(frame)
+    }
+
+    private fun accept(frame: ServerFrame.Msg) {
         socket.send(Frames.ack(frame.seq))
         merge(listOf(frame))
         viewModelScope.launch(Dispatchers.IO) {

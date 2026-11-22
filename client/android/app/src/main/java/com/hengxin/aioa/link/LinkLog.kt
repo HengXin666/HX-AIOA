@@ -10,7 +10,8 @@ import java.util.Locale
 object LinkLog {
     private const val FILE_NAME = "link_log.txt"
     private const val KEEP_LINES = 200
-    private const val TRIM_AT_LINES = 400
+    // 按文件大小判断是否需要裁剪, 平时只追加一行, 不必每次读全文件
+    private const val TRIM_AT_BYTES = 32 * 1024L
     private const val CLOCK_PATTERN = "MM-dd HH:mm:ss"
     private val lock = Any()
 
@@ -19,8 +20,7 @@ object LinkLog {
             runCatching {
                 val file = file(context)
                 file.appendText("${clock(System.currentTimeMillis())} $event\n")
-                val lines = file.readLines()
-                if (lines.size > TRIM_AT_LINES) file.writeText(lines.takeLast(KEEP_LINES).joinToString("\n", postfix = "\n"))
+                if (file.length() > TRIM_AT_BYTES) file.writeText(file.readLines().takeLast(KEEP_LINES).joinToString("\n", postfix = "\n"))
             }
         }
     }

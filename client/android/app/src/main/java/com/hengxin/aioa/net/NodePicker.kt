@@ -5,41 +5,42 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.config.AppConfig
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.link.LinkLog
+import com.hengxin.aioa.link.LinkStats
 
-// 订阅下载与节点优选: 启动时, 每小时, 网络切换和连接断开时测一次全部节点延迟, 选最快的
-// 选中结果由 mihomo 的 store-selected 落盘, 重启后直接沿用, 不必等测速
-// onChanged 只在代理可用性变化时回调 (启动, 重载), 让长连接改走新路径
+// 代理内核的生命周期与节点优选, 只在 :link 进程里运行
+// 长连接走代理时内核常驻; 否则按需启动 (更新下载, 设置页, 界面请求), 空闲 PROXY_IDLE_STOP_MS 后停掉
+// 测速不再定时跑: 启动内核时测一次, 长连接断开时 (有防抖) 再测, 内核一直在跑时超过 PROXY_OPTIMIZE_MAX_AGE_MS 才重测
+// onChanged 只在长连接走代理且代理可用性变化时回调, 让长连接改走新路径
 class NodePicker(private val context: Context, private val onChanged: () -> Unit) {
 
     private val thread = HandlerThread(THREAD_NAME).apply { start() }
     private val handler = Handler(thread.looper)
     private val core = ProxyCore(context)
     private var lastRun = 0L
-    private val periodic = Runnable { refreshIfStale(); optimizeNow(); schedule() }
+    private val idleStop = Runnable { stopIfIdle() }
 
     fun start() = handler.post {
-        val config = ConfigStore.load(context)
-        if (config != null && config.proxyEnabled && Subscription.stale(context)) Subscription.download(context, config.subscription)
-        if (config != null && core.start(config)) {
-            optimizeNow()
-            onChanged()
-        }
-        schedule()
+        if (resident(ConfigStore.load(context))) bringUp()
     }
 
     fun reload() = handler.post {
-        handler.removeCallbacks(periodic)
+        handler.removeCallbacks(idleStop)
         core.stop()
         val config = ConfigStore.load(context)
         if (config != null && config.proxyEnabled) Subscription.download(context, config.subscription)
-        if (config != null && core.start(config)) optimizeNow()
+        if (resident(config)) bringUp() else if (config?.proxyEnabled == true) demandNow()
         onChanged()
-        schedule()
     }
 
-    // 连接失败等场景调用, 有防抖, 不会频繁测速
+    /** 任何需要代理的请求之前调用 (经 ACTION_PROXY_DEMAND 跨进程转来), 顺带续租空闲计时。 */
+    fun demand() = handler.post { demandNow() }
+
+    // 连接失败等场景调用, 有防抖; 内核没在跑就没有可测的
     fun optimizeSoon() = handler.post {
+        if (!core.running) return@post
         if (SystemClock.elapsedRealtime() - lastRun >= Constants.PROXY_OPTIMIZE_DEBOUNCE_MS) optimizeNow()
     }
 
@@ -49,20 +50,51 @@ class NodePicker(private val context: Context, private val onChanged: () -> Unit
         thread.quitSafely()
     }
 
-    private fun schedule() {
-        handler.removeCallbacks(periodic)
-        handler.postDelayed(periodic, Constants.PROXY_OPTIMIZE_INTERVAL_MS)
+    private fun demandNow() {
+        val config = ConfigStore.load(context)
+        if (config == null || !config.proxyEnabled) return
+        if (!core.running) {
+            bringUp()
+        } else if (SystemClock.elapsedRealtime() - lastRun > Constants.PROXY_OPTIMIZE_MAX_AGE_MS) {
+            optimizeNow()
+        }
+        scheduleIdle(config)
     }
 
-    // 订阅超过一天就重新下载, 内核在跑时可以借代理下载, 下载成功后让内核重读文件
-    private fun refreshIfStale() {
-        val config = ConfigStore.load(context) ?: return
-        if (!config.proxyEnabled || !Subscription.stale(context)) return
-        if (Subscription.download(context, config.subscription).ok) ProxyController(context).refreshSubscription()
+    private fun bringUp(): Boolean {
+        val config = ConfigStore.load(context) ?: return false
+        if (!config.proxyEnabled) return false
+        if (!Subscription.file(context).exists()) Subscription.download(context, config.subscription)
+        if (!core.start(config)) return false
+        LinkStats.hit(LinkStats.Key.CORE_START)
+        LinkLog.add(context, if (resident(config)) "代理内核启动 (长连接走代理, 常驻)" else "代理内核按需启动")
+        optimizeNow()
+        if (resident(config)) onChanged()
+        return true
     }
+
+    private fun scheduleIdle(config: AppConfig) {
+        handler.removeCallbacks(idleStop)
+        if (!resident(config)) handler.postDelayed(idleStop, Constants.PROXY_IDLE_STOP_MS)
+    }
+
+    private fun stopIfIdle() {
+        val config = ConfigStore.load(context)
+        if (resident(config) || !core.running) return
+        if (ProxyController(context).activeConnections() > 0) {
+            config?.let(::scheduleIdle)
+            return
+        }
+        core.stop()
+        LinkStats.hit(LinkStats.Key.CORE_STOP)
+        LinkLog.add(context, "代理内核空闲, 已停止")
+    }
+
+    private fun resident(config: AppConfig?): Boolean = config != null && config.proxyEnabled && config.proxyLink
 
     private fun optimizeNow() {
         lastRun = SystemClock.elapsedRealtime()
+        LinkStats.hit(LinkStats.Key.OPTIMIZE)
         NodeOptimizer.run(context)
     }
 

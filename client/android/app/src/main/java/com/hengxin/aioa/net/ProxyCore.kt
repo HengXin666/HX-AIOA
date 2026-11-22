@@ -19,7 +19,7 @@ class ProxyCore(private val context: Context) {
     val available: Boolean get() = executable.exists()
 
     fun start(config: AppConfig): Boolean {
-        stop()
+        stopOwn()
         if (!available || !config.proxyEnabled) return false
         home.mkdirs()
         val configFile = File(home, CONFIG_FILE)
@@ -27,7 +27,8 @@ class ProxyCore(private val context: Context) {
         // 上次进程被杀后残留的内核还占着端口: 直接让它重载新配置
         if (listening()) return ProxyController(context).reload(configFile.absolutePath)
         process = runCatching {
-            ProcessBuilder(executable.absolutePath, "-d", home.absolutePath, "-f", File(home, CONFIG_FILE).absolutePath)
+            // 经 sh 包一层记下 pid 再 exec, 进程被杀后下一个 :link 还能找到并停掉它
+            ProcessBuilder(SHELL, "-c", PID_SCRIPT, File(home, PID_FILE).absolutePath, executable.absolutePath, "-d", home.absolutePath, "-f", configFile.absolutePath)
                 .redirectErrorStream(true)
                 .redirectOutput(File(home, LOG_FILE))
                 .start()
@@ -36,8 +37,26 @@ class ProxyCore(private val context: Context) {
     }
 
     fun stop() {
-        process?.destroy()
+        if (stopOwn()) return
+        // 上一个 :link 进程被杀后留下的内核不归这个对象管, 按 pid 文件找到并结束
+        if (listening()) killOrphans()
+    }
+
+    private fun stopOwn(): Boolean {
+        val own = process ?: return false
         process = null
+        own.destroy()
+        File(home, PID_FILE).delete()
+        return true
+    }
+
+    val running: Boolean get() = process?.isAlive == true || listening()
+
+    // pid 文件由启动包装脚本写入; 只在端口仍被占用时才结束, 避免误伤已复用的 pid
+    private fun killOrphans() {
+        val pid = runCatching { File(home, PID_FILE).readText().trim().toInt() }.getOrNull() ?: return
+        android.os.Process.killProcess(pid)
+        File(home, PID_FILE).delete()
     }
 
     private fun waitReady(): Boolean {
@@ -90,6 +109,9 @@ class ProxyCore(private val context: Context) {
         private const val SECRET_FILE = "secret"
         private const val SECRET_BYTES = 16
         private const val READY_POLL_MS = 100L
+        private const val PID_FILE = "core.pid"
+        private const val SHELL = "sh"
+        private const val PID_SCRIPT = "echo \$\$ > \"\$0\"; exec \"\$@\""
         // 安卓没有 /etc/resolv.conf, Go 程序默认去问 [::1]:53 必然失败, 订阅域名解析不了, 必须显式给 DNS
         private const val DNS_SERVERS = "[223.5.5.5, 119.29.29.29]"
 

@@ -12,11 +12,15 @@ import com.hengxin.aioa.config.AppConfig
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.link.LinkLog
 import com.hengxin.aioa.link.LinkService
+import com.hengxin.aioa.link.LinkStats
 import com.hengxin.aioa.net.NodeInfo
 import com.hengxin.aioa.net.NodeOptimizer
 import com.hengxin.aioa.net.ProxyController
 import com.hengxin.aioa.net.ProxyCore
+import com.hengxin.aioa.net.ProxyDemand
 import com.hengxin.aioa.net.Subscription
+import com.hengxin.aioa.update.ReleaseNote
+import com.hengxin.aioa.update.ReleaseNotes
 import com.hengxin.aioa.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -51,6 +55,9 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
     var updateText by mutableStateOf("")
         private set
     var updating by mutableStateOf(false)
+        private set
+    // 检查更新发现的待安装版本说明
+    var pendingNotes by mutableStateOf<ReleaseNote?>(null)
         private set
 
     private val app get() = getApplication<Application>()
@@ -96,8 +103,14 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         if (ProxyController(app).refreshSubscription()) status.text else "${status.text}, 但内核重读失败, 看下方报错"
     }
 
+    // 打开设置页或手动刷新时按需拉起内核, 不用之后由 :link 空闲停掉
     fun refreshProxy() {
-        viewModelScope.launch { proxy = withContext(Dispatchers.IO) { loadProxy() } }
+        viewModelScope.launch {
+            proxy = withContext(Dispatchers.IO) { loadProxy() }
+            if (!proxy.running && withContext(Dispatchers.IO) { ProxyDemand.ensure(app) }) {
+                proxy = withContext(Dispatchers.IO) { loadProxy() }
+            }
+        }
     }
 
     // 更新下载与长连接共用 Net 的判断: 内核在跑就走代理
@@ -112,6 +125,10 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
                 runCatching { Updater(app).update(foreground = true) { text -> viewModelScope.launch { updateText = text } } }
             }
             result.exceptionOrNull()?.let { updateText = "检查失败 (${updateRoute()}): ${it.message}" }
+            pendingNotes = withContext(Dispatchers.IO) {
+                val current = Updater(app).currentVersion()
+                ReleaseNotes.history(app).firstOrNull { it.versionCode > current }
+            }
             updating = false
         }
     }
@@ -121,7 +138,10 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         proxyBusy = true
         proxyMessage = start
         viewModelScope.launch {
-            proxyMessage = withContext(Dispatchers.IO) { runCatching(block).getOrElse { "出错: ${it.message}" } }
+            proxyMessage = withContext(Dispatchers.IO) {
+                ProxyDemand.ensure(app)
+                runCatching(block).getOrElse { "出错: ${it.message}" }
+            }
             proxy = withContext(Dispatchers.IO) { loadProxy() }
             proxyBusy = false
         }
@@ -146,11 +166,11 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadProxy(): ProxyView {
         val errors = ProxyCore.recentErrors(app, MAX_ERRORS)
-        val log = LinkLog.recent(app, MAX_LOG_LINES)
+        val log = listOfNotNull(LinkStats.summary(app)) + LinkLog.recent(app, MAX_LOG_LINES)
         val sub = Subscription.status(app)?.let { "${LinkLog.clock(it.at)} ${it.text}" }.orEmpty()
         if (!coreAvailable) return ProxyView(summary = "安装包未内置代理内核, 当前直连", linkLog = log)
         if (ConfigStore.load(app)?.proxyEnabled != true) return ProxyView(summary = "未配置订阅, 当前直连", linkLog = log)
-        if (!ProxyCore.listening()) return ProxyView(summary = "代理内核未运行, 当前直连", errors = errors, subStatus = sub, linkLog = log)
+        if (!ProxyCore.listening()) return ProxyView(summary = "代理内核空闲 (按需启动), 当前直连", errors = errors, subStatus = sub, linkLog = log)
         val controller = ProxyController(app)
         val nodes = controller.nodes().sortedWith(compareBy({ it.delayMs <= 0 }, { it.delayMs }))
         val summary = if (nodes.isEmpty()) "内核运行中, 但订阅没有解析出节点" else "内核运行中, 订阅解析出 ${nodes.size} 个节点"

@@ -69,6 +69,10 @@ fun SettingsScreen(model: SettingsModel, actions: SystemActions, onSaved: () -> 
         Text(stringResource(R.string.update_route, model.updateRoute()), style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = model::checkUpdate, enabled = !model.updating) { Text(stringResource(R.string.action_check_update)) }
         if (model.updateText.isNotEmpty()) Text(model.updateText, style = MaterialTheme.typography.bodySmall)
+        model.pendingNotes?.let { note ->
+            Text(stringResource(R.string.pending_notes, note.versionName), style = MaterialTheme.typography.bodyMedium)
+            note.lines.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+        }
 
         Section(stringResource(R.string.section_system))
         Text(stringResource(R.string.notify_hint), style = MaterialTheme.typography.bodySmall)
