@@ -36,10 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.data.GroupSummary
 import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.ui.chat.LetterAvatar
+import com.hengxin.aioa.ui.chat.plainPreview
 
 private const val UNGROUPED = "未分组"
 private const val BADGE_MAX = 99
-private val AVATAR = 42.dp
+private val AVATAR = 48.dp
 
 // 正在操作的对象: 给某个群挪组, 新建组, 或删除某个组
 private sealed interface Dialog {
@@ -77,10 +79,10 @@ fun GroupList(model: ChatModel) {
                         dialog = Dialog.DropFolder(f.name)
                     }
                 }
-                if (!shut) rows.forEach { s -> item(key = "g:${s.key}") { GroupRow(s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
+                if (!shut) rows.forEach { s -> item(key = "g:${s.key}") { GroupRow(Modifier.animateItem(), s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
             }
             if (g.folders.isNotEmpty() && loose.isNotEmpty()) item(key = "loose") { FolderHeader(UNGROUPED, 0, false, null, null) }
-            loose.forEach { s -> item(key = "g:${s.key}") { GroupRow(s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
+            loose.forEach { s -> item(key = "g:${s.key}") { GroupRow(Modifier.animateItem(), s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
         }
     }
     when (val d = dialog) {
@@ -111,24 +113,22 @@ private fun FolderHeader(name: String, unread: Int, collapsed: Boolean, onToggle
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GroupRow(s: GroupSummary, onOpen: () -> Unit, onLong: () -> Unit) {
+private fun GroupRow(modifier: Modifier, s: GroupSummary, onOpen: () -> Unit, onLong: () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = onLong).padding(horizontal = PAD, vertical = 10.dp),
+        modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = onLong).padding(horizontal = PAD, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(AVATAR).background(c.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-            Text(avatarOf(s.key), color = c.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
-        }
+        LetterAvatar(s.key, AVATAR)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.key, Modifier.weight(1f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(s.key, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(timeOf(s.last.ts), fontSize = 11.sp, color = c.outline)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val who = if (s.key == s.last.src || s.key == MessageDb.MEMO_GROUP) "" else "${s.last.src}: "
-                Text(who + s.last.text, Modifier.weight(1f), fontSize = 13.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(who + plainPreview(s.last.text), Modifier.weight(1f), fontSize = 13.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (s.unread > 0) Badge(s.unread)
             }
         }
@@ -180,8 +180,6 @@ private fun NameDialog(title: String, close: () -> Unit, ok: (String) -> Boolean
         dismissButton = { TextButton(close) { Text("取消") } },
     )
 }
-
-private fun avatarOf(key: String): String = key.substringAfterLast('/').trim().take(1).uppercase().ifEmpty { "#" }
 
 @Composable
 private fun timeOf(ts: Long): String {

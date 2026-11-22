@@ -3,6 +3,7 @@ package com.hengxin.aioa
 import android.annotation.SuppressLint
 import android.app.Application
 import android.provider.Settings
+import com.hengxin.aioa.data.CrashLog
 import com.hengxin.aioa.link.Channels
 import com.hengxin.aioa.update.Updater
 
@@ -10,6 +11,7 @@ class AioaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         Thread { runCatching { Updater.cleanup(this) } }.start()
         Channels.create(this)
     }
