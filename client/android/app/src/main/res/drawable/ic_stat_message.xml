@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知小图标: 单色, 系统只取透明度。部分路径改自 Lucide (ISC) 与 Octicons (MIT) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M2.992,16.342a2,2 0 0,1 0.094,1.167l-1.065,3.29a1,1 0 0,0 1.236,1.168l3.413,-0.998a2,2 0 0,1 1.099,0.092a10,10 0 1,0 -4.777,-4.719ZM6.6,12a1.4,1.4 0 1,0 2.8,0a1.4,1.4 0 1,0 -2.8,0ZM10.6,12a1.4,1.4 0 1,0 2.8,0a1.4,1.4 0 1,0 -2.8,0ZM14.6,12a1.4,1.4 0 1,0 2.8,0a1.4,1.4 0 1,0 -2.8,0Z" />
+</vector>
