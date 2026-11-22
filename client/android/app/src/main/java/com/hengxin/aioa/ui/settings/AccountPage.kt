@@ -127,9 +127,9 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
                 scope.launch {
                     val r = withContext(Dispatchers.IO) {
                         val reply = Auth.login(app, server, name, password)
-                        // 首次只填了地址没填令牌时, 登录成功后补存地址
-                        if (reply.session != null && ConfigStore.load(app)?.server != server) {
-                            ConfigStore.save(app, AppConfig(server, model.token.trim(), model.subscription.trim(), model.proxyLink))
+                        // 登录时填的地址与已存的不同, 登录成功后补存地址
+                        if (reply.session != null && ConfigStore.read(app)?.server != server) {
+                            ConfigStore.save(app, AppConfig(server, model.subscription.trim(), model.proxyLink))
                         }
                         reply
                     }

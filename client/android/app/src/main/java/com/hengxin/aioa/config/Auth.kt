@@ -58,20 +58,20 @@ object Auth {
         file(context).delete()
     }
 
-    /** 请求要带的凭证: 已登录用账号的访问令牌 (快过期时先刷新), 否则用旧版令牌。只能在后台线程调用。 */
+    /** 请求要带的凭证: 账号的访问令牌 (快过期时先刷新), 未登录为空。只能在后台线程调用。 */
     fun bearer(context: Context, config: AppConfig): String {
-        if (load(context) == null) return config.token
+        if (load(context) == null) return ""
         return locked(context) {
             val s = load(context) ?: return@locked null
             if (s.accessExp - EARLY_MS > System.currentTimeMillis()) return@locked s.access
             val r = post(context, config.server, Constants.AUTH_REFRESH_PATH, JSONObject().put(K_REFRESH, s.refresh))
             when {
                 r.session != null -> r.session.access
-                // 刷新令牌已失效 (被踢, 改密码, 过期): 退出登录, 回到旧版令牌
+                // 刷新令牌已失效 (被踢, 改密码, 过期): 退出登录
                 r.error == UNAUTHORIZED -> { clear(context); null }
                 else -> s.access
             }
-        } ?: config.token
+        } ?: ""
     }
 
     /** 账号密码登录, 成功后写入会话。只能在后台线程调用。 */

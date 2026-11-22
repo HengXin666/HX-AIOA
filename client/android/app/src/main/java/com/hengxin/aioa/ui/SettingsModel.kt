@@ -9,7 +9,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.AppConfig
-import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.link.LinkLog
 import com.hengxin.aioa.link.LinkService
@@ -40,10 +39,9 @@ data class ProxyView(
 
 class SettingsModel(app: Application) : AndroidViewModel(app) {
 
-    private val saved = ConfigStore.load(app)
+    private val saved = ConfigStore.read(app)
 
     var server by mutableStateOf(saved?.server.orEmpty())
-    var token by mutableStateOf(saved?.token.orEmpty())
     var subscription by mutableStateOf(saved?.subscription.orEmpty())
     var proxyLink by mutableStateOf(saved?.proxyLink ?: true)
 
@@ -72,9 +70,9 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
 
     fun save(): Boolean {
         if (proxyBusy) return false
-        val config = AppConfig(server.trim(), token.trim(), subscription.trim(), proxyLink)
-        if (!config.valid && !(config.server.isNotBlank() && Auth.signedIn(app))) {
-            proxyMessage = "服务端地址不能为空, 令牌和账号登录至少要有一个"
+        val config = AppConfig(server.trim(), subscription.trim(), proxyLink)
+        if (!config.valid) {
+            proxyMessage = "服务端地址不能为空"
             return false
         }
         ConfigStore.save(app, config)

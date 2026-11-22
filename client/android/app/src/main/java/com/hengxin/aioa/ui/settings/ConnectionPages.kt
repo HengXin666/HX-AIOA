@@ -35,10 +35,8 @@ fun ServerPage(model: SettingsModel, online: Boolean, onSaved: () -> Unit, onBac
 @Composable
 fun ColumnScope.ServerFields(model: SettingsModel, online: Boolean?, onSaved: () -> Unit, withSave: Boolean = true) {
     val c = Aioa.colors
-    SettingsGroup("服务端", "地址和令牌只保存在本机, 不会上传或打进安装包。") {
+    SettingsGroup("服务端", "地址只保存在本机, 账号在 \"账号\" 页登录。") {
         InputRow("服务端地址", model.server, "https://aioa.example.com") { model.server = it }
-        RowDivider(false)
-        InputRow("令牌", model.token, "旧版令牌, 已登录账号可留空", secret = true) { model.token = it }
     }
     if (withSave) PrimaryAction(stringResource(R.string.action_save)) { if (model.save()) onSaved() }
     if (online != null) {

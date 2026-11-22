@@ -34,7 +34,7 @@ class SystemActions(
     val notificationSettings: () -> Unit,
 )
 
-/** 首次配置: 服务端, 账号登录 (或旧令牌) 与可选订阅, 保存后进入主界面; 其余设置都在 "我的" 里。 */
+/** 首次配置: 服务端, 账号登录与可选订阅, 保存后进入主界面; 其余设置都在 "我的" 里。 */
 @Composable
 fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
     val context = LocalContext.current.applicationContext
@@ -45,9 +45,9 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
     var message by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         SettingsPageFrame("连接服务端", null) {
-            SettingsGroup { NoteRow("填写服务端地址, 再用账号登录 (或填旧版令牌) 即可开始接收消息。通知, 电池白名单, 代理节点等稍后在 \"我的\" 里设置。", Aioa.colors.textSecondary) }
+            SettingsGroup { NoteRow("填写服务端地址, 再用账号登录即可开始接收消息。通知, 电池白名单, 代理节点等稍后在 \"我的\" 里设置。", Aioa.colors.textSecondary) }
             ServerFields(model, null, onSaved, withSave = false)
-            SettingsGroup("账号登录", "填了账号就用账号登录, 旧版令牌可以留空。") {
+            SettingsGroup("账号登录", "消息按账号隔离, 必须登录。") {
                 InputRow("用户名", name, "例如 Heng_Xin") { name = it }
                 RowDivider(false)
                 InputRow("密码", password, "至少 8 位", secret = true) { password = it }
@@ -55,8 +55,8 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
             ProxyFields(model, onSaved, withSave = false)
             if (message.isNotEmpty()) SettingsGroup { NoteRow(message, Aioa.colors.danger) }
             PrimaryAction(if (busy) "登录中..." else stringResource(R.string.action_save), enabled = !busy) {
-                if (name.isBlank()) {
-                    if (model.save()) onSaved()
+                if (name.isBlank() || password.isEmpty()) {
+                    message = "请填写用户名和密码"
                     return@PrimaryAction
                 }
                 busy = true
