@@ -24,7 +24,7 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 
 ### 2.1 服务端 → 客户端
 
-**welcome** 连接成功后第一帧:
+**welcome** 连接成功后第一帧 (多账号未实现前没有 `user` 与 `session`):
 
 ```json
 { "t": "welcome", "v": 2, "head": 42, "now": 1763712000000, "role": "client", "session": "s_9f2k1m0c7x",
@@ -48,6 +48,20 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 ```
 
 客户端据 `ev.route.action` 决定提醒方式: `alert` 响铃 + 横幅, `push` 普通通知, `silent` / `digest` / `aggregate` 只更新界面。补拉 (`seq <= welcome.head`) 的事件不应再弹通知。安卓 `:link` 进程收到后应回 `ack`。
+
+**agents** Agent 列表与在线状态 (连上时一次, 注册信息或上下线变化时再发, 整份替换):
+
+```json
+{ "t": "agents", "agents": [ { "id": "dsh", "name": "DSH", "icon": "bot", "online": true, "lastSeen": 1763712000000, "mode": "ws" } ] }
+```
+
+**task_log** 任务对话与执行历史的增量 (完整历史用 `GET /api/v1/tasks/{id}`):
+
+```json
+{ "t": "task_log", "taskId": "deploy-42", "entry": { "ts": 1763712030000, "role": "agent", "kind": "say", "text": "镜像已推送" } }
+```
+
+`role`: `agent` | `user` | `system`; `kind` 为任务操作 (`create`, `say`, `wait`, `done`, `fail`) 或用户动作 (`approve`, `reject`, `reply`, `cancel`, `ask`), 超时为 `timeout`。
 
 **task** 任务快照实时更新 (进度变化也会推, 进度不一定落库):
 
@@ -106,13 +120,13 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 | `ack` | `{ "t": "ack", "seq": 43 }` | 已展示到 seq, 仅 `android*` 设备参与兜底推送判断 |
 | `reg` | `{ "t": "reg", "pushToken": "MiPush regId" }` | 上报厂商推送 token |
 | `watch` | `{ "t": "watch", "subjects": ["nas-01"] }` | 在看的指标主体, 整体替换, `[]` 表示不看 |
-| `send` | `{ "t": "send", "cid": "c_1", "body": { "kind": "text", "text": "你好" } }` | 发一条文字到自己的收件箱 (备忘 / 测试), 回 `sent` |
+| `send` | `{ "t": "send", "cid": "c_1", "body": { "kind": "text", "text": "你好" } }` | 发一条文字到自己的收件箱 (备忘 / 测试), 回 `sent`, 该事件 `route.action` 为 `silent`, 不触发兜底推送 |
 | `act` | `{ "t": "act", "aid": "a_8x1", "taskId": "deploy-42", "kind": "approve", "option": "go", "confirm": true }` | 用户动作, 语义同 `POST /api/v1/tasks/{id}/actions` |
 | `overview` | `{ "t": "overview" }` | 请求总览, 回 `overview` |
 
 ## 3. Agent (role=agent)
 
-连接后服务端发 `welcome` (`role: "agent"`, 无 `user`), 然后把排队中的用户动作逐条以 `act` 帧发来。
+连接后服务端发 `welcome` (`role: "agent"`, 无 `user`); Agent 发 `agent_hello` 后, 服务端把该 agent 排队中的用户动作逐条以 `act` 帧发来。
 
 ### 3.1 Agent → 服务端
 
@@ -127,7 +141,7 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 { "t": "act_ack", "aid": "a_8x1" }
 ```
 
-`agent_hello` 应在连上后先发, 决定在线状态里的名字; 一个 key 可以用多个连接各自声明不同的 agent id。每个 `task` 帧服务端回一帧 `task` (最新快照) 作为回执, 出错回 `err`。
+`agent_hello` 应在连上后先发, 决定在线状态里的名字, 服务端随即补发排队中的动作; 一个 key 可以用多个连接各自声明不同的 agent id。每个 `task` 帧服务端回一帧 `task` (最新快照) 作为回执, 出错回 `err`。
 
 ### 3.2 服务端 → Agent
 
@@ -139,7 +153,7 @@ Agent 处理后回 `act_ack`; 没有 ack 的动作在下次连上时会重发 (2
 
 ## 4. 探针 (role=probe)
 
-`device` 必须是 `probe-<subject>`, 且 key 绑定的 `subject` 与之一致 (旧 `AUTH_TOKEN` 不限)。
+`device` 必须以 `probe` 开头; key 需要 `probe` scope, 若 key 绑定了 `subject` 则 `device` 必须是 `probe-<subject>` (旧 `AUTH_TOKEN` 不限)。`probe_config` 帧尚未实现。
 
 | 方向 | 帧 | 说明 |
 | --- | --- | --- |

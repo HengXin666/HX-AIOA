@@ -66,6 +66,8 @@ type Common = {
   ttl?: number;
   expires?: number;
   resolved?: boolean;
+  root?: string;
+  cid?: string;
   route?: RouteInfo;
 };
 export type MetricEnvelope = Common & { kind: "metric"; data: MetricData };
@@ -191,6 +193,37 @@ export function parseEventInput(raw: unknown): Parsed<EventInput> {
   if (raw.resolved === true) value.resolved = true;
   if (typeof raw.ts === "number" && raw.ts > 0) value.ts = raw.ts;
   return { ok: true, value };
+}
+
+// 更新语义: 服务端对同一来源同一 dedupeKey (以及同一任务) 复用 id, 客户端只需 "同 id 覆盖, 否则追加"
+export function mergeEnvelope(list: Envelope[], ev: Envelope): Envelope[] {
+  const rest = list.filter((x) => x.id !== ev.id);
+  rest.push(ev);
+  return rest.sort((a, b) => a.seq - b.seq);
+}
+
+// 事件组: 同一 groupKey 的关联事件, root 为根因 (组内第一条), 规则只为根因提醒
+export type EventGroup = {
+  key: string;
+  root: string;
+  title: string;
+  priority: Priority;
+  ids: string[];
+  count: number;
+  open: number;
+  first: number;
+  last: number;
+};
+
+// 外部系统的级别文字归一: error/crit/fatal/down 为紧急, warn 为警告, info/ok/up 为信息
+export function severityFromText(v: unknown): Severity | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.toLowerCase();
+  if ((SEVERITIES as readonly string[]).includes(s)) return s as Severity;
+  if (/(err|crit|fatal|down|fail|emerg|alert)/.test(s)) return "critical";
+  if (/warn/.test(s)) return "warning";
+  if (/(info|ok|up|resolv|success|recover)/.test(s)) return "info";
+  return undefined;
 }
 
 // 旧客户端只认文本: 把任何事件压成一行

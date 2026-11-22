@@ -6,7 +6,9 @@ import {
   parseTaskOp,
   parseUserAction,
   type AgentInfo,
+  type AgentStatus,
   type TaskOp,
+  type TaskLogEntry,
   type TaskSnapshot,
   type UserAction,
   type UserActionInput,
@@ -27,6 +29,10 @@ export type ActDeliverFrame = { t: "act"; action: UserAction };
 export type ActOkFrame = { t: "act_ok"; aid: string; state: "queued" | "delivered" | "duplicate" };
 export type SpaceUpdateFrame = { t: "space_update"; id: string; space?: Space; deleted?: boolean };
 export type SettingsFrame = { t: "settings"; settings: Record<string, unknown> };
+// 任务对话与执行历史的增量, 进入任务详情页的客户端据此追加
+export type TaskLogFrame = { t: "task_log"; taskId: string; entry: TaskLogEntry };
+// Agent 上下线或注册信息变化时广播给客户端 (整份)
+export type AgentsFrame = { t: "agents"; agents: AgentStatus[] };
 export type ProbeConfig = {
   idleSampleMs?: number;
   liveIntervalMs?: number;
@@ -57,6 +63,8 @@ export type StreamServerFrame =
   | SettingsFrame
   | ProbeConfigFrame
   | OverviewFrame
+  | AgentsFrame
+  | TaskLogFrame
   | StreamWelcome;
 
 export function parseStreamFrame(data: Record<string, unknown>): StreamClientFrame | string | null {

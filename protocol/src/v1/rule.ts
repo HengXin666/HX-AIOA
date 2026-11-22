@@ -1,10 +1,12 @@
 import {
   DELIVERY_CHANNELS,
+  EVENT_STATUSES,
   KINDS,
   PRIORITIES,
   RULE_ACTIONS,
   SEVERITIES,
   type DeliveryChannel,
+  type EventStatus,
   type Kind,
   type Priority,
   type RuleAction,
@@ -23,6 +25,7 @@ export type RuleWhen = {
   channels?: string[];
   kinds?: Kind[];
   severities?: Severity[];
+  statuses?: EventStatus[];
   priorities?: Priority[];
   keywords?: string[];
 };
@@ -72,6 +75,7 @@ export function parseRule(raw: unknown): RuleInput | string {
   if (!inList(KINDS, when.kinds)) return "when.kinds 取值错误";
   if (!inList(SEVERITIES, when.severities)) return "when.severities 取值错误";
   if (!inList(PRIORITIES, when.priorities)) return "when.priorities 取值错误";
+  if (!inList(EVENT_STATUSES, when.statuses)) return "when.statuses 取值错误";
   if (!inList(DELIVERY_CHANNELS, raw.channels)) return "channels 取值错误";
   const window = parseWindow(raw.window);
   if (typeof window === "string") return window;

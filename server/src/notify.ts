@@ -1,3 +1,4 @@
+import type { DeliveryChannel } from "@hx-aioa/protocol";
 import { MIPUSH_ENDPOINT, PUSH_TITLE, WXPUSHER_ENDPOINT } from "./constants";
 import type { Env } from "./env";
 
@@ -5,6 +6,8 @@ export type FallbackJob = {
   preview: string;
   count: number;
   pushToken: string | undefined;
+  channels: Set<DeliveryChannel>;
+  wxUid: string | undefined;
 };
 
 export function hasFallback(env: Env): boolean {
@@ -14,11 +17,12 @@ export function hasFallback(env: Env): boolean {
 export async function sendFallback(env: Env, job: FallbackJob): Promise<void> {
   const text = job.count > 1 ? `${job.count} 条新消息: ${job.preview}` : job.preview;
   const tasks: Promise<void>[] = [];
-  if (env.MIPUSH_APP_SECRET && env.MIPUSH_PACKAGE && job.pushToken) {
+  if (job.channels.has("mipush") && env.MIPUSH_APP_SECRET && env.MIPUSH_PACKAGE && job.pushToken) {
     tasks.push(miPush(env.MIPUSH_APP_SECRET, env.MIPUSH_PACKAGE, job.pushToken, text));
   }
-  if (env.WXPUSHER_APP_TOKEN && env.WXPUSHER_UID) {
-    tasks.push(wxPusher(env.WXPUSHER_APP_TOKEN, env.WXPUSHER_UID, text));
+  const uid = job.wxUid || env.WXPUSHER_UID;
+  if (job.channels.has("wxpusher") && env.WXPUSHER_APP_TOKEN && uid) {
+    tasks.push(wxPusher(env.WXPUSHER_APP_TOKEN, uid, text));
   }
   const results = await Promise.allSettled(tasks);
   for (const r of results) {

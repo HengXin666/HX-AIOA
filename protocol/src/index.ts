@@ -7,6 +7,8 @@ export * from "./v1/space";
 export * from "./v1/rule";
 export * from "./v1/frames";
 export * from "./v1/api";
+export * from "./v1/source";
+export * from "./v1/paths";
 
 export const PING_TEXT = "ping";
 export const PONG_TEXT = "pong";

@@ -1,5 +1,6 @@
 import type { Priority, Role, Scope } from "./constants";
 import type { Rule, TimeWindow } from "./rule";
+import type { Envelope, EventGroup, RouteInfo } from "./event";
 
 export type UserStatus = "active" | "pending" | "disabled";
 export type UserPublic = { id: string; name: string; display: string; role: Role; status: UserStatus; created: number };
@@ -81,9 +82,19 @@ export type SourceInfo = {
   mapping?: JsonMapping;
   rules?: Rule[];
   callbackUrl?: string;
+  keyId?: string;
   created: number;
 };
+export type SourceCreated = SourceInfo & { key?: KeyCreated };
 
 export type IngestResult = { id: string; delivered: number; channel?: string };
 export type ProbeCreated = { subject: string; key: string; install: string };
 export type AuditEntry = { id: number; ts: number; actor: string; action: string; target: string; detail?: string };
+
+export type EventsPage = { events: Envelope[]; head: number };
+export type EventGroupsResult = { groups: EventGroup[] };
+export type MetricLatest = { ts: number; values: Record<string, number>; units?: Record<string, string> };
+export type ActResult = { aid: string; state: "queued" | "delivered" | "duplicate" };
+export type RuleTestResult = { route: RouteInfo };
+export type Settings = { tz?: string; quiet?: TimeWindow; wxpusherUid?: string } & Record<string, unknown>;
+export type ApiError = { error: string; code: string; errors?: string[] };
