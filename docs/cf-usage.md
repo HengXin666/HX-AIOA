@@ -35,3 +35,7 @@ cron 每 30 分钟检查一次, 任一项用到 80% 时在 "CF 额度" 群发一
 - 主机名排行: httpRequestsAdaptiveGroups 按 clientRequestHTTPHost, 固定近 24 小时。
 - 主机名对应的服务: Worker 路由/自定义域名, Pages 项目域名; 需要 token 另加 账户 · Workers 脚本 · 读取 和 账户 · Cloudflare Pages · 读取, 没有时不标。
 - Worker: workersInvocationsAdaptive 按脚本, 请求/错误/子请求/CPU 中位与 P99 (微秒)。
+
+## CF 存储 (R2 / KV / D1)
+
+`GET /api/v1/cf/storage` (owner), 缓存 5 分钟。每类存储的总大小与本期用量对照免费额度 (R2 操作按月, KV/D1 按天, UTC), 并列出每个桶/命名空间/数据库。R2 用 r2StorageAdaptiveGroups / r2OperationsAdaptiveGroups, KV 用 kvStorageAdaptiveGroups / kvOperationsAdaptiveGroups, D1 大小来自 REST `/d1/database` 的 file_size, 用量来自 d1AnalyticsAdaptiveGroups。token 需 Workers R2 存储 / KV 存储 / D1 读取。

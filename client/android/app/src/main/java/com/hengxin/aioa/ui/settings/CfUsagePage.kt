@@ -141,6 +141,7 @@ fun CfUsagePage(onBack: (() -> Unit)?) {
                         if (s.has("hubBytes")) InfoRow("主数据库 (实时)", bytes(s.optLong("hubBytes")))
                     }
                 }
+                CfStorageSection()
                 CfZonesSection()
                 SettingsGroup { ActionRow(TEXT_REFRESH, ICON_REFRESH) { reload++ } }
             }
