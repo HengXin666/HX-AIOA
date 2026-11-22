@@ -64,7 +64,7 @@ class LinkService : Service(), LinkSocket.Listener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            Constants.ACTION_RELOAD -> picker.reload()
+            Constants.ACTION_RELOAD -> picker.reload(intent.getBooleanExtra(Constants.EXTRA_FRESH, false))
             Constants.ACTION_OPTIMIZE -> picker.optimizeSoon()
             Constants.ACTION_PROXY_DEMAND -> picker.demand()
         }
@@ -125,6 +125,12 @@ class LinkService : Service(), LinkSocket.Listener {
         private const val DIAG_TIMEOUT_MS = 15_000L
         fun start(context: Context, action: String? = null) {
             ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java).setAction(action))
+        }
+
+        /** 配置变了: fresh 为 true 时 (订阅地址变了) 重新下载订阅并重启内核, 否则只按新配置调整。 */
+        fun reload(context: Context, fresh: Boolean) {
+            val intent = Intent(context, LinkService::class.java).setAction(Constants.ACTION_RELOAD).putExtra(Constants.EXTRA_FRESH, fresh)
+            ContextCompat.startForegroundService(context, intent)
         }
     }
 }

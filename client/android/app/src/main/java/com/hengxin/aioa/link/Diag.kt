@@ -19,7 +19,7 @@ object Diag {
     fun dump(context: Context, picker: NodePicker, args: Array<out String>?, out: PrintWriter) {
         when (args?.firstOrNull()) {
             "demand" -> picker.demand()
-            "reload" -> picker.reload()
+            "reload" -> picker.reload(true)
             "optimize" -> picker.optimizeSoon()
             // 只给本机 adb 排查订阅用, 不进任何日志
             "suburl" -> ConfigStore.load(context)?.let { out.println("URL=" + it.subscription) }

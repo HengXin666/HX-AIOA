@@ -75,9 +75,20 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
             proxyMessage = "服务端地址不能为空"
             return false
         }
+        val old = ConfigStore.read(app)
         ConfigStore.save(app, config)
-        LinkService.start(app, Constants.ACTION_RELOAD)
-        proxyMessage = if (config.proxyEnabled) "已保存, 正在启动代理内核..." else "已保存, 当前为直连"
+        // 没改任何东西且内核状态正常, 不重启也不重新解析订阅
+        if (old == config && (!config.proxyEnabled || ProxyCore.listening())) {
+            proxyMessage = "已保存, 设置没有变化"
+            return true
+        }
+        val fresh = config.proxyEnabled && old?.subscription != config.subscription
+        LinkService.reload(app, fresh)
+        proxyMessage = when {
+            !config.proxyEnabled -> "已保存, 当前为直连"
+            fresh -> "已保存, 正在下载新订阅..."
+            else -> "已保存, 正在应用..."
+        }
         pollProxy()
         return true
     }
@@ -162,7 +173,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
                 delay(POLL_STEP_MS)
                 proxy = withContext(Dispatchers.IO) { loadProxy() }
                 if (proxy.nodes.isNotEmpty()) {
-                    proxyMessage = "订阅解析出 ${proxy.nodes.size} 个节点, 当前 ${proxy.current ?: "未选择"}"
+                    proxyMessage = "代理可用: ${proxy.nodes.size} 个节点, 当前 ${proxy.current ?: "未选择"}"
                     return
                 }
                 val sub = withContext(Dispatchers.IO) { Subscription.status(app) }

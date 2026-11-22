@@ -134,6 +134,8 @@ object Constants {
     val QUIET_ROUTES = setOf("silent", "digest", "aggregate", "drop")
 
     const val ACTION_RELOAD = "com.hengxin.aioa.RELOAD"
+    // ACTION_RELOAD 的附加参数: 订阅地址变了才重新下载并重启内核
+    const val EXTRA_FRESH = "fresh"
     const val ACTION_OPTIMIZE = "com.hengxin.aioa.OPTIMIZE"
     const val ACTION_WATCHDOG = "com.hengxin.aioa.WATCHDOG"
     const val ACTION_PROXY_DEMAND = "com.hengxin.aioa.PROXY_DEMAND"

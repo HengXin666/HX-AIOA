@@ -26,12 +26,21 @@ class NodePicker(private val context: Context, private val onChanged: () -> Unit
         if (resident(ConfigStore.load(context))) bringUp()
     }
 
-    fun reload() = handler.post {
+    // fresh: 订阅地址变了, 先趁旧内核还在时下载新订阅再重启; 否则内核在跑就不动它, 只让长连接按新配置重连
+    fun reload(fresh: Boolean) = handler.post {
         handler.removeCallbacks(idleStop)
-        core.stop()
         val config = ConfigStore.load(context)
-        if (config != null && config.proxyEnabled) Subscription.download(context, config.subscription)
-        if (resident(config)) bringUp() else if (config?.proxyEnabled == true) demandNow()
+        if (config == null || !config.proxyEnabled) {
+            core.stop()
+            return@post onChanged()
+        }
+        if (fresh) {
+            Subscription.download(context, config.subscription)
+            core.stop()
+        }
+        // bringUp 在常驻模式下自己会通知长连接, 不重复通知
+        if (resident(config) && !core.running && bringUp()) return@post
+        if (!resident(config)) demandNow()
         onChanged()
     }
 
@@ -76,8 +85,9 @@ class NodePicker(private val context: Context, private val onChanged: () -> Unit
         }
         LinkStats.hit(LinkStats.Key.CORE_START)
         LinkLog.add(context, if (resident(config)) "代理内核启动 (长连接走代理, 常驻)" else "代理内核按需启动")
-        optimizeNow()
+        // 内核记住了上次选的节点, 先让长连接连上, 再测速优选
         if (resident(config)) onChanged()
+        optimizeNow()
         return true
     }
 
