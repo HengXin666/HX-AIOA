@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -52,7 +53,7 @@ fun TodayCard(mine: GithubMine) {
         }
         if (t.items.isEmpty()) Paragraph("今天还没有动静。", c.textSecondary, 13)
         val shown = if (expanded) t.items else t.items.take(TODAY_SHOWN)
-        shown.forEach { a -> GhRow(activityIcon(a.kind), a.title, metaOf(a.repo, ago(a.ts))) { openUrl(context, a.url) } }
+        AnimatedItems(shown, { it.id }) { a -> GhRow(activityIcon(a.kind), a.title, metaOf(a.repo, ago(a.ts))) { openUrl(context, a.url) } }
         if (!expanded && t.items.size > TODAY_SHOWN) Chip("还有 ${t.items.size - TODAY_SHOWN} 条", false) { expanded = true }
     }
 }

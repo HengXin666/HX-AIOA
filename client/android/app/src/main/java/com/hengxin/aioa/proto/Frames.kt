@@ -38,7 +38,7 @@ sealed interface ServerFrame {
     data class Ev(val ev: Envelope) : ServerFrame
     data class Task(val task: TaskSnapshot) : ServerFrame
     data class ActOk(val aid: String, val state: String) : ServerFrame
-    data class OverviewFrame(val overview: Overview) : ServerFrame
+    data class OverviewFrame(val overview: Overview, val raw: String = "") : ServerFrame
     // 工作台与设置暂不渲染, 只把原文交给上层, 以后接 #5 时再细化
     data class SpaceUpdate(val id: String, val deleted: Boolean, val raw: String) : ServerFrame
     data class Settings(val raw: String) : ServerFrame
@@ -77,7 +77,7 @@ object Frames {
             T_EV -> ServerFrame.Ev(V1Decode.envelope(o.getJSONObject(T_EV)))
             T_TASK -> ServerFrame.Task(V1Decode.task(o.getJSONObject(T_TASK)))
             "act_ok" -> ServerFrame.ActOk(o.getString(KEY_AID), o.optString("state"))
-            T_OVERVIEW -> ServerFrame.OverviewFrame(V1Decode.overview(o.getJSONObject(T_OVERVIEW)))
+            T_OVERVIEW -> o.getJSONObject(T_OVERVIEW).let { ServerFrame.OverviewFrame(V1Decode.overview(it), it.toString()) }
             "space_update" -> ServerFrame.SpaceUpdate(o.optString("id"), o.optBoolean("deleted"), o.toString())
             "settings" -> ServerFrame.Settings(o.optJSONObject("settings")?.toString() ?: "{}")
             "chat_sync" -> ServerFrame.ChatSync(o.optString("topic"), o.optString("channel").ifEmpty { null })

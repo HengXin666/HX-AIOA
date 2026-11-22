@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +84,7 @@ private fun SourceList(state: SourcesState, onBack: () -> Unit) {
             Card { StateBody(if (state.loaded) CardState.Empty else CardState.Loading, "还没有数据源, 点添加接入 GitHub 等") {} }
         } else {
             Card {
-                state.items.forEach { s ->
+                AnimatedItems(state.items.toList(), { it.id }) { s ->
                     SourceRow(s, state.typeOf(s)) { showing = s }
                 }
             }

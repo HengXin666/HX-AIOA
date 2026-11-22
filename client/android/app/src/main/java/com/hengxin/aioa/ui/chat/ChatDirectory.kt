@@ -46,6 +46,13 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         if (topic == TOPIC_FAVORITES) refreshFavorites() else refreshChats()
     }
 
+    /** 手动同步: 群资料与收藏都重新问一遍服务端, 顺带清理不再用的头像。 */
+    suspend fun syncNow() {
+        listOf(refreshChats(), refreshFavorites()).forEach { it.join() }
+        val keep = metas.values.mapNotNull { it.avatar }.toSet()
+        withContext(Dispatchers.IO) { Avatars.prune(context, keep) }
+    }
+
     fun refreshChats() = scope.launch {
         val r = withContext(Dispatchers.IO) { ApiCache.refresh(context, CACHE_CHATS, listOf(CHATS)) }
         if (r.changed) applyMetas(parseChats(r.body))

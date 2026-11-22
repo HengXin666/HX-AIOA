@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,7 @@ private sealed interface Dialog {
 }
 
 /** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群挪组, 长按组标题删组。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupList(model: ChatModel) {
     val g = model.groups
@@ -79,7 +82,8 @@ fun GroupList(model: ChatModel) {
         }
         val err = g.error ?: g.directory.error
         if (err != null) Text(err, Modifier.clickable { g.clearError() }.padding(horizontal = PAD), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-        LazyColumn(Modifier.fillMaxWidth()) {
+        PullToRefreshBox(g.syncing, g::syncNow, Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize()) {
             item(key = "fav") { FavoritesRow(g.directory.favorites.size) { g.favoritesOpen = true } }
             g.folders.forEach { f ->
                 val inFolder = f.groups.mapNotNull { byKey[it] }.sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
@@ -101,6 +105,7 @@ fun GroupList(model: ChatModel) {
                     fontSize = 13.sp,
                 )
             }
+        }
         }
     }
     when (val d = dialog) {

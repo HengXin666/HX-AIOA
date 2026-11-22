@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -52,7 +53,7 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
                 state.repos.isNotEmpty() -> {
                     Summary(state)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Chip("选择仓库", false, onPick) }
-                    state.repos.forEach { RepoCard(it) { openRepo(it.repo) } }
+                    AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r) { openRepo(r.repo) } }
                 }
             }
         }

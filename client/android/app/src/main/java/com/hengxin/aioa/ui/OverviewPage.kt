@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
@@ -46,7 +47,7 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
 private fun V1Layers(chat: ChatModel, state: CardState, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
     val answer = rememberAnswer(chat)
-    feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }.forEach { task ->
+    AnimatedItems(feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }, { it.id }) { task ->
         TaskCard(task.toCard(feed.pending[task.id]), onOption = { answer(task, it) }) { open(Tab.AGENT) }
     }
     LayerSection(TITLE_NEED_ME, "少而重要", items(feed, Constants.PRIORITY_NEED_ME), state, "一切正常, 没有需要处理的事") { open(Tab.CHAT) }

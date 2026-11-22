@@ -64,7 +64,22 @@ class ChatGroups(
     var jump by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
         private set
+    var syncing by mutableStateOf(false)
+        private set
     private var loadingOlder = false
+
+    /** 下拉同步: 群资料, 收藏, 分组都重新拉一次。 */
+    fun syncNow() {
+        if (syncing) return
+        syncing = true
+        scope.launch {
+            val folders = loadFolders()
+            directory.syncNow()
+            folders.join()
+            reload()
+            syncing = false
+        }
+    }
 
     fun rows(): List<GroupRowData> {
         val metas = directory.metas
