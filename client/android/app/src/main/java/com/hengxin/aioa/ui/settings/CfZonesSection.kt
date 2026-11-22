@@ -45,6 +45,7 @@ private const val RANGE_DAY = "1d"
 private const val RANGE_WEEK = "7d"
 private const val HOSTS_SHOWN = 12
 private const val US_PER_MS = 1000.0
+private const val ORIGIN = "源站"
 private val STATUS_ORDER = listOf("2xx", "3xx", "4xx", "5xx")
 private val BAR_SHAPE = RoundedCornerShape(3.dp)
 
@@ -264,11 +265,13 @@ private fun HostList(hosts: List<Host>) {
     val c = Aioa.colors
     var all by remember { mutableStateOf(false) }
     val top = (hosts.firstOrNull()?.req ?: 0L).coerceAtLeast(1L)
+    // 能读到服务列表时, 没对上 Worker/Pages 的就是代理到源站 (隧道/服务器)
+    val known = hosts.any { it.service != null }
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("主机名 (近 24 小时)", c.textSecondary, 12)
         (if (all) hosts else hosts.take(HOSTS_SHOWN)).forEach { h ->
             val bad = h.req > 0 && h.err * 10 >= h.req
-            val sub = listOfNotNull(h.service, if (h.err > 0) "5xx ${pct(h.err, h.req)}" else null).joinToString(" · ").ifEmpty { null }
+            val sub = listOfNotNull(h.service ?: if (known) ORIGIN else null, if (h.err > 0) "5xx ${pct(h.err, h.req)}" else null).joinToString(" · ").ifEmpty { null }
             BarRow(h.host, h.req.toFloat() / top, count(h.req), if (bad) c.danger else c.accent, sub, if (bad) c.danger else null)
         }
         if (hosts.size > HOSTS_SHOWN) Text(if (all) "收起" else "显示全部 ${hosts.size} 个", c.accent, 13, Modifier.clickable { all = !all })
