@@ -65,7 +65,15 @@ class NodePicker(private val context: Context, private val onChanged: () -> Unit
         val config = ConfigStore.load(context) ?: return false
         if (!config.proxyEnabled) return false
         if (!Subscription.file(context).exists()) Subscription.download(context, config.subscription)
-        if (!core.start(config)) return false
+        // 没有订阅就没有节点, 起内核只会让走代理的请求全部超时, 不如直接让调用方直连
+        if (!Subscription.file(context).exists()) {
+            LinkLog.add(context, "订阅不可用, 不启动代理内核")
+            return false
+        }
+        if (!core.start(config)) {
+            LinkLog.add(context, "代理内核启动失败: " + ProxyCore.recentErrors(context, 1).joinToString())
+            return false
+        }
         LinkStats.hit(LinkStats.Key.CORE_START)
         LinkLog.add(context, if (resident(config)) "代理内核启动 (长连接走代理, 常驻)" else "代理内核按需启动")
         optimizeNow()

@@ -21,7 +21,8 @@ class ProxyCore(private val context: Context) {
     fun start(config: AppConfig): Boolean {
         stopOwn()
         if (!available || !config.proxyEnabled) return false
-        home.mkdirs()
+        // 订阅文件还没有时内核要监视这个目录, 目录不存在会直接报错
+        File(home, PROVIDERS_DIR).mkdirs()
         val configFile = File(home, CONFIG_FILE)
         configFile.writeText(buildConfig(secret(context)))
         // 上次进程被杀后残留的内核还占着端口: 直接让它重载新配置
@@ -103,6 +104,7 @@ class ProxyCore(private val context: Context) {
 
     companion object {
         private const val HOME_DIR = "mihomo"
+        private const val PROVIDERS_DIR = "providers"
         private const val BINARY_NAME = "libmihomo.so"
         private const val CONFIG_FILE = "config.yaml"
         private const val LOG_FILE = "core.log"

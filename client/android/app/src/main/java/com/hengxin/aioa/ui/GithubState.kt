@@ -32,6 +32,8 @@ private const val F_WORKFLOW = "workflow"
 private const val F_UPDATED = "updatedAt"
 // webhook 常常一次推好几条, 合并成一次刷新
 private const val EVENT_DEBOUNCE_MS = 1500L
+// 服务端定时同步每 30 分钟一次, CI 显示运行中超过这么久就主动让它同步一次
+private const val CI_STALE_MS = 3 * 60_000L
 // 总览卡的动态取自最近活跃的几个仓库
 private const val RECENT_REPOS = 3
 const val GITHUB_RECENT_SHOWN = 3
@@ -118,6 +120,7 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
                 loaded = true
                 error = err
                 recentList?.let { recent = it }
+                syncIfCiStale()
             }
         }
     }
@@ -150,6 +153,17 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
                 }
             }
         }
+    }
+
+    private var autoSyncAt = 0L
+
+    // 运行中的 CI 早已结束但服务端还没同步到, 静默补一次; 有节流, 失败不提示
+    private fun syncIfCiStale() {
+        val now = System.currentTimeMillis()
+        val stuck = repos.any { r -> r.ci?.let { it.status == CiStatus.RUNNING && now - it.at > CI_STALE_MS } == true }
+        if (!stuck || now - autoSyncAt < CI_STALE_MS) return
+        autoSyncAt = now
+        sync { }
     }
 
     /** 页面可见期间登记, 离开时注销; repo 非空表示详情页。 */

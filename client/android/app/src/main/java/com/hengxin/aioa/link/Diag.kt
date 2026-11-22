@@ -1,6 +1,7 @@
 package com.hengxin.aioa.link
 
 import android.content.Context
+import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.net.NodePicker
 import com.hengxin.aioa.net.ProxyController
 import com.hengxin.aioa.net.ProxyCore
@@ -18,6 +19,8 @@ object Diag {
             "demand" -> picker.demand()
             "reload" -> picker.reload()
             "optimize" -> picker.optimizeSoon()
+            // 只给本机 adb 排查订阅用, 不进任何日志
+            "suburl" -> ConfigStore.load(context)?.let { out.println("URL=" + it.subscription) }
         }
         val listening = ProxyCore.listening()
         out.println("== 代理内核")
