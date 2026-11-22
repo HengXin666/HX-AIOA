@@ -54,7 +54,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val spaces = SpacesState(app, viewModelScope, metrics)
     val sources = SourcesState(app, viewModelScope)
     val github = GithubState(app, viewModelScope)
-    val groups = ChatGroups(app, viewModelScope, db)
+    val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g -> g.directory.onMetas = { g.applyReads() } }
 
     fun resume() {
         NotifyKit.clearMessages(getApplication<Application>())
@@ -69,12 +69,14 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
             groups.reload()
             if (configured) {
                 groups.loadFolders()
+                groups.directory.load()
                 socket.start()
             }
         }
     }
 
     fun pause() {
+        groups.flushRead()
         socket.stop()
         online = false
         // 下次打开时重新计算分隔线
@@ -107,6 +109,8 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame)) return
+        if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
+        if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {
             sources.onEvent(frame.ev.source.id, frame.ev.title)
             github.onEvent(frame.ev.source)

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,60 +36,79 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hengxin.aioa.data.GroupSummary
 import com.hengxin.aioa.data.MessageDb
-import com.hengxin.aioa.ui.chat.LetterAvatar
+import com.hengxin.aioa.kit.Icon
+import com.hengxin.aioa.ui.chat.ChatAvatar
+import com.hengxin.aioa.ui.chat.digestLabel
 import com.hengxin.aioa.ui.chat.plainPreview
 
 private const val UNGROUPED = "未分组"
 private const val BADGE_MAX = 99
 private val AVATAR = 48.dp
 
-// 正在操作的对象: 给某个群挪组, 新建组, 或删除某个组
+// 正在操作的对象: 给某个群挪组, 新建群, 新建组, 或删除某个组
 private sealed interface Dialog {
     data class Move(val group: String) : Dialog
+    data object NewGroup : Dialog
     data object NewFolder : Dialog
     data class DropFolder(val name: String) : Dialog
 }
 
-/** 群列表: 组在上 (可收起), 未分组的在下; 长按群可以挪到别的组, 长按组标题可删组。 */
+/** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群挪组, 长按组标题删组。 */
 @Composable
 fun GroupList(model: ChatModel) {
     val g = model.groups
     var dialog by remember { mutableStateOf<Dialog?>(null) }
+    var menu by remember { mutableStateOf(false) }
     var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val byKey = g.summaries.associateBy { it.key }
+    val rows = g.rows()
+    val byKey = rows.associateBy { it.key }
     val grouped = g.folders.flatMap { it.groups }.toSet()
-    val loose = g.summaries.filter { it.key !in grouped }
+    val loose = rows.filter { it.key !in grouped }
     Column(Modifier.fillMaxSize()) {
         Header("消息", model.online) {
-            TextButton({ dialog = Dialog.NewFolder }) { Text("新建组") }
-        }
-        g.error?.let { Text(it, Modifier.padding(horizontal = PAD), fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
-        if (g.summaries.isEmpty() && g.folders.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有消息。推送时带上 channel 就会进对应的群。", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+            Box {
+                Box(Modifier.size(36.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
+                    Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem({ Text("新建群") }, { dialog = Dialog.NewGroup; menu = false })
+                    DropdownMenuItem({ Text("新建组") }, { dialog = Dialog.NewFolder; menu = false })
+                }
             }
-            return@Column
         }
+        val err = g.error ?: g.directory.error
+        if (err != null) Text(err, Modifier.clickable { g.clearError() }.padding(horizontal = PAD), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
         LazyColumn(Modifier.fillMaxWidth()) {
+            item(key = "fav") { FavoritesRow(g.directory.favorites.size) { g.favoritesOpen = true } }
             g.folders.forEach { f ->
-                val rows = f.groups.mapNotNull { byKey[it] }.sortedByDescending { it.last.seq }
+                val inFolder = f.groups.mapNotNull { byKey[it] }.sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
                 val shut = f.name in collapsed
                 item(key = "f:${f.name}") {
-                    FolderHeader(f.name, rows.sumOf { it.unread }, shut, { collapsed = if (shut) collapsed - f.name else collapsed + f.name }) {
+                    FolderHeader(Modifier.animateItem(), f.name, inFolder.sumOf { if (it.muted) 0 else it.unread }, shut, { collapsed = if (shut) collapsed - f.name else collapsed + f.name }) {
                         dialog = Dialog.DropFolder(f.name)
                     }
                 }
-                if (!shut) rows.forEach { s -> item(key = "g:${s.key}") { GroupRow(Modifier.animateItem(), s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
+                if (!shut) inFolder.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Move(r.key) } } }
             }
-            if (g.folders.isNotEmpty() && loose.isNotEmpty()) item(key = "loose") { FolderHeader(UNGROUPED, 0, false, null, null) }
-            loose.forEach { s -> item(key = "g:${s.key}") { GroupRow(Modifier.animateItem(), s, { g.openGroup(s.key) }) { dialog = Dialog.Move(s.key) } } }
+            if (g.folders.isNotEmpty() && loose.isNotEmpty()) item(key = "loose") { FolderHeader(Modifier, UNGROUPED, 0, false, null, null) }
+            loose.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Move(r.key) } } }
+            if (rows.isEmpty()) item(key = "empty") {
+                Text(
+                    "还没有群。右上角 + 新建群, 再在群设置里接入 Agent; 推送时带上 channel 也会自动进对应的群。",
+                    Modifier.padding(24.dp),
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
     when (val d = dialog) {
         is Dialog.Move -> MoveDialog(d.group, g) { dialog = null }
-        Dialog.NewFolder -> NameDialog("新建组", { dialog = null }) { g.addFolder(it) }
+        Dialog.NewGroup -> NameDialog("新建群", "例如 新闻", { dialog = null }) { name ->
+            g.directory.createGroup(name).also { if (it) g.openGroup(name.trim()) }
+        }
+        Dialog.NewFolder -> NameDialog("新建组", "例如 工作", { dialog = null }) { g.addFolder(it) }
         is Dialog.DropFolder -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("删除组 \"${d.name}\"?") },
@@ -99,46 +120,77 @@ fun GroupList(model: ChatModel) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderHeader(name: String, unread: Int, collapsed: Boolean, onToggle: (() -> Unit)?, onLong: (() -> Unit)?) {
+private fun FavoritesRow(count: Int, onOpen: () -> Unit) {
     val c = MaterialTheme.colorScheme
-    val mod = if (onToggle != null) Modifier.combinedClickable(onClick = onToggle, onLongClick = onLong) else Modifier
-    Row(mod.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = PAD, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onToggle != null) Text(if (collapsed) "▸ " else "▾ ", fontSize = 12.sp, color = c.outline)
-        Text(name, Modifier.weight(1f), fontSize = 12.sp, color = c.outline, fontWeight = FontWeight.Medium)
-        if (collapsed && unread > 0) Badge(unread)
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = PAD, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(AVATAR).background(c.primary, CircleShape), contentAlignment = Alignment.Center) { Icon("star", c.onPrimary, 22.dp) }
+        Column(Modifier.weight(1f)) {
+            Text("收藏", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(if (count == 0) "长按消息可以收藏" else "$count 条", fontSize = 13.sp, color = c.outline)
+        }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GroupRow(modifier: Modifier, s: GroupSummary, onOpen: () -> Unit, onLong: () -> Unit) {
+private fun FolderHeader(modifier: Modifier, name: String, unread: Int, collapsed: Boolean, onToggle: (() -> Unit)?, onLong: (() -> Unit)?) {
+    val c = MaterialTheme.colorScheme
+    val mod = if (onToggle != null) modifier.combinedClickable(onClick = onToggle, onLongClick = onLong) else modifier
+    Row(mod.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = PAD, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (onToggle != null) Text(if (collapsed) "▸ " else "▾ ", fontSize = 12.sp, color = c.outline)
+        Text(name, Modifier.weight(1f), fontSize = 12.sp, color = c.outline, fontWeight = FontWeight.Medium)
+        if (collapsed && unread > 0) Badge(unread, false)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GroupRow(modifier: Modifier, r: GroupRowData, onOpen: () -> Unit, onLong: () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(
-        modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = onLong).padding(horizontal = PAD, vertical = 9.dp),
+        modifier.fillMaxWidth()
+            .background(if (r.pinned) c.surfaceVariant.copy(alpha = 0.35f) else c.surface)
+            .combinedClickable(onClick = onOpen, onLongClick = onLong)
+            .padding(horizontal = PAD, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        LetterAvatar(s.key, AVATAR)
+        ChatAvatar(r.key, r.meta?.avatar, AVATAR)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.key, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(timeOf(s.last.ts), fontSize = 11.sp, color = c.outline)
+                Text(r.meta?.title ?: r.key, Modifier.weight(1f, fill = false), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                digestLabel(r.meta?.digest)?.let { Tag(it) }
+                Box(Modifier.weight(1f))
+                r.last?.let { Text(timeOfDay(it.ts), fontSize = 11.sp, color = c.outline) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val who = if (s.key == s.last.src || s.key == MessageDb.MEMO_GROUP) "" else "${s.last.src}: "
-                Text(who + plainPreview(s.last.text), Modifier.weight(1f), fontSize = 13.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (s.unread > 0) Badge(s.unread)
+                val last = r.last
+                val who = if (last == null || r.key == last.src || r.key == MessageDb.MEMO_GROUP) "" else "${last.src}: "
+                val preview = last?.let { who + plainPreview(it.text) } ?: "还没有消息"
+                Text(preview, Modifier.weight(1f), fontSize = 13.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (r.muted) Text("🔕", fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                if (r.unread > 0) Badge(r.unread, r.muted)
             }
         }
     }
 }
 
 @Composable
-private fun Badge(n: Int) {
-    Box(Modifier.padding(start = 6.dp).background(MaterialTheme.colorScheme.error, CircleShape).padding(horizontal = 6.dp, vertical = 1.dp)) {
-        Text(if (n > BADGE_MAX) "$BADGE_MAX+" else "$n", color = MaterialTheme.colorScheme.onError, fontSize = 11.sp)
+private fun Tag(text: String) {
+    val c = MaterialTheme.colorScheme
+    Text(text, Modifier.padding(start = 6.dp).background(c.primary.copy(alpha = 0.12f), CircleShape).padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = c.primary)
+}
+
+@Composable
+private fun Badge(n: Int, quiet: Boolean) {
+    val c = MaterialTheme.colorScheme
+    Box(Modifier.padding(start = 6.dp).background(if (quiet) c.outline else c.error, CircleShape).padding(horizontal = 6.dp, vertical = 1.dp)) {
+        Text(if (n > BADGE_MAX) "$BADGE_MAX+" else "$n", color = c.onError, fontSize = 11.sp)
     }
 }
 
@@ -146,13 +198,13 @@ private fun Badge(n: Int) {
 private fun MoveDialog(group: String, g: ChatGroups, close: () -> Unit) {
     var creating by remember { mutableStateOf(false) }
     if (creating) {
-        NameDialog("新建组并移入", close) { name -> g.addFolder(name).also { if (it) g.moveTo(group, name) } }
+        NameDialog("新建组并移入", "例如 工作", close) { name -> g.addFolder(name).also { if (it) g.moveTo(group, name) } }
         return
     }
     val current = g.folderOf(group)
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("把 \"$group\" 移到") },
+        title = { Text("把 \"${g.directory.title(group)}\" 移到") },
         text = {
             Column {
                 g.folders.forEach { f ->
@@ -169,20 +221,20 @@ private fun MoveDialog(group: String, g: ChatGroups, close: () -> Unit) {
 
 /** 输入名字的对话框; ok 返回 false 表示重名或为空, 不关闭。 */
 @Composable
-private fun NameDialog(title: String, close: () -> Unit, ok: (String) -> Boolean) {
+internal fun NameDialog(title: String, hint: String, close: () -> Unit, ok: (String) -> Boolean) {
     var name by remember { mutableStateOf("") }
     var bad by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = close,
         title = { Text(title) },
-        text = { OutlinedTextField(name, { name = it; bad = false }, singleLine = true, isError = bad, placeholder = { Text("例如 邮件") }) },
+        text = { OutlinedTextField(name, { name = it; bad = false }, singleLine = true, isError = bad, placeholder = { Text(hint) }) },
         confirmButton = { TextButton({ if (ok(name)) close() else bad = true }) { Text("确定") } },
         dismissButton = { TextButton(close) { Text("取消") } },
     )
 }
 
 @Composable
-private fun timeOf(ts: Long): String {
+private fun timeOfDay(ts: Long): String {
     val context = LocalContext.current
     return if (DateUtils.isToday(ts)) DateFormat.getTimeFormat(context).format(ts)
     else DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH)

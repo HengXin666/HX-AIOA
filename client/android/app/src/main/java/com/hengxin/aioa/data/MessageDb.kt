@@ -5,7 +5,10 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.proto.FwdInfo
+import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
+import org.json.JSONObject
 
 /** 群: 推送方写的 channel; 没写时按来源名, 本机发出的归 "备忘"。 */
 fun ServerFrame.Msg.groupKey(): String = group ?: if (src.startsWith(Constants.DEVICE_PREFIX)) MessageDb.MEMO_GROUP else src
@@ -22,7 +25,7 @@ class MessageDb private constructor(context: Context) :
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT)")
+        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT)")
         db.execSQL("CREATE TABLE $T_KV (k TEXT PRIMARY KEY, v INTEGER NOT NULL)")
         db.execSQL(GRP_INDEX)
     }
@@ -33,6 +36,7 @@ class MessageDb private constructor(context: Context) :
             db.execSQL("UPDATE $T_MSG SET $C_GRP = $GROUP_EXPR")
             db.execSQL(GRP_INDEX)
         }
+        if (oldVersion < 3) db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_EXTRA TEXT")
     }
 
     fun insert(msg: ServerFrame.Msg): Boolean {
@@ -43,6 +47,7 @@ class MessageDb private constructor(context: Context) :
             put(C_TEXT, msg.text)
             put(C_CID, msg.cid)
             put(C_GRP, msg.groupKey())
+            put(C_EXTRA, extraOf(msg))
         }
         return writableDatabase.insertWithOnConflict(T_MSG, null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
@@ -54,10 +59,13 @@ class MessageDb private constructor(context: Context) :
         arrayOf(limit.toString()),
     )
 
-    fun inGroup(key: String, limit: Int): List<ServerFrame.Msg> = query(
-        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_GRP = ? ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
-        arrayOf(key, limit.toString()),
+    /** 某个群里 before 之前的最近 limit 条, 按序号升序; 向上翻页时 before 取当前最早一条。 */
+    fun inGroup(key: String, limit: Int, before: Long = Long.MAX_VALUE): List<ServerFrame.Msg> = query(
+        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ < ? ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
+        arrayOf(key, before.toString(), limit.toString()),
     )
+
+    fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */
     fun groups(): List<GroupSummary> {
@@ -115,12 +123,16 @@ class MessageDb private constructor(context: Context) :
             val text = c.getColumnIndexOrThrow(C_TEXT)
             val cid = c.getColumnIndexOrThrow(C_CID)
             val grp = c.getColumnIndexOrThrow(C_GRP)
+            val extra = c.getColumnIndexOrThrow(C_EXTRA)
             buildList {
                 while (c.moveToNext()) {
                     val srcV = c.getString(src)
                     // 库里存的是群键; 只有推送方写了 channel 的才还原成 group
                     val g = c.getString(grp)?.takeIf { it != srcV && it != MEMO_GROUP }
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g))
+                    val x = c.getString(extra)?.let { runCatching { JSONObject(it) }.getOrNull() }
+                    val reply = x?.optJSONObject(X_REPLY)?.let { MsgRef(it.optLong(C_SEQ), it.optString(C_SRC), it.optString(C_TEXT)) }
+                    val fwd = x?.optJSONObject(X_FWD)?.let { FwdInfo(it.optString(C_SRC), it.optLong(C_TS)) }
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd))
                 }
             }
         }
@@ -128,7 +140,19 @@ class MessageDb private constructor(context: Context) :
     companion object {
         const val MEMO_GROUP = "备忘"
         private const val DB_NAME = "messages.db"
-        private const val DB_VERSION = 2
+        private const val DB_VERSION = 3
+        private const val C_EXTRA = "extra"
+        private const val X_REPLY = "reply"
+        private const val X_FWD = "fwd"
+
+        // 引用与转发的快照存成一列 JSON, 没有就是 null
+        private fun extraOf(m: ServerFrame.Msg): String? {
+            if (m.reply == null && m.fwd == null) return null
+            val o = JSONObject()
+            m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
+            m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
+            return o.toString()
+        }
         private const val T_MSG = "msg"
         private const val T_KV = "kv"
         private const val C_SEQ = "seq"

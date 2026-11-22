@@ -13,6 +13,8 @@ import androidx.core.content.ContextCompat
 import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.data.MutedGroups
+import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.net.NodePicker
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.Frames
@@ -100,7 +102,8 @@ class LinkService : Service(), LinkSocket.Listener {
     private fun onEvent(ev: Envelope) {
         val msg = ev.toMsg()
         if (!store(msg) || ev.seq <= replayHead) return
-        notifier.event(ev, msg, loud = ev.shouldNotify() && !AioaApp.uiForeground(application))
+        val muted = MutedGroups.contains(this, msg.groupKey())
+        notifier.event(ev, msg, loud = ev.shouldNotify() && !muted && !AioaApp.uiForeground(application))
     }
 
     // 入库并确认; 返回是否是别处发来的新消息
