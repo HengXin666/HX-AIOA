@@ -25,3 +25,13 @@ cron 每 30 分钟检查一次, 任一项用到 80% 时在 "CF 额度" 群发一
 ## 存储
 
 点进额度页最下面的 "存储": 整个账号的 DO 存储 (`durableObjectsStorageGroups.max.storedBytes`, CF 统计有延迟) 对照免费 5 GB, 以及主 Hub 数据库当前大小 (`sql.databaseSize`, 实时)。存储不按天重置。
+
+## CF 总览 (根域名 → 服务)
+
+`GET /api/v1/cf/zones?range=1d|7d` (owner), 服务端内存缓存 5 分钟, CF GraphQL 限额是每用户 5 分钟 300 次。
+
+- 根域名列表: REST `/zones` (token 需 区域 · Analytics · 读取, 资源选全部区域)。
+- 每个根域名: 请求, 流量, 缓存命中, 拦截威胁, 状态码分布, 来源国家; 1d 按小时 (httpRequests1hGroups), 7d 按天 (httpRequests1dGroups)。
+- 主机名排行: httpRequestsAdaptiveGroups 按 clientRequestHTTPHost, 固定近 24 小时。
+- 主机名对应的服务: Worker 路由/自定义域名, Pages 项目域名; 需要 token 另加 账户 · Workers 脚本 · 读取 和 账户 · Cloudflare Pages · 读取, 没有时不标。
+- Worker: workersInvocationsAdaptive 按脚本, 请求/错误/子请求/CPU 中位与 P99 (微秒)。
