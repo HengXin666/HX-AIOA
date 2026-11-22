@@ -85,7 +85,10 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     // adb shell dumpsys activity service com.hengxin.aioa/.link.LinkService [demand|reload|optimize]
-    override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) = Diag.dump(this, picker, args, writer)
+    // dumpsys 在主线程回调, 探测端口和查节点要联网, 放到子线程里做
+    override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
+        Thread { Diag.dump(this, picker, args, writer) }.apply { start(); join(DIAG_TIMEOUT_MS) }
+    }
 
     override fun onStatus(online: Boolean) {
         if (online) watchdog.onOnline() else picker.optimizeSoon()
@@ -119,6 +122,7 @@ class LinkService : Service(), LinkSocket.Listener {
     }
 
     companion object {
+        private const val DIAG_TIMEOUT_MS = 15_000L
         fun start(context: Context, action: String? = null) {
             ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java).setAction(action))
         }
