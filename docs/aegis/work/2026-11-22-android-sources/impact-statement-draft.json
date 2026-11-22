@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [],
+  "invariants": [],
+  "compatBoundary": "Compatibility boundary not yet refined.",
+  "nonGoals": [
+    "不改服务端与协议; 不新增重新生成 key 的接口, 用删掉重建代替"
+  ]
+}

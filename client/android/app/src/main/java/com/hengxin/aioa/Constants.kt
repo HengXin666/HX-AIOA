@@ -85,6 +85,12 @@ object Constants {
     const val ACT_ASK = "ask"
     const val SPACES_PATH = "api/v1/spaces"
     const val TASKS_PATH = "api/v1/tasks"
+    const val SOURCES_PATH = "api/v1/sources"
+    const val SOURCE_TYPES_PATH = "api/v1/source-types"
+    const val EVENTS_PATH = "api/v1/events"
+    const val KEYS_PATH = "api/v1/keys"
+    const val QUERY_KEY = "key"
+    const val SOURCE_GITHUB = "github"
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"

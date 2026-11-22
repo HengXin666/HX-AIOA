@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "安卓 app 可以添加, 查看, 删除数据源, 新建后按类型给出接入步骤 (GitHub 分步 + 复制按钮 + 连通检测)。",
+  "goal": "安卓 app 可以添加, 查看, 删除数据源, 新建后按类型给出接入步骤 (GitHub 分步 + 复制按钮 + 连通检测)。",
+  "successEvidence": [
+    ":app:compileReleaseKotlin 通过"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "不改服务端与协议; 不新增重新生成 key 的接口, 用删掉重建代替"
+  ],
+  "scope": "client/android/app: ui/Sources*.kt, ui/SourceSetupPage.kt, net/Api.kt, MePage, Shell, ChatModel, Constants",
+  "changeKinds": [],
+  "riskHints": []
+}

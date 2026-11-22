@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-11-22-android-sources",
+  "currentTodo": "Define first execution slice.",
+  "completedTodos": [],
+  "activeSlice": "initial",
+  "evidenceRefs": [],
+  "blockedOn": null,
+  "nextStep": "真机验证 GitHub ping 后显示已连接",
+  "updatedAt": "2026-11-22"
+}

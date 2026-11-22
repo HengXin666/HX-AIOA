@@ -31,6 +31,8 @@ private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 @Composable
 fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit, onSettings: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
+    // "我的" 下的子页; 子页自己处理返回键, 回到 "我的"
+    var meSub by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
     AppScaffold(NAV, tab.name, { key -> tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
         when (tab) {
@@ -38,7 +40,7 @@ fun Shell(chat: ChatModel, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -
             Tab.CHAT -> ChatScreen(chat)
             Tab.AGENT -> AgentPage(chat)
             Tab.RESOURCES -> MetricsPage(chat)
-            Tab.ME -> MePage(prefs, setPrefs, onNotes, onSettings)
+            Tab.ME -> if (meSub) SourcesPage(chat.sources) { meSub = false } else MePage(prefs, setPrefs, onNotes, onSettings) { meSub = true }
         }
     }
 }
