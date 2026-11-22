@@ -21,11 +21,16 @@ object Subscription {
     private const val SNIPPET = 60
     private const val HTTP_FORBIDDEN = 403
     private const val CF_HEADER = "cf-mitigated"
+    private const val SERVER_HEADER = "server"
+    private val BLANKS = Regex("\\s+")
     private val USER_AGENTS = listOf(
         "clash-verge/v2.2.3",
         "ClashMetaForAndroid/2.11.5.Meta",
         "mihomo/1.19.0",
         "clash.meta",
+        "Clash",
+        "v2rayN/7.10.0",
+        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
     )
 
     // 内核配置里 proxy-provider 的 path, 相对于内核工作目录
@@ -73,7 +78,8 @@ object Subscription {
             val text = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 val challenge = resp.header(CF_HEADER) != null
-                val reason = if (challenge) "HTTP ${resp.code} Cloudflare 人机验证拦截" else "HTTP ${resp.code}"
+                val hint = text.replace(BLANKS, " ").trim().take(SNIPPET).ifEmpty { resp.header(SERVER_HEADER).orEmpty() }
+                val reason = (if (challenge) "HTTP ${resp.code} Cloudflare 人机验证拦截" else "HTTP ${resp.code}") + if (hint.isEmpty()) "" else " ($hint)"
                 return Attempt(null, reason, fatal = !challenge && resp.code != HTTP_FORBIDDEN)
             }
             val head = text.trimStart()
