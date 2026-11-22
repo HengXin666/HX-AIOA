@@ -49,6 +49,12 @@ class ProxyController(context: Context) {
             .put("".toRequestBody(JSON)),
     )
 
+    // 内核当前承载的连接数, 空闲停机前确认没有正在进行的请求; 查不到按 0 处理
+    fun activeConnections(): Int {
+        val url = base().addPathSegment("connections").build()
+        return call(Request.Builder().url(url).get())?.optJSONArray("connections")?.length() ?: 0
+    }
+
     fun current(): String? = call(Request.Builder().url(groupUrl()).get())?.optString("now")?.ifEmpty { null }
 
     fun select(name: String): Boolean = send(

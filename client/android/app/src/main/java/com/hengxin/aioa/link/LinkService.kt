@@ -16,10 +16,11 @@ import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.net.NodePicker
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
-import com.hengxin.aioa.update.Updater
+import com.hengxin.aioa.proto.shouldNotify
+import com.hengxin.aioa.proto.toMsg
 import java.util.concurrent.Executors
 
-// 运行在独立的 :link 进程, 不加载任何 UI 类: 一条长连接, 本地消息库, 代理内核, 定时检查更新
+// 运行在独立的 :link 进程, 不加载任何 UI 类: 一条长连接, 本地消息库, 按需的代理内核, 搭便车的低频维护
 class LinkService : Service(), LinkSocket.Listener {
 
     private lateinit var socket: LinkSocket
@@ -27,14 +28,12 @@ class LinkService : Service(), LinkSocket.Listener {
     private lateinit var notifier: Notifier
     private lateinit var picker: NodePicker
     private lateinit var watchdog: LinkWatchdog
+    private lateinit var maintenance: Maintenance
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
-    private val updateTask = object : Runnable {
-        override fun run() {
-            io.execute { runCatching { Updater(this@LinkService).update(foreground = false) { } } }
-            handler.postDelayed(this, Constants.UPDATE_INTERVAL_MS)
-        }
-    }
+
+    // 补拉 (seq <= welcome.head) 的事件只入库不弹通知
+    private var replayHead = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -46,21 +45,23 @@ class LinkService : Service(), LinkSocket.Listener {
             0
         }
         ServiceCompat.startForeground(this, Constants.NOTIFY_ID_LINK, notifier.linkNotification(), type)
+        LinkStats.load(this)
         val device = AioaApp.deviceId(application, Constants.DEVICE_LINK)
-        socket = LinkSocket(this, device, db::maxSeq, this, forLink = true)
+        socket = LinkSocket(this, device, db::maxSeq, this, forLink = true, pingSec = Constants.LINK_PING_INTERVAL_SEC)
         picker = NodePicker(this) { handler.post { socket.restart() } }
-        watchdog = LinkWatchdog(this) { socket.check() }
+        maintenance = Maintenance(this, io)
+        watchdog = LinkWatchdog(this, socket) { maintenance.runIfDue() }
         LinkLog.add(this, "后台服务启动")
         socket.start()
         picker.start()
         watchdog.start()
-        handler.postDelayed(updateTask, UPDATE_FIRST_DELAY_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             Constants.ACTION_RELOAD -> picker.reload()
             Constants.ACTION_OPTIMIZE -> picker.optimizeSoon()
+            Constants.ACTION_PROXY_DEMAND -> picker.demand()
         }
         return START_STICKY
     }
@@ -68,6 +69,7 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         LinkLog.add(this, "后台服务被销毁")
+        LinkStats.flush(this)
         watchdog.stop()
         socket.stop()
         picker.stop()
@@ -81,18 +83,28 @@ class LinkService : Service(), LinkSocket.Listener {
         if (!online) picker.optimizeSoon()
     }
 
+    override fun onNetwork() = watchdog.onNetworkChanged()
+
     override fun onFrame(frame: ServerFrame) {
-        if (frame !is ServerFrame.Msg) return
-        val fresh = db.insert(frame)
-        socket.send(Frames.ack(frame.seq))
-        if (!fresh || frame.src.startsWith(Constants.DEVICE_PREFIX)) return
+        when (frame) {
+            is ServerFrame.Welcome -> replayHead = frame.head
+            is ServerFrame.Msg -> store(frame, notify = true)
+            is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) {
+                store(frame.ev.toMsg(), notify = frame.ev.shouldNotify() && frame.ev.seq > replayHead)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun store(msg: ServerFrame.Msg, notify: Boolean) {
+        val fresh = db.insert(msg)
+        socket.send(Frames.ack(msg.seq))
+        if (!notify || !fresh || msg.src.startsWith(Constants.DEVICE_PREFIX)) return
         if (AioaApp.uiForeground(application)) return
         notifier.showUnread(db.unread(Constants.DEVICE_PREFIX, Constants.NOTIFY_MAX_LINES), db.unreadCount(Constants.DEVICE_PREFIX))
     }
 
     companion object {
-        private const val UPDATE_FIRST_DELAY_MS = 60_000L
-
         fun start(context: Context, action: String? = null) {
             ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java).setAction(action))
         }

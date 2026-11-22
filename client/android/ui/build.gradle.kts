@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.roborazzi)
 }
 
 if (!desktopOnly) apply(plugin = "com.android.library")
@@ -23,6 +24,15 @@ kotlin {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.ui)
+        }
+        // 截图测试只跑桌面目标, 不需要安卓 SDK: ./gradlew :ui:recordRoborazziDesktop -PdesktopOnly=true
+        val desktopTest by getting {
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(compose.desktop.uiTestJUnit4)
+                implementation(libs.roborazzi.compose.desktop)
+                implementation(kotlin("test"))
+            }
         }
     }
 }

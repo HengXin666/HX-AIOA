@@ -1,68 +1,85 @@
-import type { MsgFrame } from "@hx-aioa/protocol";
-import {
-  AUTH_TOKEN,
-  DEVICE_PREFIX,
-  SERVER_URL,
-  STATUS_NO_CONFIG,
-  STATUS_OFFLINE,
-  STATUS_ONLINE,
-  STORAGE_DEVICE,
-  STORAGE_SINCE,
-} from "./constants";
-import { Link } from "./link";
+import "./tokens.css";
+import "./style.css";
+import "./components.css";
+import "./cards.css";
+import "./charts.css";
+import { AUTH_TOKEN, QUERY_MOCK, SERVER_URL } from "./constants";
+import { Actions } from "./core/backend";
+import { h, icon } from "./core/dom";
+import { MockBackend } from "./core/mock";
+import { Scope } from "./core/scope";
+import { Store } from "./core/store";
+import { offlineBackend, StreamLink } from "./core/stream";
+import { loadDevice, startLegacyLink } from "./legacy";
+import { agentPage } from "./pages/agent";
+import { feedPage } from "./pages/feed";
+import { lookPage } from "./pages/look";
+import { mePage } from "./pages/me";
+import { overviewPage } from "./pages/overview";
+import type { Env, Page } from "./pages/page";
+import { readerPage, resourcesPage } from "./pages/resources";
+import { rulesPage } from "./pages/rules";
+import { AppearanceStore } from "./theme/appearance";
 
-const list = document.querySelector<HTMLElement>("#list")!;
-const status = document.querySelector<HTMLElement>("#status")!;
-const form = document.querySelector<HTMLFormElement>("#composer")!;
-const input = document.querySelector<HTMLInputElement>("#input")!;
+const NAV = [
+  { path: "overview", label: "总览", icon: "layout-dashboard" },
+  { path: "feed", label: "动态", icon: "rss" },
+  { path: "agent", label: "Agent", icon: "bot" },
+  { path: "res", label: "资源", icon: "server" },
+  { path: "me", label: "我的", icon: "user" },
+] as const;
 
-const device = loadDevice();
-const seen = new Set<number>();
-let since = Number(localStorage.getItem(STORAGE_SINCE) ?? 0);
+const ROUTES: Record<string, Page> = {
+  overview: overviewPage,
+  feed: feedPage,
+  agent: agentPage,
+  res: resourcesPage,
+  me: mePage,
+  "me/rules": rulesPage,
+  "me/look": lookPage,
+  read: readerPage,
+};
 
-function loadDevice(): string {
-  let id = localStorage.getItem(STORAGE_DEVICE);
-  if (!id) {
-    id = `${DEVICE_PREFIX}-${crypto.randomUUID().slice(0, 8)}`;
-    localStorage.setItem(STORAGE_DEVICE, id);
-  }
-  return id;
-}
+const app = document.querySelector<HTMLElement>("#app")!;
+const nav = document.querySelector<HTMLElement>("#nav")!;
+const store = new Store();
+const look = new AppearanceStore();
+look.receive(look.value);
 
-function render(frame: MsgFrame): void {
-  if (seen.has(frame.seq)) return;
-  seen.add(frame.seq);
-  since = Math.max(since, frame.seq);
-  localStorage.setItem(STORAGE_SINCE, String(since));
-
-  const el = document.createElement("div");
-  el.className = frame.src === device ? "msg mine" : "msg";
-  el.textContent = frame.body.text;
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  const delay = Date.now() - frame.ts;
-  meta.textContent = `#${frame.seq} · ${frame.src} · 延迟 ${delay}ms`;
-  el.appendChild(meta);
-  list.appendChild(el);
-  list.scrollTop = list.scrollHeight;
-}
-
-if (!SERVER_URL) {
-  status.textContent = STATUS_NO_CONFIG;
+const mock = new URLSearchParams(location.search).has(QUERY_MOCK);
+const actions = new Actions(store, offlineBackend);
+if (mock) {
+  const m = new MockBackend(store);
+  actions.setBackend(m);
+  m.start();
+} else if (SERVER_URL) {
+  const s = new StreamLink({ server: SERVER_URL, token: AUTH_TOKEN, device: loadDevice(), onSettings: (v) => look.receive(v.appearance) }, store);
+  actions.setBackend(s);
+  s.start();
+  startLegacyLink();
 } else {
-  const link = new Link(
-    { server: SERVER_URL, token: AUTH_TOKEN, device, since: () => since },
-    {
-      onMessage: render,
-      onStatus: (online) => (status.textContent = online ? STATUS_ONLINE : STATUS_OFFLINE),
-    },
-  );
-  link.start();
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = input.value.trim();
-    if (!text) return;
-    if (link.send(crypto.randomUUID(), { kind: "text", text })) input.value = "";
-  });
+  store.setLink(false, "未配置服务端地址, 可加 ?mock=1 预览");
+  store.setReady(true);
 }
+
+let scope = new Scope();
+
+function route(): void {
+  const hash = location.hash.replace(/^#\/?/, "") || "overview";
+  const parts = hash.split("/");
+  const key = ROUTES[hash] ? hash : parts[0]!;
+  const page = ROUTES[key] ?? overviewPage;
+  const arg = ROUTES[hash] ? undefined : parts.slice(1).join("/") || undefined;
+  scope.dispose();
+  scope = new Scope();
+  const env: Env = { store, actions, scope, look };
+  app.replaceChildren();
+  page(app, env, arg);
+  const top = key.split("/")[0] === "read" ? "overview" : key.split("/")[0];
+  for (const a of nav.querySelectorAll("a")) a.classList.toggle("on", a.dataset.path === top);
+  window.scrollTo(0, 0);
+}
+
+nav.append(...NAV.map((n) => h("a", { href: `#/${n.path}`, "data-path": n.path }, icon(n.icon), h("span", {}, n.label))));
+window.addEventListener("hashchange", route);
+route();

@@ -2,6 +2,7 @@ package com.hengxin.aioa.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.AdaptiveGrid
 import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.CardHeader
@@ -68,7 +69,7 @@ private fun Probe(state: MetricsState, subject: String) {
     }
     if (cpu.size > 1) {
         Card {
-            CardHeader("activity", "CPU 走势", SOURCE_PROBE)
+            CardHeader(Constants.ICON_ACTIVITY, "CPU 走势", SOURCE_PROBE)
             LineChart(cpu.map { (ts, v) -> Point(clock(ts), v) }, PERCENT, threshold = CPU_ALERT)
         }
     }

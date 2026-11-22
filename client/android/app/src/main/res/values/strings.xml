@@ -43,6 +43,7 @@
     <string name="battery_already">已在电池优化白名单。已打开省电策略页, 请选 \"无限制\"</string>
     <string name="battery_open_failed">无法打开设置页, 请在系统设置里搜索 \"省电策略\"</string>
     <string name="update_need_permission">新版本已下载, 点此允许安装未知应用, 允许后返回 HX-AIOA 自动继续</string>
+    <string name="pending_notes">%1$s 更新内容:</string>
     <string name="section_link_log">连接日志</string>
-    <string name="link_log_hint">后台长连接的连接, 断开, 重连记录, 最新在前, 点代理区的刷新按钮更新。排查断线不重连时看这里。</string>
+    <string name="link_log_hint">第一行是连接与唤醒计数 (对照耗电测量用), 下面是后台长连接的连接, 断开, 重连记录, 最新在前, 点代理区的刷新按钮更新。排查断线不重连时看这里。</string>
 </resources>

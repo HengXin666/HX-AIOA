@@ -2,6 +2,9 @@ package com.hengxin.aioa
 
 object Constants {
     const val WS_PATH = "ws"
+    const val STREAM_PATH = "api/v1/stream"
+    const val QUERY_ROLE = "role"
+    const val ROLE_CLIENT = "client"
     const val QUERY_TOKEN = "token"
     const val QUERY_DEVICE = "device"
     const val QUERY_SINCE = "since"
@@ -10,14 +13,22 @@ object Constants {
     const val DEVICE_LINK = "link"
     const val DEVICE_UI = "ui"
 
-    const val PING_INTERVAL_SEC = 60L
+    // :link 的心跳只由看门狗闹钟发文本 ping (服务端自动回 pong, 不唤醒 DO), OkHttp 协议 ping 关闭, 避免双重心跳
+    const val LINK_PING_INTERVAL_SEC = 0L
+    // 界面进程只在前台连接, 短心跳便于尽快发现断线, 不影响后台耗电
+    const val UI_PING_INTERVAL_SEC = 30L
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
     const val NORMAL_CLOSE = 1000
     const val CONNECT_STALL_MS = 20_000L
     const val PROBE_TIMEOUT_MS = 5000L
-    const val WATCHDOG_INTERVAL_MS = 5 * 60_000L
-    const val WATCHDOG_WAKE_MS = 10_000L
+    // 自适应心跳: 从保守值起步, 探测成功就拉长, 探测到连接已死就退回上一个可用值并固定; 上限接近 Doze 闹钟最短间隔的整数倍
+    const val HEARTBEAT_MIN_MS = 4 * 60_000L
+    const val HEARTBEAT_MAX_MS = 14 * 60_000L
+    const val HEARTBEAT_STEP_MS = 2 * 60_000L
+    // 唤醒锁上限: 覆盖一次探测超时加一次重连; 收到 pong 或有流量免探测时立即释放
+    const val WATCHDOG_WAKE_MS = PROBE_TIMEOUT_MS + CONNECT_STALL_MS / 2
+    const val MAINTENANCE_WAKE_MS = 60_000L
 
     // 渠道 id 一旦创建, 重要性等设置就由用户掌控, 改设置只能换新 id
     const val CHANNEL_LINK = "link"
@@ -38,18 +49,48 @@ object Constants {
     const val PROXY_GROUP = "PROXY"
     const val PROXY_TEST_URL = "https://www.gstatic.com/generate_204"
     const val PROXY_TEST_TIMEOUT_MS = 3000
-    const val PROXY_OPTIMIZE_INTERVAL_MS = 60 * 60_000L
+    // 内核按需启动: 最后一次使用后空闲这么久就停掉 (长连接走代理时常驻)
+    const val PROXY_IDLE_STOP_MS = 5 * 60_000L
+    // 内核仍在跑时, 距上次测速超过这么久才在下一次按需使用时重测
+    const val PROXY_OPTIMIZE_MAX_AGE_MS = 6 * 60 * 60_000L
     const val PROXY_OPTIMIZE_DEBOUNCE_MS = 10_000L
     const val PROXY_READY_TIMEOUT_MS = 5000L
     const val PROXY_PROBE_TIMEOUT_MS = 100
     const val LOOPBACK = "127.0.0.1"
 
     const val UPDATE_MANIFEST_URL = "https://github.com/HengXin666/HX-AIOA/releases/latest/download/update.json"
+    // 更新检查与订阅刷新合并为一次维护, 搭看门狗或亮屏的唤醒执行, 不单独设闹钟
     const val UPDATE_INTERVAL_MS = 6 * 60 * 60_000L
+    const val MAINTENANCE_FIRST_DELAY_MS = 60_000L
     const val UPDATE_DIR = "update"
+
+    // 协议 v1 词汇, 与 protocol/src/v1/constants.ts 一致
+    const val PRIORITY_NEED_ME = "need_me"
+    const val PRIORITY_HAPPENING = "happening"
+    const val PRIORITY_WORTH_READING = "worth_reading"
+    const val KIND_EVENT = "event"
+    const val KIND_METRIC = "metric"
+    const val KIND_TASK = "task"
+    const val KIND_REPORT = "report"
+    const val TASK_RUNNING = "running"
+    const val TASK_WAITING = "waiting"
+    const val TASK_DONE = "done"
+    const val TASK_FAILED = "failed"
+    const val TASK_CANCELLED = "cancelled"
+    const val SEVERITY_CRITICAL = "critical"
+    const val SEVERITY_WARNING = "warning"
+    const val ACT_APPROVE = "approve"
+    const val ACT_REJECT = "reject"
+    const val ACT_REPLY = "reply"
+    const val STYLE_DANGER = "danger"
+    const val STYLE_PRIMARY = "primary"
+    const val ICON_ACTIVITY = "activity"
+    // 这些路由动作只更新界面, 不弹通知
+    val QUIET_ROUTES = setOf("silent", "digest", "aggregate", "drop")
 
     const val ACTION_RELOAD = "com.hengxin.aioa.RELOAD"
     const val ACTION_OPTIMIZE = "com.hengxin.aioa.OPTIMIZE"
     const val ACTION_WATCHDOG = "com.hengxin.aioa.WATCHDOG"
+    const val ACTION_PROXY_DEMAND = "com.hengxin.aioa.PROXY_DEMAND"
     const val ACTION_INSTALL_RESULT = "com.hengxin.aioa.INSTALL_RESULT"
 }

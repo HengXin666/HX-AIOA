@@ -1,0 +1,487 @@
+# HX-AIOA API v1 契约
+
+本文是服务端与各客户端 (Web, 安卓, Agent, 探针, 脚本) 的唯一契约。类型定义的真源是 `protocol/src/v1/`, 本文给出语义与 JSON 例子。WebSocket 帧见 [api-v1-stream.md](api-v1-stream.md)。
+
+### 实现状态 (2026-11-22, 分支 wt-proto-server)
+
+| 章节 | 状态 |
+| --- | --- |
+| §3 接入 key, 来源, 写入, Webhook, 拉取 (#3) | 已实现 (单用户: key 与来源都属于母号) |
+| §4 统一事件模型, 事件组, 总览, 报告 (#2 #7) | 已实现 |
+| §5 规则引擎 (#6) | 已实现 |
+| §6 Agent 与任务 (#4) | 已实现, 含工作台按钮动作 (`button:*`) |
+| §8 设置 | 已实现 |
+| §10 旧接口与迁移 | 已实现, 旧 `msg` 表首次启动时并入新收件箱, seq 不变 |
+| §7 工作台 (#5) | 已实现单账号版本: 下发, 删除, 显示状态, 按钮动作, 连接时推送 `space_update` |
+| §1 账号, §2 频道订阅, §9 探针管理接口 (#11) | 未实现, 本节为设计草案; 现阶段只认 `AUTH_TOKEN` (母号) 与 `hxk_` 接入 key, `to` 字段被忽略 |
+
+所有路径常量见 `protocol/src/v1/paths.ts`。
+
+## 0. 约定
+
+- 所有 JSON 字段用 camelCase。时间戳 `ts` 一律是毫秒 Unix 时间。
+- 错误统一返回 `{"error": "中文说明", "code": "snake_code"}`, HTTP 状态码见 §0.2。
+- 鉴权: `Authorization: Bearer <凭证>`。浏览器 WebSocket 不能带请求头, 改用 `?token=<凭证>`。
+- 路径里的频道名含 `/`, 需要 `encodeURIComponent`, 例如 `/api/v1/channels/nas%2Falerts`。
+
+### 0.1 凭证
+
+| 前缀 | 名称 | 来源 | 用途 |
+| --- | --- | --- | --- |
+| `hxa_` | 访问令牌 | 登录 / 刷新 | 设备访问全部 "我的" 接口与流, 有效期 `expiresIn` 秒 (3600) |
+| `hxr_` | 刷新令牌 | 登录 / 刷新 | 只能用于 `POST /auth/refresh`, 每次刷新都会换新, 旧的立即失效, 60 天未用过期 |
+| `hxk_` | 接入 key | `POST /keys` | NAS, webhook, 脚本, Agent, 探针; 只写不读, 带权限范围 |
+| `hxi_` | 邀请码 | `POST /invites` | 一次性, 带过期时间和角色 |
+| 无前缀 | 旧版 `AUTH_TOKEN` | 部署 secret | 兼容: 等价于母号 (owner) 的全权限凭证, 见 §9 |
+
+接入 key 的权限范围 (`scopes`): `messages:send` (发文本消息), `events:write` (写事件, webhook), `spaces:write` (下发工作台布局), `agent` (Agent 任务), `probe` (探针指标)。
+
+### 0.2 错误码
+
+| HTTP | code | 含义 |
+| --- | --- | --- |
+| 400 | `bad_request` | 参数或 JSON 格式错误, `error` 写明哪里错 |
+| 401 | `unauthorized` | 没带凭证, 凭证错误或已过期 (访问令牌过期后用刷新令牌换新) |
+| 403 | `forbidden` | 凭证有效但没有权限 (角色, scope, 频道白名单) |
+| 404 | `not_found` | 资源不存在 |
+| 409 | `conflict` | 名字已被占用, 已初始化等 |
+| 409 | `need_confirm` | 危险动作需要二次确认, 带 `confirm: true` 重发 |
+| 410 | `expired` | 邀请码或确认请求已过期 |
+| 429 | `rate_limited` | 接入 key 超过每分钟限速 |
+| 413 | `bad_request` | Webhook 请求体超过 256KB |
+| 503 | `not_configured` | 服务端缺少 secret (`TOKEN_SECRET` / `SETUP_CODE`) |
+| 500 | `internal` | 服务端异常 |
+
+## 1. 账号
+
+角色: `owner` (母号, 唯一), `admin`, `member`。管理员能管理账号, 但**不能读取任何子号的内容** (收件箱, 任务, 工作台, 设置都存在各自的用户 DO 中, 没有跨用户读取的接口)。管理员不能重置别人的密码 (否则等于能读), 忘记密码只能删号重新邀请。
+
+用户对象 `UserPublic`:
+
+```json
+{ "id": "u_k3j9x2m1qa", "name": "mom", "display": "妈妈", "role": "member", "status": "active", "created": 1763712000000 }
+```
+
+`status`: `active` | `pending` (等待管理员批准) | `disabled`。用户名 `name` 为 2-32 位小写字母, 数字, `_ . -`; 密码至少 8 位。
+
+### 1.1 初始化母号
+
+`POST /api/v1/setup` (无需凭证)
+
+```json
+{ "code": "部署时设置的 SETUP_CODE", "name": "hengxin", "password": "至少8位", "display": "HengXin", "device": { "name": "Pixel 8", "platform": "android" } }
+```
+
+返回 `TokenPair`。只能成功一次, 之后返回 409 `conflict`。母号的收件箱沿用旧版单用户的数据 (历史消息不丢)。
+
+`GET /api/v1/setup` 返回 `{ "done": true }` 或 `{ "done": false }`, 供客户端决定显示 "初始化" 还是 "登录"。
+
+### 1.2 登录, 刷新, 登出
+
+`POST /api/v1/auth/login`
+
+```json
+{ "name": "hengxin", "password": "...", "device": { "name": "Pixel 8", "platform": "android" } }
+```
+
+返回 `TokenPair`:
+
+```json
+{
+  "access": "hxa_eyJ1Ijoi....3q2x",
+  "refresh": "hxr_Zk9...",
+  "expiresIn": 3600,
+  "session": "s_9f2k1m0c7x",
+  "user": { "id": "u_k3j9x2m1qa", "name": "hengxin", "display": "HengXin", "role": "owner", "status": "active", "created": 1763712000000 }
+}
+```
+
+每次登录创建一个设备会话 (`session`), 在设备列表里显示。客户端应持久化 `refresh`, 在访问令牌过期 (或收到 401) 时调用:
+
+`POST /api/v1/auth/refresh` `{ "refresh": "hxr_..." }` → 新的 `TokenPair` (refresh 也换新)。刷新令牌失效 (被踢, 改密码, 过期) 返回 401, 客户端应回到登录页。
+
+`POST /api/v1/auth/logout` (访问令牌) → `{ "ok": true }`, 删除当前会话。
+
+### 1.3 我
+
+- `GET /api/v1/me` → `{ "user": UserPublic, "groups": [GroupInfo], "devices": [DeviceSession] }`
+- `POST /api/v1/me/password` `{ "old": "...", "new": "..." }` → `{ "ok": true }`, 除当前会话外的所有会话被踢下线。
+- `DELETE /api/v1/me/devices/{sessionId}` → `{ "ok": true }`, 吊销该设备的刷新令牌并立即断开它的长连接 (关闭码 4001)。
+
+`DeviceSession`: `{ "id": "s_...", "name": "Pixel 8", "platform": "android", "created": ..., "seen": ..., "current": true }`。`seen` 为最近一次登录或刷新时间。
+
+### 1.4 邀请与加入
+
+`POST /api/v1/invites` (admin / owner)
+
+```json
+{ "role": "member", "groups": ["family"], "ttlHours": 72, "needsApproval": true }
+```
+
+返回 `InviteCreated`, `code` 只在此时出现一次:
+
+```json
+{ "id": "inv_x8a...", "code": "hxi_7Hc2...", "role": "member", "groups": ["g_..."], "expires": 1763971200000, "needsApproval": true, "created": ..., "createdBy": "u_..." }
+```
+
+admin 只能邀请 `member`; owner 可邀请 `admin`。`GET /api/v1/invites` 列出未使用的邀请 (不含 code), `DELETE /api/v1/invites/{id}` 作废。
+
+`POST /api/v1/join` (无需凭证)
+
+```json
+{ "code": "hxi_7Hc2...", "name": "mom", "password": "...", "display": "妈妈", "device": { "name": "妈妈的手机", "platform": "android" } }
+```
+
+- 邀请不需要批准: 返回 `TokenPair`, 直接登录。
+- 需要批准: 返回 `{ "pending": true, "user": UserPublic }`, 管理员批准后才能用账号密码登录 (登录返回 403, `error` 说明等待批准)。
+
+### 1.5 用户管理 (admin / owner)
+
+- `GET /api/v1/users` → `{ "users": [UserPublic] }`
+- `PATCH /api/v1/users/{id}` `{ "role": "admin", "status": "disabled", "display": "..." }`: 改角色仅 owner; admin 只能管理 member。禁用会踢掉该用户全部会话。
+- `POST /api/v1/users/{id}/approve` → `UserPublic`
+- `DELETE /api/v1/users/{id}` → `{ "ok": true }`, 同时清空该用户 DO 的全部数据, 不可恢复。
+- `GET /api/v1/audit?limit=100` → `{ "entries": [AuditEntry] }`, 关键操作 (建号, 发 key, 改角色, 吊销) 的审计日志。
+
+### 1.6 群组
+
+- `GET /api/v1/groups` → `{ "groups": [GroupInfo] }` (admin 看全部, member 看自己所在的)
+- `POST /api/v1/groups` (admin) `{ "name": "family", "title": "家人", "members": ["mom", "u_..."] }` → `GroupInfo`
+- `PATCH /api/v1/groups/{id}` (admin) `{ "title": "...", "members": [...] }` (members 整体替换, 元素可以是用户 id 或用户名)
+- `DELETE /api/v1/groups/{id}` (admin)
+
+`GroupInfo`: `{ "id": "g_...", "name": "family", "title": "家人", "members": ["u_...", "u_..."] }`
+
+## 2. 频道与订阅
+
+外部系统发到**频道**, 不写收件人; 用户或群组**订阅**频道。
+
+- `GET /api/v1/channels` → `{ "channels": [ChannelInfo] }` (自己可见的)
+- `POST /api/v1/channels` `{ "name": "nas/alerts", "title": "NAS 告警", "readers": ["*"] }`
+- `PATCH /api/v1/channels/{name}` / `DELETE /api/v1/channels/{name}` (频道所有者或 admin)
+
+`readers` 决定谁能自己订阅: `"*"` 所有人, `"user:<名或id>"`, `"group:<名或id>"`, `"role:admin"`。admin 创建的频道默认 `["*"]`, member 创建的默认只有自己。接入 key 第一次发到不存在的频道时, 自动创建该频道 (所有者为 key 的主人, readers 只有主人) 并为主人建立订阅, 新来源因此不需要任何配置就能在动态里看到。
+
+- `GET /api/v1/subscriptions` → `{ "subscriptions": [SubscriptionInfo] }` (自己的和自己所在群组的)
+- `POST /api/v1/subscriptions`
+
+```json
+{ "channel": "nas/alerts", "target": "group:family", "minPriority": "need_me", "mute": { "start": "23:00", "end": "08:00", "days": "all" } }
+```
+
+`target` 省略表示自己; 给别人或群组订阅需要 admin。`minPriority` 低于阈值的事件不投递给该订阅者 (`need_me` > `happening` > `worth_reading`)。`mute` 时段内照常入库, 但不响铃 (动作降为 `silent`)。
+
+- `PATCH /api/v1/subscriptions/{id}` / `DELETE /api/v1/subscriptions/{id}`
+
+## 3. 接入 key 与来源
+
+### 3.1 接入 key
+
+`POST /api/v1/keys` (任意用户, 访问令牌)
+
+```json
+{ "name": "nas", "scopes": ["events:write"], "channels": ["nas/*"], "ratePerMin": 60, "sourceId": "src_...", "subject": "nas-01" }
+```
+
+返回 `KeyCreated`, `key` 与 `webhookSecret` 只显示这一次 (服务端只存哈希, `webhookSecret` 由服务端密钥派生, 不落库):
+
+```json
+{
+  "id": "k_p1x...", "userId": "u_...", "name": "nas", "prefix": "hxk_Ab12", "scopes": ["events:write"],
+  "channels": ["nas/*"], "ratePerMin": 60, "sourceId": "src_...", "subject": "nas-01", "created": ...,
+  "key": "hxk_Ab12....",
+  "webhookSecret": "whs_...",
+  "webhookUrls": { "github": "https://域名/api/v1/hooks/github/k_p1x...", "generic": "https://域名/api/v1/hooks/generic/k_p1x..." }
+}
+```
+
+- `channels` 为频道白名单, 支持 `*` 通配; 空数组表示不限。
+- `ratePerMin` 默认 120, 超过返回 429 (内存计数, 简单限速)。
+- `webhookSecret` 由 secret `TOKEN_SECRET` 派生; 未设置 `TOKEN_SECRET` 时为空字符串, GitHub 验签不可用 (仍可用 `?key=` 鉴权)。
+- `webhookUrls` 含全部适配器: `generic`, `github`, `uptime-kuma`, `beszel`, `healthchecks`。
+- 接入 key 只写不读: 调用任何读取接口 (如 `GET /api/v1/events`) 返回 403。
+- `GET /api/v1/keys` 列出自己的 key (admin 可加 `?all=1` 看全部, 只有元数据), `DELETE /api/v1/keys/{id}` 吊销。
+
+### 3.2 来源注册
+
+来源描述 "这是谁发来的", 决定事件在客户端显示的名称与图标, 以及默认频道, 关注对象, 优先级和默认规则。
+
+`POST /api/v1/sources`
+
+```json
+{
+  "name": "群晖 NAS", "icon": "server", "type": "webhook",
+  "subject": "nas-01", "channel": "nas/alerts", "priority": "happening",
+  "mapping": { "title": "{{alert.name}}", "summary": "{{alert.message}}", "severity": "{{level}}", "dedupeKey": "{{alert.id}}", "status": "{{state}}" },
+  "rules": [ { "name": "NAS 信息级只进摘要", "when": { "severities": ["info"] }, "action": "digest" } ],
+  "callbackUrl": "https://nas.local/aioa-callback"
+}
+```
+
+`type` 取值 `SOURCE_TYPES`: `webhook` | `github` | `uptime-kuma` | `beszel` | `healthchecks` | `agent` | `probe` | `script` | `mail` | `pull`。`icon` 只写图标名 (如 `cpu`, `server`, `github`), 客户端用内置图标库渲染。`GET/PATCH/DELETE /api/v1/sources[/{id}]`。
+
+- 请求体可带 `"key": { "scopes": ["events:write"], "ratePerMin": 60 }` (`scopes` 默认 `events:write`), 一步创建绑定该来源的 key, 返回 `SourceCreated` = `SourceInfo & { key: KeyCreated }`, 来源上记 `keyId`。
+- `GET /api/v1/source-types` → `{ "types": [SourceTypeInfo] }`: 内置来源类型的名称, 图标, 适配器, 接入说明 (`setup`) 与默认规则。客户端据此展示 "可接入的来源", 新增来源类型不需要客户端发版。
+
+key 绑定 `sourceId` 后, 该 key 写入的事件自动带上来源信息 (`source.id` 为来源 id), 未指定频道 / subject 时用来源的默认值。规则优先级: 用户规则 → 来源的 `rules` (没有时用来源类型的默认规则) → 内置规则。
+
+### 3.3 写入事件
+
+`POST /api/v1/events` (scope `events:write`), 单条或 `{ "events": [...] }` (最多 50 条)。
+
+```json
+{
+  "channel": "nas/alerts",
+  "kind": "event",
+  "subject": "nas-01",
+  "dedupeKey": "disk-sda",
+  "groupKey": "nas-01-down",
+  "data": { "title": "磁盘 sda 温度过高", "summary": "当前 62°C", "severity": "warning", "status": "firing", "url": "https://nas.local" },
+  "actions": [ { "id": "mute", "label": "静音 1 小时" }, { "id": "open", "label": "打开面板", "url": "https://nas.local" } ],
+  "ttl": 86400
+}
+```
+
+返回 `{ "id": "e_...", "delivered": 2, "channel": "nas/alerts" }` (`delivered` 为投递到的用户数)。批量返回 `{ "results": [...] }`。
+
+- 不写 `channel` 也不写 `to` 时: 用 key 来源的默认频道; 都没有则直发给 key 的主人。
+- `to`: 点名直发, 如 `["user:mom", "group:family", "role:admin"]`。member 的 key 只能发给自己和自己所在的群组。
+- `kind` 为 `event` 时可以简写, 把 `title` / `summary` / `severity` / `status` / `url` 直接写在顶层。
+- 事件字段与四种 kind 的载荷见 §4。
+
+`POST /api/v1/messages` (scope `messages:send`): `{ "text": "备份完成", "title": "可选", "channel": "...", "to": [...], "priority": "happening" }`, 是 `event` 的简写。
+
+### 3.4 Webhook 与拉取
+
+`POST /api/v1/hooks/{adapter}/{keyId}`, `adapter` 为 `generic` | `github` | `uptime-kuma` | `beszel` | `healthchecks`。鉴权: 带 `X-Hub-Signature-256` 时按 GitHub 方式用 `webhookSecret` 验签, 否则需要 `?key=hxk_...` 或 `Authorization: Bearer hxk_...` 且与路径中的 `keyId` 是同一把 key (scope `events:write`)。返回 `{ "results": [IngestResult] }`, 适配器判断无需入库时 `results` 为空。
+
+各适配器的字段映射, 去重与分组规则, 拉取式来源 (`tools/puller.mjs`) 见 [api-v1-connectors.md](api-v1-connectors.md)。新增来源 = 写适配器 (`server/src/adapters/`) + 在 `SOURCE_TYPE_INFOS` 登记, 客户端零改动。
+
+## 4. 统一事件模型
+
+所有来源进来的数据都变成 `Envelope`:
+
+```json
+{
+  "id": "e_3fa9c1d2b7e04a18",
+  "seq": 42,
+  "ts": 1763712000000,
+  "kind": "event",
+  "source": { "id": "src_x1", "name": "群晖 NAS", "icon": "server", "type": "webhook" },
+  "subject": "nas-01",
+  "channel": "nas/alerts",
+  "priority": "happening",
+  "dedupeKey": "disk-sda",
+  "groupKey": "nas-01-down",
+  "actions": [ { "id": "mute", "label": "静音 1 小时" } ],
+  "ttl": 86400,
+  "expires": 1763798400000,
+  "resolved": false,
+  "root": "e_1a2b3c4d5e6f7a8b",
+  "data": { "title": "磁盘 sda 温度过高", "summary": "当前 62°C", "severity": "warning", "status": "firing" },
+  "route": { "action": "push", "channels": ["ws", "mipush", "wxpusher"], "rule": "builtin:default" }
+}
+```
+
+- `seq`: 每个用户收件箱内递增, 断线重连按 `since` 补拉。不同用户的 `seq` 互不相关, 同一事件在各用户处 `id` 相同。
+- `priority`: `need_me` (需要我) / `happening` (正在发生) / `worth_reading` (值得一看)。不写时默认: critical 事件和等待确认的任务为 `need_me`, info 事件和报告为 `worth_reading`, 其余 `happening`。
+- `dedupeKey`: 同一来源同一 `dedupeKey` 的后续事件**覆盖**前一条: `id` 不变, `seq` 变成新的, 客户端按 `id` 替换本地记录。`resolved: true` 或 `status: "resolved"` 表示闭环。
+- `groupKey`: 关联事件 (机器掉线 → 容器离线 → 网站不可达) 用同一个 `groupKey`, 客户端折叠展示, 规则引擎只为组里第一条响铃 (根因), 其余降为 `silent`。
+- `root`: 有 `groupKey` 时为该组根因事件的 id (组内第一条未闭环的事件, 6 小时内); 根因自己的 `root` 等于自己的 `id`。
+- `cid`: 客户端用 `send` 帧发出的消息带回自己的 `cid`。
+- `ttl` (秒): 过期 (`expires`) 后从总览收起, 记录仍保留。
+
+**更新语义** (客户端统一按 "同 `id` 覆盖, 否则追加" 合并, 见 `mergeEnvelope`):
+
+| 情况 | 语义 |
+| --- | --- |
+| `event` / `report` 带 `dedupeKey` | 同来源同 `dedupeKey` 覆盖: `id` 不变, `seq` 变新, 旧行删除 |
+| `event` / `report` 不带 `dedupeKey` | 追加 |
+| `task` | 同一任务一条, `id` 为 `t_<taskId>`, 只在创建, 等待确认, 恢复运行, 完成, 失败, 取消时覆盖; 进度与对话只走 `task` / `task_log` 帧 |
+| `metric` | 不进收件箱, 每个 subject 只保留最新值 |
+| 用户收起 (`resolve`) | 覆盖为 `resolved: true` 并推给所有在线客户端 |
+- `route`: 规则引擎的决定 (见 §5), 只读, 用来追溯为什么响铃或没响。`merged` 表示被合并掉的同类条数。
+
+四种 `kind` 的 `data`:
+
+| kind | data | 是否进收件箱 |
+| --- | --- | --- |
+| `metric` | `{ "values": {"cpu": 37.5}, "units": {"cpu": "%"}, "thresholds": {"cpu": {"warn": 80, "crit": 95}} }` | 否, 只保留每个 subject 的最新值 (最多每 5 分钟落库一次), 实时转发给在看的连接 |
+| `event` | `{ "title", "summary?", "severity": "critical|warning|normal|info", "status?": "firing|resolved|ongoing", "url?" }` | 是 |
+| `task` | `TaskSnapshot`, 见 §6 | 是, 同一任务只保留一条 (按任务 id 覆盖) |
+| `report` | `{ "title", "summary?", "markdown?", "blocks?", "refs?": ["e_..."], "period?": "2026-11-21" }`, 上限 64KB | 是 |
+
+收件箱接口 (访问令牌):
+
+- `GET /api/v1/events?since=0&limit=100&kind=event` → `{ "events": [Envelope], "head": 42 }`, 按 `seq` 升序, `limit` 最大 500。
+- `POST /api/v1/events/{id}/resolve` → `{ "ok": true }`, 用户手动收起 (标记 resolved)。
+- `POST /api/v1/events/{id}/actions` `{ "actionId": "mute" }` → `{ "ok": true, "forwarded": true }`: 内置 `resolve`; 其它动作若来源配置了 `callbackUrl`, 服务端 POST `{ "event": Envelope, "action": "mute", "user": "hengxin" }` 到该地址。
+- `GET /api/v1/event-groups` → `{ "groups": [EventGroup] }`: 最近 1000 条事件中按 `groupKey` 归组, `EventGroup` = `{ "key", "root", "title", "priority", "ids", "count", "open", "first", "last" }` (`open` 为未闭环条数, `priority` 取组内最高)。
+- `GET /api/v1/metrics/latest?subjects=nas-01,vps` → `{ "metrics": { "nas-01": { "ts": ..., "values": {...}, "units": {...} } } }`
+
+### 4.1 总览 (#7)
+
+`GET /api/v1/overview` → `Overview`:
+
+```json
+{
+  "layers": {
+    "need_me": [ { "ev": Envelope, "count": 1, "ids": ["e_..."] } ],
+    "happening": [ { "ev": Envelope, "count": 3, "ids": ["e_a", "e_b", "e_c"] } ],
+    "worth_reading": [ { "ev": Envelope, "count": 1, "ids": ["e_..."] } ]
+  },
+  "tasks": [ TaskSnapshot ],
+  "generatedAt": 1763712000000
+}
+```
+
+- `need_me`: 7 天内未闭环, 未过期的 `need_me` 事件, 最多 20 组。
+- `happening`: 24 小时内未闭环的 `happening` 事件, 同 `groupKey` 折叠为一组 (`ev` 为最新一条, `ids` 为组内全部原始事件, 保证可追溯), 最多 30 组。
+- `worth_reading`: 7 天内的报告与 `worth_reading` 事件, 每次最多 10 条。
+- 规则动作为 `drop` 的事件不进总览; `digest` 只进 `worth_reading`。
+- `tasks`: 进行中与等待确认的任务。
+- 排序: 层内按时间倒序。AI 可以发一份 `report` 做归纳, 用 `refs` 指向原始事件, 原始事件始终保留。
+
+### 4.2 报告
+
+- `GET /api/v1/reports?before=<seq>&limit=20` → `{ "reports": [Envelope] }` (`kind: "report"`, 按 seq 倒序, 列表中省略 `markdown` 与 `blocks`)
+- `GET /api/v1/reports/{id}` → 完整 `Envelope`
+
+## 5. 规则引擎 (#6)
+
+规则在服务端 (Hub) 执行, 客户端只负责编辑和展示。对每条进入收件箱的事件 (含任务里程碑), 依次匹配: 用户规则 (按列表顺序, 第一条命中生效) → 来源规则 → 内置默认规则, 然后依次做降噪 (见下)。
+
+```json
+{
+  "id": "r_ab12",
+  "name": "夜里 NAS 告警不响",
+  "enabled": true,
+  "when": { "sources": ["src_*"], "subjects": ["nas-*"], "channels": ["nas/*"], "kinds": ["event"], "severities": ["warning", "normal"], "statuses": ["firing"], "priorities": ["happening"], "keywords": ["温度"] },
+  "window": { "start": "23:00", "end": "08:00", "days": "all" },
+  "action": "silent",
+  "channels": ["ws"],
+  "aggregateSec": 300,
+  "bypassQuiet": false
+}
+```
+
+- `when` 中各字段都是 "任一匹配", 字段之间是 "并且", 不写表示不限。`sources` 匹配来源 id, 名字或类型 (如 `github`), `subjects`, `channels`, `sources` 支持 `*` 通配; `statuses` 匹配 `firing|resolved|ongoing`; `keywords` 在标题和摘要中查找 (不区分大小写)。
+- `window`: 规则只在该时间窗内生效; `start > end` 表示跨午夜; `days`: `all` | `weekday` | `weekend`。时区取设置 `tz` (默认 `Asia/Shanghai`)。
+- `action`:
+
+| action | 含义 | 实时 WS | 兜底推送 | 进总览 |
+| --- | --- | --- | --- | --- |
+| `alert` | 强提醒 (客户端响铃 / 横幅) | 是 | 是 | 是 |
+| `push` | 普通推送 | 是 | 是 | 是 |
+| `silent` | 静默入库 | 是 (不提醒) | 否 | 是 |
+| `digest` | 只进摘要 | 是 (不提醒) | 否 | 只进 `worth_reading` |
+| `aggregate` | 聚合后推送: 窗口 (`aggregateSec`, 默认 300) 内的同类事件静默入库, 窗口结束推一条 "N 条 xxx" | 是 (不提醒) | 窗口结束时 | 是 |
+| `drop` | 不推但保留 (可在时间线 "已过滤" 中查到) | 否 | 否 | 否 |
+
+- `channels` (投递渠道): `ws` (长连接), `mipush`, `wxpusher`, `next_open` (不实时推, 下次打开 / 重连时补拉看到)。不写时 `alert`/`push` 为 `["ws","mipush","wxpusher"]`。兜底推送仅在安卓设备 1.5 秒内未 ack 时发出。
+- 降噪, 只作用于 `alert`/`push`, 降级后动作为 `silent` 且 `route.reason` 写明原因:
+  1. 免打扰: 设置里的 `quiet` (同 `window` 格式) 时段内降级, 除非规则 `bypassQuiet: true`。
+  2. 关联事件只推根因: 同 `groupKey` 已有未闭环的根因 (6 小时内) 时降级, `route.merged` 为组内已有条数。
+  3. 同一事件更新: 覆盖同 `id` 时, 严重程度没有升级且状态没变则降级。
+  4. 短时间同类合并: 60 秒内已有同类 (`来源|subject|标题`) 事件时降级, `route.merged` 为条数。
+- 聚合 (`aggregate`): 窗口键为 `规则|来源|subject`, 窗口内原始事件照常静默入库, 窗口结束推一条来源为 `system` 的汇总事件 `"N 条: 标题"` (`route.merged = N`, 免打扰时段内也只静默)。
+
+内置默认规则 (开箱可用, `builtin: true`, 不能修改, 可以用自己的规则覆盖):
+
+| id | 条件 | 动作 |
+| --- | --- | --- |
+| `builtin:resolved` | `kind = event` 且 `status = resolved` | `silent` |
+| `builtin:need-me` | `priority = need_me` | `alert` |
+| `builtin:reading` | `priority = worth_reading` | `digest` |
+| `builtin:default` | 其余 | `push` |
+
+接口 (访问令牌): `GET /api/v1/rules` → `{ "rules": [Rule] }` (含内置, 内置在最后); `POST /api/v1/rules` (新建, 追加到末尾) → `Rule`; `PUT /api/v1/rules/{id}` 整体替换; `DELETE /api/v1/rules/{id}`; `PUT /api/v1/rules/order` `{ "ids": [...] }` 调整顺序 (必须包含全部自定义规则); `POST /api/v1/rules/test` 请求体同 §3.3 的事件, 返回 `{ "route": RouteInfo }`, 只试算不入库, 供手机上编辑规则时预览。规则匹配结果写在事件的 `route` 中。用户规则最多 100 条, 存为一个键, 改一次只写一行。
+
+来源类型自带的默认规则 (可被用户规则覆盖): GitHub `info` 级动态只进摘要; Uptime Kuma `warning` (等待中) 聚合 5 分钟。
+
+## 6. Agent 与任务 (#4)
+
+Agent 用带 `agent` scope 的接入 key 接入, 属于 key 的主人, 任务只出现在主人的收件箱。两种接入方式, 语义相同:
+
+- **WebSocket** (推荐, 在线状态即时): `wss://域名/api/v1/stream?token=hxk_...&role=agent`, 帧见 [api-v1-stream.md](api-v1-stream.md) §3。
+- **HTTP**: 下列接口, 用 `Authorization: Bearer hxk_...`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/v1/agent/register` | `{ "agent": { "id": "dsh", "name": "DSH", "icon": "bot", "desc": "..." } }`, 同时作为 HTTP 心跳, 2 分钟内有心跳视为在线 |
+| `POST` | `/api/v1/agent/tasks` | 任务操作 `TaskOp`, 返回 `{ "task": TaskSnapshot }` |
+| `GET` | `/api/v1/agent/actions?agent=dsh` | 待处理的用户动作 `{ "actions": [UserAction] }` (含已投递未确认的) |
+| `POST` | `/api/v1/agent/actions/{aid}/ack` | 确认已处理, 之后不再重发 |
+
+`TaskOp` (Agent → 服务端):
+
+```json
+{ "taskId": "deploy-42", "op": "create", "agent": "dsh", "title": "部署 hx-aioa 到生产", "summary": "...", "subject": "vps-1" }
+{ "taskId": "deploy-42", "op": "progress", "progress": 0.4, "step": "构建镜像" }
+{ "taskId": "deploy-42", "op": "say", "text": "镜像已推送, 准备切流量" }
+{ "taskId": "deploy-42", "op": "wait", "prompt": { "question": "切换生产流量?", "options": [ { "id": "go", "label": "切换", "style": "danger" }, { "id": "hold", "label": "先不" } ], "allowText": true, "danger": true, "timeoutSec": 1800 } }
+{ "taskId": "deploy-42", "op": "done", "result": "部署完成, 耗时 3 分钟" }
+{ "taskId": "deploy-42", "op": "fail", "error": "健康检查失败" }
+```
+
+任务状态机: `running` → `waiting` (等待确认) → `running` → `done` | `failed` | `cancelled`。`agent` 省略时用连接时 `agent_hello` 声明的 id, 再没有则用 key 名。agent id 第一次注册时绑定到注册它的 key, 其它 key 不能冒用; 任务也只能由创建它的 key 继续操作。已结束的任务只接受 `say` 与重新 `create`。进度 (`progress`) 实时推帧, 最多每 30 秒落库一次。`TaskSnapshot`:
+
+```json
+{
+  "id": "deploy-42", "agent": "dsh", "title": "部署 hx-aioa 到生产", "subject": "vps-1",
+  "state": "waiting", "progress": 0.8, "step": "等待确认",
+  "prompt": { "id": "p_1", "question": "切换生产流量?", "options": [ { "id": "go", "label": "切换", "style": "danger" }, { "id": "hold", "label": "先不" } ], "allowText": true, "danger": true, "expires": 1763713800000 },
+  "created": 1763712000000, "updated": 1763712100000
+}
+```
+
+用户动作 (客户端 → 服务端): `POST /api/v1/tasks/{taskId}/actions` 或流帧 `act`:
+
+```json
+{ "aid": "a_随机", "taskId": "deploy-42", "kind": "approve", "option": "go", "confirm": true }
+```
+
+- `kind`: `reply` (回复文字), `approve`, `reject`, `cancel`, `ask` (带上下文的追问, 不改变状态)。`approve`/`reject`/`reply` 回答当前 `prompt`, 任务回到 `running`; `cancel` 使任务变成 `cancelled`。
+- 幂等: 同一 `aid` 重复提交返回 `{ "aid", "state": "duplicate" }`, 不会重复投递。
+- 二次确认: `prompt.danger` 为真或所选选项 `style: "danger"` 时, 必须带 `confirm: true`, 否则返回 409 `need_confirm`。客户端应弹出确认框后重发。
+- `reply` 在没有 `prompt` 时作为普通留言投递; 有 `prompt` 时视为回答, 但 `prompt` 有选项且 `allowText` 不为真时返回 400。`approve`/`reject` 在没有 `prompt` 时返回 409 `conflict`。
+- 超时: `prompt.expires` 之后提交返回 410 `expired`; 到期时服务端把 `prompt.expired` 置真, 任务回到 `running`, 并给 Agent 投递一条 `{ "kind": "reject", "timeout": true, "user": "system" }`。
+- 排队: Agent 离线时动作排队 (24 小时), Agent 连上 (WS) 或拉取 (HTTP) 时投递, 直到 Agent `ack`。返回的 `state`: `delivered` (Agent 在线, 已推送) / `queued`。
+
+投递给 Agent 的 `UserAction`: `{ "aid", "taskId", "kind", "option?", "text?", "ts", "user": "hengxin", "promptId?": "p_1", "timeout?": true }`。
+
+查询 (访问令牌): `GET /api/v1/tasks?state=waiting` → `{ "tasks": [TaskSnapshot] }`; `GET /api/v1/tasks/{id}` → `{ "task": TaskSnapshot, "log": [TaskLogEntry] }`, `log` 为完整对话与执行历史: `{ "ts", "role": "agent|user|system", "kind": "create|say|wait|approve|...", "text?", "data?" }`; `GET /api/v1/agents` → `{ "agents": [AgentStatus] }`。
+
+## 7. 工作台 (#5)
+
+已实现 (单账号), 见 [api-v1-spaces.md](api-v1-spaces.md)。
+
+## 8. 设置 (随账号同步)
+
+- `GET /api/v1/settings` → `{ "settings": { "appearance": {...}, "tz": "Asia/Shanghai", "quiet": { "start": "23:00", "end": "08:00" } } }`
+- `PATCH /api/v1/settings` `{ "appearance": { "theme": "dark", "accent": "#3b82f6", "radius": 16, "density": "compact" }, "quiet": null }`: 逐键合并, 值为 `null` 删除该键。每个值不超过 16KB, 最多 64 个键。改动后该用户其它在线设备收到 `settings` 帧。
+
+服务端识别的键: `tz` (IANA 时区), `quiet` (免打扰时间窗), `wxpusherUid` (WxPusher 兜底推送的 UID)。其余键 (如 `appearance`) 服务端原样保存, 由客户端定义。
+
+## 9. 探针 (#11)
+
+- `POST /api/v1/probes` (访问令牌) `{ "subject": "nas-01" }` → `{ "subject": "nas-01", "key": "hxk_...", "install": "curl -fsSL ... | sudo AIOA_SERVER=... AIOA_TOKEN=... AIOA_SUBJECT=nas-01 sh" }`。每个探针一个独立 key (scope `probe` + `events:write`, 绑定 `subject`, 只能提供这个主体)。
+- `GET /api/v1/probes` → `{ "probes": [ { "subject", "keyId", "online", "config" } ] }`
+- `PUT /api/v1/probes/{subject}/config` `{ "idleSampleMs": 60000, "liveIntervalMs": 2000, "alerts": { "cpu": 90, "mem": 90, "temp": 85 } }`: 保存并立即通过 `probe_config` 帧下发给在线探针, 探针每次连上也会收到。
+
+## 10. 旧接口与迁移
+
+| 旧 | 状态 |
+| --- | --- |
+| `GET /ws?token=&device=&since=` | 保留。收到的仍是旧 `msg` 帧 (任何事件被压成一行文本), 新事件模型的 `seq` 与旧消息连续 |
+| `POST /api/send` | 保留。等价于 `POST /api/v1/messages` 直发给凭证主人 |
+| `GET /api/messages` | 保留, 返回旧 `MsgFrame` 数组 |
+| `AUTH_TOKEN` | 保留。等价于母号的全权限凭证 (所有 scope + 读取), 可用于 `/ws`, `/api/v1/stream` (任意 role), 所有 `/api/v1` 接口 |
+| 旧 `msg` 表 | 新版首次启动时在一个事务里并入 `ev` 表 (id 为 `m_<seq>`, seq 不变) 后删除 |
+
+迁移步骤: (1) 部署新版本并设置 `TOKEN_SECRET`, `SETUP_CODE`; 旧探针与旧安卓继续用 `AUTH_TOKEN` 工作, 消息进母号收件箱。(2) 新客户端调用 `POST /api/v1/setup` 建母号, 旧单用户的历史消息自动归母号。(3) 给每台探针 / 每个脚本建独立 key, 逐个替换。(4) 全部替换后删除 `AUTH_TOKEN` secret, 旧凭证即失效。
+
+## 11. 其它
+
+- `GET /health` → `{ "ok": true, "v": 2 }`
+- 更新公告: 安卓 `update.json` 的 `notes` 字段为多行文本 (每行一条 "- 标题"), 新增 `changes` 数组 (`[{ "title": "...", "sha": "abc1234" }]`); 旧客户端只读 `notes`, 兼容。

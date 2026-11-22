@@ -1,4 +1,14 @@
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+
+export * from "./v1/constants";
+export * from "./v1/event";
+export * from "./v1/task";
+export * from "./v1/space";
+export * from "./v1/rule";
+export * from "./v1/frames";
+export * from "./v1/api";
+export * from "./v1/source";
+export * from "./v1/paths";
 
 export const PING_TEXT = "ping";
 export const PONG_TEXT = "pong";
@@ -43,7 +53,7 @@ export type MsgFrame = {
   cid?: string;
 };
 export type SentFrame = { t: "sent"; cid: string; seq: number; ts: number };
-export type ErrFrame = { t: "err"; code: string; text: string };
+export type ErrFrame = { t: "err"; code: string; text: string; aid?: string };
 export type ProbesFrame = { t: "probes"; subjects: string[] };
 export type DemandFrame = { t: "demand"; subjects: string[]; intervalMs: number };
 export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame | ProbesFrame;

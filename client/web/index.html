@@ -1,21 +1,14 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="system">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>HX-AIOA</title>
-    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header>
-      <strong>HX-AIOA</strong>
-      <span id="status">未连接</span>
-    </header>
-    <main id="list"></main>
-    <form id="composer">
-      <input id="input" autocomplete="off" placeholder="说点什么..." />
-      <button type="submit">发送</button>
-    </form>
+    <div id="bg" aria-hidden="true"></div>
+    <main id="app"></main>
+    <nav id="nav"></nav>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

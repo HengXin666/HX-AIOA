@@ -19,25 +19,31 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 
-// 单条长连接: 协议层 ping 保活 (服务端不计费也不唤醒), 网络切换立即重连, 失败指数退避, 看门狗兜底深睡后的假在线
+// 单条长连接: 优先连 v1 流, 服务端还没有 v1 (握手 404) 时退回旧 /ws; 网络切换立即重连, 失败指数退避
+// pingSec 为 0 时不开 OkHttp 协议 ping, 心跳完全交给看门狗的 check, 一条连接只有一个心跳来源
 class LinkSocket(
     private val context: Context,
     private val device: String,
     private val since: () -> Long,
     private val listener: Listener,
     private val forLink: Boolean,
+    pingSec: Long = Constants.UI_PING_INTERVAL_SEC,
 ) {
     interface Listener {
         fun onFrame(frame: ServerFrame)
         fun onStatus(online: Boolean)
+        fun onNetwork() {}
     }
+
+    /** 一次健康检查的结论, 看门狗据此调整心跳间隔并决定何时释放唤醒锁。 */
+    enum class Probe { ALIVE, SKIPPED, DEAD, OFFLINE }
 
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
     // 建连 (含读配置, 探测本机代理端口) 放在后台线程, 回调统一切回主线程
     private val handler = Handler(worker.looper)
     private val main = Handler(Looper.getMainLooper())
     private val client = Net.base.newBuilder()
-        .pingInterval(Constants.PING_INTERVAL_SEC, TimeUnit.SECONDS)
+        .pingInterval(pingSec, TimeUnit.SECONDS)
         .build()
 
     @Volatile
@@ -51,12 +57,19 @@ class LinkSocket(
     private var connectAt = 0L
     private var probeAt = 0L
     private var lastPong = 0L
+    private var probeDone: ((Probe) -> Unit)? = null
+    // 旧服务端没有 v1 流时置位, 本进程内不再尝试 v1
+    private var legacy = false
+
+    @Volatile
+    private var lastRx = 0L
     private val reconnectTask = Runnable { connect() }
     private val probeCheck = Runnable { verifyProbe() }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             handler.post { log("网络可用"); reconnectNow() }
+            main.post { listener.onNetwork() }
         }
 
         override fun onLost(network: Network) {
@@ -87,35 +100,54 @@ class LinkSocket(
         handler.post { log("代理路径变化, 重建连接"); reconnectNow() }
     }
 
-    // 看门狗调用: 没连上且不在建连中就立刻重连; 显示在线则发应用层 ping, 等不到 pong 就判死重连
-    fun check() = handler.post {
-        if (!running) return@post
+    /** 距上次收到任何数据的毫秒数, 用它判断 NAT 映射是否刚被刷新过。 */
+    fun idleMs(): Long = SystemClock.elapsedRealtime() - lastRx
+
+    // 看门狗调用: 没连上且不在建连中就立刻重连; 在线且最近 skipIdleMs 内有流量就不发探测, 否则发文本 ping 等 pong
+    fun check(skipIdleMs: Long, done: (Probe) -> Unit) = handler.post {
+        if (!running) return@post done(Probe.OFFLINE)
         val now = SystemClock.elapsedRealtime()
         when {
-            open -> probe(now)
+            open && now - lastRx < skipIdleMs -> done(Probe.SKIPPED)
+            open -> probe(now, done)
             now - connectAt > Constants.CONNECT_STALL_MS -> {
                 log("看门狗: 当前离线, 立即重连")
                 reconnectNow()
+                done(Probe.OFFLINE)
             }
-            else -> Unit
+            else -> done(Probe.OFFLINE)
         }
     }
 
-    private fun probe(now: Long) {
+    private fun probe(now: Long, done: (Probe) -> Unit) {
         probeAt = now
         if (socket?.send(Frames.PING) != true) {
             log("看门狗: 发送探测失败, 重连")
             reconnectNow()
-            return
+            return done(Probe.DEAD)
         }
+        probeDone?.invoke(Probe.SKIPPED)
+        probeDone = done
         handler.removeCallbacks(probeCheck)
         handler.postDelayed(probeCheck, Constants.PROBE_TIMEOUT_MS)
     }
 
+    private fun onPong() {
+        lastPong = SystemClock.elapsedRealtime()
+        val done = probeDone ?: return
+        probeDone = null
+        handler.removeCallbacks(probeCheck)
+        done(Probe.ALIVE)
+    }
+
     private fun verifyProbe() {
-        if (!running || !open || lastPong >= probeAt) return
+        val done = probeDone
+        probeDone = null
+        if (!running || !open) return done?.invoke(Probe.OFFLINE) ?: Unit
+        if (lastPong >= probeAt) return done?.invoke(Probe.ALIVE) ?: Unit
         log("看门狗: ${Constants.PROBE_TIMEOUT_MS / MS_PER_SEC}s 内没收到 pong, 连接已死, 重连")
         reconnectNow()
+        done?.invoke(Probe.DEAD)
     }
 
     private fun log(event: String) {
@@ -134,17 +166,26 @@ class LinkSocket(
         socket?.cancel()
         socket = null
         open = false
+        handler.removeCallbacks(probeCheck)
+        probeDone?.invoke(Probe.OFFLINE)
+        probeDone = null
         connectAt = SystemClock.elapsedRealtime()
         val config = ConfigStore.load(context) ?: return log("未配置服务端, 不连接")
         val base = runCatching { config.server.toHttpUrl() }.getOrNull() ?: return log("服务端地址无效")
-        val url = base.newBuilder()
-            .addPathSegment(Constants.WS_PATH)
+        val builder = base.newBuilder()
+        if (legacy) {
+            builder.addPathSegment(Constants.WS_PATH)
+        } else {
+            builder.addPathSegments(Constants.STREAM_PATH).addQueryParameter(Constants.QUERY_ROLE, Constants.ROLE_CLIENT)
+        }
+        val url = builder
             .addQueryParameter(Constants.QUERY_TOKEN, config.token)
             .addQueryParameter(Constants.QUERY_DEVICE, device)
             .addQueryParameter(Constants.QUERY_SINCE, since().toString())
             .build()
         val proxy = Net.proxy(context, forLink)
-        log(if (proxy.type() == java.net.Proxy.Type.DIRECT) "开始连接 (直连)" else "开始连接 (代理)")
+        val route = if (proxy.type() == java.net.Proxy.Type.DIRECT) "直连" else "代理"
+        log("开始连接 ($route, ${if (legacy) "旧 /ws" else "v1"})")
         val routed = client.newBuilder().proxy(proxy).build()
         socket = routed.newWebSocket(Request.Builder().url(url).build(), SocketListener())
     }
@@ -162,15 +203,18 @@ class LinkSocket(
             handler.post {
                 if (webSocket !== socket) return@post
                 open = true
+                lastRx = SystemClock.elapsedRealtime()
                 retryMs = Constants.RECONNECT_MIN_MS
+                if (forLink) LinkStats.hit(LinkStats.Key.CONNECT)
                 log("已连接")
             }
             main.post { listener.onStatus(true) }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            lastRx = SystemClock.elapsedRealtime()
             if (text == Frames.PONG) {
-                handler.post { lastPong = SystemClock.elapsedRealtime() }
+                handler.post { onPong() }
                 return
             }
             val frame = Frames.parse(text) ?: return
@@ -185,15 +229,22 @@ class LinkSocket(
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = lost(webSocket, "已关闭 $code $reason")
 
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (response?.code == HTTP_NOT_FOUND && !legacy) {
+                handler.post { if (webSocket === socket) legacy = true }
+            }
             lost(webSocket, "连接失败: ${response?.code?.let { "HTTP $it " }.orEmpty()}${t.javaClass.simpleName} ${t.message.orEmpty()}")
+        }
 
         private fun lost(webSocket: WebSocket, why: String) {
             handler.post {
                 if (webSocket !== socket) return@post
                 log(why)
+                if (forLink && open) LinkStats.hit(LinkStats.Key.DISCONNECT)
                 socket = null
                 open = false
+                probeDone?.invoke(Probe.DEAD)
+                probeDone = null
                 main.post { listener.onStatus(false) }
                 scheduleReconnect()
             }
@@ -202,6 +253,7 @@ class LinkSocket(
 
     private companion object {
         const val MS_PER_SEC = 1000L
+        const val HTTP_NOT_FOUND = 404
         val worker: HandlerThread by lazy { HandlerThread("link-socket").apply { start() } }
     }
 }

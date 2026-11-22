@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """生成增量补丁与 update.json, 供 CI 发布使用。
 
-用法: release.py --apk 新包 --version N --base-url 下载前缀 --out 输出目录 [--old 版本号=旧包路径 ...]
+用法: release.py --apk 新包 --version N --base-url 下载前缀 --out 输出目录 [--changes changes.json] [--old 版本号=旧包路径 ...]
+changes.json 由 release_notes.py 生成; notes 为每行一条 "- 标题" 的多行文本, 旧客户端只读 notes。
 补丁格式 HXPATCH1 见 client/android/.../update/BsPatch.kt。
 """
 import argparse
@@ -73,15 +74,19 @@ def main() -> None:
     ap.add_argument("--base-url", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--notes", default="")
+    ap.add_argument("--changes", default="")
     ap.add_argument("--old", action="append", default=[])
     args = ap.parse_args()
 
     new = open(args.apk, "rb").read()
     apk_name = f"HX-AIOA-{args.version}.apk"
+    changes = json.load(open(args.changes, encoding="utf-8")) if args.changes else []
+    notes = "\n".join(f"- {c['title']}" for c in changes) or args.notes
     manifest = {
         "versionCode": args.version,
         "versionName": f"0.1.{args.version}",
-        "notes": args.notes,
+        "notes": notes,
+        "changes": changes,
         "apk": {"url": f"{args.base_url}/{apk_name}", "size": len(new), "sha256": sha256(new)},
         "patches": [],
     }

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.net.Net
+import com.hengxin.aioa.net.ProxyCore
+import com.hengxin.aioa.net.ProxyDemand
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
@@ -13,8 +15,15 @@ import java.security.MessageDigest
 
 data class UpdateFile(val url: String, val size: Long, val sha256: String)
 data class UpdatePatch(val fromSha256: String, val file: UpdateFile)
-data class UpdateManifest(val versionCode: Long, val versionName: String, val notes: String, val apk: UpdateFile, val patches: List<UpdatePatch>)
+data class UpdateManifest(
+    val versionCode: Long,
+    val versionName: String,
+    val notes: List<String>,
+    val apk: UpdateFile,
+    val patches: List<UpdatePatch>,
+)
 
+// 代理内核按需启动: 先按当前路径请求, 失败再拉起内核走代理重试一次
 // 检查更新 -> 优先下载增量补丁 (要求本机 APK 的 sha256 与补丁起点一致) -> 带进度下载 -> 校验 -> 交给 Installer
 class Updater(private val context: Context) {
 
@@ -31,7 +40,7 @@ class Updater(private val context: Context) {
         return UpdateManifest(
             versionCode = json.getLong("versionCode"),
             versionName = json.optString("versionName"),
-            notes = json.optString("notes"),
+            notes = ReleaseNotes.parse(json),
             apk = file(json.getJSONObject("apk")),
             patches = (0 until (patches?.length() ?: 0)).map {
                 val p = patches!!.getJSONObject(it)
@@ -52,6 +61,8 @@ class Updater(private val context: Context) {
                     progress.on("已是最新版本")
                     return false
                 }
+                ReleaseNotes.remember(context, ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes))
+                progress.on("发现新版本 ${manifest.versionName}, 准备下载")
                 val apk = prepare(manifest, progress)
                 if (!context.packageManager.canRequestPackageInstalls()) {
                     File(dir(), PERMISSION_MARK).createNewFile()
@@ -63,6 +74,19 @@ class Updater(private val context: Context) {
                 return true
             }
         }
+    }
+
+    // 新版本首次启动的公告: 本地存过就直接用, 没有就拉 update.json, 版本号对得上才采用; 网络失败下次启动再试
+    fun announcement(): ReleaseNote? {
+        val current = currentVersion()
+        if (!ReleaseNotes.unseen(context, current)) return null
+        ReleaseNotes.find(context, current)?.let { return it }
+        val manifest = runCatching { fetchManifest() }.getOrNull() ?: return null
+        if (manifest.versionCode != current || manifest.notes.isEmpty()) {
+            ReleaseNotes.markShown(context, current)
+            return null
+        }
+        return ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes).also { ReleaseNotes.remember(context, it) }
     }
 
     private fun prepare(manifest: UpdateManifest, progress: Progress): File {
@@ -88,6 +112,8 @@ class Updater(private val context: Context) {
     }
 
     private fun fetchTo(file: UpdateFile, target: File, label: String, progress: Progress): File {
+        // 安装包较大, 配了订阅就先拉起代理, 避免直连慢速下载长时间占着网络
+        ProxyDemand.ensure(context)
         Net.client(context).newCall(Request.Builder().url(file.url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("下载失败 ${resp.code}")
             val total = file.size.coerceAtLeast(1)
@@ -117,7 +143,11 @@ class Updater(private val context: Context) {
 
     private fun mb(bytes: Long) = "%.1f".format(bytes / BYTES_PER_MB)
 
-    private fun download(url: String): ByteArray =
+    private fun download(url: String): ByteArray = runCatching { get(url) }.getOrElse { first ->
+        if (!ProxyCore.listening() && ProxyDemand.ensure(context)) get(url) else throw first
+    }
+
+    private fun get(url: String): ByteArray =
         Net.client(context).newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("请求失败 ${resp.code}")
             resp.body!!.bytes()

@@ -10,6 +10,7 @@ composeBom = "2025.10.01"
 okhttp = "4.12.0"
 coroutines = "1.10.2"
 orgjson = "20250517"
+roborazzi = "1.79.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -21,6 +22,7 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 org-json = { group = "org.json", name = "json", version.ref = "orgjson" }
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "coroutines" }
+roborazzi-compose-desktop = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose-desktop", version.ref = "roborazzi" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 [plugins]
@@ -31,4 +33,5 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 compose-hot-reload = { id = "org.jetbrains.compose.hot-reload", version.ref = "hotReload" }

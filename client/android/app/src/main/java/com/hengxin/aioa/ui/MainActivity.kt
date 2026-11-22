@@ -28,6 +28,8 @@ import com.hengxin.aioa.R
 import com.hengxin.aioa.config.AppearanceStore
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.AioaTheme
+import com.hengxin.aioa.update.ReleaseNote
+import com.hengxin.aioa.update.ReleaseNotes
 import com.hengxin.aioa.update.Updater
 import com.hengxin.aioa.link.LinkService
 
@@ -35,6 +37,9 @@ class MainActivity : ComponentActivity() {
 
     private val chat: ChatModel by viewModels()
     private val settings: SettingsModel by viewModels()
+
+    // 非空时显示更新公告抽屉
+    private var notes by mutableStateOf<List<ReleaseNote>?>(null)
 
     private val notifyPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -45,6 +50,7 @@ class MainActivity : ComponentActivity() {
             notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         if (chat.configured) LinkService.start(this)
+        announce()
         val actions = SystemActions(::requestBatteryWhitelist, ::openAppSettings, ::openNotificationSettings)
         setContent {
             var prefs by remember { mutableStateOf(AppearanceStore.load(this)) }
@@ -70,8 +76,9 @@ class MainActivity : ComponentActivity() {
                             Shell(chat, prefs, { next ->
                                 prefs = next
                                 AppearanceStore.save(this, next)
-                            }) { showSettings = true }
+                            }, ::showHistory) { showSettings = true }
                         }
+                        notes?.let { NotesSheet(it, ::closeNotes) }
                     }
                 }
             }
@@ -82,6 +89,25 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         chat.resume()
         resumePendingUpdate()
+    }
+
+    // 新版本首次启动弹一次更新公告; 本地没有说明时会拉一次 update.json, 放后台线程
+    private fun announce() {
+        val context = applicationContext
+        Thread {
+            val note = runCatching { Updater(context).announcement() }.getOrNull() ?: return@Thread
+            runOnUiThread { notes = listOf(note) }
+        }.start()
+    }
+
+    private fun showHistory() {
+        notes = ReleaseNotes.history(this).take(HISTORY_SHOWN)
+    }
+
+    private fun closeNotes() {
+        notes = null
+        val context = applicationContext
+        Thread { runCatching { ReleaseNotes.markShown(context, Updater(context).currentVersion()) } }.start()
     }
 
     // 从 "安装未知应用" 授权页回来后, 用已下载的安装包继续安装
@@ -136,6 +162,7 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val SCHEME_PACKAGE = "package"
+        const val HISTORY_SHOWN = 5
         const val MIUI_POWER_PKG = "com.miui.powerkeeper"
         const val MIUI_POWER_ACTIVITY = "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
         const val MIUI_SECURITY_PKG = "com.miui.securitycenter"

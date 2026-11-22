@@ -1,79 +1,216 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   ANDROID_DEVICE_PREFIX,
-  PROBE_DEVICE_PREFIX,
   PING_TEXT,
   PONG_TEXT,
+  PROBE_DEVICE_PREFIX,
+  PROTOCOL_VERSION,
   QUERY_DEVICE,
+  QUERY_ROLE,
   QUERY_SINCE,
+  STREAM_PATH,
+  STREAM_ROLES,
   parseClientFrame,
-  previewOf,
-  type Body,
+  parseStreamFrame,
   type ClientFrame,
-  type MsgFrame,
-  type SendResult,
-  type ServerFrame,
+  type StreamClientFrame,
+  type StreamRole,
 } from "@hx-aioa/protocol";
+import { AgentService } from "./agents";
+import { handleHttp, principalOf } from "./api";
+import { messageInput } from "./api-events";
+import { Config } from "./config";
 import {
+  ABNORMAL_CLOSE,
+  CODE_BAD_REQUEST,
+  CODE_FORBIDDEN,
+  CODE_UNAUTHORIZED,
   ERR_BAD_FRAME,
-  ERR_NEED_WS,
-  ERR_TOO_LONG,
-  FALLBACK_DELAY_MS,
+  ERR_FORBIDDEN,
+  ERR_UNAUTHORIZED,
+  HISTORY_DEFAULT_LIMIT,
   HISTORY_MAX_LIMIT,
   KEY_ACKED_SEQ,
-  KEY_PENDING_SEQ,
   KEY_PUSH_TOKEN,
-  MAX_TEXT_LENGTH,
-  ABNORMAL_CLOSE,
-  NO_STATUS_CLOSE,
   NORMAL_CLOSE,
+  NO_STATUS_CLOSE,
+  OVERVIEW_SCAN,
+  OWNER_ID,
+  PROTO_LEGACY,
+  PROTO_V1,
+  TIMER_AGG_PREFIX,
+  TIMER_FALLBACK,
+  TIMER_PROMPT_PREFIX,
   UNKNOWN_DEVICE,
 } from "./constants";
+import { type Core, type Principal, allowed } from "./core";
 import type { Env } from "./env";
-import { hasFallback, sendFallback } from "./notify";
-import { type Attachment, MetricRouter, isProbe } from "./metrics";
-import { MessageStore } from "./store";
+import { buildOverview } from "./group";
+import { ApiFail, fail } from "./http";
+import { toMsgFrame } from "./legacy";
+import { MetricRouter, isProbe } from "./metrics";
+import { Pipeline } from "./pipeline";
+import { Registry } from "./registry";
+import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
+import { EventStore } from "./store";
+import { Spaces } from "./spaces";
+import { TaskStore } from "./taskstore";
+import { Timers } from "./timers";
 
-
-// 单实例消息中枢, 只用休眠 API, 空闲时不计运行时长
+// 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
-  private readonly store: MessageStore;
-  private readonly metrics: MetricRouter;
+  private readonly core: Core;
+  private readonly timers: Timers;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.store = new MessageStore(ctx.storage.sql);
-    this.metrics = new MetricRouter(() => this.ctx.getWebSockets());
+    const sql = ctx.storage.sql;
+    const all = () => this.ctx.getWebSockets();
+    const store = new EventStore(sql, (fn) => ctx.storage.transactionSync(fn));
+    const config = new Config(ctx.storage);
+    const metrics = new MetricRouter(all, sql);
+    const sockets = new Sockets(all);
+    this.timers = new Timers(ctx.storage);
+    const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers);
+    const spaces = new Spaces(ctx.storage);
+    const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
+    this.core = { env, store, registry: new Registry(sql), config, pipeline, agents, metrics, sockets, spaces };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
   override async fetch(req: Request): Promise<Response> {
-    if (req.headers.get("Upgrade") !== "websocket") {
-      return new Response(ERR_NEED_WS, { status: 426 });
-    }
+    if (req.headers.get("Upgrade") !== "websocket") return handleHttp(this.core, req);
     const url = new URL(req.url);
+    const who = await principalOf(this.core, req, url);
+    if (!who) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
+    const v1 = url.pathname === STREAM_PATH;
     const device = url.searchParams.get(QUERY_DEVICE) || UNKNOWN_DEVICE;
-    const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
+    const roleRaw = url.searchParams.get(QUERY_ROLE) ?? (device.startsWith(PROBE_DEVICE_PREFIX) ? "probe" : "client");
+    const role = (STREAM_ROLES as readonly string[]).includes(roleRaw) ? (roleRaw as StreamRole) : null;
+    if (!role || !this.mayConnect(who, role, device)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
 
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
     this.ctx.acceptWebSocket(server, [device]);
-    server.serializeAttachment({ device } satisfies Attachment);
+    const att: Attachment = { device, proto: v1 ? PROTO_V1 : PROTO_LEGACY, role };
+    if (!who.owner) att.keyId = who.key.id;
+    server.serializeAttachment(att);
 
-    this.reply(server, { t: "welcome", head: this.store.head() });
-    if (!device.startsWith(PROBE_DEVICE_PREFIX)) this.reply(server, this.metrics.probes());
+    const head = this.core.store.head();
+    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role });
+    else sendFrame(server, { t: "welcome", head });
+    if (role !== "client") return new Response(null, { status: 101, webSocket: client });
+    sendFrame(server, this.core.metrics.probes());
+    if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
+    if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
+    const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
     if (Number.isFinite(since)) {
-      for (const frame of this.store.since(since, HISTORY_MAX_LIMIT)) this.reply(server, frame);
+      for (const ev of this.core.store.since(since, HISTORY_MAX_LIMIT)) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));
     }
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  private mayConnect(who: Principal, role: StreamRole, device: string): boolean {
+    if (role === "client") return who.owner;
+    if (role === "agent") return allowed(who, "agent");
+    if (!allowed(who, "probe") || !device.startsWith(PROBE_DEVICE_PREFIX)) return false;
+    return who.owner || !who.key.subject || device === `${PROBE_DEVICE_PREFIX}-${who.key.subject}`;
+  }
+
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const frame = typeof data === "string" ? parseClientFrame(data) : null;
-    if (!frame) {
-      this.reply(ws, { t: "err", code: "bad_frame", text: ERR_BAD_FRAME });
-      return;
+    if (typeof data !== "string") return void this.err(ws, CODE_BAD_REQUEST, ERR_BAD_FRAME);
+    const att = attOf(ws);
+    try {
+      if (att.proto === PROTO_V1) {
+        let obj: unknown;
+        try {
+          obj = JSON.parse(data);
+        } catch {
+          return void this.err(ws, CODE_BAD_REQUEST, ERR_BAD_FRAME);
+        }
+        const f = typeof obj === "object" && obj !== null ? parseStreamFrame(obj as Record<string, unknown>) : null;
+        if (typeof f === "string") return void this.err(ws, CODE_BAD_REQUEST, f, (obj as { aid?: string }).aid);
+        if (f) return await this.handleStream(ws, att, f);
+      }
+      const frame = parseClientFrame(data);
+      if (!frame) return void this.err(ws, CODE_BAD_REQUEST, ERR_BAD_FRAME);
+      await this.handleLegacy(ws, att, frame);
+    } catch (e) {
+      const aid = (() => {
+        try {
+          return (JSON.parse(data) as { aid?: string }).aid;
+        } catch {
+          return undefined;
+        }
+      })();
+      if (e instanceof ApiFail) this.err(ws, e.code, e.message, aid);
+      else this.err(ws, "internal", String(e), aid);
     }
-    await this.handle(ws, frame);
+  }
+
+  private async handleStream(ws: WebSocket, att: Attachment, f: StreamClientFrame): Promise<void> {
+    const agents = this.core.agents;
+    const isAgent = att.role === "agent";
+    if ((f.t === "task" || f.t === "agent_hello" || f.t === "act_ack") !== isAgent) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
+    switch (f.t) {
+      case "act": {
+        const { t: _t, ...input } = f;
+        const r = await agents.act(input, OWNER_ID);
+        sendFrame(ws, { t: "act_ok", ...r });
+        return;
+      }
+      case "overview": {
+        const overview = buildOverview(this.core.store.recent(OVERVIEW_SCAN), agents.list(null, HISTORY_DEFAULT_LIMIT), Date.now());
+        sendFrame(ws, { t: "overview", overview });
+        return;
+      }
+      case "task": {
+        const { t: _t, ...op } = f;
+        const fallback = att.agents?.length === 1 ? att.agents[0] : undefined;
+        const task = await agents.op(op, fallback ? { keyId: att.keyId ?? null, agent: fallback } : { keyId: att.keyId ?? null });
+        sendFrame(ws, { t: "task", task });
+        return;
+      }
+      case "agent_hello":
+        agents.hello(ws, f.agent);
+        return;
+      case "act_ack":
+        agents.ack(f.aid, { keyId: att.keyId ?? null });
+        return;
+    }
+  }
+
+  private async handleLegacy(ws: WebSocket, att: Attachment, frame: ClientFrame): Promise<void> {
+    const metrics = this.core.metrics;
+    switch (frame.t) {
+      case "watch":
+        ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
+        metrics.primeWatcher(ws, frame.subjects.filter((s) => !(att.watch ?? []).includes(s)));
+        metrics.rebalance();
+        return;
+      case "offer":
+        if (!isProbe(att)) return;
+        ws.serializeAttachment({ ...att, offer: frame.subjects, demand: [] } satisfies Attachment);
+        metrics.rebalance();
+        return;
+      case "metric":
+        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.relay(frame);
+        return;
+      case "send": {
+        if (att.role !== "client") return;
+        const input = messageInput({ text: frame.body.text });
+        if (typeof input === "string") return this.err(ws, CODE_BAD_REQUEST, input);
+        // 自己发给自己的备忘不响铃, 也不触发兜底推送
+        const ev = await this.core.pipeline.fromInput(input, { source: { id: att.device, name: att.device }, cid: frame.cid }, { action: "silent", channels: ["ws"], reason: "本人发送" });
+        sendFrame(ws, { t: "sent", cid: frame.cid, seq: ev.seq, ts: ev.ts });
+        return;
+      }
+      case "ack":
+        if (att.device.startsWith(ANDROID_DEVICE_PREFIX)) await this.ctx.storage.put(KEY_ACKED_SEQ, frame.seq);
+        return;
+      case "reg":
+        if (att.role === "client") await this.ctx.storage.put(KEY_PUSH_TOKEN, frame.pushToken);
+        return;
+    }
   }
 
   override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
@@ -91,100 +228,25 @@ export class Hub extends DurableObject<Env> {
   }
 
   private release(ws: WebSocket): void {
-    ws.serializeAttachment({ device: (ws.deserializeAttachment() as Attachment).device, watch: [], offer: [] });
-    this.metrics.rebalance();
+    const att = attOf(ws);
+    ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [] } satisfies Attachment);
+    this.core.metrics.rebalance();
+    if (att.role === "agent") this.core.agents.broadcastAgents();
   }
 
   override async alarm(): Promise<void> {
-    const pending = (await this.ctx.storage.get<number>(KEY_PENDING_SEQ)) ?? 0;
-    const acked = (await this.ctx.storage.get<number>(KEY_ACKED_SEQ)) ?? 0;
-    await this.ctx.storage.delete(KEY_PENDING_SEQ);
-    if (pending <= acked) return;
-
-    const missed = this.store.since(acked, HISTORY_MAX_LIMIT);
-    const last = missed[missed.length - 1];
-    if (!last) return;
-    await sendFallback(this.env, {
-      preview: previewOf(last.body),
-      count: missed.length,
-      pushToken: await this.ctx.storage.get<string>(KEY_PUSH_TOKEN),
-    });
-  }
-
-  async post(src: string, body: Body, cid?: string): Promise<SendResult> {
-    if (body.text.length > MAX_TEXT_LENGTH) throw new Error(ERR_TOO_LONG);
-    const ts = Date.now();
-    const seq = this.store.append(src, body, cid, ts);
-    const frame: MsgFrame = { t: "msg", seq, ts, src, body };
-    if (cid) frame.cid = cid;
-    this.broadcast(frame);
-    if (!src.startsWith(ANDROID_DEVICE_PREFIX)) await this.armFallback(seq);
-    return { seq, ts };
-  }
-
-  async history(since: number, limit: number): Promise<MsgFrame[]> {
-    return this.store.since(since, limit);
-  }
-
-  private async handle(ws: WebSocket, frame: ClientFrame): Promise<void> {
-    const att = ws.deserializeAttachment() as Attachment;
-    const { device } = att;
-    switch (frame.t) {
-      case "watch":
-        ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
-        this.metrics.primeWatcher(ws, frame.subjects.filter((s) => !(att.watch ?? []).includes(s)));
-        this.metrics.rebalance();
-        return;
-      case "offer":
-        if (!isProbe(att)) return;
-        ws.serializeAttachment({ ...att, offer: frame.subjects, demand: [] } satisfies Attachment);
-        this.metrics.rebalance();
-        return;
-      case "metric":
-        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) this.metrics.relay(frame);
-        return;
-      case "send": {
-        try {
-          const r = await this.post(device, frame.body, frame.cid);
-          this.reply(ws, { t: "sent", cid: frame.cid, seq: r.seq, ts: r.ts });
-        } catch (e) {
-          this.reply(ws, { t: "err", code: "send_failed", text: String(e) });
-        }
-        return;
-      }
-      case "ack":
-        if (device.startsWith(ANDROID_DEVICE_PREFIX)) {
-          await this.ctx.storage.put(KEY_ACKED_SEQ, frame.seq);
-        }
-        return;
-      case "reg":
-        await this.ctx.storage.put(KEY_PUSH_TOKEN, frame.pushToken);
-        return;
-    }
-  }
-
-  // 已有待触发的闹钟时只更新 pending, 合并多条消息为一次兜底推送
-  private async armFallback(seq: number): Promise<void> {
-    if (!hasFallback(this.env)) return;
-    await this.ctx.storage.put(KEY_PENDING_SEQ, seq);
-    if ((await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + FALLBACK_DELAY_MS);
-    }
-  }
-
-  private broadcast(frame: ServerFrame): void {
-    const text = JSON.stringify(frame);
-    for (const ws of this.ctx.getWebSockets()) {
-      if (isProbe(ws.deserializeAttachment() as Attachment)) continue;
+    for (const name of await this.timers.takeDue(Date.now())) {
       try {
-        ws.send(text);
-      } catch {
-        // 连接已失效, 由运行时回收
+        if (name === TIMER_FALLBACK) await this.core.pipeline.runFallback();
+        else if (name.startsWith(TIMER_AGG_PREFIX)) await this.core.pipeline.flushBucket(name.slice(TIMER_AGG_PREFIX.length));
+        else if (name.startsWith(TIMER_PROMPT_PREFIX)) await this.core.agents.expire(name.slice(TIMER_PROMPT_PREFIX.length));
+      } catch (e) {
+        console.error("定时任务失败:", name, e);
       }
     }
   }
 
-  private reply(ws: WebSocket, frame: ServerFrame): void {
-    ws.send(JSON.stringify(frame));
+  private err(ws: WebSocket, code: string, text: string, aid?: string): void {
+    sendFrame(ws, aid ? { t: "err", code, text, aid } : { t: "err", code, text });
   }
 }

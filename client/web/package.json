@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@hx-aioa/protocol": "0.1.0"
+    "@hx-aioa/protocol": "0.1.0",
+    "lucide-static": "^1.77.0"
   },
   "devDependencies": {
     "vite": "^5.4.11"
