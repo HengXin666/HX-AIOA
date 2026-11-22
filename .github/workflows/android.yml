@@ -33,6 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 生成更新说明要看到上一个发布标签以来的提交
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -90,6 +93,17 @@ jobs:
             fi
           done
 
+      - name: 生成更新说明
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh release list --limit 20 --json tagName --jq '.[].tagName' | grep '^android-' | head -n 1 || true)
+          if [ -n "$prev" ] && ! git rev-parse -q --verify "refs/tags/$prev" >/dev/null; then
+            git fetch --quiet origin "refs/tags/$prev:refs/tags/$prev" || prev=""
+          fi
+          python tools/release_notes.py --since "$prev" --out "$RUNNER_TEMP/changes.json" | tee "$RUNNER_TEMP/notes.md"
+          [ -s "$RUNNER_TEMP/notes.md" ] || git log -1 --pretty='- %s' > "$RUNNER_TEMP/notes.md"
+
       - name: 生成补丁与 update.json
         if: github.event_name != 'pull_request'
         run: |
@@ -100,6 +114,7 @@ jobs:
             --base-url "https://github.com/${{ github.repository }}/releases/download/$TAG" \
             --out "$RUNNER_TEMP/out" \
             --notes "$(git log -1 --pretty=%s)" \
+            --changes "$RUNNER_TEMP/changes.json" \
             $(cat "$RUNNER_TEMP/old.args")
 
       - uses: actions/upload-artifact@v4
@@ -115,5 +130,46 @@ jobs:
           gh release create "$TAG" "$RUNNER_TEMP"/out/* \
             --target "${{ github.sha }}" \
             --title "安卓 #$VERSION" \
-            --notes "$(git log -1 --pretty=%s)" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --latest
+
+  # 组件截图: 桌面目标渲染, 不需要安卓 SDK; PR 中先用目标分支录基线, 再对比本分支, 差异图作为产物
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: 录制基线 (目标分支)
+        if: github.event_name == 'pull_request'
+        working-directory: client/android
+        run: |
+          git checkout --quiet "origin/${{ github.base_ref }}"
+          if [ -f ui/src/desktopTest/kotlin/com/hengxin/aioa/kit/KitScreenshotTest.kt ]; then
+            gradle :ui:recordRoborazziDesktop -PdesktopOnly=true --no-daemon || true
+          fi
+          git checkout --quiet "${{ github.sha }}"
+
+      - name: 截图与对比
+        working-directory: client/android
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -d ui/build/outputs/roborazzi ]; then
+            gradle :ui:compareRoborazziDesktop -PdesktopOnly=true --no-daemon
+          else
+            gradle :ui:recordRoborazziDesktop -PdesktopOnly=true --no-daemon
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_number }}
+          path: client/android/ui/build/outputs/roborazzi/
