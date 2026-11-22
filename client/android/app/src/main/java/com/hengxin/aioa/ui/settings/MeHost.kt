@@ -49,8 +49,8 @@ class MeDeps(
 
 /** "我的" 导航: 手机单栏, 子页从右滑入, 返回键回到列表; 宽屏左列表右详情。 */
 @Composable
-fun MeHost(deps: MeDeps) {
-    var page by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
+fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
+    var page by rememberSaveable(initial) { mutableStateOf(initial) }
     val toRoot = { page = SettingsPage.ROOT }
     BackHandler(enabled = page != SettingsPage.ROOT, onBack = toRoot)
     val chat = deps.chat

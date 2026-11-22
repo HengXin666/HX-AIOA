@@ -71,7 +71,11 @@ class SourcesState(private val context: Context, private val scope: CoroutineSco
         }
     }
 
-    fun startAdd() {
+    /** 添加页预选的类型, 由别的页面 (如 GitHub 空状态) 直接带进来; 用过即清。 */
+    var addType by mutableStateOf<String?>(null)
+
+    fun startAdd(type: String? = null) {
+        addType = type
         error = null
         screen = SourcesScreen.ADD
         if (types.isEmpty()) refresh()

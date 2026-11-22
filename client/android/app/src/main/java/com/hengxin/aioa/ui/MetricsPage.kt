@@ -9,6 +9,7 @@ import com.hengxin.aioa.kit.CardHeader
 import com.hengxin.aioa.kit.CardState
 import com.hengxin.aioa.kit.LineChart
 import com.hengxin.aioa.kit.Point
+import com.hengxin.aioa.kit.SettingRow
 import com.hengxin.aioa.kit.StatCard
 import com.hengxin.aioa.kit.Text
 import java.text.SimpleDateFormat
@@ -27,12 +28,13 @@ private enum class MetricTile { CPU, MEM, LOAD, TEMP }
 
 /** 资源页: 上方是 Agent 下发的工作台, 下方是在线探针; 可见时 watch 两者用到的主体, 离开即取消, 服务端随之让探针停推。 */
 @Composable
-fun MetricsPage(chat: ChatModel) {
+fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
     val state = chat.metrics
     val spaces = chat.spaces
     val current = spaces.spaces.firstOrNull { it.id == spaces.currentId } ?: spaces.spaces.firstOrNull()
     WatchProbes(state, current?.metricSubjects().orEmpty())
     PageColumn("资源") {
+        Card { SettingRow(ICON_GITHUB, GITHUB_TITLE, chat.github.repos.size.takeIf { it > 0 }?.let { "$it 个仓库" }.orEmpty(), openGithub) }
         if (spaces.spaces.isNotEmpty()) {
             PageSection("工作台")
             SpacesSection(chat)
