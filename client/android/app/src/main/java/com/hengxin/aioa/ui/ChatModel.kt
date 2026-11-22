@@ -56,7 +56,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     @Volatile
     private var lastSeq = 0L
-    private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
+    private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true, ui = true)
     val metrics = MetricsState { socket.send(Frames.watch(it)) }
     val feed = FeedState(socket::send) { raw ->
         viewModelScope.launch(Dispatchers.IO) { runCatching { ApiCache.write(app, CACHE_OVERVIEW, org.json.JSONObject(raw)) } }

@@ -17,6 +17,8 @@ object Constants {
     const val LINK_PING_INTERVAL_SEC = 0L
     // 界面进程只在前台连接, 短心跳便于尽快发现断线, 不影响后台耗电
     const val UI_PING_INTERVAL_SEC = 30L
+    // 界面连接连续这么多个心跳间隔收不到任何数据才重连
+    const val UI_DEAD_INTERVALS = 3
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
     const val NORMAL_CLOSE = 1000
