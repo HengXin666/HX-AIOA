@@ -12,7 +12,11 @@ ICONS = [
     "memory-stick", "message-circle", "moon", "palette", "plug", "refresh-cw", "server", "settings", "sun",
     "thermometer", "user", "wifi-off",
     "bot", "chevron-down", "chevron-up", "file-text", "layout-dashboard", "maximize-2", "minimize-2", "send", "shield-check",
+    "git-branch", "git-pull-request", "circle-dot", "git-commit-horizontal", "tag", "star", "message-square",
+    "circle-play", "external-link",
 ]
+# Lucide 已移除品牌图标, 这些名字借用相近图标的路径
+ALIASES = {"github": "git-branch"}
 OUT = Path(__file__).resolve().parent.parent / "client/android/ui/src/commonMain/kotlin/com/hengxin/aioa/kit/LucideIcons.kt"
 
 
@@ -64,11 +68,15 @@ def main() -> int:
         "internal object LucidePaths {",
         "    val all: Map<String, List<String>> = mapOf(",
     ]
+    bodies = {}
     for name in ICONS:
         root = ET.fromstring(fetch(name))
         paths = [to_path(el) for el in root if el.tag.split("}")[-1] != "title"]
         body = ", ".join('"' + p.replace('"', "") + '"' for p in paths)
+        bodies[name] = body
         lines.append(f'        "{name}" to listOf({body}),')
+    for alias, target in ALIASES.items():
+        lines.append(f'        "{alias}" to listOf({bodies[target]}),')
     lines += ["    )", "}", ""]
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines), encoding="utf-8")
