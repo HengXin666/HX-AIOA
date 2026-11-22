@@ -115,6 +115,10 @@ object Constants {
     const val AUTH_LOGOUT_PATH = "api/v1/auth/logout"
     const val ME_PATH = "api/v1/me"
     const val ME_DEVICES_PATH = "api/v1/me/devices"
+    const val ME_PASSWORD_PATH = "api/v1/me/password"
+    const val SETTINGS_PATH = "api/v1/settings"
+    // 消息分组 (群放进组) 存在账号设置里, 多端同步
+    const val SETTING_CHAT_FOLDERS = "chatFolders"
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"

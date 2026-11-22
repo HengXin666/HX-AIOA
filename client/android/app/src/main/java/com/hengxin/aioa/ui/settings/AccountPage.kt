@@ -21,9 +21,12 @@ import com.hengxin.aioa.ui.SettingsModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 private const val DELETE = "DELETE"
 private const val GET = "GET"
+private const val POST = "POST"
+private const val PASSWORD_MIN = 8
 
 private data class Device(val id: String, val name: String, val platform: String, val current: Boolean)
 
@@ -46,6 +49,8 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
+    var oldPw by remember { mutableStateOf("") }
+    var newPw by remember { mutableStateOf("") }
     val c = Aioa.colors
 
     // 登录状态变化后让常驻连接与界面连接都换上新凭证
@@ -116,6 +121,27 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
                                 val r = withContext(Dispatchers.IO) { Api.call(context, DELETE, listOf(Constants.ME_DEVICES_PATH, d.id)) }
                                 if (r.error != null) message = r.error else devices = devices.filter { it.id != d.id }
                             }
+                        }
+                    }
+                }
+            }
+            SettingsGroup("修改密码", "改完后其它设备都会下线, 本机保持登录。") {
+                InputRow("原密码", oldPw, "", secret = true) { oldPw = it }
+                RowDivider(false)
+                InputRow("新密码", newPw, "至少 8 位", secret = true) { newPw = it }
+                RowDivider()
+                ActionRow(if (busy) "提交中..." else "修改密码", enabled = !busy && oldPw.isNotEmpty() && newPw.length >= PASSWORD_MIN) {
+                    busy = true
+                    scope.launch {
+                        val body = JSONObject().put("old", oldPw).put("new", newPw)
+                        val r = withContext(Dispatchers.IO) { Api.call(context, POST, listOf(Constants.ME_PASSWORD_PATH), body) }
+                        busy = false
+                        if (r.error != null) message = r.error
+                        else {
+                            oldPw = ""
+                            newPw = ""
+                            devices = devices.filter { it.current }
+                            message = "密码已修改, 其它设备已下线"
                         }
                     }
                 }
