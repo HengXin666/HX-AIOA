@@ -71,6 +71,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun save(): Boolean {
+        if (proxyBusy) return false
         val config = AppConfig(server.trim(), token.trim(), subscription.trim(), proxyLink)
         if (!config.valid && !(config.server.isNotBlank() && Auth.signedIn(app))) {
             proxyMessage = "服务端地址不能为空, 令牌和账号登录至少要有一个"
@@ -150,13 +151,26 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
 
     // 内核在 :link 进程里重启并拉取订阅, 这里逐秒显示进度, 结束时给出明确结论
     private fun pollProxy() {
+        proxyBusy = true
         viewModelScope.launch {
+            try { pollSteps() } finally { proxyBusy = false }
+        }
+    }
+
+    private suspend fun pollSteps() {
+        val pollStart = System.currentTimeMillis()
+        run {
             for (step in 1..POLL_TIMES) {
                 delay(POLL_STEP_MS)
                 proxy = withContext(Dispatchers.IO) { loadProxy() }
                 if (proxy.nodes.isNotEmpty()) {
                     proxyMessage = "订阅解析出 ${proxy.nodes.size} 个节点, 当前 ${proxy.current ?: "未选择"}"
-                    return@launch
+                    return
+                }
+                val sub = withContext(Dispatchers.IO) { Subscription.status(app) }
+                if (sub != null && !sub.ok && sub.at >= pollStart) {
+                    proxyMessage = "订阅下载失败, 原因见上方报错"
+                    return
                 }
                 val stage = if (proxy.running) "内核已启动, 正在拉取订阅" else "正在启动代理内核"
                 proxyMessage = "$stage... ${step * POLL_STEP_MS / MS_PER_SEC}s"
