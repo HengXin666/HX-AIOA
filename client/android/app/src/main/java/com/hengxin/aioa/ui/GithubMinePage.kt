@@ -45,7 +45,7 @@ fun TodayCard(mine: GithubMine) {
             Box(Modifier.weight(1f)) { Text("今天" + if (t.login.isNotEmpty()) " · ${t.login}" else "", c.text, GH_ROW_SP, weight = FontWeight.Medium) }
         }
         Row(Modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-            SummaryCell(t.stats.commits, "提交", Modifier.weight(1f))
+            SummaryCell(t.stats.pushes, "推送", Modifier.weight(1f))
             SummaryCell(t.stats.prs, LABEL_PR, Modifier.weight(1f))
             SummaryCell(t.stats.issues, LABEL_ISSUE, Modifier.weight(1f))
             SummaryCell(t.stats.repos, "仓库", Modifier.weight(1f))
