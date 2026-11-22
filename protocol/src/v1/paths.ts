@@ -22,6 +22,9 @@ export const PATH_AGENT_REGISTER = `${API_V1}/agent/register`;
 export const PATH_AGENT_TASKS = `${API_V1}/agent/tasks`;
 export const PATH_AGENT_ACTIONS = `${API_V1}/agent/actions`;
 export const PATH_TASKS = `${API_V1}/tasks`;
+export const PATH_GITHUB_REPOS = `${API_V1}/github/repos`;
+export const PATH_GITHUB_REPO = `${API_V1}/github/repos/{owner}/{name}`;
+export const PATH_GITHUB_SYNC = `${API_V1}/github/sync`;
 
 export const QUERY_KIND = "kind";
 export const QUERY_BEFORE = "before";

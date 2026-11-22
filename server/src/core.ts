@@ -2,6 +2,7 @@ import type { KeyInfo, Scope } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
 import type { Config } from "./config";
 import type { Env } from "./env";
+import type { GithubService } from "./github/service";
 import type { MetricRouter } from "./metrics";
 import type { Pipeline } from "./pipeline";
 import type { Registry } from "./registry";
@@ -22,6 +23,7 @@ export type Core = {
   metrics: MetricRouter;
   sockets: Sockets;
   spaces: Spaces;
+  github: GithubService;
 };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };

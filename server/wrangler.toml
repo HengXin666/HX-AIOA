@@ -14,6 +14,10 @@ new_sqlite_classes = ["Hub"]
 # 绑定自己的域名, workers.dev 在中国大陆多数无法直连
 # 用 zone 内惯用的 route 模式 (与该 zone 其它子域一致), 不声明 custom_domain,
 # 否则会与页面上已存在的 cdn.woa.qzz.io CNAME 争抢记录, 部署时报 100117
+# 有 GITHUB_TOKEN 时每 30 分钟回填一次 GitHub 页面状态
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[routes]]
 pattern = "aioa.woa.qzz.io/*"
 zone_name = "woa.qzz.io"
@@ -25,3 +29,4 @@ zone_name = "woa.qzz.io"
 # MIPUSH_PACKAGE        可选, 安卓包名
 # WXPUSHER_APP_TOKEN    可选, WxPusher 应用 token
 # WXPUSHER_UID          可选, WxPusher 用户 UID
+# GITHUB_TOKEN          可选, GitHub 只读 fine-grained token, 用于 GitHub 页面回填
