@@ -19,7 +19,7 @@ class Notifier(private val context: Context, private val db: MessageDb) {
     private val events = EventNotifier(context)
 
     fun linkNotification(): Notification =
-        NotifyKit.builder(context, Constants.CHANNEL_LINK, R.drawable.ic_stat_link, withLarge = false)
+        NotifyKit.builder(context, Constants.CHANNEL_LINK, R.drawable.ic_stat_app)
             .setContentTitle(context.getString(R.string.link_running))
             .setContentIntent(NotifyKit.openApp(context))
             .setOngoing(true)
