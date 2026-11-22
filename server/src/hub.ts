@@ -24,6 +24,9 @@ import {
 import { handleAccounts } from "./accounts/api";
 import { ERR_MEMBER_NO_KEYS, HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from "./accounts/constants";
 import { Accounts, type Session } from "./accounts/service";
+import { verifyPassword } from "./accounts/crypto";
+import { messageInput } from "./api-events";
+import { cfUsage } from "./api-cf";
 import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
@@ -66,7 +69,14 @@ import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
 import { EventStore } from "./store";
 import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
+import { Terminals } from "./terminal";
 import { Timers } from "./timers";
+
+const TERM_SOURCE = "终端";
+const CF_SOURCE = "CF 额度";
+const KEY_CF_ALERT = "cf_alert_day";
+const CF_ALERT_RATIO = 0.8;
+const PCT = 100;
 
 // 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
@@ -88,8 +98,29 @@ export class Hub extends DurableObject<Env> {
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
     const registry = new Registry(sql);
     const github = new GithubService(env, sql, ctx.storage, registry);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql) };
+    const terms = new Terminals(all, () => env.TOKEN_SECRET || env.AUTH_TOKEN, (text, loud) => this.termAudit(text, loud));
+    const checkPassword = async (id: string, pw: string) => verifyPassword(pw, this.acct().dir.passOf(id) ?? "");
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql), terms, checkPassword };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
+  }
+
+  // RPC (cron 每 30 分钟): 任一额度用到 80% 时提醒一次, 每天最多一条
+  async cfCheck(): Promise<void> {
+    const u = await cfUsage(this.env);
+    const hot = (u.items ?? []).filter((i) => i.used >= i.limit * CF_ALERT_RATIO);
+    if (!hot.length || !u.day || (await this.ctx.storage.get<string>(KEY_CF_ALERT)) === u.day) return;
+    await this.ctx.storage.put(KEY_CF_ALERT, u.day);
+    const text = `今天 (UTC) 的 CF 免费额度已用超过 80%: ${hot.map((i) => `${i.label} ${Math.round((i.used / i.limit) * PCT)}%`).join(", ")}`;
+    const input = messageInput({ text });
+    if (typeof input !== "string") await this.core.pipeline.fromInput(input, { source: { id: CF_SOURCE, name: CF_SOURCE }, sourceInfo: null });
+  }
+
+  // 终端开关记一条消息到 "终端" 群: 打开时按规则提醒, 关闭时静默
+  private async termAudit(text: string, loud: boolean): Promise<void> {
+    const input = messageInput({ text });
+    if (typeof input === "string") return;
+    const origin = { source: { id: TERM_SOURCE, name: TERM_SOURCE }, sourceInfo: null };
+    await this.core.pipeline.fromInput(input, origin, loud ? undefined : { action: "silent", channels: ["ws"], reason: "终端关闭" });
   }
 
   // 主 Hub 才有账号目录; 子号 DO 只收主 Hub 转发来的请求
@@ -183,6 +214,7 @@ export class Hub extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, session ? [device, SESSION_TAG_PREFIX + session] : [device]);
     const att: Attachment = { device, proto: v1 ? PROTO_V1 : PROTO_LEGACY, role };
     if (!who.owner) att.keyId = who.key.id;
+    if (role === "probe") att.shell = allowed(who, "probe:shell");
     server.serializeAttachment(att);
 
     const head = this.core.store.head();
@@ -295,6 +327,12 @@ export class Hub extends DurableObject<Env> {
       case "host":
         if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.host(ws, att, frame);
         return;
+      case "term_open":
+      case "term_ready":
+      case "term":
+      case "term_resize":
+      case "term_close":
+        return this.core.terms.handle(ws, att, frame);
       case "send": {
         if (att.role !== "client") return;
         const input = chatInput(this.core.store, frame);
@@ -329,7 +367,8 @@ export class Hub extends DurableObject<Env> {
 
   private release(ws: WebSocket): void {
     const att = attOf(ws);
-    ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [], host: undefined } satisfies Attachment);
+    ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [], host: undefined, terms: [] } satisfies Attachment);
+    this.core.terms.release(ws, att);
     if (att.host) this.core.metrics.offline(att.host);
     this.core.metrics.rebalance();
     if (att.host) this.core.metrics.broadcastHosts();

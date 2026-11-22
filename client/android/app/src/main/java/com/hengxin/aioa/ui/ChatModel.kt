@@ -20,6 +20,7 @@ import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.proto.Frames
+import com.hengxin.aioa.ui.term.TermHub
 import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.TaskSnapshot
@@ -58,6 +59,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private var lastSeq = 0L
     private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true, ui = true)
     val metrics = MetricsState { socket.send(Frames.watch(it)) }
+    val terms = TermHub(socket::send)
     val feed = FeedState(socket::send) { raw ->
         viewModelScope.launch(Dispatchers.IO) { runCatching { ApiCache.write(app, CACHE_OVERVIEW, org.json.JSONObject(raw)) } }
     }
@@ -119,12 +121,12 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onStatus(online: Boolean) {
         this.online = online
-        if (online) metrics.onOnline()
+        if (online) metrics.onOnline() else terms.onOffline()
         if (online) CrashLog.take(getApplication())?.let { send(CRASH_TITLE + FENCE + "\n" + it + "\n" + FENCE) }
     }
 
     override fun onFrame(frame: ServerFrame) {
-        if (metrics.onFrame(frame) || spaces.onFrame(frame)) return
+        if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {

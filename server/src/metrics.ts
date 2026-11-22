@@ -36,7 +36,9 @@ export class MetricRouter {
 
   // 主机快照只存进探针连接的 attachment, 不写库; 在看资源页的连接顺带收到
   host(ws: WebSocket, att: Attachment, frame: HostFrame): void {
-    const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info: frame.info };
+    const info = { ...frame.info };
+    if (!att.shell) delete info.shell;
+    const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info };
     if (frame.last) card.last = frame.last;
     if (frame.avail !== undefined) card.avail = frame.avail;
     ws.serializeAttachment({ ...att, host: card } satisfies Attachment);
@@ -45,7 +47,8 @@ export class MetricRouter {
 
   // 探针断开: 唯一一次写库, 留一行离线快照给卡片显示 "最后在线"
   offline(card: HostCard): void {
-    const body: HostCard = { ...card, online: false, seen: Date.now() };
+    const { shell: _s, ...info } = card.info;
+    const body: HostCard = { ...card, info, online: false, seen: Date.now() };
     this.sql.exec("INSERT OR REPLACE INTO probe_host (subject, body) VALUES (?, ?)", card.subject, JSON.stringify(body));
   }
 

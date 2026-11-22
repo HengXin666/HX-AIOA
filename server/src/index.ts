@@ -18,8 +18,8 @@ export default {
     return env.HUB.get(env.HUB.idFromName(HUB_NAME)).fetch(new Request(req, { headers }));
   },
   async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (!env.GITHUB_TOKEN) return;
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
-    ctx.waitUntil(hub.githubSync().then((r) => console.log("GitHub 定时同步:", JSON.stringify(r))));
+    if (env.GITHUB_TOKEN) ctx.waitUntil(hub.githubSync().then((r) => console.log("GitHub 定时同步:", JSON.stringify(r))));
+    if (env.CF_API_TOKEN && env.CF_ACCOUNT_ID) ctx.waitUntil(hub.cfCheck().catch((e) => console.error("CF 额度检查失败:", e)));
   },
 } satisfies ExportedHandler<Env>;

@@ -26,6 +26,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     NOTIFY("通知设置", "bell"),
     APPEARANCE("外观", "palette"),
     SYSTEM("系统权限", "shield-check"),
+    CF_USAGE("CF 额度", "gauge"),
     UPDATE("更新", ICON_REFRESH),
     ABOUT("关于", "bot"),
 }

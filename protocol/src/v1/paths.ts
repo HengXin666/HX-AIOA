@@ -58,3 +58,6 @@ export const PATH_USER_APPROVE = `${API_V1}/users/{id}/approve`;
 export const PATH_GROUPS = `${API_V1}/groups`;
 export const PATH_GROUP = `${API_V1}/groups/{id}`;
 export const PATH_AUDIT = `${API_V1}/audit`;
+export const PATH_PROBES = `${API_V1}/probes`;
+export const PATH_SHELL_TICKET = `${API_V1}/shell/ticket`;
+export const PATH_CF_USAGE = `${API_V1}/cf/usage`;

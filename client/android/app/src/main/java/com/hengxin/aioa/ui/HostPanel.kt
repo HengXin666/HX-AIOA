@@ -1,6 +1,8 @@
 package com.hengxin.aioa.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,7 +46,7 @@ private const val DASH = "-"
 
 /** 主机卡片: 名称, IP, 系统, CPU / 内存 / 磁盘 用量, 网速, 负载, 在线率。有人在看时用实时点, 否则用 10 分钟快照。 */
 @Composable
-fun HostPanel(state: MetricsState, host: HostCard) {
+fun HostPanel(state: MetricsState, host: HostCard, onTerminal: (() -> Unit)? = null) {
     val c = Aioa.colors
     val live = if (host.online) state.samples[host.subject]?.lastOrNull() else null
     val v = host.last?.values.orEmpty() + live?.values.orEmpty()
@@ -67,6 +69,9 @@ fun HostPanel(state: MetricsState, host: HostCard) {
         Row(Modifier.fillMaxWidth()) {
             Text("在线率 ${host.avail?.let { "${one(it)}%" } ?: DASH} (24h)", c.textSecondary, 12, Modifier.weight(1f))
             host.bootAt?.takeIf { host.online }?.let { Text("已运行 ${uptime(it)}", c.textSecondary, 12) }
+        }
+        if (onTerminal != null && host.online && host.shell) {
+            Text("打开终端 ›", c.accent, 13, Modifier.clickable(onClick = onTerminal).padding(top = 4.dp), FontWeight.Medium)
         }
     }
     val cpu = state.series(host.subject, FIELD_CPU)

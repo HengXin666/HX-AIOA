@@ -27,7 +27,7 @@ export type TaskState = (typeof TASK_STATES)[number];
 export const ROLES = ["owner", "admin", "member"] as const;
 export type Role = (typeof ROLES)[number];
 
-export const SCOPES = ["messages:send", "events:write", "events:read", "spaces:write", "agent", "probe"] as const;
+export const SCOPES = ["messages:send", "events:write", "events:read", "spaces:write", "agent", "probe", "probe:shell"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 export const RULE_ACTIONS = ["alert", "push", "silent", "digest", "aggregate", "drop"] as const;

@@ -2,6 +2,10 @@ name = "hx-aioa"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
+# install.sh 与探针脚本走静态资源 (不进 Worker, 不计请求额度); probe*.mjs 由部署时从 tools/ 复制
+[assets]
+directory = "./public"
+
 # 免费计划只能使用 SQLite 存储的 Durable Object
 [[durable_objects.bindings]]
 name = "HUB"

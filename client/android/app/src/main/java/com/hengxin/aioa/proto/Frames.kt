@@ -16,6 +16,9 @@ private const val KEY_AID = "aid"
 private const val T_OVERVIEW = "overview"
 private const val T_EV = "ev"
 private const val T_TASK = "task"
+private const val KEY_SID = "sid"
+private const val KEY_COLS = "cols"
+private const val KEY_ROWS = "rows"
 
 sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
@@ -46,6 +49,10 @@ sealed interface ServerFrame {
     data class Agents(val agents: List<AgentStatus>) : ServerFrame
     data class ChatSync(val topic: String, val channel: String?) : ServerFrame
     data class TaskLog(val taskId: String, val role: String, val kind: String, val text: String?, val ts: Long) : ServerFrame
+    // 终端: d 为 base64 字节, 原样交给 xterm
+    data class TermReady(val sid: String) : ServerFrame
+    data class TermData(val sid: String, val d: String) : ServerFrame
+    data class TermClose(val sid: String, val reason: String?) : ServerFrame
 }
 
 data class MetricPoint(val ts: Long, val values: Map<String, Double>)
@@ -65,6 +72,8 @@ data class HostCard(
     val bootAt: Long?,
     val last: MetricPoint?,
     val avail: Double?,
+    /** 探针本机开了终端且 key 有 probe:shell 权限。 */
+    val shell: Boolean = false,
 )
 
 // 与 protocol/src/index.ts 及 protocol/src/v1/frames.ts 保持一致, 协议改动先改那边; 未知 t 忽略
@@ -104,6 +113,9 @@ object Frames {
             "task_log" -> o.getJSONObject("entry").let { e ->
                 ServerFrame.TaskLog(o.getString("taskId"), e.optString("role"), e.optString("kind"), e.optString(KEY_TEXT).ifEmpty { null }, e.optLong(KEY_TS))
             }
+            "term_ready" -> ServerFrame.TermReady(o.getString(KEY_SID))
+            "term" -> ServerFrame.TermData(o.getString(KEY_SID), o.getString("d"))
+            "term_close" -> ServerFrame.TermClose(o.getString(KEY_SID), o.optString("reason").ifEmpty { null })
             else -> null
         }
     }
@@ -138,6 +150,7 @@ object Frames {
             bootAt = num("bootAt")?.toLong(),
             last = h.optJSONObject("last")?.let { runCatching { point(it) }.getOrNull() },
             avail = if (h.has("avail")) h.optDouble("avail") else null,
+            shell = info.optBoolean("shell"),
         )
     }
 
@@ -155,6 +168,17 @@ object Frames {
         fwd?.let { o.put("fwd", it) }
         return o.toString()
     }
+
+    /** 开终端会话: ticket 是输入密码换来的 60 秒票据。 */
+    fun termOpen(sid: String, subject: String, ticket: String, cols: Int, rows: Int): String =
+        JSONObject().put(KEY_T, "term_open").put(KEY_SID, sid).put("subject", subject).put("ticket", ticket).put(KEY_COLS, cols).put(KEY_ROWS, rows).toString()
+
+    fun term(sid: String, b64: String): String = JSONObject().put(KEY_T, "term").put(KEY_SID, sid).put("d", b64).toString()
+
+    fun termResize(sid: String, cols: Int, rows: Int): String =
+        JSONObject().put(KEY_T, "term_resize").put(KEY_SID, sid).put(KEY_COLS, cols).put(KEY_ROWS, rows).toString()
+
+    fun termClose(sid: String): String = JSONObject().put(KEY_T, "term_close").put(KEY_SID, sid).toString()
 
     fun ack(seq: Long): String = JSONObject().put(KEY_T, "ack").put(KEY_SEQ, seq).toString()
 

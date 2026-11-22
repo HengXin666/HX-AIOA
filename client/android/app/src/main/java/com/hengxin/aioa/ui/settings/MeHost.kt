@@ -103,6 +103,7 @@ private fun Detail(p: SettingsPage, deps: MeDeps, onBack: (() -> Unit)?, toRoot:
         SettingsPage.NOTIFY -> NotifyPage(deps.actions, onBack)
         SettingsPage.APPEARANCE -> AppearancePage(deps.prefs, deps.setPrefs, onBack)
         SettingsPage.SYSTEM -> SystemPage(deps.actions, onBack)
+        SettingsPage.CF_USAGE -> CfUsagePage(onBack)
         SettingsPage.UPDATE -> UpdatePage(deps.settings(), deps.onNotes, onBack)
         SettingsPage.ABOUT -> AboutPage(onBack)
     }

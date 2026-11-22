@@ -12,6 +12,9 @@ export type Attachment = {
   offer?: string[];
   demand?: string[];
   host?: HostCard;
+  // 探针: key 带 probe:shell; 两端: 进行中的终端会话 id
+  shell?: boolean;
+  terms?: string[];
 };
 
 export function trySend(ws: WebSocket, text: string): boolean {

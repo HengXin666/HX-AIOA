@@ -292,6 +292,7 @@ HX 当前: 资源阈值在探针本地判断 (每分钟采样, 连续 3 次超�
 - 升级: **由面板驱动**, 不让每台机器定时查 GitHub。GitHub Release 发布二进制与 `SHA256SUMS`; 用户在 App 点 "升级" 后, Hub 在 `config.target` 里下发版本, 下载地址与 SHA-256; 探针下载, 校验, 替换后退出, 由服务管理器拉起。参考 NIE-SLA 的 manifest + SHA-256 链与 cfsm-agent 的 "校验失败继续跑旧版"。
 - `offer` 帧增加 `version`, `os`, `arch`, 供 App 展示与升级判断。
 - 不做 Web SSH, 远程命令等主控能力 (与 CF-Server-Monitor, NIE-SLA 的安全取向一致), 探针始终只出站。
+  - 2026-11-23 更新: 应需求加了经探针中转的终端, 默认关闭, 需 key 权限 + 主机本地开关 + 每次输入密码, 探针仍只出站, 见 docs/terminal.md。
 
 ### 6.7 不建议采纳的做法
 

@@ -38,8 +38,8 @@ cd client/web
 cp .env.example .env.local   # 填服务端地址与 token
 npm run dev
 
-# 探针 (在要监控的机器上, Node 22+)
-AIOA_SERVER=https://你的域名 AIOA_TOKEN=xxx AIOA_SUBJECT=nas-01 node tools/probe.mjs
+# 探针 (在要监控的机器上, Node 22+): App "资源 → 添加主机" 生成一行安装命令, 见 docs/terminal.md
+# 手动运行: AIOA_SERVER=https://你的域名 AIOA_TOKEN=xxx AIOA_SUBJECT=nas-01 node tools/probe.mjs
 
 # 延迟压测
 node tools/bench.mjs --url https://你的域名 --token xxx --count 50

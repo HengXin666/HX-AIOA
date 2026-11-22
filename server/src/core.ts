@@ -9,6 +9,7 @@ import type { Pipeline } from "./pipeline";
 import type { Registry } from "./registry";
 import type { Sockets } from "./sockets";
 import type { Spaces } from "./spaces";
+import type { Terminals } from "./terminal";
 import type { EventStore } from "./store";
 
 // AUTH_TOKEN 视为母号的全权限凭证; 接入 key 只写不读, 按 scope 授权
@@ -27,6 +28,9 @@ export type Core = {
   spaces: Spaces;
   github: GithubService;
   chats: ChatStore;
+  terms: Terminals;
+  // 账号密码复核 (终端票据用), 只有主 Hub 有账号目录
+  checkPassword: (userId: string, password: string) => Promise<boolean>;
 };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };

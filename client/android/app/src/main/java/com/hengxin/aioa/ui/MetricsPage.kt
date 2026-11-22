@@ -2,6 +2,13 @@ package com.hengxin.aioa.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.hengxin.aioa.ui.term.AddHostDialog
+import com.hengxin.aioa.ui.term.ShellPasswordDialog
+import com.hengxin.aioa.ui.term.TerminalDialog
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.AdaptiveGrid
 import com.hengxin.aioa.kit.Card
@@ -33,6 +40,17 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
     val spaces = chat.spaces
     val current = spaces.spaces.firstOrNull { it.id == spaces.currentId } ?: spaces.spaces.firstOrNull()
     WatchProbes(state, current?.metricSubjects().orEmpty())
+    var adding by remember { mutableStateOf(false) }
+    var askFor by remember { mutableStateOf<String?>(null) }
+    var session by remember { mutableStateOf<Pair<String, String>?>(null) }
+    if (adding) AddHostDialog { adding = false }
+    askFor?.let { s ->
+        ShellPasswordDialog(s, { askFor = null }) { ticket ->
+            askFor = null
+            session = s to ticket
+        }
+    }
+    session?.let { (s, ticket) -> TerminalDialog(chat.terms, s, ticket) { session = null } }
     PageColumn("资源") {
         Card { SettingRow(ICON_GITHUB, GITHUB_TITLE, chat.github.repos.size.takeIf { it > 0 }?.let { "$it 个仓库" }.orEmpty(), openGithub) }
         if (spaces.spaces.isNotEmpty()) {
@@ -41,8 +59,9 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
             PageSection("探针")
         }
         val carded = state.hosts.map { it.subject }.toSet()
+        Card { SettingRow("server", "添加主机", "一行命令安装探针", { adding = true }) }
         if (state.probes.isEmpty() && carded.isEmpty()) NoProbe()
-        state.hosts.forEach { HostPanel(state, it) }
+        state.hosts.forEach { h -> HostPanel(state, h) { askFor = h.subject } }
         // 旧版探针不发主机卡片, 仍用原来的指标格子
         state.probes.filter { it !in carded }.forEach { Probe(state, it) }
     }
@@ -60,7 +79,7 @@ fun WatchProbes(state: MetricsState, extra: Set<String> = emptySet()) {
 
 @Composable
 fun NoProbe() {
-    StatCard("server", "探针", 0f, "", state = CardState.Error("没有在线探针, 在服务器上运行 tools/probe.mjs"))
+    StatCard("server", "探针", 0f, "", state = CardState.Error("没有在线探针, 点上面的 添加主机 生成安装命令"))
 }
 
 @Composable

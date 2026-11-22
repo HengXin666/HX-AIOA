@@ -10,4 +10,7 @@ export interface Env {
   WXPUSHER_APP_TOKEN?: string;
   WXPUSHER_UID?: string;
   GITHUB_TOKEN?: string;
+  // CF 额度页: 只读 Account Analytics token 与账号 id
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
 }

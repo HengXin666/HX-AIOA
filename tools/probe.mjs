@@ -3,6 +3,7 @@
 // 环境变量: AIOA_SERVER (如 https://example.com), AIOA_TOKEN, AIOA_SUBJECT (默认主机名)
 // 告警阈值: AIOA_ALERT_CPU / AIOA_ALERT_MEM (百分比, 默认 90), AIOA_ALERT_TEMP (摄氏度, 默认 85), 设为 0 关闭
 // 主机卡片: AIOA_SNAPSHOT_MIN 分钟发一次快照 (默认 10), AIOA_IP 覆盖显示的 IP
+// 终端: AIOA_SHELL=1 才开启 (还要 key 带 probe:shell 权限, App 端每次输入密码), 需要 python3
 import os from "node:os";
 import { readFileSync, statfsSync } from "node:fs";
 
@@ -21,6 +22,9 @@ const KB = 1024;
 const SNAPSHOT_MS = envNumber("AIOA_SNAPSHOT_MIN", 10) * 60_000;
 const ALERT_SUSTAIN = 3;
 const SEND_PATH = "/api/send";
+// 带上自定义 UA, 避免被 CF 的机器人防护拦下
+const AGENT_UA = "hx-aioa-agent/1";
+const SHELL_ON = process.env.AIOA_SHELL === "1";
 const ALERTS = [
   { key: "cpu", name: "CPU", unit: "%", limit: envNumber("AIOA_ALERT_CPU", 90) },
   { key: "mem", name: "内存", unit: "%", limit: envNumber("AIOA_ALERT_MEM", 90) },
@@ -146,6 +150,7 @@ function osName() {
 function hostInfo() {
   const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4");
   const info = { hostname: os.hostname(), os: osName(), arch: os.arch(), cores: os.cpus().length, memTotal: os.totalmem(), bootAt: Date.now() - os.uptime() * 1000 };
+  if (SHELL_ON) info.shell = true;
   const ip = process.env.AIOA_IP || lan?.address;
   if (ip) info.ip = ip;
   try {
@@ -196,7 +201,7 @@ async function notify(text) {
   try {
     const res = await fetch(new URL(SEND_PATH, server), {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}`, "user-agent": AGENT_UA },
       body: JSON.stringify({ src: `${DEVICE_PREFIX}-${subject}`, body: { kind: "text", text } }),
     });
     if (!res.ok) console.error(`告警发送失败: HTTP ${res.status}`);
@@ -225,7 +230,7 @@ function connect() {
   const url = new URL("/ws", server.replace(/^http/, "ws"));
   url.searchParams.set("token", token);
   url.searchParams.set("device", `${DEVICE_PREFIX}-${subject}`);
-  ws = new WebSocket(url);
+  ws = new WebSocket(url, { headers: { "User-Agent": AGENT_UA } });
   let ping;
   ws.onopen = () => {
     retry = RETRY_MIN_MS;
@@ -238,8 +243,10 @@ function connect() {
     if (e.data === "pong") return;
     const frame = JSON.parse(e.data);
     if (frame.t === "demand") onDemand(frame);
+    else if (frame.t?.startsWith("term")) term?.handle(frame);
   };
   ws.onclose = () => {
+    term?.closeAll();
     clearInterval(ping);
     clearInterval(live);
     live = undefined;
@@ -258,6 +265,8 @@ function tick() {
   if (upTicks.length > HISTORY_POINTS) upTicks.shift();
 }
 
+const term = SHELL_ON ? (await import("./probe-term.mjs")).createTerminals(send) : null;
+if (SHELL_ON) console.log("终端已开启 (AIOA_SHELL=1)");
 remember(sample());
 setInterval(tick, IDLE_SAMPLE_MS);
 setInterval(sendHost, SNAPSHOT_MS);

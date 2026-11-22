@@ -46,8 +46,23 @@ jobs:
             exit 1
           fi
 
+      - name: 复制探针脚本到静态资源
+        run: cp ../tools/probe.mjs ../tools/probe-term.mjs public/
+
       - name: 部署到 Cloudflare
         run: npx wrangler deploy
+
+      # 可选: 配置了 CF_ANALYTICS_TOKEN (只读 Account Analytics) 时启用 CF 额度页
+      - name: 同步 CF 额度查询凭据
+        env:
+          AIOA_CF_TOKEN: ${{ secrets.CF_ANALYTICS_TOKEN }}
+        run: |
+          if [ -z "$AIOA_CF_TOKEN" ]; then
+            echo "未配置 CF_ANALYTICS_TOKEN secret, 跳过, CF 额度页显示未配置"
+            exit 0
+          fi
+          printf '%s' "$AIOA_CF_TOKEN" | npx wrangler secret put CF_API_TOKEN
+          printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | npx wrangler secret put CF_ACCOUNT_ID
 
       # 可选: 仅当配置了 AUTH_TOKEN secret 时, 才同步 Worker 运行时密钥 (if 中不能引用 secrets, 改在脚本里判断)
       - name: 同步运行时密钥

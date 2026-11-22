@@ -16,3 +16,4 @@ client/android/.idea/
 client/android/app/src/main/jniLibs/
 client/android/**/build/
 client/android/.kotlin/
+server/public/probe*.mjs
