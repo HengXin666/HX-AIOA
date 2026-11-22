@@ -27,7 +27,7 @@ export type CfUsage = {
   day?: string;
   items?: { key: string; label: string; used: number; limit: number; unit: string }[];
   // storedBytes: 整个账号 DO 存储 (CF 统计, 有延迟); hubBytes: 主 Hub 数据库当前大小 (实时)
-  storage?: { storedBytes?: number; limit: number; hubBytes?: number };
+  storage?: { storedBytes?: number; limit: number; hubBytes?: number; error?: string };
 };
 
 const STORAGE_QUERY = `query($a: String!, $d: Date!) { viewer { accounts(filter: {accountTag: $a}) {
@@ -61,14 +61,14 @@ async function gql<T>(env: Env, query: string, variables: Record<string, string>
 type StorageData = { viewer?: { accounts?: { durableObjectsStorageGroups?: { max: { storedBytes?: number } }[] }[] } };
 
 // 存储另查一次: 失败不影响用量
-async function storedBytes(env: Env, now: number): Promise<number | undefined> {
+async function storedBytes(env: Env, now: number): Promise<{ storedBytes?: number; error?: string }> {
   const day = new Date(now - DAY_MS * 2).toISOString().slice(0, 10);
   try {
     const d = await gql<StorageData>(env, STORAGE_QUERY, { a: env.CF_ACCOUNT_ID!, d: day });
-    return d.viewer?.accounts?.[0]?.durableObjectsStorageGroups?.[0]?.max.storedBytes;
+    const rows = d.viewer?.accounts?.[0]?.durableObjectsStorageGroups ?? [];
+    return rows.length ? { storedBytes: rows[0]!.max.storedBytes } : { error: "CF 暂无存储统计" };
   } catch (e) {
-    console.error("查询 DO 存储失败:", e);
-    return undefined;
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -90,7 +90,7 @@ export async function cfUsage(env: Env, now = Date.now(), hubBytes?: number): Pr
     rowsRead: total(acc.durableObjectsPeriodicGroups, "rowsRead"),
   };
   const items = CF_LIMITS.map((l) => ({ ...l, used: used[l.key] ?? 0 }));
-  const out: CfUsage = { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, storedBytes: stored } };
+  const out: CfUsage = { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, ...stored } };
   cache = { at: now, body: out };
   return live(out);
 }
