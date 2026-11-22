@@ -17,7 +17,11 @@ data class ChatMeta(
     val digest: String?,
     val agents: List<ChatAgent>,
     val updated: Long,
-)
+    /** 清空聊天记录的位置: seq <= cleared 的本地消息要删掉。 */
+    val cleared: Long = 0,
+) {
+    val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty()
+}
 
 /** 群里接入的 Agent; brief 是怎么使唤它, reads 是它能读的群。 */
 data class ChatAgent(val keyId: String, val name: String, val brief: String, val reads: List<String>, val created: Long, val rotated: Long?)
@@ -63,6 +67,7 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 digest = o.optStr("digest"),
                 agents = (0 until (agents?.length() ?: 0)).mapNotNull { j -> agents?.optJSONObject(j)?.let { runCatching { parseAgent(it) }.getOrNull() } },
                 updated = o.optLong("updated"),
+                cleared = o.optLong("cleared"),
             )
         }.getOrNull()
     }.associateBy { it.channel }

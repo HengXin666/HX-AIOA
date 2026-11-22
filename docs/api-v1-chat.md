@@ -12,6 +12,10 @@
 
 `GET /api/v1/chats/{channel}/messages?since=&limit=` → `{ messages: [Envelope], head }`。母号, 或 scope 含 `events:read` 且白名单匹配该群的 key。
 
+## 清空聊天记录
+
+`DELETE /api/v1/chats/{channel}/messages?before=` (母号) → `{ deleted, cleared }`。删掉该群 seq < before 的消息 (不填为全部), 群键规则同客户端: 有 channel 用 channel, 本机发的归 `备忘`, 否则按来源名。群资料记下 `cleared` (只前进) 并广播 `chat_sync`, 各端删掉本地 seq <= cleared 的消息。收藏是快照, 不受影响。
+
 ## 群里的 Agent
 
 - `POST /api/v1/chats/{channel}/agents` `{ name, brief, reads: [channel] }` → `{ agent, prompt }`。服务端新建一个来源 (默认频道为本群) 和一把 key (`messages:send`, `events:write`, 有 `reads` 时加 `events:read`, 白名单为本群 + reads)。`prompt` 是完整的接入提示词, 含明文 key, 只在这一次返回。

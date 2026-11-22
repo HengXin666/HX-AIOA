@@ -18,10 +18,12 @@ import {
   PATH_EVENT_BY_SEQ,
   PATH_FAVORITE,
   PATH_FAVORITES,
+  QUERY_BEFORE,
   QUERY_LIMIT,
   QUERY_SINCE,
   globMatch,
   type ChatAgent,
+  type ChatCleared,
   type ChatMeta,
   type ChatPatch,
   type ChatSyncFrame,
@@ -114,6 +116,20 @@ function chatMessages(c: ReqCtx): Response {
   const limit = clampInt(c.url.searchParams.get(QUERY_LIMIT), HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT);
   const messages = c.core.store.inChannel(channel, since, limit);
   return json({ messages, head: messages.at(-1)?.seq ?? since });
+}
+
+// 清空聊天记录: 删服务端存档, 并把位置记进群资料, 各端据此删本地
+function clearChat(c: ReqCtx): Response {
+  const channel = param(c, 0);
+  if (!channel || channel.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
+  const head = c.core.store.head();
+  const before = clampInt(c.url.searchParams.get(QUERY_BEFORE), head + 1, head + 1);
+  const deleted = c.core.store.clearGroup(channel, before);
+  const meta = c.core.chats.patchChat(channel, {});
+  const cleared = Math.max(meta.cleared ?? 0, before - 1);
+  c.core.chats.replaceChat({ ...meta, cleared });
+  sync(c.core, "chats", channel);
+  return json({ deleted, cleared } satisfies ChatCleared);
 }
 
 type AgentInput = { name: string; brief: string; reads: string[] };
@@ -267,6 +283,7 @@ export const CHAT_ROUTES: Route[] = [
   route(GET, PATH_CHATS, READ_SCOPE, listChats),
   route(PATCH, PATH_CHAT, OWNER, patchChat),
   route(GET, PATH_CHAT_MESSAGES, READ_SCOPE, chatMessages),
+  route(DELETE, PATH_CHAT_MESSAGES, OWNER, clearChat),
   route(POST, PATH_CHAT_AGENTS, OWNER, addAgent),
   route(PATCH, PATH_CHAT_AGENT, OWNER, patchAgent),
   route(DELETE, PATH_CHAT_AGENT, OWNER, removeAgent),

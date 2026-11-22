@@ -57,6 +57,7 @@ private sealed interface GsDialog {
     data class EditAgent(val agent: ChatAgent?) : GsDialog
     data class Prompt(val title: String, val text: String, val note: String) : GsDialog
     data class Remove(val agent: ChatAgent) : GsDialog
+    data object Clear : GsDialog
 }
 
 /** 群设置: 头像, 名称, 置顶, 免打扰, 日报 / 周报, 以及接入的 Agent。 */
@@ -124,6 +125,11 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                     AgentAction.REMOVE -> dialog = GsDialog.Remove(agent)
                 }
             }
+            Card {
+                Row(Modifier.fillMaxWidth().clickable { dialog = GsDialog.Clear }.padding(vertical = 8.dp)) {
+                    Text("清空聊天记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
+                }
+            }
             Box(Modifier.heightIn(min = 24.dp))
         }
     }
@@ -160,6 +166,19 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
             title = { Text("移除 ${d.agent.name}?") },
             text = { Text("它的密钥会立即作废, 已发的消息保留。") },
             confirmButton = { TextButton({ scope.launch { dir.removeAgent(group, d.agent.keyId)?.let { dir.error = it } }; dialog = null }) { Text("移除") } },
+            dismissButton = { TextButton({ dialog = null }) { Text("取消") } },
+        )
+        GsDialog.Clear -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("清空聊天记录?") },
+            text = { Text("服务端和所有设备上这个群的消息都会删掉, 收藏不受影响, 群资料与 Agent 保留。") },
+            confirmButton = {
+                TextButton({
+                    dialog = null
+                    busy = "正在清空..."
+                    g.clearHistory(group) { err -> busy = null; err?.let { dir.error = "清空失败: $it" } }
+                }) { Text("清空", color = MaterialTheme.colorScheme.error) }
+            },
             dismissButton = { TextButton({ dialog = null }) { Text("取消") } },
         )
         null -> Unit

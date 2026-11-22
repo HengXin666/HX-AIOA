@@ -12,6 +12,8 @@ export type ChatMeta = {
   read?: number;
   digest?: DigestKind;
   agents?: ChatAgent[];
+  // 清空聊天记录时的位置: 该群 seq <= cleared 的消息客户端一并删掉
+  cleared?: number;
   updated: number;
 };
 // 群里接入的 Agent: 一个来源 + 一把 key; brief 是 "怎么使唤它", 存服务端, Agent 挂了可重新接入
@@ -29,6 +31,7 @@ export type AgentRequest = { name: string; brief?: string; reads?: string[] };
 export type Favorite = { seq: number; saved: number; ev: Envelope };
 export type OnboardResult = { agent: ChatAgent; prompt: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
+export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取
 export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites"; channel?: string };
 

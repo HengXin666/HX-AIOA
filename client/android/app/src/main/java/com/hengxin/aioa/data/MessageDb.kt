@@ -83,6 +83,10 @@ class MessageDb private constructor(context: Context) :
         }
     }
 
+    /** 清空一个群 seq <= upTo 的消息, 返回删掉的条数。 */
+    fun clearGroup(key: String, upTo: Long): Int =
+        writableDatabase.delete(T_MSG, "$C_GRP = ? AND $C_SEQ <= ?", arrayOf(key, upTo.toString()))
+
     fun groupRead(key: String): Long = getKv(K_GROUP_READ + key)
 
     fun markGroupRead(key: String, seq: Long) {

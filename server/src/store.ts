@@ -1,9 +1,11 @@
 import type { Envelope, Kind } from "@hx-aioa/protocol";
+import { DEVICE_PREFIX, MEMO_GROUP } from "./constants";
 import { legacyBodyText, textToEventData } from "./legacy";
 
 type Row = { seq: number; body: string };
 
 const COLS = "seq, body";
+const GROUP_KEY = `COALESCE(NULLIF(json_extract(body, '$.channel'), ''), CASE WHEN json_extract(body, '$.source.id') LIKE '${DEVICE_PREFIX}%' THEN '${MEMO_GROUP}' ELSE COALESCE(NULLIF(json_extract(body, '$.source.name'), ''), json_extract(body, '$.source.id')) END)`;
 
 // 收件箱: 每条事件一行; 覆盖更新 = 删旧行 + 插新行 (id 不变, seq 变新), 便于客户端按 since 补拉
 export class EventStore {
@@ -66,6 +68,11 @@ export class EventStore {
       .exec<Row>(`SELECT ${COLS} FROM ev WHERE seq > ? AND kind != 'metric' AND json_extract(body, '$.channel') = ? ORDER BY seq LIMIT ?`, since, channel, limit)
       .toArray()
       .map(parse);
+  }
+
+  // 清空一个群 seq < before 的消息 (指标不算), 返回删掉的条数
+  clearGroup(key: string, before: number): number {
+    return this.sql.exec(`DELETE FROM ev WHERE seq < ? AND kind != 'metric' AND ${GROUP_KEY} = ?`, before, key).rowsWritten;
   }
 
   bySeq(seq: number): Envelope | null {
