@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.data.CrashLog
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.link.NotifyKit
@@ -23,6 +24,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+
+private const val CRASH_TITLE = "**上次崩溃**\n"
+private const val FENCE = "```"
 
 // 打开界面: 先从本地库秒出历史, 再用 since=本地最大序号 只补拉增量; 后台推送全部交给 :link 进程
 class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
@@ -98,6 +102,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onStatus(online: Boolean) {
         this.online = online
         if (online) metrics.onOnline()
+        if (online) CrashLog.take(getApplication())?.let { send(CRASH_TITLE + FENCE + "\n" + it + "\n" + FENCE) }
     }
 
     override fun onFrame(frame: ServerFrame) {

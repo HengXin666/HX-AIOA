@@ -68,12 +68,16 @@ class ChatGroups(private val context: Context, private val scope: CoroutineScope
     fun removeFolder(name: String) = save(folders.filter { it.name != name })
 
     fun openGroup(key: String) {
+        if (open == key) return
         open = key
         messages.clear()
         scope.launch {
             val list = withContext(Dispatchers.IO) { db.inGroup(key, Constants.HISTORY_PAGE) }
             if (open != key) return@launch
-            messages.addAll(list)
+            // 读库期间可能已有新消息追加进来, 合并去重
+            val merged = (list + messages).distinctBy { it.seq }.sortedBy { it.seq }
+            messages.clear()
+            messages.addAll(merged)
             list.lastOrNull()?.let { markRead(key, it.seq) }
         }
     }
