@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.proto.AgentStatus
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.OverviewItem
@@ -28,6 +29,8 @@ class FeedState(private val send: (String) -> Boolean) {
         private set
     val layers = mutableStateMapOf<String, List<OverviewItem>>()
     val tasks = mutableStateMapOf<String, TaskSnapshot>()
+    var agents by mutableStateOf<List<AgentStatus>>(emptyList())
+        private set
     /** taskId -> 已提交还没回执的选项 id。 */
     val pending = mutableStateMapOf<String, String>()
     private val actions = HashMap<String, String>()
@@ -52,6 +55,7 @@ class FeedState(private val send: (String) -> Boolean) {
                 tasks[frame.task.id] = frame.task
                 touch()
             }
+            is ServerFrame.Agents -> agents = frame.agents
             is ServerFrame.ActOk -> settle(frame.aid, if (frame.state == STATE_QUEUED) "Agent 离线, 已排队, 上线后送达" else null)
             is ServerFrame.Err -> {
                 val aid = frame.aid ?: return false

@@ -41,6 +41,9 @@ fun AgentPage(chat: ChatModel) {
             Card { KitText("服务端还没有升级到 v1 协议, 暂时看不到 Agent 任务", Aioa.colors.textSecondary, 14) }
             return@PageColumn
         }
+        if (feed.agents.isNotEmpty()) {
+            Card { feed.agents.forEach { a -> Chip("${a.name} ${if (a.online) "在线" else "离线"}", a.online) {} } }
+        }
         PageSection("进行中")
         val active = all.filter { it.state in ACTIVE }
         if (active.isEmpty() || state != CardState.Ready) {

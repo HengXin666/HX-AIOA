@@ -81,6 +81,10 @@ internal object V1Decode {
         expired = o.optBoolean("expired"),
     )
 
+    fun agents(a: JSONArray?): List<AgentStatus> = list(a) { o ->
+        AgentStatus(o.getString("id"), o.optString("name").ifEmpty { o.getString("id") }, o.optBoolean("online"), o.optLong("lastSeen"))
+    }
+
     fun strings(a: JSONArray?): List<String> =
         a?.let { arr -> (0 until arr.length()).mapNotNull { arr.opt(it) as? String } }.orEmpty()
 

@@ -32,6 +32,8 @@ sealed interface ServerFrame {
     // 工作台与设置暂不渲染, 只把原文交给上层, 以后接 #5 时再细化
     data class SpaceUpdate(val id: String, val deleted: Boolean, val raw: String) : ServerFrame
     data class Settings(val raw: String) : ServerFrame
+    data class Agents(val agents: List<AgentStatus>) : ServerFrame
+    data class TaskLog(val taskId: String, val role: String, val kind: String, val text: String?, val ts: Long) : ServerFrame
 }
 
 data class MetricPoint(val ts: Long, val values: Map<String, Double>)
@@ -67,6 +69,10 @@ object Frames {
             T_OVERVIEW -> ServerFrame.OverviewFrame(V1Decode.overview(o.getJSONObject(T_OVERVIEW)))
             "space_update" -> ServerFrame.SpaceUpdate(o.optString("id"), o.optBoolean("deleted"), o.toString())
             "settings" -> ServerFrame.Settings(o.optJSONObject("settings")?.toString() ?: "{}")
+            "agents" -> ServerFrame.Agents(V1Decode.agents(o.optJSONArray("agents")))
+            "task_log" -> o.getJSONObject("entry").let { e ->
+                ServerFrame.TaskLog(o.getString("taskId"), e.optString("role"), e.optString("kind"), e.optString(KEY_TEXT).ifEmpty { null }, e.optLong(KEY_TS))
+            }
             else -> null
         }
     }

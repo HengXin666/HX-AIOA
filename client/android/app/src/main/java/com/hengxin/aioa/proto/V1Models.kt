@@ -60,3 +60,5 @@ data class Envelope(
 data class OverviewItem(val ev: Envelope, val count: Int, val ids: List<String>)
 
 data class Overview(val layers: Map<String, List<OverviewItem>>, val tasks: List<TaskSnapshot>, val generatedAt: Long)
+
+data class AgentStatus(val id: String, val name: String, val online: Boolean, val lastSeen: Long)
