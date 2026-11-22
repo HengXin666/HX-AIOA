@@ -67,7 +67,7 @@ export class Pipeline {
     const channel = input.channel ?? info?.channel;
     if (subject) draft.subject = subject;
     if (channel) draft.channel = channel;
-    for (const k of ["dedupeKey", "groupKey", "actions", "ttl"] as const) if (input[k] !== undefined) Object.assign(draft, { [k]: input[k] });
+    for (const k of ["dedupeKey", "groupKey", "actions", "ttl", "reply", "fwd"] as const) if (input[k] !== undefined) Object.assign(draft, { [k]: input[k] });
     if (input.resolved) draft.resolved = true;
     if (origin.cid) draft.cid = origin.cid;
     return this.ingest(draft, info ?? null, fixed);

@@ -60,6 +60,18 @@ export class EventStore {
     return first(this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE id = ?`, id).toArray());
   }
 
+  // 某个群 (channel) 的消息, 给 Agent 读群用; 指标不算消息
+  inChannel(channel: string, since: number, limit: number): Envelope[] {
+    return this.sql
+      .exec<Row>(`SELECT ${COLS} FROM ev WHERE seq > ? AND kind != 'metric' AND json_extract(body, '$.channel') = ? ORDER BY seq LIMIT ?`, since, channel, limit)
+      .toArray()
+      .map(parse);
+  }
+
+  bySeq(seq: number): Envelope | null {
+    return first(this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE seq = ?`, seq).toArray());
+  }
+
   byDedupe(key: string): Envelope | null {
     return first(this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE dedupe = ? ORDER BY seq DESC LIMIT 1`, key).toArray());
   }

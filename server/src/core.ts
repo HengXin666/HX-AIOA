@@ -1,5 +1,6 @@
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
+import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
 import type { Env } from "./env";
 import type { GithubService } from "./github/service";
@@ -25,6 +26,7 @@ export type Core = {
   sockets: Sockets;
   spaces: Spaces;
   github: GithubService;
+  chats: ChatStore;
 };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };

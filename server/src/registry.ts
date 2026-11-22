@@ -47,6 +47,10 @@ export class Registry {
     return this.sql.exec<KeyRow>("SELECT id, hash, body FROM apikey ORDER BY id").toArray().map((r) => JSON.parse(r.body) as KeyInfo);
   }
 
+  saveKey(info: KeyInfo): void {
+    this.sql.exec("UPDATE apikey SET body = ? WHERE id = ?", JSON.stringify(info), info.id);
+  }
+
   deleteKey(id: string): boolean {
     return this.sql.exec("DELETE FROM apikey WHERE id = ?", id).rowsWritten > 0;
   }

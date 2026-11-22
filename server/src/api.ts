@@ -1,5 +1,6 @@
 import { API_MESSAGES_PATH, API_SEND_PATH, API_V1, PATH_HOOKS, QUERY_LIMIT, QUERY_SINCE, isBody, type SendRequest } from "@hx-aioa/protocol";
 import { AGENT_ROUTES } from "./api-agent";
+import { CHAT_ROUTES } from "./api-chats";
 import { CONFIG_ROUTES } from "./api-config";
 import { GITHUB_ROUTES } from "./api-github";
 import { SPACE_ROUTES } from "./api-spaces";
@@ -26,7 +27,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {
@@ -57,20 +58,26 @@ async function legacy(core: Core, req: Request, url: URL, who: Principal): Promi
   return null;
 }
 
+// 没读请求体就提前返回时先丢弃它, 否则 workerd 会报 "请求流未读完" 并影响同一连接的下一个请求
+async function early(req: Request, res: Response): Promise<Response> {
+  if (req.body && !req.bodyUsed) await req.arrayBuffer().catch(() => undefined);
+  return res;
+}
+
 export async function handleHttp(core: Core, req: Request, pre?: Principal): Promise<Response> {
   const url = new URL(req.url);
   try {
     const hook = HOOK_RE.exec(url.pathname);
     if (hook && req.method === POST) return await handleHook(core, req, url, hook[1] ?? "", hook[2] ?? "");
     const who = pre ?? (await principalOf(core, req, url));
-    if (!who) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
-    if (!who.owner && !core.registry.allow(who.key)) return fail(429, ERR_RATE, CODE_RATE_LIMITED);
+    if (!who) return await early(req, fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED));
+    if (!who.owner && !core.registry.allow(who.key)) return await early(req, fail(429, ERR_RATE, CODE_RATE_LIMITED));
     if (!url.pathname.startsWith(API_V1)) return (await legacy(core, req, url, who)) ?? fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
     for (const r of ROUTES) {
       if (r.method !== req.method) continue;
       const m = r.re.exec(url.pathname);
       if (!m) continue;
-      if (!allowed(who, r.need)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+      if (!allowed(who, r.need)) return await early(req, fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN));
       return await r.handler({ req, url, params: m.slice(1), who, core });
     }
     return fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
