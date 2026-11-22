@@ -63,7 +63,7 @@
 { "id": "u_k3j9x2m1qa", "name": "mom", "display": "妈妈", "role": "member", "status": "active", "created": 1763712000000 }
 ```
 
-`status`: `active` | `pending` (等待管理员批准) | `disabled`。用户名 `name` 为 2-32 位小写字母, 数字, `_ . -`; 密码至少 8 位。
+`status`: `active` | `pending` (等待管理员批准) | `disabled`。用户名 `name` 为 2-32 位字母 (保留大小写, 唯一性与登录不区分大小写), 数字, `_ . -`; 密码至少 8 位。
 
 ### 1.1 初始化母号
 

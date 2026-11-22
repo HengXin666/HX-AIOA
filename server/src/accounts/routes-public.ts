@@ -51,15 +51,15 @@ export async function setup(a: Accounts, code: string | undefined, b: Body): Pro
 
 export async function login(a: Accounts, b: Body): Promise<Response> {
   const name = str(b.name);
-  a.checkThrottle(name);
+  a.checkThrottle(name.toLowerCase());
   const row = a.dir.withPass(name);
   if (!row || !(await verifyPassword(str(b.password), row.pass))) {
-    a.recordFail(name);
+    a.recordFail(name.toLowerCase());
     throw new ApiFail(401, CODE_UNAUTHORIZED, ERR_BAD_LOGIN);
   }
   if (row.user.status === "pending") throw new ApiFail(403, CODE_FORBIDDEN, ERR_PENDING);
   if (row.user.status === "disabled") throw new ApiFail(403, CODE_FORBIDDEN, ERR_DISABLED);
-  a.clearFails(name);
+  a.clearFails(name.toLowerCase());
   return json(await a.issue(row.user, device(b)));
 }
 
