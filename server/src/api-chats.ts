@@ -2,7 +2,6 @@ import {
   DIGEST_KINDS,
   MAX_AGENT_READS,
   MAX_AVATAR_BYTES,
-  MAX_BRIEF_LENGTH,
   MAX_CHAT_AGENTS,
   MAX_ID_LENGTH,
   MAX_TITLE_LENGTH,
@@ -10,7 +9,10 @@ import {
   PATH_AVATARS,
   PATH_CHAT,
   PATH_CHAT_AGENT,
+  PATH_AGENT_GUIDE,
+  PATH_AGENT_GUIDE_ACK,
   PATH_CHAT_AGENT_PROMPT,
+  HEADER_GUIDE_VERSION,
   PATH_CHAT_AGENT_ROTATE,
   PATH_CHAT_AGENTS,
   PATH_CHAT_MESSAGES,
@@ -30,7 +32,7 @@ import {
   type OnboardResult,
   type Scope,
 } from "@hx-aioa/protocol";
-import { agentPrompt } from "./agent-prompt";
+import { agentBootstrap, agentGuide } from "./agent-prompt";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, type ReqCtx, type Route, route } from "./core";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
@@ -132,17 +134,15 @@ function clearChat(c: ReqCtx): Response {
   return json({ deleted, cleared } satisfies ChatCleared);
 }
 
-type AgentInput = { name: string; brief: string; reads: string[] };
+type AgentInput = { name: string; reads: string[] };
+const SEND_SCOPE: Scope = "messages:send";
+const MARKDOWN = "text/markdown; charset=utf-8";
 
 function parseAgent(raw: unknown, partial: boolean): Partial<AgentInput> | string {
   if (!isObj(raw)) return "需要 JSON 对象";
   const out: Partial<AgentInput> = {};
   if (typeof raw.name === "string" && raw.name.trim()) out.name = raw.name.trim().slice(0, MAX_TITLE_LENGTH);
   else if (!partial) return "需要 name";
-  if (typeof raw.brief === "string") {
-    if (raw.brief.length > MAX_BRIEF_LENGTH) return "使唤提示词过长";
-    out.brief = raw.brief;
-  }
   if (raw.reads !== undefined) {
     if (!Array.isArray(raw.reads) || raw.reads.length > MAX_AGENT_READS || !raw.reads.every((x) => typeof x === "string" && x)) return "reads 必须是群名数组";
     out.reads = [...new Set(raw.reads as string[])];
@@ -187,9 +187,9 @@ async function addAgent(c: ReqCtx): Promise<Response> {
   const { info, key } = await issueKey(c.core, channel, draft);
   src.keyId = info.id;
   c.core.registry.saveSource(src);
-  const agent: ChatAgent = { ...draft, keyId: info.id, brief: p.brief ?? "", created: Date.now() };
+  const agent: ChatAgent = { ...draft, keyId: info.id, created: Date.now(), pending: true };
   saveAgents(c.core, channel, [...agents, agent]);
-  return json({ agent, prompt: agentPrompt(baseOf(c.url), channel, titleOf(c.core, channel), agent, key) } satisfies OnboardResult);
+  return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key) } satisfies OnboardResult);
 }
 
 // 重新接入: 作废旧 key, 发新 key, 来源与历史消息不变
@@ -201,9 +201,10 @@ async function rotateAgent(c: ReqCtx): Promise<Response> {
   const { info, key } = await issueKey(c.core, channel, old);
   const src = c.core.registry.source(old.sourceId);
   if (src) c.core.registry.saveSource({ ...src, keyId: info.id });
-  const agent: ChatAgent = { ...old, keyId: info.id, rotated: Date.now() };
+  const { brief: _b, ...rest } = old;
+  const agent: ChatAgent = { ...rest, keyId: info.id, rotated: Date.now(), pending: true };
   saveAgents(c.core, channel, (meta?.agents ?? []).map((x) => (x.keyId === old.keyId ? agent : x)));
-  return json({ agent, prompt: agentPrompt(baseOf(c.url), channel, titleOf(c.core, channel), agent, key) } satisfies OnboardResult);
+  return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key) } satisfies OnboardResult);
 }
 
 async function patchAgent(c: ReqCtx): Promise<Response> {
@@ -212,7 +213,11 @@ async function patchAgent(c: ReqCtx): Promise<Response> {
   const old = agentOf(meta, param(c, 1));
   const p = parseAgent(await readJson(c.req), true);
   if (typeof p === "string") return fail(400, p);
+  const base = baseOf(c.url);
+  const title = titleOf(c.core, channel);
   const agent: ChatAgent = { ...old, ...p };
+  // 指令内容变了, 等它下次拉取后重新报到
+  if (agentGuide(base, channel, title, agent).version !== agentGuide(base, channel, title, old).version) agent.pending = true;
   // 读权限变了就改 key 的白名单与 scope, key 本身不变
   const key = c.core.registry.key(old.keyId);
   if (key && p.reads) {
@@ -239,7 +244,33 @@ function removeAgent(c: ReqCtx): Response {
 function agentPromptOf(c: ReqCtx): Response {
   const channel = param(c, 0);
   const agent = agentOf(c.core.chats.chat(channel), param(c, 1));
-  return json({ agent, prompt: agentPrompt(baseOf(c.url), channel, titleOf(c.core, channel), agent) });
+  return json({ agent, prompt: agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent).text });
+}
+
+// 按 key 找到它所在的群和 Agent 资料
+function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAgent } {
+  const keyId = c.who.owner ? null : c.who.key.id;
+  for (const meta of keyId ? c.core.chats.chats() : []) {
+    const agent = meta.agents?.find((a) => a.keyId === keyId);
+    if (agent) return { channel: meta.channel, meta, agent };
+  }
+  throw new ApiFail(403, CODE_FORBIDDEN, "这把密钥不是群里接入的 Agent");
+}
+
+function agentGuideOf(c: ReqCtx): Response {
+  const { channel, agent } = agentByKey(c);
+  const g = agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent);
+  return new Response(g.text, { headers: { "Content-Type": MARKDOWN, [HEADER_GUIDE_VERSION]: g.version } });
+}
+
+async function agentAck(c: ReqCtx): Promise<Response> {
+  const { channel, meta, agent } = agentByKey(c);
+  const raw = await readJson(c.req);
+  const g = agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent);
+  if (!isObj(raw) || raw.version !== g.version) return fail(409, `指令已更新到 ${g.version}, 请重新 GET ${PATH_AGENT_GUIDE}`);
+  const next: ChatAgent = { ...agent, joined: Date.now(), pending: false };
+  saveAgents(c.core, channel, (meta.agents ?? []).map((x) => (x.keyId === agent.keyId ? next : x)));
+  return json({ ok: true, version: g.version });
 }
 
 function seqParam(c: ReqCtx): number {
@@ -289,6 +320,8 @@ export const CHAT_ROUTES: Route[] = [
   route(DELETE, PATH_CHAT_AGENT, OWNER, removeAgent),
   route(POST, PATH_CHAT_AGENT_ROTATE, OWNER, rotateAgent),
   route(GET, PATH_CHAT_AGENT_PROMPT, OWNER, agentPromptOf),
+  route(GET, PATH_AGENT_GUIDE, SEND_SCOPE, agentGuideOf),
+  route(POST, PATH_AGENT_GUIDE_ACK, SEND_SCOPE, agentAck),
   route(GET, PATH_FAVORITES, OWNER, (c) => cached(c.req, c.core.chats.favoritesTag(), { favorites: c.core.chats.favorites() })),
   route(PUT, PATH_FAVORITE, OWNER, putFavorite),
   route(DELETE, PATH_FAVORITE, OWNER, deleteFavorite),

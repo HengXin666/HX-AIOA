@@ -47,6 +47,9 @@ import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.DIGEST_DAILY
 import com.hengxin.aioa.ui.chat.DIGEST_WEEKLY
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val CARD = RoundedCornerShape(14.dp)
 private val BIG_AVATAR = 84.dp
@@ -113,12 +116,12 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 when (action) {
                     AgentAction.COPY -> scope.launch {
                         dir.savedPrompt(group, agent.keyId)
-                            .onSuccess { dialog = GsDialog.Prompt(agent.name, it, "这份不含密钥: 原来的 Agent 还活着时用来提醒它怎么干活; 要重新接入请点 \"重新接入\"。") }
+                            .onSuccess { dialog = GsDialog.Prompt("${agent.name} 的指令", it, "这是服务端下发给它的完整指令 (不含密钥), 它报到时拉的就是这份。改了可读的群后它会自己重新拉取。") }
                             .onFailure { dir.error = it.message }
                     }
                     AgentAction.ROTATE -> scope.launch {
                         dir.rotate(group, agent.keyId)
-                            .onSuccess { dialog = GsDialog.Prompt(agent.name, it.prompt, "旧密钥已作废。把这段整个发给 Agent 就能重新接入, 密钥只显示这一次。") }
+                            .onSuccess { dialog = GsDialog.Prompt("发给 ${agent.name}", it.prompt, "旧密钥已作废。把这段发给 Agent, 它会自己拉指令并报到。密钥只显示这一次。") }
                             .onFailure { dir.error = it.message }
                     }
                     AgentAction.EDIT -> dialog = GsDialog.EditAgent(agent)
@@ -135,21 +138,21 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     }
     when (val d = dialog) {
         GsDialog.Rename -> NameDialog("群名称", meta?.title ?: group, { dialog = null }) { dir.rename(group, it); true }
-        is GsDialog.EditAgent -> AgentDialog(model, group, d.agent, { dialog = null }) { name, brief, reads ->
+        is GsDialog.EditAgent -> AgentDialog(model, group, d.agent, { dialog = null }) { name, reads ->
             scope.launch {
                 if (d.agent == null) {
-                    dir.addAgent(group, name, brief, reads)
-                        .onSuccess { dialog = GsDialog.Prompt(name, it.prompt, "把这段整个发给 Agent 就能接入。密钥只显示这一次, 使唤提示词已存到服务端, 之后随时可以重新接入。") }
+                    dir.addAgent(group, name, reads)
+                        .onSuccess { dialog = GsDialog.Prompt("发给 $name", it.prompt, "把这段发给你的 Agent, 它会自己拉取完整指令, 原样存下并报到。密钥只显示这一次。") }
                         .onFailure { dir.error = it.message; dialog = null }
                 } else {
-                    dir.editAgent(group, d.agent.keyId, name, brief, reads)?.let { dir.error = it }
+                    dir.editAgent(group, d.agent.keyId, name, reads)?.let { dir.error = it }
                     dialog = null
                 }
             }
         }
         is GsDialog.Prompt -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("给 ${d.title} 的提示词") },
+            title = { Text(d.title) },
             text = {
                 Column {
                     Text(d.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
@@ -195,14 +198,14 @@ private fun AgentsCard(agents: List<ChatAgent>, onAdd: () -> Unit, onAction: (Ch
             Text("Agent", Modifier.weight(1f), fontSize = 15.sp)
             TextButton(onAdd) { Text("+ 接入 Agent") }
         }
-        if (agents.isEmpty()) Text("接入后会得到一段提示词, 复制给你的 Agent, 它就能往这个群发消息 (也可以授权它读别的群, 用来做精选)。", fontSize = 12.sp, color = c.outline)
+        if (agents.isEmpty()) Text("起个名字, 勾上它能读的群, 就会得到一句话。发给你的 Agent, 它会自己拉取规则并报到, 之后你在它那边布置任务, 结果发到这个群。", fontSize = 12.sp, color = c.outline)
         agents.forEach { a ->
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                 Text(a.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(a.brief.ifBlank { "还没写使唤提示词" }, fontSize = 12.sp, color = c.outline, maxLines = 2)
+                Text(joinState(a), fontSize = 12.sp, color = if (a.joined != null && !a.pending) c.primary else c.outline)
                 if (a.reads.isNotEmpty()) Text("可读: ${a.reads.joinToString(", ")}", fontSize = 12.sp, color = c.outline)
                 Row {
-                    TextButton({ onAction(a, AgentAction.COPY) }) { Text("复制提示词") }
+                    TextButton({ onAction(a, AgentAction.COPY) }) { Text("查看指令") }
                     TextButton({ onAction(a, AgentAction.ROTATE) }) { Text("重新接入") }
                     TextButton({ onAction(a, AgentAction.EDIT) }) { Text("编辑") }
                     TextButton({ onAction(a, AgentAction.REMOVE) }) { Text("移除", color = c.error) }
@@ -212,11 +215,16 @@ private fun AgentsCard(agents: List<ChatAgent>, onAdd: () -> Unit, onAction: (Ch
     }
 }
 
-/** 接入或编辑 Agent: 名字, 使唤提示词, 可读的群。 */
+private fun joinState(a: ChatAgent): String = when {
+    a.joined == null -> "还没报到: 把那句话发给它"
+    a.pending -> "指令已更新, 等它重新拉取后报到"
+    else -> "已接入 · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(a.joined))} 报到"
+}
+
+/** 接入或编辑 Agent: 名字和可读的群, 指令由服务端生成。 */
 @Composable
-private fun AgentDialog(model: ChatModel, group: String, agent: ChatAgent?, close: () -> Unit, ok: (String, String, List<String>) -> Unit) {
+private fun AgentDialog(model: ChatModel, group: String, agent: ChatAgent?, close: () -> Unit, ok: (String, List<String>) -> Unit) {
     var name by remember { mutableStateOf(agent?.name ?: "") }
-    var brief by remember { mutableStateOf(agent?.brief ?: "") }
     var reads by remember { mutableStateOf(agent?.reads?.toSet() ?: emptySet()) }
     val groups = remember { model.groups.rows().map { it.key }.filter { it != MessageDb.MEMO_GROUP } }
     AlertDialog(
@@ -225,13 +233,6 @@ private fun AgentDialog(model: ChatModel, group: String, agent: ChatAgent?, clos
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("名字") }, singleLine = true)
-                OutlinedTextField(
-                    brief,
-                    { brief = it },
-                    Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 120.dp),
-                    label = { Text("使唤提示词: 让它做什么, 多久一次") },
-                    placeholder = { Text("例如: 每天 8 点汇总 Hacker News 前 10 条, 每条一句中文点评") },
-                )
                 Text("允许读这些群的消息", Modifier.padding(top = 10.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 groups.forEach { k ->
                     Row(Modifier.fillMaxWidth().clickable { reads = if (k in reads) reads - k else reads + k }, verticalAlignment = Alignment.CenterVertically) {
@@ -241,7 +242,7 @@ private fun AgentDialog(model: ChatModel, group: String, agent: ChatAgent?, clos
                 }
             }
         },
-        confirmButton = { TextButton({ if (name.isNotBlank()) ok(name, brief, reads.toList()) }, enabled = name.isNotBlank()) { Text(if (agent == null) "生成提示词" else "保存") } },
+        confirmButton = { TextButton({ if (name.isNotBlank()) ok(name, reads.toList()) }, enabled = name.isNotBlank()) { Text(if (agent == null) "生成接入语" else "保存") } },
         dismissButton = { TextButton(close) { Text("取消") } },
     )
 }

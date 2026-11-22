@@ -61,9 +61,18 @@ check("新建群", made.status === 200 && made.data.chat.title === "新闻" && m
 check("资料变化广播", Boolean(await client.next((f) => f.t === "chat_sync" && f.channel === GROUP)));
 await api(PATCH, `${V1}/chats/${enc(DIGEST)}`, { title: "日报", digest: "daily" });
 
-const writer = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "新闻抓取", brief: "每小时抓一次科技新闻" });
-check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("每小时抓一次科技新闻") && writer.data.prompt.includes("hxk_"), writer.data);
+const writer = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "新闻抓取" });
+check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("/chat-agent/guide") && writer.data.prompt.includes("hxk_"), writer.data);
 const writerKey = /密钥: (\S+)/.exec(writer.data.prompt)?.[1] ?? "";
+const guideRes = await fetch(`${server}${V1}/chat-agent/guide`, { headers: { Authorization: `Bearer ${writerKey}` } });
+const guideText = await guideRes.text();
+const version = guideRes.headers.get("X-Aioa-Guide-Version") ?? "";
+check("Agent 拉取指令", guideRes.status === 200 && version.length === 8 && guideText.includes(version) && guideText.includes(GROUP) && !guideText.includes("hxk_"), guideText);
+check("旧版本报到被拒", (await api(POST, `${V1}/chat-agent/ack`, { version: "00000000" }, writerKey)).status === 409);
+check("报到", (await api(POST, `${V1}/chat-agent/ack`, { version }, writerKey)).status === 200);
+const joined = (await api(GET, `${V1}/chats`)).data.chats.find((c) => c.channel === GROUP)?.agents?.[0];
+check("报到后状态为已接入", joined?.joined > 0 && joined.pending === false, joined);
+check("母号不能拉 Agent 指令", (await api(GET, `${V1}/chat-agent/guide`)).status === 403);
 const posted = await api(POST, `${V1}/messages`, { text: "**头条**: 测试" }, writerKey);
 check("Agent 默认发到本群", posted.status === 200 && posted.data.channel === GROUP, posted.data);
 const evFrame = await client.next((f) => f.t === "ev" && f.ev.channel === GROUP);
@@ -71,9 +80,10 @@ check("客户端实时收到群消息", Boolean(evFrame));
 const denied = await api(GET, `${V1}/chats/${enc(GROUP)}/messages`, undefined, writerKey);
 check("没给读权限不能读群", denied.status === 403, denied.status);
 
-const curator = await api(POST, `${V1}/chats/${enc(DIGEST)}/agents`, { name: "精选", brief: "从新闻群挑好的", reads: [GROUP] });
+const curator = await api(POST, `${V1}/chats/${enc(DIGEST)}/agents`, { name: "精选", reads: [GROUP] });
 const curatorKey = /密钥: (\S+)/.exec(curator.data.prompt)?.[1] ?? "";
-check("精选 Agent 提示词含读群说明", curator.data.prompt.includes(GROUP) && curator.data.prompt.includes("/messages?since="), curator.data.prompt);
+const curatorGuide = await (await fetch(`${server}${V1}/chat-agent/guide`, { headers: { Authorization: `Bearer ${curatorKey}` } })).text();
+check("精选 Agent 指令含读群说明", curatorGuide.includes(GROUP) && curatorGuide.includes("/messages?since="), curatorGuide);
 const read = await api(GET, `${V1}/chats/${enc(GROUP)}/messages?since=0`, undefined, curatorKey);
 check("精选 Agent 读到新闻群", read.status === 200 && read.data.messages.length === 1 && read.data.head > 0, read.data);
 const chatsForKey = await api(GET, `${V1}/chats`, undefined, curatorKey);
@@ -112,7 +122,7 @@ check("旧 key 作废", (await api(POST, `${V1}/messages`, { text: "x" }, writer
 const viaNew = await api(POST, `${V1}/messages`, { text: "又来了" }, newKey);
 check("新 key 可用", viaNew.data?.channel === GROUP, [viaNew.status, viaNew.data]);
 const saved = await api(GET, `${V1}/chats/${enc(GROUP)}/agents/${rotated.data.agent.keyId}/prompt`);
-check("保存的提示词不含密钥", saved.data.prompt.includes("每小时抓一次科技新闻") && !saved.data.prompt.includes(newKey), saved.data);
+check("查看的指令不含密钥", saved.data.prompt.includes("/chat-agent/ack") && !saved.data.prompt.includes(newKey), saved.data);
 const removed = await api(DELETE, `${V1}/chats/${enc(GROUP)}/agents/${rotated.data.agent.keyId}`);
 check("移除 Agent 并作废 key", removed.data.ok === true && (await api(POST, `${V1}/messages`, { text: "x" }, newKey)).status === 401);
 const read2 = await api(PATCH, `${V1}/chats/${enc(GROUP)}`, { read: 5 });

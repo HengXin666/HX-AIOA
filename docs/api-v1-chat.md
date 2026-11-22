@@ -18,11 +18,15 @@
 
 ## 群里的 Agent
 
-- `POST /api/v1/chats/{channel}/agents` `{ name, brief, reads: [channel] }` → `{ agent, prompt }`。服务端新建一个来源 (默认频道为本群) 和一把 key (`messages:send`, `events:write`, 有 `reads` 时加 `events:read`, 白名单为本群 + reads)。`prompt` 是完整的接入提示词, 含明文 key, 只在这一次返回。
-- `POST .../agents/{keyId}/rotate` → `{ agent, prompt }`: 作废旧 key 发新 key, 来源与历史不变。Agent 挂了或 key 泄露时用。
-- `PATCH .../agents/{keyId}` `{ name, brief, reads }`: 改使唤提示词或可读的群, key 不变。
-- `GET .../agents/{keyId}/prompt` → 不含 key 的提示词 (保存的使唤方式)。
+主人只定名字和可读的群, 不写提示词。服务端给一句接入语, 主人发给外部 Agent, 它用自己的 key 拉取完整指令, 原样存进长期指令并报到。
+
+- `POST /api/v1/chats/{channel}/agents` `{ name, reads: [channel] }` → `{ agent, prompt }`。服务端新建一个来源 (默认频道为本群) 和一把 key (`messages:send`, `events:write`, 有 `reads` 时加 `events:read`, 白名单为本群 + reads)。`prompt` 是一句接入语, 含明文 key, 只在这一次返回。
+- `POST .../agents/{keyId}/rotate` → `{ agent, prompt }`: 作废旧 key 发新 key, 来源与历史不变, 需要重新报到。
+- `PATCH .../agents/{keyId}` `{ name, reads }`: key 不变; 指令内容变了就标 `pending`, 等 Agent 重新拉取报到。
+- `GET .../agents/{keyId}/prompt` → 当前下发给它的完整指令 (不含 key)。
 - `DELETE .../agents/{keyId}`: 删除来源并作废 key。
+- Agent 侧 (用它自己的 key): `GET /api/v1/chat-agent/guide` → Markdown 全文, 响应头 `X-Aioa-Guide-Version` 为版本 (内容哈希); `POST /api/v1/chat-agent/ack` `{ version }` 报到, 版本不是最新返回 409。指令要求它每天首次干活前和遇到 401 / 403 时重新拉取, 版本变了整段替换。
+- `ChatAgent.joined` 为最近报到时间, `pending` 为指令变了还没重新报到。旧数据里的 `brief` 不再使用。
 
 ## 接入总览
 

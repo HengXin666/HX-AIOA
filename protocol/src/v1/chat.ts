@@ -16,18 +16,22 @@ export type ChatMeta = {
   cleared?: number;
   updated: number;
 };
-// 群里接入的 Agent: 一个来源 + 一把 key; brief 是 "怎么使唤它", 存服务端, Agent 挂了可重新接入
+// 群里接入的 Agent: 一个来源 + 一把 key; 主人只定名字和可读的群, 指令由服务端下发
+// joined 为最近一次报到时间, pending 表示指令变了但它还没重新报到; brief 只是旧数据
 export type ChatAgent = {
   keyId: string;
   sourceId: string;
   name: string;
-  brief: string;
   reads: string[];
   created: number;
   rotated?: number;
+  joined?: number;
+  pending?: boolean;
+  brief?: string;
 };
 export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest">>;
-export type AgentRequest = { name: string; brief?: string; reads?: string[] };
+export type AgentRequest = { name: string; reads?: string[] };
+export type AgentAck = { version: string };
 export type Favorite = { seq: number; saved: number; ev: Envelope };
 export type OnboardResult = { agent: ChatAgent; prompt: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
@@ -48,6 +52,10 @@ export const PATH_CHAT_AGENTS = `${API_V1}/chats/{channel}/agents`;
 export const PATH_CHAT_AGENT = `${API_V1}/chats/{channel}/agents/{keyId}`;
 export const PATH_CHAT_AGENT_ROTATE = `${API_V1}/chats/{channel}/agents/{keyId}/rotate`;
 export const PATH_CHAT_AGENT_PROMPT = `${API_V1}/chats/{channel}/agents/{keyId}/prompt`;
+// 群 Agent 用自己的 key 拉取接入指令与报到
+export const PATH_AGENT_GUIDE = `${API_V1}/chat-agent/guide`;
+export const PATH_AGENT_GUIDE_ACK = `${API_V1}/chat-agent/ack`;
+export const HEADER_GUIDE_VERSION = "X-Aioa-Guide-Version";
 export const PATH_FAVORITES = `${API_V1}/favorites`;
 export const PATH_FAVORITE = `${API_V1}/favorites/{seq}`;
 export const PATH_AVATARS = `${API_V1}/avatars`;

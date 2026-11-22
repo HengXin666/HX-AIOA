@@ -129,8 +129,8 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    suspend fun addAgent(channel: String, name: String, brief: String, reads: List<String>): Result<Onboard> =
-        onboard { Api.call(context, POST, listOf(CHATS, channel, AGENTS), agentBody(name, brief, reads)) }
+    suspend fun addAgent(channel: String, name: String, reads: List<String>): Result<Onboard> =
+        onboard { Api.call(context, POST, listOf(CHATS, channel, AGENTS), agentBody(name, reads)) }
 
     suspend fun rotate(channel: String, keyId: String): Result<Onboard> =
         onboard { Api.call(context, POST, listOf(CHATS, channel, AGENTS, keyId, "rotate")) }
@@ -140,8 +140,8 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         r.body?.optString("prompt")?.let { Result.success(it) } ?: Result.failure(Exception(r.error))
     }
 
-    suspend fun editAgent(channel: String, keyId: String, name: String, brief: String, reads: List<String>): String? = withContext(Dispatchers.IO) {
-        Api.call(context, PATCH, listOf(CHATS, channel, AGENTS, keyId), agentBody(name, brief, reads)).error
+    suspend fun editAgent(channel: String, keyId: String, name: String, reads: List<String>): String? = withContext(Dispatchers.IO) {
+        Api.call(context, PATCH, listOf(CHATS, channel, AGENTS, keyId), agentBody(name, reads)).error
     }.also { refreshChats() }
 
     suspend fun removeAgent(channel: String, keyId: String): String? = withContext(Dispatchers.IO) {
@@ -160,8 +160,8 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         return r.error?.let { Result.failure(Exception(it)) } ?: Result.success(r.body?.optLong("cleared") ?: 0L)
     }
 
-    private fun agentBody(name: String, brief: String, reads: List<String>) =
-        JSONObject().put("name", name.trim()).put("brief", brief).put("reads", JSONArray(reads))
+    private fun agentBody(name: String, reads: List<String>) =
+        JSONObject().put("name", name.trim()).put("reads", JSONArray(reads))
 
     private companion object {
         const val CHATS = "api/v1/chats"
