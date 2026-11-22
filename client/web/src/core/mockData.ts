@@ -29,10 +29,10 @@ export const MOCK_SPACES: Space[] = [
         icon: "hard-drive",
         refresh: PUSH,
         items: [
-          { id: "nas-cpu-ring", type: "ring", title: "CPU", bind: [{ subject: NAS, field: "cpu" }], props: { warn: 70, crit: 90 } },
-          { id: "nas-mem-ring", type: "ring", title: "内存", bind: [{ subject: NAS, field: "mem" }] },
+          { id: "nas-cpu-ring", type: "ring", title: "CPU", question: "NAS 现在忙不忙?", bind: [{ subject: NAS, field: "cpu" }], props: { warn: 70, crit: 90 } },
+          { id: "nas-mem-ring", type: "ring", title: "内存", question: "内存还够不够?", bind: [{ subject: NAS, field: "mem" }] },
           { id: "nas-temp", type: "value", title: "温度", icon: "thermometer", bind: [{ subject: NAS, field: "temp", range: R10 }] },
-          { id: "nas-cpu-line", type: "line", title: "CPU 走势", icon: "cpu", bind: [{ subject: NAS, field: "cpu", range: R10 }], props: { warn: 70, crit: 90 } },
+          { id: "nas-cpu-line", type: "line", title: "CPU 走势", icon: "cpu", question: "最近 10 分钟有没有尖峰?", bind: [{ subject: NAS, field: "cpu", range: R10 }], props: { warn: 70, crit: 90 } },
         ],
       },
       {
@@ -41,9 +41,9 @@ export const MOCK_SPACES: Space[] = [
         icon: "server",
         refresh: PUSH,
         items: [
-          { id: "vps-cpu", type: "sparkline", title: "CPU", icon: "cpu", bind: [{ subject: VPS, field: "cpu", range: R5 }] },
-          { id: "vps-mem", type: "sparkline", title: "内存", icon: "memory-stick", bind: [{ subject: VPS, field: "mem", range: R5 }] },
-          { id: "vps-net", type: "line", title: "出站流量", icon: "activity", bind: [{ subject: VPS, field: "net", range: R10 }], props: { threshold: false } },
+          { id: "vps-cpu", type: "sparkline", title: "CPU", icon: "cpu", question: "VPS 负载在升还是降?", bind: [{ subject: VPS, field: "cpu", range: R5 }] },
+          { id: "vps-mem", type: "sparkline", title: "内存", icon: "memory-stick", question: "内存有没有在泄漏?", bind: [{ subject: VPS, field: "mem", range: R5 }] },
+          { id: "vps-net", type: "line", title: "出站流量", icon: "activity", question: "出站流量是否异常?", bind: [{ subject: VPS, field: "net", range: R10 }], props: { threshold: false } },
         ],
       },
       {
@@ -90,6 +90,8 @@ export const MOCK_SPACES: Space[] = [
     icon: "git-branch",
     origin: "agent:dsh",
     panels: [
+      { id: "approve", title: "待我批准", icon: "shield-check", size: "s", refresh: PUSH, items: [{ id: "approve-all", type: "approval", bind: [{ subject: DSH, field: "task" }] }] },
+      { id: "talk", title: "和 DSH 对话", icon: "message-circle", refresh: PUSH, items: [{ id: "chat-dsh", type: "chat", props: { agent: DSH } }] },
       { id: "tasks", title: "Agent 任务", icon: "bot", refresh: PUSH, items: [{ id: "task-all", type: "task_card", props: { limit: 2 } }] },
       { id: "gh", title: "GitHub 动态", icon: "git-branch", refresh: PUSH, items: [{ id: "gh-list", type: "list", bind: [{ subject: GITHUB, field: FIELD_EVENTS }] }] },
       { id: "daily", title: "AI 日报", icon: "sparkles", size: "l", refresh: PUSH, items: [{ id: "daily-r", type: "report", bind: [{ subject: ANY, field: FIELD_REPORT }] }] },
@@ -106,8 +108,8 @@ export const MOCK_SPACES: Space[] = [
         icon: "thermometer",
         refresh: PUSH,
         items: [
-          { id: "home-temp", type: "sparkline", title: "温度", bind: [{ subject: HOME, field: "temp", range: R10 }] },
-          { id: "home-hum", type: "ring", title: "湿度", bind: [{ subject: HOME, field: "humidity" }] },
+          { id: "home-temp", type: "sparkline", title: "温度", question: "客厅在变冷还是变热?", bind: [{ subject: HOME, field: "temp", range: R10 }] },
+          { id: "home-hum", type: "ring", title: "湿度", question: "要不要开除湿?", bind: [{ subject: HOME, field: "humidity" }] },
         ],
       },
     ],

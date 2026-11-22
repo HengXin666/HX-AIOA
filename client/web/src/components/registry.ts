@@ -1,6 +1,7 @@
 import type { ItemType } from "@hx-aioa/protocol";
 import { renderLine } from "./chart";
 import type { Ctx } from "./frame";
+import { renderApproval, renderChat } from "./interact";
 import { renderButton, renderList, renderReport, renderStatusGrid, renderTaskCard } from "./lists";
 import { renderRing, renderSparkline, renderValue } from "./metric";
 
@@ -14,6 +15,8 @@ const RENDERERS: Record<ItemType, (ctx: Ctx) => HTMLElement> = {
   list: renderList,
   report: renderReport,
   button: renderButton,
+  chat: renderChat,
+  approval: renderApproval,
 };
 
 export function renderItem(ctx: Ctx): HTMLElement {

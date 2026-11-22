@@ -169,21 +169,44 @@
   margin-bottom: var(--space-md);
 }
 
+/* 4 列网格, 面板按尺寸占 1 到 4 列; 中屏两列, 窄屏一列 */
 .panels {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--gap);
 }
 
-.panel.size-l,
-.panel.size-full {
-  grid-column: 1 / -1;
+.panel {
+  grid-column: span var(--span, 2);
+}
+
+@media (max-width: 1024px) {
+  .panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel {
+    grid-column: span min(var(--span, 2), 2);
+  }
+
+  .panel.size-l {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
   .panels {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .panel {
+    grid-column: 1 / -1;
+  }
+}
+
+.size-tag {
+  min-width: 2.5em;
+  text-align: center;
 }
 
 .panels.editing .panel {
@@ -223,8 +246,27 @@
 .w-list,
 .w-task_card,
 .w-report,
-.w-status_grid {
+.w-status_grid,
+.w-chat,
+.w-approval {
   grid-column: 1 / -1;
+}
+
+.w-q {
+  font-size: var(--fs-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: var(--space-sm) 0;
+}
+
+.approval + .approval {
+  margin-top: var(--space-md);
 }
 
 .w-head {
