@@ -43,6 +43,11 @@ export type ReportData = {
 };
 export type EventAction = { id: string; label: string; style?: "primary" | "danger"; url?: string };
 
+// 引用: 被引用消息的快照, 原消息被清理后仍能显示
+export type MsgRef = { seq: number; id: string; src: string; text: string };
+// 转发: 原消息的来源与时间
+export type FwdInfo = { src: string; ts: number; channel?: string };
+
 // 规则引擎的决定, 随事件保存, 便于追溯为什么响铃或没响
 export type RouteInfo = {
   action: RuleAction;
@@ -69,6 +74,8 @@ type Common = {
   root?: string;
   cid?: string;
   route?: RouteInfo;
+  reply?: MsgRef;
+  fwd?: FwdInfo;
 };
 export type MetricEnvelope = Common & { kind: "metric"; data: MetricData };
 export type EventEnvelope = Common & { kind: "event"; data: EventData };
@@ -89,6 +96,9 @@ export type EventInput = {
   ttl?: number;
   resolved?: boolean;
   ts?: number;
+  // 只由服务端内部填写 (聊天发送), 外部写入不解析
+  reply?: MsgRef;
+  fwd?: FwdInfo;
   data: MetricData | EventData | ReportData;
 };
 

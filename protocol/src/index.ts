@@ -12,6 +12,7 @@ export * from "./v1/api";
 export * from "./v1/source";
 export * from "./v1/paths";
 export * from "./v1/github";
+export * from "./v1/chat";
 
 export const PING_TEXT = "ping";
 export const PONG_TEXT = "pong";
@@ -36,7 +37,8 @@ export const MAX_METRIC_POINTS = 1440;
 export type TextBody = { kind: "text"; text: string };
 export type Body = TextBody;
 
-export type SendFrame = { t: "send"; cid: string; body: Body };
+// reply / fwd 为被引用 / 被转发消息的 seq, channel 为目标群 (不写为备忘)
+export type SendFrame = { t: "send"; cid: string; body: Body; reply?: number; fwd?: number; channel?: string };
 export type AckFrame = { t: "ack"; seq: number };
 export type RegFrame = { t: "reg"; pushToken: string };
 // 懒更新指标: 客户端声明在看哪些主体, 探针声明能提供哪些主体, 服务端只在有人看时向探针要数据
@@ -81,9 +83,15 @@ export function parseClientFrame(raw: string): ClientFrame | null {
   const f = data as Record<string, unknown>;
   switch (f.t) {
     case "send":
-      return typeof f.cid === "string" && isBody(f.body)
-        ? { t: "send", cid: f.cid, body: f.body }
-        : null;
+      if (typeof f.cid !== "string" || !isBody(f.body)) return null;
+      return {
+        t: "send",
+        cid: f.cid,
+        body: f.body,
+        ...(typeof f.reply === "number" ? { reply: f.reply } : {}),
+        ...(typeof f.fwd === "number" ? { fwd: f.fwd } : {}),
+        ...(typeof f.channel === "string" && f.channel ? { channel: f.channel } : {}),
+      };
     case "ack":
       return typeof f.seq === "number" ? { t: "ack", seq: f.seq } : null;
     case "reg":

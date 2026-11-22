@@ -27,7 +27,6 @@ import { Accounts, type Session } from "./accounts/service";
 import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
-import { messageInput } from "./api-events";
 import { Config } from "./config";
 import {
   ABNORMAL_CLOSE,
@@ -56,6 +55,8 @@ import { type Core, type Principal, allowed } from "./core";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
 import { buildOverview } from "./group";
+import { chatInput } from "./chat";
+import { ChatStore } from "./chat-store";
 import { ApiFail, fail } from "./http";
 import { toMsgFrame } from "./legacy";
 import { MetricRouter, isProbe } from "./metrics";
@@ -87,7 +88,7 @@ export class Hub extends DurableObject<Env> {
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
     const registry = new Registry(sql);
     const github = new GithubService(env, sql, ctx.storage, registry);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github };
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql) };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -292,7 +293,7 @@ export class Hub extends DurableObject<Env> {
         return;
       case "send": {
         if (att.role !== "client") return;
-        const input = messageInput({ text: frame.body.text });
+        const input = chatInput(this.core.store, frame);
         if (typeof input === "string") return this.err(ws, CODE_BAD_REQUEST, input);
         // 自己发给自己的备忘不响铃, 也不触发兜底推送
         const ev = await this.core.pipeline.fromInput(input, { source: { id: att.device, name: att.device }, cid: frame.cid }, { action: "silent", channels: ["ws"], reason: "本人发送" });
