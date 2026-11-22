@@ -1,6 +1,7 @@
 package com.hengxin.aioa.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
@@ -43,28 +44,35 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     var github by rememberSaveable { mutableStateOf<String?>(null) }
     val openGithub = { github = "" }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
-    AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
-        val gh = github
-        if (gh != null) {
-            if (gh == GH_PICK) {
-                GithubPickPage(chat.github) { github = "" }
-            } else if (gh.isEmpty()) {
-                GithubPage(chat.github, { github = null }, { github = it }, { github = GH_PICK }) {
-                    github = null
-                    chat.sources.startAdd(Constants.SOURCE_GITHUB)
-                    meStart = SettingsPage.SOURCES
-                    tab = Tab.ME
-                }
-            } else GithubRepoPage(chat.github, gh) { github = "" }
-            return@AppScaffold
+    Box {
+        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+            val gh = github
+            if (gh != null) {
+                if (gh == GH_PICK) {
+                    GithubPickPage(chat.github) { github = "" }
+                } else if (gh.isEmpty()) {
+                    GithubPage(chat.github, { github = null }, { github = it }, { github = GH_PICK }) {
+                        github = null
+                        chat.sources.startAdd(Constants.SOURCE_GITHUB)
+                        meStart = SettingsPage.SOURCES
+                        tab = Tab.ME
+                    }
+                } else GithubRepoPage(chat.github, gh) { github = "" }
+                return@AppScaffold
+            }
+            when (tab) {
+                Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
+                Tab.CHAT -> ChatScreen(chat)
+                Tab.AGENT -> AgentPage(chat)
+                Tab.RESOURCES -> MetricsPage(chat, openGithub)
+                // "我的" 的子页自己处理返回键, 逐级回到列表
+                Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart)
+            }
         }
-        when (tab) {
-            Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
-            Tab.CHAT -> ChatScreen(chat)
-            Tab.AGENT -> AgentPage(chat)
-            Tab.RESOURCES -> MetricsPage(chat, openGithub)
-            // "我的" 的子页自己处理返回键, 逐级回到列表
-            Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart)
+        MessageBanner(chat) {
+            github = null
+            tab = Tab.CHAT
+            chat.openBanner()
         }
     }
 }

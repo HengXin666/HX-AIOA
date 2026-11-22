@@ -126,6 +126,12 @@ class ProxyCore(private val context: Context) {
                 .map { line -> line.substringAfter("msg=", line).trim('"') }
         }
 
+        // 诊断用: 内核日志最后几行原样输出
+        fun logTail(context: Context, max: Int): List<String> {
+            val file = File(home(context), LOG_FILE)
+            return if (file.exists()) file.readLines().takeLast(max) else emptyList()
+        }
+
         fun secret(context: Context): String {
             val file = File(home(context), SECRET_FILE)
             if (file.exists()) return file.readText()

@@ -28,6 +28,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import com.hengxin.aioa.data.MutedGroups
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 private const val CRASH_TITLE = "**上次崩溃**\n"
 private const val FENCE = "```"
@@ -134,7 +137,30 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         accept(frame)
     }
 
+    /** 应用在前台时别的群来的新消息, 顶部横幅显示几秒; 正在看的群, 自己发的, 免打扰的, 补拉的旧消息不弹。 */
+    var banner by mutableStateOf<ServerFrame.Msg?>(null)
+    private var bannerJob: Job? = null
+
+    private fun maybeBanner(frame: ServerFrame.Msg) {
+        val key = frame.groupKey()
+        if (isMine(frame) || groups.open == key || System.currentTimeMillis() - frame.ts > BANNER_FRESH_MS) return
+        if (MutedGroups.contains(getApplication(), key)) return
+        banner = frame
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(BANNER_SHOW_MS)
+            banner = null
+        }
+    }
+
+    fun openBanner() {
+        val msg = banner ?: return
+        banner = null
+        groups.openGroup(msg.groupKey())
+    }
+
     private fun accept(frame: ServerFrame.Msg) {
+        if (frame.seq > lastSeq) maybeBanner(frame)
         socket.send(Frames.ack(frame.seq))
         merge(listOf(frame))
         viewModelScope.launch(Dispatchers.IO) {
@@ -159,5 +185,10 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onCleared() {
         socket.stop()
+    }
+
+    private companion object {
+        const val BANNER_SHOW_MS = 4000L
+        const val BANNER_FRESH_MS = 60_000L
     }
 }
