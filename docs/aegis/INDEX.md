@@ -37,3 +37,5 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-21 | artifact | docs/aegis/work/2026-11-21-core-proto/drift-check-draft.json | 核心协议与服务端: 多账号, 接入 key, 统一事件, 规则, Agent, 工作台 drift check draft |
 | 2026-11-22 | work | docs/aegis/work/2026-11-22-v1-server/10-intent.md | v1 服务端: 统一事件, 来源接入, Agent 交互, 规则引擎 intent |
 | 2026-11-22 | work | docs/aegis/work/2026-11-22-v1-server/90-evidence.md | v1 服务端: 统一事件, 来源接入, Agent 交互, 规则引擎 evidence |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-space-schema/10-intent.md | 工作台: 组件数据体系与微页面 schema (#5) intent |
+| 2026-11-22 | work | docs/aegis/work/2026-11-22-space-schema/90-evidence.md | 工作台: 组件数据体系与微页面 schema (#5) evidence |
