@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.net.ApiCache
+import com.hengxin.aioa.proto.V1Decode
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -27,6 +29,7 @@ import java.util.UUID
 
 private const val CRASH_TITLE = "**上次崩溃**\n"
 private const val FENCE = "```"
+private const val CACHE_OVERVIEW = "overview"
 
 // 打开界面: 先从本地库秒出历史, 再用 since=本地最大序号 只补拉增量; 后台推送全部交给 :link 进程
 class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
@@ -50,7 +53,9 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private var lastSeq = 0L
     private val socket = LinkSocket(app, device, { lastSeq }, this, forLink = true)
     val metrics = MetricsState { socket.send(Frames.watch(it)) }
-    val feed = FeedState(socket::send)
+    val feed = FeedState(socket::send) { raw ->
+        viewModelScope.launch(Dispatchers.IO) { runCatching { ApiCache.write(app, CACHE_OVERVIEW, org.json.JSONObject(raw)) } }
+    }
     val spaces = SpacesState(app, viewModelScope, metrics)
     val sources = SourcesState(app, viewModelScope)
     val github = GithubState(app, viewModelScope)
@@ -61,6 +66,9 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         viewModelScope.launch {
             val (history, readSeq) = withContext(Dispatchers.IO) { db.recent(Constants.HISTORY_PAGE) to db.readSeq() }
             merge(history)
+            if (!feed.loaded) {
+                withContext(Dispatchers.IO) { ApiCache.read(getApplication(), CACHE_OVERVIEW)?.let { runCatching { V1Decode.overview(it) }.getOrNull() } }?.let(feed::restore)
+            }
             if (!loaded) {
                 dividerSeq = readSeq
                 loaded = true

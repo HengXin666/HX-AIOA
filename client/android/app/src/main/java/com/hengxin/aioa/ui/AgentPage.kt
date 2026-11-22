@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,10 +50,10 @@ fun AgentPage(chat: ChatModel) {
         if (active.isEmpty() || state != CardState.Ready) {
             Card { StateBody(if (state == CardState.Ready) CardState.Empty else state, "没有进行中的任务") {} }
         }
-        active.forEach { task -> TaskCard(task.toCard(feed.pending[task.id]), stateOf(state), onOption = { answer(task, it) }) }
+        AnimatedItems(active, { it.id }) { task -> TaskCard(task.toCard(feed.pending[task.id]), stateOf(state), onOption = { answer(task, it) }) }
         val ended = all.filter { it.state !in ACTIVE }
         if (ended.isNotEmpty()) PageSection("已结束")
-        ended.forEach { task -> TaskCard(task.toCard(null), stateOf(state)) }
+        AnimatedItems(ended, { it.id }) { task -> TaskCard(task.toCard(null), stateOf(state)) }
     }
 }
 

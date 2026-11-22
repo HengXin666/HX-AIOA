@@ -83,7 +83,7 @@ fun LayerSection(
         Card {
             val shown = if (state == CardState.Ready && items.isEmpty()) CardState.Empty else state
             StateBody(shown, emptyText, onRetry) {
-                items.forEach { item -> FeedRow(item, onItem?.let { { it(item) } }) }
+                AnimatedItems(items, { it.id }) { item -> FeedRow(item, onItem?.let { { it(item) } }) }
             }
         }
     }

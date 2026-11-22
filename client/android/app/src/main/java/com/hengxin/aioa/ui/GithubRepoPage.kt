@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -78,18 +79,18 @@ private fun RepoHeader(r: GhRepo) {
 @Composable
 private fun TabBody(d: GhDetail, tab: RepoTab, open: (String?) -> Unit) {
     when (tab) {
-        RepoTab.TIMELINE -> d.timeline.sortedByDescending { it.ts }.forEach { a ->
+        RepoTab.TIMELINE -> AnimatedItems(d.timeline.sortedByDescending { it.ts }, { "${it.ts}${it.kind}${it.title}" }) { a ->
             GhRow(activityIcon(a.kind), a.title, ago(a.ts)) { open(a.url) }
         }
-        RepoTab.PRS -> d.prs.forEach { p ->
+        RepoTab.PRS -> AnimatedItems(d.prs, { it.number }) { p ->
             val meta = metaOf("#${p.number}", p.author, if (p.draft) "草稿" else "", ago(p.updatedAt))
             GhRow(ICON_PR, p.title, meta) { open(p.url) }
         }
-        RepoTab.ISSUES -> d.issues.forEach { i ->
+        RepoTab.ISSUES -> AnimatedItems(d.issues, { it.number }) { i ->
             val meta = metaOf("#${i.number}", i.author, ago(i.updatedAt), *i.labels.toTypedArray())
             GhRow(ICON_ISSUE, i.title, meta) { open(i.url) }
         }
-        RepoTab.CI -> d.runs.forEach { r -> RunRow(r) { open(r.url) } }
+        RepoTab.CI -> AnimatedItems(d.runs, { it.url }) { r -> RunRow(r) { open(r.url) } }
     }
 }
 

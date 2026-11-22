@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.kit.AnimatedItems
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
@@ -39,7 +40,7 @@ fun GithubOverviewCard(state: GithubState, open: () -> Unit) {
                 Dot(ciColor(ci?.status))
                 Text(ci?.let { "最新 CI " + metaOf(ciLabel(it.status), it.workflow, ago(it.at)) } ?: "最新 CI 未知", c.textSecondary, GH_META_SP)
             }
-            state.recent.take(GITHUB_RECENT_SHOWN).forEach { a ->
+            AnimatedItems(state.recent.take(GITHUB_RECENT_SHOWN), { "${it.repo}${it.ts}${it.title}" }) { a ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(activityIcon(a.kind), c.textSecondary, 14.dp)
                     Text("${a.repo.substringAfter('/')}: ${a.title}", c.text, 13)

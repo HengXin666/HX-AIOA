@@ -9,6 +9,7 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.proto.AgentStatus
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.Frames
+import com.hengxin.aioa.proto.Overview
 import com.hengxin.aioa.proto.OverviewItem
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.TaskSnapshot
@@ -17,7 +18,7 @@ import java.util.UUID
 private const val LAYER_MAX = 20
 
 /** 总览与 Agent 页的界面状态: v1 流的 overview 快照打底, 之后的 ev / task 帧实时合并。只在界面进程使用。 */
-class FeedState(private val send: (String) -> Boolean) {
+class FeedState(private val send: (String) -> Boolean, private val save: (String) -> Unit = {}) {
     /** 服务端是否支持 v1; 旧 /ws 端点时总览退回由消息推断。 */
     var v1 by mutableStateOf(false)
         private set
@@ -35,6 +36,23 @@ class FeedState(private val send: (String) -> Boolean) {
     val pending = mutableStateMapOf<String, String>()
     private val actions = HashMap<String, String>()
 
+    /** 用上次缓存的总览打底, 打开就有内容; 连上后服务端的快照会替换它。 */
+    fun restore(o: Overview) {
+        if (loaded) return
+        apply(o)
+        updatedAt = o.generatedAt
+    }
+
+    // 只替换变了的层, 没变的层不触发重绘; 列表按 id 增量显示
+    private fun apply(o: Overview) {
+        (layers.keys - o.layers.keys).forEach { layers.remove(it) }
+        o.layers.forEach { (k, v) -> if (layers[k] != v) layers[k] = v }
+        (tasks.keys - o.tasks.map { it.id }.toSet()).forEach { tasks.remove(it) }
+        o.tasks.forEach { if (tasks[it.id] != it) tasks[it.id] = it }
+        loaded = true
+        touch()
+    }
+
     fun onFrame(frame: ServerFrame): Boolean {
         when (frame) {
             is ServerFrame.Welcome -> {
@@ -43,12 +61,8 @@ class FeedState(private val send: (String) -> Boolean) {
                 return false
             }
             is ServerFrame.OverviewFrame -> {
-                layers.clear()
-                layers.putAll(frame.overview.layers)
-                tasks.clear()
-                frame.overview.tasks.forEach { tasks[it.id] = it }
-                loaded = true
-                touch()
+                apply(frame.overview)
+                if (frame.raw.isNotEmpty()) save(frame.raw)
             }
             is ServerFrame.Ev -> merge(frame.ev)
             is ServerFrame.Task -> {

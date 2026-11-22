@@ -34,11 +34,18 @@ object Avatars {
     private const val START_QUALITY = 90
     private const val QUALITY_STEP = 10
     private const val MIN_QUALITY = 30
+    private const val PRUNE_AGE_MS = 30L * 24 * 3600 * 1000
     const val MIME = "image/webp"
 
     private val mem = LruCache<String, ImageBitmap>(MEM_ITEMS)
 
     fun cached(id: String): ImageBitmap? = mem.get(id)
+
+    /** 换掉的旧头像: 没人引用且一个月没用过的文件删掉。 */
+    fun prune(context: Context, keep: Set<String>) {
+        val cutoff = System.currentTimeMillis() - PRUNE_AGE_MS
+        File(context.filesDir, DIR).listFiles()?.forEach { if (it.name !in keep && it.lastModified() < cutoff) it.delete() }
+    }
 
     suspend fun load(context: Context, id: String): ImageBitmap? = mem.get(id) ?: withContext(Dispatchers.IO) {
         val f = File(File(context.filesDir, DIR).apply { mkdirs() }, id)
