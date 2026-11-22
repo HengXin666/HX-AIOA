@@ -20,7 +20,8 @@ private const val T_TASK = "task"
 sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
     data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null) : ServerFrame
-    data class Msg(val seq: Long, val ts: Long, val src: String, val text: String, val cid: String?) : ServerFrame
+    // group: 事件的 channel, 即消息所在的群; 旧消息与本机发出的没有
+    data class Msg(val seq: Long, val ts: Long, val src: String, val text: String, val cid: String?, val group: String? = null) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
     data class Metric(val subject: String, val points: List<MetricPoint>, val history: Boolean) : ServerFrame

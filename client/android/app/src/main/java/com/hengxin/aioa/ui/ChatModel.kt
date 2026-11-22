@@ -50,6 +50,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val spaces = SpacesState(app, viewModelScope, metrics)
     val sources = SourcesState(app, viewModelScope)
     val github = GithubState(app, viewModelScope)
+    val groups = ChatGroups(app, viewModelScope, db)
 
     fun resume() {
         NotifyKit.clearMessages(getApplication<Application>())
@@ -61,7 +62,11 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
                 loaded = true
             }
             markRead()
-            if (configured) socket.start()
+            groups.reload()
+            if (configured) {
+                groups.loadFolders()
+                socket.start()
+            }
         }
     }
 
@@ -113,6 +118,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         viewModelScope.launch(Dispatchers.IO) {
             db.insert(frame)
             db.markRead(frame.seq)
+            withContext(Dispatchers.Main) { groups.onMessage(frame) }
         }
     }
 

@@ -110,7 +110,7 @@ fun Envelope.preview(): String = when (kind) {
 /** 写进旧消息库的形状: 聊天页与通知继续按 Msg 工作; 本机发出的保留设备 id 以便识别 "我"。 */
 fun Envelope.toMsg(): ServerFrame.Msg {
     val src = if (source.id.startsWith(Constants.DEVICE_PREFIX)) source.id else source.name.ifEmpty { source.id }
-    return ServerFrame.Msg(seq, ts, src, preview(), null)
+    return ServerFrame.Msg(seq, ts, src, preview(), null, channel?.ifEmpty { null })
 }
 
 /** 是否应该弹通知: 路由明确要求安静, 指标或已恢复的事件都不打扰。 */
