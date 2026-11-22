@@ -18,7 +18,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.util.concurrent.TimeUnit
 
 // 单条长连接: 优先连 v1 流, 服务端还没有 v1 (握手 404) 时退回旧 /ws; 网络切换立即重连, 失败指数退避
 // pingSec 为 0 时不开 OkHttp 协议 ping, 心跳完全交给看门狗的 check, 一条连接只有一个心跳来源
@@ -28,7 +27,9 @@ class LinkSocket(
     private val since: () -> Long,
     private val listener: Listener,
     private val forLink: Boolean,
-    pingSec: Long = Constants.UI_PING_INTERVAL_SEC,
+    private val pingSec: Long = Constants.UI_PING_INTERVAL_SEC,
+    // 界面进程的连接: 日志加前缀, 不计入后台连接统计
+    private val ui: Boolean = false,
 ) {
     interface Listener {
         fun onFrame(frame: ServerFrame)
@@ -43,9 +44,8 @@ class LinkSocket(
     // 建连 (含读配置, 探测本机代理端口) 放在后台线程, 回调统一切回主线程
     private val handler = Handler(worker.looper)
     private val main = Handler(Looper.getMainLooper())
-    private val client = Net.base.newBuilder()
-        .pingInterval(pingSec, TimeUnit.SECONDS)
-        .build()
+    // 不用 OkHttp 协议 ping: 经代理时 pong 晚到一次就判整条连接失败。改为文本 ping 保活, 多次无数据才重连
+    private val client = Net.base
 
     @Volatile
     private var socket: WebSocket? = null
@@ -66,6 +66,7 @@ class LinkSocket(
     private var lastRx = 0L
     private val reconnectTask = Runnable { connect() }
     private val probeCheck = Runnable { verifyProbe() }
+    private val keepAlive = Runnable { keepAlive() }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -90,6 +91,7 @@ class LinkSocket(
         running = false
         connectivity.unregisterNetworkCallback(networkCallback)
         handler.removeCallbacks(reconnectTask)
+        handler.removeCallbacks(keepAlive)
         socket?.close(Constants.NORMAL_CLOSE, null)
         socket = null
     }
@@ -151,8 +153,21 @@ class LinkSocket(
         done?.invoke(Probe.DEAD)
     }
 
+    // 前台保活: 空闲满一个间隔发文本 ping, 连续多个间隔收不到任何数据 (含 pong) 才判定断线
+    private fun keepAlive() {
+        if (!running || !open || pingSec <= 0) return
+        val intervalMs = pingSec * MS_PER_SEC
+        val idle = idleMs()
+        if (idle > intervalMs * Constants.UI_DEAD_INTERVALS) {
+            log("${idle / MS_PER_SEC}s 没有收到数据, 重连")
+            return reconnectNow()
+        }
+        if (idle >= intervalMs) socket?.send(Frames.PING)
+        handler.postDelayed(keepAlive, intervalMs)
+    }
+
     private fun log(event: String) {
-        LinkLog.add(context, if (forLink) event else "[界面] $event")
+        LinkLog.add(context, if (ui) "[界面] $event" else event)
     }
 
     private fun reconnectNow() {
@@ -168,6 +183,7 @@ class LinkSocket(
         socket = null
         open = false
         handler.removeCallbacks(probeCheck)
+        handler.removeCallbacks(keepAlive)
         probeDone?.invoke(Probe.OFFLINE)
         probeDone = null
         connectAt = SystemClock.elapsedRealtime()
@@ -206,8 +222,10 @@ class LinkSocket(
                 open = true
                 lastRx = SystemClock.elapsedRealtime()
                 retryMs = Constants.RECONNECT_MIN_MS
-                if (forLink) LinkStats.hit(LinkStats.Key.CONNECT)
+                if (!ui) LinkStats.hit(LinkStats.Key.CONNECT)
                 log("已连接")
+                handler.removeCallbacks(keepAlive)
+                if (pingSec > 0) handler.postDelayed(keepAlive, pingSec * MS_PER_SEC)
             }
             main.post { listener.onStatus(true) }
         }
@@ -241,7 +259,8 @@ class LinkSocket(
             handler.post {
                 if (webSocket !== socket) return@post
                 log(why)
-                if (forLink && open) LinkStats.hit(LinkStats.Key.DISCONNECT)
+                if (!ui && open) LinkStats.hit(LinkStats.Key.DISCONNECT)
+                handler.removeCallbacks(keepAlive)
                 socket = null
                 open = false
                 probeDone?.invoke(Probe.DEAD)
