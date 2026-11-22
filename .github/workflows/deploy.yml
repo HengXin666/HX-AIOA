@@ -59,3 +59,14 @@ jobs:
             exit 0
           fi
           printf '%s' "$AIOA_AUTH_TOKEN" | npx wrangler secret put AUTH_TOKEN
+
+      # 可选: 配置了 TOKEN_SECRET secret 时同步到 Worker, webhook 签名密钥由它派生
+      - name: 同步 webhook 签名根密钥
+        env:
+          AIOA_TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
+        run: |
+          if [ -z "$AIOA_TOKEN_SECRET" ]; then
+            echo "未配置 TOKEN_SECRET secret, 跳过, GitHub webhook 验签不可用"
+            exit 0
+          fi
+          printf '%s' "$AIOA_TOKEN_SECRET" | npx wrangler secret put TOKEN_SECRET

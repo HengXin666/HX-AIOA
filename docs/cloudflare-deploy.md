@@ -34,7 +34,7 @@ Worker 的运行时密钥 (`AUTH_TOKEN` / `MIPUSH_APP_SECRET` 等) **不是**部
 
 - 当前 `AUTH_TOKEN` 已在 Worker 里配置好, 手动触发的部署**不会覆盖**它。
 - 若确实想让 CI 一并同步 `AUTH_TOKEN`, 在 GitHub 里也加一个同名 `AUTH_TOKEN` secret, workflow 会在部署后自动 `secret put`。
-- v1 接入 (#3) 建议再设置 `TOKEN_SECRET` (`wrangler secret put TOKEN_SECRET`, 任意长随机串): 各接入 key 的 webhook 签名密钥由它派生, GitHub Webhook 验签需要它; 更换后所有 `webhookSecret` 随之改变。
+- v1 接入 (#3) 建议再设置 `TOKEN_SECRET` (仓库 Actions secret, 部署时自动同步到 Worker; 或手动 `wrangler secret put TOKEN_SECRET`, 任意长随机串): 各接入 key 的 webhook 签名密钥由它派生, GitHub Webhook 验签需要它; 更换后所有 `webhookSecret` 随之改变。
 
 ## 部署后会做什么
 
