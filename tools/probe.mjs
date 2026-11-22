@@ -2,8 +2,9 @@
 // 懒更新探针: 平时只低频记本地历史, 服务端下发 demand 后才实时推送。
 // 环境变量: AIOA_SERVER (如 https://example.com), AIOA_TOKEN, AIOA_SUBJECT (默认主机名)
 // 告警阈值: AIOA_ALERT_CPU / AIOA_ALERT_MEM (百分比, 默认 90), AIOA_ALERT_TEMP (摄氏度, 默认 85), 设为 0 关闭
+// 主机卡片: AIOA_SNAPSHOT_MIN 分钟发一次快照 (默认 10), AIOA_IP 覆盖显示的 IP
 import os from "node:os";
-import { readFileSync } from "node:fs";
+import { readFileSync, statfsSync } from "node:fs";
 
 const IDLE_SAMPLE_MS = 60_000;
 const HISTORY_POINTS = 1440;
@@ -13,6 +14,11 @@ const RETRY_MAX_MS = 60_000;
 const DEVICE_PREFIX = "probe";
 const MEMINFO = "/proc/meminfo";
 const THERMAL = "/sys/class/thermal/thermal_zone0/temp";
+const NET_DEV = "/proc/net/dev";
+const OS_RELEASE = "/etc/os-release";
+const ROOT = "/";
+const KB = 1024;
+const SNAPSHOT_MS = envNumber("AIOA_SNAPSHOT_MIN", 10) * 60_000;
 const ALERT_SUSTAIN = 3;
 const SEND_PATH = "/api/send";
 const ALERTS = [
@@ -80,11 +86,84 @@ function temperature() {
 
 const round = (v) => Math.round(v * 10) / 10;
 
+// 所有非回环网卡的累计字节, 两次采样相减得到速率
+function netBytes() {
+  try {
+    let rx = 0;
+    let tx = 0;
+    for (const line of readFileSync(NET_DEV, "utf8").split("\n").slice(2)) {
+      const [name, rest] = line.split(":");
+      if (!rest || name.trim() === "lo") continue;
+      const f = rest.trim().split(/\s+/).map(Number);
+      rx += f[0];
+      tx += f[8];
+    }
+    return { rx, tx, ts: Date.now() };
+  } catch {
+    return undefined;
+  }
+}
+
+let lastNet = netBytes();
+
+function netRate() {
+  const now = netBytes();
+  const prev = lastNet;
+  lastNet = now;
+  if (!now || !prev || now.ts <= prev.ts) return undefined;
+  const sec = (now.ts - prev.ts) / 1000;
+  return { rx: round((now.rx - prev.rx) / KB / sec), tx: round((now.tx - prev.tx) / KB / sec) };
+}
+
+function diskPercent() {
+  try {
+    const s = statfsSync(ROOT);
+    return s.blocks > 0 ? round((1 - s.bavail / s.blocks) * 100) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function sample() {
   const values = { cpu: cpuPercent(), mem: memPercent(), load: round(os.loadavg()[0]) };
   const temp = temperature();
   if (temp !== undefined) values.temp = temp;
+  const disk = diskPercent();
+  if (disk !== undefined) values.disk = disk;
+  const net = netRate();
+  if (net) Object.assign(values, net);
   return { ts: Date.now(), values };
+}
+
+function osName() {
+  try {
+    return /^PRETTY_NAME="?([^"\n]+)/m.exec(readFileSync(OS_RELEASE, "utf8"))?.[1] ?? `${os.type()} ${os.release()}`;
+  } catch {
+    return `${os.type()} ${os.release()}`;
+  }
+}
+
+function hostInfo() {
+  const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4");
+  const info = { hostname: os.hostname(), os: osName(), arch: os.arch(), cores: os.cpus().length, memTotal: os.totalmem(), bootAt: Date.now() - os.uptime() * 1000 };
+  const ip = process.env.AIOA_IP || lan?.address;
+  if (ip) info.ip = ip;
+  try {
+    const s = statfsSync(ROOT);
+    info.diskTotal = s.blocks * s.bsize;
+  } catch {}
+  return info;
+}
+
+// 24 小时在线率: 每分钟记一次连接是否在线
+const upTicks = [];
+
+function availability() {
+  return upTicks.length ? round((upTicks.filter(Boolean).length / upTicks.length) * 100) : 100;
+}
+
+function sendHost() {
+  send({ t: "host", subject, info: hostInfo(), last: history[history.length - 1], avail: availability() });
 }
 
 function remember(point) {
@@ -152,6 +231,7 @@ function connect() {
     retry = RETRY_MIN_MS;
     console.log(`已连接, 提供主体 ${subject}`);
     send({ t: "offer", subjects: [subject] });
+    sendHost();
     ping = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send("ping"), PING_MS);
   };
   ws.onmessage = (e) => {
@@ -174,8 +254,11 @@ function tick() {
   const point = sample();
   remember(point);
   checkAlerts(point);
+  upTicks.push(ws?.readyState === WebSocket.OPEN);
+  if (upTicks.length > HISTORY_POINTS) upTicks.shift();
 }
 
 remember(sample());
 setInterval(tick, IDLE_SAMPLE_MS);
+setInterval(sendHost, SNAPSHOT_MS);
 connect();

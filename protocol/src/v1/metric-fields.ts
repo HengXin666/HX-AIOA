@@ -7,6 +7,8 @@ export const FIELD_TEMP = "temp";
 export const FIELD_LOAD = "load";
 export const FIELD_NET = "net";
 export const FIELD_UP = "up";
+export const FIELD_RX = "rx";
+export const FIELD_TX = "tx";
 
 const PERCENT = "%";
 
@@ -21,6 +23,8 @@ export const METRIC_FIELDS: Record<string, MetricFieldInfo> = {
   [FIELD_LOAD]: { name: "负载", unit: "" },
   [FIELD_NET]: { name: "网络", unit: "MB/s" },
   [FIELD_UP]: { name: "在线", unit: "" },
+  [FIELD_RX]: { name: "下行", unit: "KB/s" },
+  [FIELD_TX]: { name: "上行", unit: "KB/s" },
 };
 
 // 可替换的指标来源; 每个来源的原生字段名 → 标准字段名

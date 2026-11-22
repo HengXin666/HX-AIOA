@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.hengxin.aioa.proto.HostCard
 import com.hengxin.aioa.proto.MetricPoint
 import com.hengxin.aioa.proto.ServerFrame
 
@@ -14,6 +15,8 @@ class MetricsState(private val sendWatch: (List<String>) -> Boolean) {
     var probes by mutableStateOf<List<String>>(emptyList())
         private set
     val samples = mutableStateMapOf<String, List<MetricPoint>>()
+    var hosts by mutableStateOf<List<HostCard>>(emptyList())
+        private set
 
     // 界面当前想看的主体; 断线重连后按它重新声明
     private var watching: List<String> = emptyList()
@@ -30,6 +33,10 @@ class MetricsState(private val sendWatch: (List<String>) -> Boolean) {
     fun onFrame(frame: ServerFrame): Boolean = when (frame) {
         is ServerFrame.Probes -> {
             probes = frame.subjects
+            true
+        }
+        is ServerFrame.Hosts -> {
+            hosts = frame.hosts
             true
         }
         is ServerFrame.Metric -> {

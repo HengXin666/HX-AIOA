@@ -281,6 +281,7 @@ export class Hub extends DurableObject<Env> {
       case "watch":
         ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
         metrics.primeWatcher(ws, frame.subjects.filter((s) => !(att.watch ?? []).includes(s)));
+        if (frame.subjects.length && !(att.watch ?? []).length) sendFrame(ws, metrics.hostsFrame());
         metrics.rebalance();
         return;
       case "offer":
@@ -289,7 +290,10 @@ export class Hub extends DurableObject<Env> {
         metrics.rebalance();
         return;
       case "metric":
-        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.relay(frame);
+        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.relay(frame, false);
+        return;
+      case "host":
+        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.host(ws, att, frame);
         return;
       case "send": {
         if (att.role !== "client") return;
@@ -325,8 +329,10 @@ export class Hub extends DurableObject<Env> {
 
   private release(ws: WebSocket): void {
     const att = attOf(ws);
-    ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [] } satisfies Attachment);
+    ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [], host: undefined } satisfies Attachment);
+    if (att.host) this.core.metrics.offline(att.host);
     this.core.metrics.rebalance();
+    if (att.host) this.core.metrics.broadcastHosts();
     if (att.role === "agent") this.core.agents.broadcastAgents();
   }
 

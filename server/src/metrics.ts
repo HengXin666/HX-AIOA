@@ -4,6 +4,9 @@ import {
   METRIC_LIVE_INTERVAL_MS,
   PROBE_DEVICE_PREFIX,
   type DemandFrame,
+  type HostCard,
+  type HostFrame,
+  type HostsFrame,
   type MetricData,
   type MetricFrame,
   type MetricLatest,
@@ -28,6 +31,37 @@ export class MetricRouter {
     private readonly sql: SqlStorage,
   ) {
     sql.exec("CREATE TABLE IF NOT EXISTS metric_latest (subject TEXT PRIMARY KEY, ts INTEGER NOT NULL, body TEXT NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS probe_host (subject TEXT PRIMARY KEY, body TEXT NOT NULL)");
+  }
+
+  // 主机快照只存进探针连接的 attachment, 不写库; 在看资源页的连接顺带收到
+  host(ws: WebSocket, att: Attachment, frame: HostFrame): void {
+    const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info: frame.info };
+    if (frame.last) card.last = frame.last;
+    if (frame.avail !== undefined) card.avail = frame.avail;
+    ws.serializeAttachment({ ...att, host: card } satisfies Attachment);
+    this.broadcastHosts();
+  }
+
+  // 探针断开: 唯一一次写库, 留一行离线快照给卡片显示 "最后在线"
+  offline(card: HostCard): void {
+    const body: HostCard = { ...card, online: false, seen: Date.now() };
+    this.sql.exec("INSERT OR REPLACE INTO probe_host (subject, body) VALUES (?, ?)", card.subject, JSON.stringify(body));
+  }
+
+  hostsFrame(): HostsFrame {
+    const online = this.sockets().map((ws) => attOf(ws)).filter((a) => isProbe(a) && a.host).map((a) => a.host!);
+    const live = new Set(online.map((h) => h.subject));
+    const rows = this.sql.exec<{ body: string }>("SELECT body FROM probe_host").toArray();
+    const offline = rows.map((r) => JSON.parse(r.body) as HostCard).filter((h) => !live.has(h.subject));
+    return { t: "hosts", hosts: [...online, ...offline].sort((a, b) => a.subject.localeCompare(b.subject)) };
+  }
+
+  broadcastHosts(): void {
+    const targets = this.sockets().filter((ws) => (attOf(ws).watch ?? []).length > 0);
+    if (!targets.length) return;
+    const text = JSON.stringify(this.hostsFrame());
+    for (const ws of targets) trySend(ws, text);
   }
 
   watchers(subject: string): WebSocket[] {
@@ -67,7 +101,8 @@ export class MetricRouter {
   }
 
   // 不论来自探针还是 HTTP, 转发前统一换成标准字段名, 组件绑定与来源无关
-  relay(raw: MetricFrame): void {
+  // persist 为 false 时只转发 (探针实时点), 不写库
+  relay(raw: MetricFrame, persist = true): void {
     const frame: MetricFrame = { ...raw, points: raw.points.map((p) => ({ ts: p.ts, values: normalizeMetricValues(p.values) })) };
     const last = frame.points[frame.points.length - 1];
     if (last && !frame.history) {
@@ -75,7 +110,7 @@ export class MetricRouter {
       const prev = this.latest.get(frame.subject)?.points[0]?.values;
       const merged = { ts: last.ts, values: { ...prev, ...last.values } };
       this.latest.set(frame.subject, { t: "metric", subject: frame.subject, points: [merged] });
-      this.persist(frame.subject, merged.ts, merged.values);
+      if (persist) this.persist(frame.subject, merged.ts, merged.values);
     }
     const text = JSON.stringify(frame);
     for (const ws of this.watchers(frame.subject)) trySend(ws, text);
@@ -108,6 +143,11 @@ export class MetricRouter {
         const units = this.units.get(s);
         if (units) v.units = units;
         out[s] = v;
+        continue;
+      }
+      const card = this.sockets().map((ws) => attOf(ws).host).find((h) => h?.subject === s && h.last);
+      if (card?.last) {
+        out[s] = { ts: card.last.ts, values: card.last.values };
         continue;
       }
       const row = this.sql.exec<{ body: string }>("SELECT body FROM metric_latest WHERE subject = ?", s).toArray()[0];

@@ -35,6 +35,7 @@ sealed interface ServerFrame {
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
     data class Metric(val subject: String, val points: List<MetricPoint>, val history: Boolean) : ServerFrame
     data class Probes(val subjects: List<String>) : ServerFrame
+    data class Hosts(val hosts: List<HostCard>) : ServerFrame
     data class Ev(val ev: Envelope) : ServerFrame
     data class Task(val task: TaskSnapshot) : ServerFrame
     data class ActOk(val aid: String, val state: String) : ServerFrame
@@ -48,6 +49,23 @@ sealed interface ServerFrame {
 }
 
 data class MetricPoint(val ts: Long, val values: Map<String, Double>)
+
+/** 主机卡片: 探针每 10 分钟的快照, online=false 时 seen 为最后在线时间。 */
+data class HostCard(
+    val subject: String,
+    val online: Boolean,
+    val seen: Long,
+    val hostname: String?,
+    val ip: String?,
+    val os: String?,
+    val arch: String?,
+    val cores: Int?,
+    val memTotal: Double?,
+    val diskTotal: Double?,
+    val bootAt: Long?,
+    val last: MetricPoint?,
+    val avail: Double?,
+)
 
 // 与 protocol/src/index.ts 及 protocol/src/v1/frames.ts 保持一致, 协议改动先改那边; 未知 t 忽略
 object Frames {
@@ -74,6 +92,7 @@ object Frames {
             "err" -> ServerFrame.Err(o.optString("code"), o.optString(KEY_TEXT), o.optString(KEY_AID).ifEmpty { null })
             "metric" -> parseMetric(o)
             "probes" -> ServerFrame.Probes(V1Decode.strings(o.optJSONArray("subjects")))
+            "hosts" -> ServerFrame.Hosts(parseHosts(o.optJSONArray("hosts") ?: JSONArray()))
             T_EV -> ServerFrame.Ev(V1Decode.envelope(o.getJSONObject(T_EV)))
             T_TASK -> ServerFrame.Task(V1Decode.task(o.getJSONObject(T_TASK)))
             "act_ok" -> ServerFrame.ActOk(o.getString(KEY_AID), o.optString("state"))
@@ -91,12 +110,35 @@ object Frames {
 
     private fun parseMetric(o: JSONObject): ServerFrame.Metric {
         val arr = o.optJSONArray(KEY_POINTS) ?: JSONArray()
-        val points = (0 until arr.length()).map { i ->
-            val p = arr.getJSONObject(i)
-            val v = p.getJSONObject("values")
-            MetricPoint(p.getLong(KEY_TS), v.keys().asSequence().associateWith { v.getDouble(it) })
-        }
+        val points = (0 until arr.length()).map { i -> point(arr.getJSONObject(i)) }
         return ServerFrame.Metric(o.optString("subject"), points, o.optBoolean("history"))
+    }
+
+    private fun point(p: JSONObject): MetricPoint {
+        val v = p.getJSONObject("values")
+        return MetricPoint(p.getLong(KEY_TS), v.keys().asSequence().associateWith { v.getDouble(it) })
+    }
+
+    private fun parseHosts(arr: JSONArray): List<HostCard> = (0 until arr.length()).mapNotNull { i ->
+        val h = arr.optJSONObject(i) ?: return@mapNotNull null
+        val info = h.optJSONObject("info") ?: JSONObject()
+        fun str(k: String) = info.optString(k).ifEmpty { null }
+        fun num(k: String) = if (info.has(k)) info.optDouble(k) else null
+        HostCard(
+            subject = h.optString("subject"),
+            online = h.optBoolean("online"),
+            seen = h.optLong("seen"),
+            hostname = str("hostname"),
+            ip = str("ip"),
+            os = str("os"),
+            arch = str("arch"),
+            cores = num("cores")?.toInt(),
+            memTotal = num("memTotal"),
+            diskTotal = num("diskTotal"),
+            bootAt = num("bootAt")?.toLong(),
+            last = h.optJSONObject("last")?.let { runCatching { point(it) }.getOrNull() },
+            avail = if (h.has("avail")) h.optDouble("avail") else null,
+        )
     }
 
     /** 声明当前在看的主体, 空列表表示不看了; 页面离开或进入后台时必须发空列表。 */

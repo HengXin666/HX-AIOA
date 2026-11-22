@@ -40,8 +40,11 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
             SpacesSection(chat)
             PageSection("探针")
         }
-        if (state.probes.isEmpty()) NoProbe()
-        state.probes.forEach { Probe(state, it) }
+        val carded = state.hosts.map { it.subject }.toSet()
+        if (state.probes.isEmpty() && carded.isEmpty()) NoProbe()
+        state.hosts.forEach { HostPanel(state, it) }
+        // 旧版探针不发主机卡片, 仍用原来的指标格子
+        state.probes.filter { it !in carded }.forEach { Probe(state, it) }
     }
 }
 

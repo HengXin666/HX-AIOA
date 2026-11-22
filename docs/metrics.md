@@ -22,8 +22,17 @@ CPU, 内存这类指标只在有人看时才需要实时, 所以采用懒更新,
 | 探针 → Hub → 客户端 | `{t:"metric", subject, points:[{ts, values}], history?}` | 指标点, values 为 名字 → 数值 |
 | Hub → 探针 | `{t:"demand", subjects, intervalMs}` | 需要实时推送的主体, 空表示停 |
 | Hub → 客户端 | `{t:"probes", subjects}` | 在线探针的主体列表, 连上时发一次, 变化时再发 |
+| 探针 → Hub | `{t:"host", subject, info, last, avail}` | 主机卡片快照: 连上时和每 10 分钟一次 |
+| Hub → 客户端 | `{t:"hosts", hosts}` | 全部主机卡片, 开始 watch 时和快照变化时发给在看的连接 |
 
 定义在 `protocol/src/index.ts`, 安卓镜像在 `Frames.kt`。
+
+### 主机卡片与 CF 额度
+
+- 快照 (主机名, IP, 系统, 核数, 内存 / 磁盘总量, 开机时间, 最新一组指标, 24 小时在线率) 只放在探针那条连接的 attachment 里, 休眠唤醒后仍在, 不写 SQLite。每台探针每天约 144 条消息, 写入为 0。
+- 实时推送 (有人在看时每 2 秒) 只转发, 不落库。
+- 唯一的写入是探针断开时记一行离线快照, 卡片据此显示 "离线 · 最后在线时间"。
+- 在线率由探针本地统计 (每分钟记一次连接是否在线), 不占服务端写入。
 
 ## 运行探针
 
@@ -31,7 +40,7 @@ CPU, 内存这类指标只在有人看时才需要实时, 所以采用懒更新,
 AIOA_SERVER=https://你的域名 AIOA_TOKEN=... AIOA_SUBJECT=nas-01 node tools/probe.mjs
 ```
 
-需要 Node 22 以上。目前采集 cpu, mem, load, temp (有温度传感器时), 均为标准字段名 (`protocol/src/v1/metric-fields.ts`); Beszel, Netdata, Prometheus 的数据进入服务端时也换成同一套名字, 工作台组件不关心来源。
+需要 Node 22 以上。目前采集 cpu, mem, disk, load, rx / tx (KB/s), temp (有温度传感器时), 均为标准字段名 (`protocol/src/v1/metric-fields.ts`); Beszel, Netdata, Prometheus 的数据进入服务端时也换成同一套名字, 工作台组件不关心来源。
 
 告警阈值: `AIOA_ALERT_CPU`, `AIOA_ALERT_MEM` (百分比, 默认 90), `AIOA_ALERT_TEMP` (摄氏度, 默认 85), 设为 0 关闭。
 

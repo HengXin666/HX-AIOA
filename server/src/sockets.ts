@@ -1,4 +1,4 @@
-import type { Envelope, StreamRole } from "@hx-aioa/protocol";
+import type { Envelope, HostCard, StreamRole } from "@hx-aioa/protocol";
 import { PROTO_LEGACY, PROTO_V1 } from "./constants";
 import { toMsgFrame } from "./legacy";
 
@@ -11,6 +11,7 @@ export type Attachment = {
   watch?: string[];
   offer?: string[];
   demand?: string[];
+  host?: HostCard;
 };
 
 export function trySend(ws: WebSocket, text: string): boolean {
