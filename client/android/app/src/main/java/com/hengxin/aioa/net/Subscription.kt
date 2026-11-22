@@ -19,6 +19,7 @@ object Subscription {
     private const val MAX_AGE_MS = 24 * 60 * 60_000L
     private const val TIMEOUT_SEC = 10L
     private const val DIRECT_TRIES = 2
+    private const val IMPORT_FILE = "sub.yaml"
     private val RELAY_PATH = listOf("api/v1/relay/subscription")
     private val lock = Any()
     private const val SNIPPET = 60
@@ -61,6 +62,7 @@ object Subscription {
 
     // 顺序: 直连试两个 UA, 再让服务端在境外代拉 (机场屏蔽国内 IP 时), 内核在跑时最后走代理
     private fun downloadLocked(context: Context, url: String): SubStatus {
+        imported(context)?.let { return done(context, it, "导入文件") }
         val failures = mutableListOf<String>()
         for (ua in USER_AGENTS.take(DIRECT_TRIES)) {
             val result = runCatching { fetch(url, Proxy.NO_PROXY, ua) }.getOrElse { Attempt(null, it.message ?: it.javaClass.simpleName) }
@@ -83,6 +85,15 @@ object Subscription {
             }
         }
         return save(context, SubStatus(false, now(), "订阅下载失败: " + failures.joinToString("; ")))
+    }
+
+    // 机场把国内 IP 和云厂商出口都拦了时, 从电脑拉好放到 App 外部目录 (adb push 可写), 读一次就删
+    private fun imported(context: Context): String? {
+        val f = File(context.getExternalFilesDir(null) ?: return null, IMPORT_FILE)
+        if (!f.exists()) return null
+        val text = runCatching { f.readText() }.getOrNull()
+        f.delete()
+        return text?.takeIf { it.isNotBlank() && !it.trimStart().startsWith("<") }
     }
 
     private fun done(context: Context, body: String, route: String): SubStatus {
