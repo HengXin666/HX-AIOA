@@ -11,9 +11,11 @@
 | `src/v1/source.ts` | 来源类型, Webhook 适配器 id, 拉取任务约定, 映射模板 |
 | `src/v1/frames.ts` | `/api/v1/stream` 新增帧 |
 | `src/v1/api.ts`, `src/v1/paths.ts` | HTTP 请求与响应类型, 路径常量 |
-| `src/v1/space.ts` | 工作台布局 (草案) |
+| `src/v1/space.ts` | 工作台 schema: 组件类型与分类, 数据绑定, 校验 `validateSpace` |
+| `src/v1/space-layout.ts` | 工作台显示状态 (排序, 尺寸, 隐藏) 的解析与排序, 服务端解析的当前值 `SpaceData` |
+| `src/v1/metric-fields.ts` | 标准指标字段与各来源 (探针, Beszel, Netdata, Prometheus) 的别名 |
 
-v1 契约见 `docs/api-v1.md`, `docs/api-v1-stream.md`, `docs/api-v1-connectors.md`。下文是旧版 `/ws` 协议, 继续可用: 服务端内部已统一为事件模型, 旧客户端收到的 `msg` 帧由事件压成一行文本生成, `seq` 与新模型连续。
+v1 契约见 `docs/api-v1.md`, `docs/api-v1-stream.md`, `docs/api-v1-connectors.md`, `docs/api-v1-spaces.md`。下文是旧版 `/ws` 协议, 继续可用: 服务端内部已统一为事件模型, 旧客户端收到的 `msg` 帧由事件压成一行文本生成, `seq` 与新模型连续。
 
 ## 旧版 /ws 协议
 

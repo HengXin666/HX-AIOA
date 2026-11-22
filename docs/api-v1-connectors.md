@@ -51,6 +51,14 @@ Beszel 通过 shoutrrr 发通知, 地址写 `generic://<域名>/api/v1/hooks/bes
 
 也兼容同样字段的表单或 query。
 
+### netdata / prometheus (指标)
+
+只产出 `metric`, 字段统一换成标准名 (`cpu`, `mem`, `disk`, `load` 等), 工作台组件按 `subject + field` 绑定, 与来源无关, 详见 [api-v1-spaces.md](api-v1-spaces.md) §1。
+
+- netdata: 拉取 `/api/v1/allmetrics?format=json`, 整体 POST 一次; subject 取来源上配置的 `subject`。
+- prometheus: 拉取 `/api/v1/query`, `itemsPath` 填 `data.result`, 每条 POST 一次; 字段取 `field` 标签 (用 `label_replace` 打上), subject 取 `subject` 标签或 `instance`。
+- beszel 指标: 拉取 PocketBase `/api/collections/systems/records`, `itemsPath` 填 `items`, 带 `info` 的条目转成指标, 告警通知仍按上文转成事件。
+
 ## 3. 拉取式来源
 
 不能主动推送, 或只在内网可达的来源 (邮件 API, 内网探针, 需要令牌的接口) 由家里的机器定时拉取, 每个条目原样 POST 给某个 webhook 适配器, 映射规则仍在服务端统一维护。约定类型 `PullConfig` / `PullJob`:

@@ -3,10 +3,10 @@ import { parseRule, type RuleInput } from "./rule";
 import type { JsonMapping } from "./api";
 
 // Webhook 适配器 id, 也是 /api/v1/hooks/{adapter}/{keyId} 的路径段
-export const HOOK_ADAPTERS = ["generic", "github", "uptime-kuma", "beszel", "healthchecks"] as const;
+export const HOOK_ADAPTERS = ["generic", "github", "uptime-kuma", "beszel", "healthchecks", "netdata", "prometheus"] as const;
 export type HookAdapter = (typeof HOOK_ADAPTERS)[number];
 
-export const SOURCE_TYPES = ["webhook", "github", "uptime-kuma", "beszel", "healthchecks", "agent", "probe", "script", "mail", "pull"] as const;
+export const SOURCE_TYPES = ["webhook", "github", "uptime-kuma", "beszel", "healthchecks", "netdata", "prometheus", "agent", "probe", "script", "mail", "pull"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 // 内置来源类型的描述: 客户端据此显示 "可接入的来源" 与接入说明, 无需随来源增加而发版
