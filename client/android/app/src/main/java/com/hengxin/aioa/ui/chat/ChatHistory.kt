@@ -19,7 +19,7 @@ class ChatHistory(private val context: Context) {
         }
     }
 
-    /** mode: recall (2 分钟内自己发的) 或 delete; 成功返回墓碑。 */
+    /** mode: recall (自己发的, 随时可撤) 或 delete; 成功返回墓碑。 */
     fun remove(seq: Long, mode: String): Result<ServerFrame.Msg> {
         val r = Api.call(context, DELETE, listOf(EVENTS_SEQ, seq.toString()), query = mapOf(QUERY_MODE to mode))
         val body = r.body ?: return Result.failure(Exception(r.error ?: "操作失败"))

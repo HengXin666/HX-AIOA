@@ -353,7 +353,7 @@ GitHub 页面 (仓库摘要, PR, Issue, CI, 动态) 的接口见 [api-v1-github.
 ### 4.3 撤回, 删除与多端同步
 
 - 事件表本身就是操作日志: 新增, 更新, 撤回, 删除都换一个新的递增 `seq`, 设备只记最后一个 `seq`, 重连带 `?since=` 拉之后的变更。
-- `DELETE /api/v1/events/seq/{seq}?mode=recall|delete` (访问令牌): `recall` 只限客户端发出 (带 `cid`) 且 2 分钟内的消息; `delete` 任何事件和报告都行 (指标, 任务除外)。返回墓碑。
+- `DELETE /api/v1/events/seq/{seq}?mode=recall|delete` (访问令牌或带 `messages:send` 的 key): `recall` 只能撤回自己发的 (主人: 从客户端发出, 带 `cid`; Agent: 自己来源发的), 没有时间限制; `delete` 主人可删任何事件和报告, Agent 只能删自己所在群的 (指标, 任务除外)。返回墓碑。
 - 墓碑: 同 `id`, 新 `seq`, `data` 清空, `deleted: { mode, at, seq }` (`seq` 是被替换那条的旧序号), 安静路由不响铃; 总览不再列出, 收藏一并删除。
 - 墓碑保留 30 天。重连时 `since` 早于已清理墓碑的最大 `seq` (floor) 时, `welcome` 带 `resync: true, floor`, 客户端丢掉本地 `seq < floor` 的缓存, 补拉改为最近 500 条。
 - 云端翻页: `GET /api/v1/chats/{群键}/messages?before=<seq>&limit=<n>` 返回该群 `seq < before` 的最近 n 条 (升序)。群键与客户端一致: 有 channel 用 channel, 本机发出的是 `备忘`, 其它用来源名。

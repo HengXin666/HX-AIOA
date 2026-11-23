@@ -160,7 +160,7 @@ private fun BubbleMenu(open: Boolean, close: () -> Unit, msg: ServerFrame.Msg, a
             dismissButton = { TextButton({ confirm = false }) { Text("取消") } },
         )
     }
-    val recallable = msg.cid != null && msg.src.startsWith(Constants.DEVICE_PREFIX) && System.currentTimeMillis() - msg.ts < Constants.RECALL_WINDOW_MS
+    val recallable = msg.cid != null && msg.src.startsWith(Constants.DEVICE_PREFIX)
     DropdownMenu(open, close) {
         DropdownMenuItem({ Text("复制") }, { onCopy(); close() })
         DropdownMenuItem({ Text("引用") }, { a.onReply(msg); close() })

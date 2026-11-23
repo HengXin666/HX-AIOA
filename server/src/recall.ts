@@ -2,14 +2,14 @@ import {
   DELETE_MODES,
   PATH_EVENT_BY_SEQ,
   QUERY_MODE,
-  RECALL_WINDOW_MS,
   TOMBSTONE_KEEP_MS,
   type ChatSyncFrame,
   type DeleteMode,
   type Envelope,
 } from "@hx-aioa/protocol";
-import { CODE_BAD_REQUEST, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE } from "./constants";
-import { type Core, OWNER, type ReqCtx, type Route, route } from "./core";
+import { originOf } from "./api-events";
+import { CODE_BAD_REQUEST, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE } from "./constants";
+import { type Core, type Principal, type ReqCtx, type Route, route } from "./core";
 import { ApiFail, fail, json } from "./http";
 
 const TEXT_RECALLED = "消息已撤回";
@@ -33,14 +33,20 @@ export function tombstoneOf(ev: Envelope, mode: DeleteMode, now: number): Envelo
   return t;
 }
 
-/** 撤回 (2 分钟内, 只限客户端发出的聊天消息) 或删除 (任何消息); 墓碑换新 seq, 断线设备补拉时也能收到。 */
-export function removeMessage(core: Core, seq: number, mode: DeleteMode, now = Date.now()): Envelope {
+// 作者: 主人从自己的客户端发的 (带 cid), 或这把 key 对应的来源发的
+function isAuthor(core: Core, who: Principal, ev: Envelope): boolean {
+  return who.owner ? !!ev.cid : ev.source.id === originOf(core, who).source.id;
+}
+
+/** 撤回: 作者随时可撤; 删除: 主人 (群管理员) 删任何消息, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
+export function removeMessage(core: Core, who: Principal, seq: number, mode: DeleteMode, now = Date.now()): Envelope {
   const ev = core.store.bySeq(seq);
   if (!ev) throw new ApiFail(404, CODE_NOT_FOUND, ERR_NO_RESOURCE);
   if (ev.deleted?.mode === mode || ev.deleted?.mode === "delete") return ev;
   if (ev.kind === "metric" || ev.kind === "task") throw new ApiFail(400, CODE_BAD_REQUEST, "指标和任务不能撤回或删除");
-  if (mode === "recall" && !ev.deleted && (!ev.cid || now - ev.ts > RECALL_WINDOW_MS)) {
-    throw new ApiFail(400, CODE_BAD_REQUEST, "只能撤回 2 分钟内自己发出的消息");
+  if (mode === "recall" && !ev.deleted && !isAuthor(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只能撤回自己发的消息");
+  if (mode === "delete" && !who.owner && !(ev.channel && ev.channel === who.key.channels[0])) {
+    throw new ApiFail(403, CODE_FORBIDDEN, "Agent 只能删除自己所在群的消息");
   }
   const saved = core.store.put(tombstoneOf(ev, mode, now));
   core.store.pruneTombstones(now - TOMBSTONE_KEEP_MS);
@@ -56,7 +62,7 @@ function deleteBySeq(c: ReqCtx): Response {
   if (!Number.isFinite(seq) || seq <= 0) return fail(400, "seq 不合法");
   const mode = c.url.searchParams.get(QUERY_MODE) ?? "delete";
   if (!(DELETE_MODES as readonly string[]).includes(mode)) return fail(400, "mode 只能是 recall 或 delete");
-  return json(removeMessage(c.core, seq, mode as DeleteMode));
+  return json(removeMessage(c.core, c.who, seq, mode as DeleteMode));
 }
 
-export const RECALL_ROUTES: Route[] = [route(DELETE, PATH_EVENT_BY_SEQ, OWNER, deleteBySeq)];
+export const RECALL_ROUTES: Route[] = [route(DELETE, PATH_EVENT_BY_SEQ, "messages:send", deleteBySeq)];

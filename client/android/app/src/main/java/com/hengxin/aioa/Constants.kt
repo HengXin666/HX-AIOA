@@ -56,8 +56,6 @@ object Constants {
     val VIBRATE_PATTERN = longArrayOf(0, 250, 150, 250)
 
     const val HISTORY_PAGE = 300
-    // 与服务端 RECALL_WINDOW_MS 一致
-    const val RECALL_WINDOW_MS = 120_000L
     const val NOTIFY_MAX_LINES = 6
     const val TIME_GAP_MS = 5 * 60_000L
 
