@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,10 +40,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hengxin.aioa.Constants
+import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
-import com.hengxin.aioa.ui.chat.LetterAvatar
 import com.hengxin.aioa.ui.chat.HtmlCard
+import com.hengxin.aioa.ui.chat.LetterAvatar
 import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
 import com.hengxin.aioa.ui.chat.colorOf
@@ -62,6 +66,8 @@ class BubbleActions(
     val digests: List<Pair<String, String>>,
     val onDigest: (ServerFrame.Msg, String) -> Unit,
     val onJump: (Long) -> Unit,
+    // mode: recall / delete
+    val onRemove: (ServerFrame.Msg, String) -> Unit = { _, _ -> },
 )
 
 /** 一条气泡在列表里的位置: 是否一串的第一条 (显示名字与头像)。 */
@@ -71,6 +77,7 @@ data class BubbleSpot(val head: Boolean, val showSender: Boolean, val highlight:
 @Composable
 fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions: BubbleActions?, modifier: Modifier = Modifier, status: String? = null, onStatus: (() -> Unit)? = null) {
     val c = MaterialTheme.colorScheme
+    if (msg.deleted != null) return RecalledLine(if (mine) "你" else msg.src, modifier)
     var menu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val shape = when {
@@ -133,14 +140,35 @@ private fun QuoteBlock(ref: MsgRef, fg: Color, bar: Color, onClick: () -> Unit) 
     }
 }
 
+/** 撤回后原位置只留一行灰字。 */
+@Composable
+private fun RecalledLine(who: String, modifier: Modifier) {
+    Box(modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text("$who 撤回了一条消息", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+    }
+}
+
 @Composable
 private fun BubbleMenu(open: Boolean, close: () -> Unit, msg: ServerFrame.Msg, a: BubbleActions, onCopy: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("删除这条消息?") },
+            text = { Text("所有设备上都会删除, 不能恢复。") },
+            confirmButton = { TextButton({ confirm = false; a.onRemove(msg, MessageDb.DELETE_MODE) }) { Text("删除", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton({ confirm = false }) { Text("取消") } },
+        )
+    }
+    val recallable = msg.cid != null && msg.src.startsWith(Constants.DEVICE_PREFIX) && System.currentTimeMillis() - msg.ts < Constants.RECALL_WINDOW_MS
     DropdownMenu(open, close) {
         DropdownMenuItem({ Text("复制") }, { onCopy(); close() })
         DropdownMenuItem({ Text("引用") }, { a.onReply(msg); close() })
         DropdownMenuItem({ Text("转发") }, { a.onForward(msg); close() })
         DropdownMenuItem({ Text(if (a.isFavorite(msg.seq)) "取消收藏" else "收藏") }, { a.onFavorite(msg); close() })
         a.digests.forEach { (key, label) -> DropdownMenuItem({ Text("收录到 $label") }, { a.onDigest(msg, key); close() }) }
+        if (recallable) DropdownMenuItem({ Text("撤回") }, { a.onRemove(msg, MessageDb.RECALL_MODE); close() })
+        DropdownMenuItem({ Text("删除", color = MaterialTheme.colorScheme.error) }, { confirm = true; close() })
     }
 }
 

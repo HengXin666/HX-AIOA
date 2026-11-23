@@ -1,6 +1,5 @@
 package com.hengxin.aioa.link
 
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -166,8 +165,24 @@ class EventNotifier(private val context: Context) {
     private fun summary(channel: String, @DrawableRes icon: Int, group: String, title: Int, id: Int, latest: Pair<String, String>) =
         NotifyKit.summary(context, channel, icon, group, id, context.getString(title), latest = latest)
 
-    private fun active(tag: String, id: Int): Boolean =
-        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.tag == tag && it.id == id }
+    private fun active(tag: String, id: Int): Boolean = NotifyKit.active(context, tag, id)
+
+    /** 撤回 / 删除: 按 id 找到可能挂着的告警, GitHub, 报告通知撤掉, 组摘要随之刷新。 */
+    fun retract(ev: Envelope) {
+        val hits = listOf(
+            Triple(alertTag(ev.id), Constants.NOTIFY_ID_ALERT, true),
+            Triple(GITHUB_TAG + ev.id, Constants.NOTIFY_ID_EVENT, false),
+            Triple(REPORT_TAG + ev.id, Constants.NOTIFY_ID_EVENT, false),
+        ).filter { active(it.first, it.second) }
+        hits.forEach { (tag, id, alert) ->
+            NotifyKit.cancel(context, tag, id)
+            if (alert) {
+                NotifyKit.summary(context, Constants.CHANNEL_ALERT, R.drawable.ic_stat_alert, Constants.GROUP_ALERT, SUMMARY_ALERT, context.getString(R.string.notify_group_alert), 0, tag)
+            } else {
+                NotifyKit.summary(context, Constants.CHANNEL_GITHUB, R.drawable.ic_stat_app, Constants.GROUP_EVENT, SUMMARY_EVENT, context.getString(R.string.notify_group_event), 0, tag)
+            }
+        }
+    }
 
     // 服务端的 GitHub 标题形如 "[仓库] 内容": 拆成标题 "[仓库]" 与正文
     private fun githubTitle(ev: Envelope): Pair<String?, String> {

@@ -52,6 +52,9 @@ export type StreamWelcome = {
   user?: UserPublic;
   session?: string;
   role: "client" | "agent" | "probe";
+  // 断线太久 (since 早于已清理的墓碑) 时为 true: 本地 seq < floor 的缓存可能漏了删除, 应丢掉后重拉
+  resync?: boolean;
+  floor?: number;
 };
 
 export type StreamServerFrame =

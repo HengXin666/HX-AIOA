@@ -61,6 +61,9 @@ data class Envelope(
     val cid: String? = null,
     val reply: MsgRef? = null,
     val fwd: FwdInfo? = null,
+    // 墓碑: recall / delete, 以及被替换那条的旧序号
+    val deleted: String? = null,
+    val deletedSeq: Long = 0,
 )
 
 /** 引用的快照: 原消息的序号, 来源与摘要。 */

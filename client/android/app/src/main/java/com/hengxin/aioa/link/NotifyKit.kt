@@ -67,6 +67,9 @@ object NotifyKit {
         runCatching { NotificationManagerCompat.from(context).notify(tag, id, notification) }
     }
 
+    fun active(context: Context, tag: String, id: Int): Boolean =
+        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.tag == tag && it.id == id }
+
     fun cancel(context: Context, tag: String?, id: Int) {
         NotificationManagerCompat.from(context).cancel(tag, id)
     }

@@ -98,7 +98,10 @@ class LinkService : Service(), LinkSocket.Listener {
 
     override fun onFrame(frame: ServerFrame) {
         when (frame) {
-            is ServerFrame.Welcome -> replayHead = frame.head
+            is ServerFrame.Welcome -> {
+                replayHead = frame.head
+                if (frame.resync && frame.floor > 0) db.dropBefore(frame.floor)
+            }
             is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !MutedGroups.contains(this, frame.groupKey())) notifier.message(frame)
             is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) onEvent(frame.ev)
             is ServerFrame.Task -> notifier.task(frame.task)
@@ -109,6 +112,12 @@ class LinkService : Service(), LinkSocket.Listener {
     // 补拉的旧事件不提醒; 界面在前台, 已恢复或安静路由时仍交给通知层, 只用来更新或撤掉已有的那条
     private fun onEvent(ev: Envelope) {
         val msg = ev.toMsg()
+        // 撤回 / 删除: 本地删掉原消息, 撤掉还挂着的通知
+        if (ev.deleted != null) {
+            db.insert(msg)
+            socket.send(Frames.ack(msg.seq))
+            return notifier.retract(ev, msg)
+        }
         if (!store(msg) || ev.seq <= replayHead) return
         val muted = MutedGroups.contains(this, msg.groupKey())
         notifier.event(ev, msg, loud = ev.shouldNotify() && !muted && !AioaApp.uiForeground(application))

@@ -130,6 +130,12 @@ export class Store {
       return;
     }
     if (ev.kind === "task") return this.ingestTask(ev.data);
+    // 撤回 / 删除的墓碑: 网页只做查看, 直接去掉
+    if (ev.deleted) {
+      this.events.delete(ev.id);
+      this.touch(ev.subject ?? ANY, FIELD_EVENTS, ev.ts);
+      return;
+    }
     this.events.set(ev.id, ev);
     if (this.events.size > EVENTS_LIMIT) this.events.delete(this.events.keys().next().value!);
     const field = ev.kind === "report" ? FIELD_REPORT : FIELD_EVENTS;

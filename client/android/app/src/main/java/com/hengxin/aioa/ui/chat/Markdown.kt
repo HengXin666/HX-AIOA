@@ -1,7 +1,5 @@
 package com.hengxin.aioa.ui.chat
 
-import com.hengxin.aioa.proto.plainLine
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +31,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hengxin.aioa.proto.plainLine
 
 /** Markdown 的块: 只支持聊天里常见的写法, 解析结果按文本缓存。 */
 sealed interface MdBlock {

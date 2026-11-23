@@ -47,11 +47,21 @@ class Notifier(private val context: Context, private val db: MessageDb) {
         }
     }
 
+    /** 消息被撤回或删除: 撤掉它的单独通知; 所在群的会话通知按剩下的未读重发 (不再响), 没有了就撤掉。 */
+    fun retract(ev: Envelope, msg: ServerFrame.Msg) {
+        events.retract(ev)
+        val key = msg.groupKey()
+        val tag = MESSAGE_TAG + key
+        if (!NotifyKit.active(context, tag, Constants.NOTIFY_ID_MESSAGE)) return
+        val left = db.unread(Constants.DEVICE_PREFIX, HISTORY_SCAN).lastOrNull { it.groupKey() == key }
+        if (left == null) NotifyKit.cancel(context, tag, Constants.NOTIFY_ID_MESSAGE) else message(left, quiet = true)
+    }
+
     /** 单独推来的任务快照只用于撤掉已处理的待确认通知, 不新弹。 */
     fun task(task: TaskSnapshot) = events.task(task, task.agent, loud = false)
 
     /** 普通消息: 同一个群合并为一条会话 (标题是群名, 每条显示发送者), 每条新消息都重新提醒一次 (横幅, 震动, 锁屏可见)。 */
-    fun message(msg: ServerFrame.Msg) {
+    fun message(msg: ServerFrame.Msg, quiet: Boolean = false) {
         if (!NotifyKit.granted(context)) return
         val key = msg.groupKey()
         val title = GroupTitles.of(context, key)
@@ -78,10 +88,11 @@ class Notifier(private val context: Context, private val db: MessageDb) {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_LIGHTS)
             .setVibrate(Constants.VIBRATE_PATTERN)
+            .setSilent(quiet)
             .build()
         // 先撤掉旧的再发, 系统把它当作新通知, 每条都会重新弹横幅
         val tag = MESSAGE_TAG + key
-        NotificationManagerCompat.from(context).cancel(tag, Constants.NOTIFY_ID_MESSAGE)
+        if (!quiet) NotificationManagerCompat.from(context).cancel(tag, Constants.NOTIFY_ID_MESSAGE)
         NotifyKit.post(context, tag, Constants.NOTIFY_ID_MESSAGE, notification)
         NotifyKit.summary(
             context,

@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val KEY_ID = "id"
+private const val KEY_DELETED = "deleted"
 private const val KEY_TITLE = "title"
 private const val KEY_SUMMARY = "summary"
 private const val KEY_LABEL = "label"
@@ -63,6 +64,8 @@ internal object V1Decode {
             cid = opt(o, "cid"),
             reply = o.optJSONObject("reply")?.let(::ref),
             fwd = o.optJSONObject("fwd")?.let { FwdInfo(it.optString("src"), it.optLong("ts")) },
+            deleted = o.optJSONObject(KEY_DELETED)?.let { opt(it, "mode") },
+            deletedSeq = o.optJSONObject(KEY_DELETED)?.optLong("seq") ?: 0L,
         )
     }
 
@@ -132,7 +135,7 @@ fun Envelope.preview(): String = when (kind) {
 /** 写进旧消息库的形状: 聊天页与通知继续按 Msg 工作; 本机发出的保留设备 id 以便识别 "我"。 */
 fun Envelope.toMsg(): ServerFrame.Msg {
     val src = if (source.id.startsWith(Constants.DEVICE_PREFIX)) source.id else source.name.ifEmpty { source.id }
-    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html)
+    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq)
 }
 
 /** 聊天里显示的正文 (Markdown): 报告带标题与全文, 有标题的消息标题加粗; 纯文本消息 summary 就是原文。 */

@@ -3,6 +3,11 @@ import { API_V1 } from "./constants";
 // 本分支服务端已实现的 HTTP 路径, 带 {x} 的段由调用方替换 (记得 encodeURIComponent)
 export const PATH_EVENTS = `${API_V1}/events`;
 export const PATH_EVENT_RESOLVE = `${API_V1}/events/{id}/resolve`;
+// PATH_EVENT_BY_SEQ 的 DELETE ?mode=recall|delete: 撤回或删除一条消息, 留墓碑同步各端
+export const QUERY_MODE = "mode";
+export const RECALL_WINDOW_MS = 2 * 60_000;
+// 墓碑保留天数: 比这更久没上线的设备重连时整体重拉
+export const TOMBSTONE_KEEP_MS = 30 * 86_400_000;
 export const PATH_EVENT_ACTIONS = `${API_V1}/events/{id}/actions`;
 export const PATH_REPORTS = `${API_V1}/reports`;
 export const PATH_EVENT_GROUPS = `${API_V1}/event-groups`;

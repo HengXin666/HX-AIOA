@@ -113,6 +113,7 @@ fun ChatScreen(model: ChatModel) {
         digests = dir.digests().filter { it.channel != open }.map { it.channel to (it.title ?: it.channel) },
         onDigest = { m, key -> g.forward(m, key) },
         onJump = g::jumpTo,
+        onRemove = g::remove,
     )
     Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(model, open) { g.close() }

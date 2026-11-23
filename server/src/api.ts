@@ -4,6 +4,7 @@ import { CF_ROUTES } from "./api-cf";
 import { CF_ZONE_ROUTES } from "./api-cf-zones";
 import { CF_STORAGE_ROUTES } from "./api-cf-storage";
 import { CHAT_ROUTES } from "./api-chats";
+import { RECALL_ROUTES } from "./recall";
 import { CONFIG_ROUTES } from "./api-config";
 import { INTEGRATION_ROUTES } from "./api-integrations";
 import { PROBE_ROUTES } from "./api-probes";
@@ -33,7 +34,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {

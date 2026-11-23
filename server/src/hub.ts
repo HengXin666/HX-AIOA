@@ -219,7 +219,11 @@ export class Hub extends DurableObject<Env> {
 
     const head = this.core.store.head();
     const me = who.owner && who.user ? { user: who.user, session } : {};
-    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me });
+    const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
+    const floor = this.core.store.floor();
+    // 断线期间有墓碑被清理: 让客户端丢掉 floor 之前的缓存, 补拉改为最近一批
+    const resync = Number.isFinite(since) && since > 0 && since < floor;
+    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me, ...(resync ? { resync, floor } : {}) });
     else sendFrame(server, { t: "welcome", head });
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
     sendFrame(server, this.core.metrics.probes());
@@ -227,9 +231,9 @@ export class Hub extends DurableObject<Env> {
     sendFrame(server, this.core.metrics.hostsFrame());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
     if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
-    const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
     if (Number.isFinite(since)) {
-      for (const ev of this.core.store.since(since, HISTORY_MAX_LIMIT)) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));
+      const evs = resync ? this.core.store.recent(HISTORY_MAX_LIMIT) : this.core.store.since(since, HISTORY_MAX_LIMIT);
+      for (const ev of evs) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));
     }
     return new Response(null, { status: 101, webSocket: client });
   }

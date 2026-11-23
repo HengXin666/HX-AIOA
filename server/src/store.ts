@@ -5,6 +5,7 @@ import { legacyBodyText, textToEventData } from "./legacy";
 type Row = { seq: number; body: string };
 
 const COLS = "seq, body";
+const META_FLOOR = "floor";
 const GROUP_KEY = `COALESCE(NULLIF(json_extract(body, '$.channel'), ''), CASE WHEN json_extract(body, '$.source.id') LIKE '${DEVICE_PREFIX}%' THEN '${MEMO_GROUP}' ELSE COALESCE(NULLIF(json_extract(body, '$.source.name'), ''), json_extract(body, '$.source.id')) END)`;
 
 // 收件箱: 每条事件一行; 覆盖更新 = 删旧行 + 插新行 (id 不变, seq 变新), 便于客户端按 since 补拉
@@ -21,6 +22,7 @@ export class EventStore {
       dedupe TEXT,
       body TEXT NOT NULL
     )`);
+    sql.exec("CREATE TABLE IF NOT EXISTS ev_meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL)");
     sql.exec("CREATE INDEX IF NOT EXISTS ev_dedupe ON ev (dedupe) WHERE dedupe IS NOT NULL");
     if (sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'msg'").toArray().length) {
       tx(() => this.migrateLegacy());
@@ -73,6 +75,28 @@ export class EventStore {
   // 清空一个群 seq < before 的消息 (指标不算), 返回删掉的条数
   clearGroup(key: string, before: number): number {
     return this.sql.exec(`DELETE FROM ev WHERE seq < ? AND kind != 'metric' AND ${GROUP_KEY} = ?`, before, key).rowsWritten;
+  }
+
+  // 群里 before 之前的一页 (升序), 客户端本地翻到头后向云端要更早的
+  groupBefore(key: string, before: number, limit: number): Envelope[] {
+    return this.sql
+      .exec<Row>(`SELECT ${COLS} FROM ev WHERE seq < ? AND kind != 'metric' AND ${GROUP_KEY} = ? ORDER BY seq DESC LIMIT ?`, before, key, limit)
+      .toArray()
+      .map(parse)
+      .reverse();
+  }
+
+  // 清掉过期墓碑; floor 记下被清掉的最大 seq, since 早于它的设备需要整体重拉
+  pruneTombstones(cutoff: number): number {
+    const r = this.sql.exec<{ m: number | null }>("SELECT MAX(seq) AS m FROM ev WHERE json_extract(body, '$.deleted.at') < ?", cutoff).one();
+    if (!r.m) return 0;
+    const n = this.sql.exec("DELETE FROM ev WHERE json_extract(body, '$.deleted.at') < ?", cutoff).rowsWritten;
+    this.sql.exec("INSERT INTO ev_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = MAX(v, excluded.v)", META_FLOOR, r.m);
+    return n;
+  }
+
+  floor(): number {
+    return this.sql.exec<{ v: number }>("SELECT v FROM ev_meta WHERE k = ?", META_FLOOR).toArray()[0]?.v ?? 0;
   }
 
   bySeq(seq: number): Envelope | null {

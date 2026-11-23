@@ -17,6 +17,7 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.data.CrashLog
 import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.data.replacedBy
 import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.proto.Frames
@@ -131,6 +132,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
+        if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {
             sources.onEvent(frame.ev.source.id, frame.ev.title)
@@ -165,7 +167,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
 
     private fun accept(frame: ServerFrame.Msg) {
-        if (frame.seq > lastSeq) maybeBanner(frame)
+        if (frame.seq > lastSeq && frame.deleted == null) maybeBanner(frame)
         socket.send(Frames.ack(frame.seq))
         merge(listOf(frame))
         viewModelScope.launch(Dispatchers.IO) {
@@ -175,11 +177,12 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         }
     }
 
-    // 按序号去重合并, 保持有序
+    // 按序号去重合并, 保持有序; 同 id 的新版本 (更新, 撤回) 替换旧的, 删除墓碑只删不加
     private fun merge(incoming: List<ServerFrame.Msg>) {
         val fresh = incoming.filter { it.seq > lastSeq }
         if (fresh.isEmpty()) return
-        messages.addAll(fresh)
+        fresh.forEach { m -> messages.removeAll { it.replacedBy(m) } }
+        messages.addAll(fresh.filter { it.deleted != MessageDb.DELETE_MODE })
         lastSeq = fresh.last().seq
     }
 

@@ -76,6 +76,7 @@ export function buildOverview(evs: Envelope[], tasks: TaskSnapshot[], now: numbe
   const layers: Record<Priority, OverviewItem[]> = { need_me: [], happening: [], worth_reading: [] };
   const index = new Map<string, OverviewItem>();
   for (const ev of [...evs].sort((a, b) => b.ts - a.ts)) {
+    if (ev.deleted) continue;
     const layer = layerOf(ev, now);
     if (!layer) continue;
     const key = ev.groupKey ? `${layer}|${ev.groupKey}` : `${layer}|${ev.id}`;

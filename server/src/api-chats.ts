@@ -114,8 +114,14 @@ async function patchChat(c: ReqCtx): Promise<Response> {
 function chatMessages(c: ReqCtx): Response {
   const channel = param(c, 0);
   if (!canRead(c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  const since = clampInt(c.url.searchParams.get(QUERY_SINCE), 0, Number.MAX_SAFE_INTEGER);
   const limit = clampInt(c.url.searchParams.get(QUERY_LIMIT), HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT);
+  // before: 向前翻页, 群键与客户端一致 (没写 channel 的按来源名, 本机发出的归备忘)
+  const before = c.url.searchParams.get(QUERY_BEFORE);
+  if (before !== null) {
+    const messages = c.core.store.groupBefore(channel, clampInt(before, 1, Number.MAX_SAFE_INTEGER), limit);
+    return json({ messages, head: c.core.store.head() });
+  }
+  const since = clampInt(c.url.searchParams.get(QUERY_SINCE), 0, Number.MAX_SAFE_INTEGER);
   const messages = c.core.store.inChannel(channel, since, limit);
   return json({ messages, head: messages.at(-1)?.seq ?? since });
 }

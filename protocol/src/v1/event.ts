@@ -51,6 +51,11 @@ export type MsgRef = { seq: number; id: string; src: string; text: string };
 // 转发: 原消息的来源与时间
 export type FwdInfo = { src: string; ts: number; channel?: string };
 
+// 撤回 / 删除留下的墓碑: 同 id 换新 seq 下发, 各端据此删掉或改成 "已撤回"; seq 是被替换那条的旧序号
+export const DELETE_MODES = ["recall", "delete"] as const;
+export type DeleteMode = (typeof DELETE_MODES)[number];
+export type DeletedInfo = { mode: DeleteMode; at: number; seq: number };
+
 // 规则引擎的决定, 随事件保存, 便于追溯为什么响铃或没响
 export type RouteInfo = {
   action: RuleAction;
@@ -79,6 +84,7 @@ type Common = {
   route?: RouteInfo;
   reply?: MsgRef;
   fwd?: FwdInfo;
+  deleted?: DeletedInfo;
 };
 export type MetricEnvelope = Common & { kind: "metric"; data: MetricData };
 export type EventEnvelope = Common & { kind: "event"; data: EventData };
@@ -216,6 +222,7 @@ export function parseEventInput(raw: unknown): Parsed<EventInput> {
 // 更新语义: 服务端对同一来源同一 dedupeKey (以及同一任务) 复用 id, 客户端只需 "同 id 覆盖, 否则追加"
 export function mergeEnvelope(list: Envelope[], ev: Envelope): Envelope[] {
   const rest = list.filter((x) => x.id !== ev.id);
+  if (ev.deleted?.mode === "delete") return rest;
   rest.push(ev);
   return rest.sort((a, b) => a.seq - b.seq);
 }

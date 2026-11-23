@@ -22,7 +22,8 @@ private const val KEY_ROWS = "rows"
 
 sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
-    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null) : ServerFrame
+    /** resync: 断线太久, 本地 seq < floor 的缓存可能漏了删除, 要丢掉。 */
+    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null, val resync: Boolean = false, val floor: Long = 0) : ServerFrame
     // group: 事件的 channel, 即消息所在的群; 旧消息与本机发出的没有
     data class Msg(
         val seq: Long,
@@ -35,6 +36,10 @@ sealed interface ServerFrame {
         val fwd: FwdInfo? = null,
         // 推送方给的 HTML 卡片 (周报之类), 在沙箱 WebView 里渲染
         val html: String? = null,
+        // 事件 id: 同 id 的新版本 (更新, 撤回) 换新 seq, 本地据此替换旧行
+        val id: String? = null,
+        val deleted: String? = null,
+        val deletedSeq: Long = 0,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
@@ -94,7 +99,7 @@ object Frames {
 
     private fun decode(o: JSONObject): ServerFrame? {
         return when (o.optString(KEY_T)) {
-            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null })
+            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null }, o.optBoolean("resync"), o.optLong("floor"))
             "msg" -> ServerFrame.Msg(
                 seq = o.getLong(KEY_SEQ),
                 ts = o.getLong(KEY_TS),

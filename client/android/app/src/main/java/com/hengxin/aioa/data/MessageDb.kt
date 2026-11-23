@@ -13,6 +13,10 @@ import org.json.JSONObject
 /** 群: 推送方写的 channel; 没写时按来源名, 本机发出的归 "备忘"。 */
 fun ServerFrame.Msg.groupKey(): String = group ?: if (src.startsWith(Constants.DEVICE_PREFIX)) MessageDb.MEMO_GROUP else src
 
+/** n 是否替代了这条: 同 id 的新版本, 或墓碑指向它的旧序号。 */
+fun ServerFrame.Msg.replacedBy(n: ServerFrame.Msg): Boolean =
+    seq != n.seq && ((n.id != null && id == n.id) || (n.deletedSeq > 0 && seq == n.deletedSeq))
+
 /** 群列表的一行: 最后一条消息与未读数。 */
 data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int)
 
@@ -25,9 +29,10 @@ class MessageDb private constructor(context: Context) :
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT)")
+        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT, $C_ID TEXT)")
         db.execSQL("CREATE TABLE $T_KV (k TEXT PRIMARY KEY, v INTEGER NOT NULL)")
         db.execSQL(GRP_INDEX)
+        db.execSQL(ID_INDEX)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -37,10 +42,32 @@ class MessageDb private constructor(context: Context) :
             db.execSQL(GRP_INDEX)
         }
         if (oldVersion < 3) db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_EXTRA TEXT")
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_ID TEXT")
+            db.execSQL(ID_INDEX)
+        }
     }
 
+    /** 入库: 同 id 的旧版本和墓碑指向的旧序号先删掉; 删除墓碑本身不留行, 撤回墓碑留一行显示 "已撤回"。 */
     fun insert(msg: ServerFrame.Msg): Boolean {
-        val values = ContentValues().apply {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            msg.id?.let { db.delete(T_MSG, "$C_ID = ? AND $C_SEQ != ?", arrayOf(it, msg.seq.toString())) }
+            if (msg.deletedSeq > 0) db.delete(T_MSG, "$C_SEQ = ?", arrayOf(msg.deletedSeq.toString()))
+            val fresh = msg.deleted != DELETE_MODE && db.insertWithOnConflict(T_MSG, null, valuesOf(msg), SQLiteDatabase.CONFLICT_IGNORE) != -1L
+            db.setTransactionSuccessful()
+            return fresh
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** 断线太久: floor 之前的缓存可能漏了删除, 丢掉, 需要时再向云端翻页。 */
+    fun dropBefore(floor: Long): Int = writableDatabase.delete(T_MSG, "$C_SEQ < ?", arrayOf(floor.toString()))
+
+    private fun valuesOf(msg: ServerFrame.Msg): ContentValues {
+        return ContentValues().apply {
             put(C_SEQ, msg.seq)
             put(C_TS, msg.ts)
             put(C_SRC, msg.src)
@@ -48,8 +75,8 @@ class MessageDb private constructor(context: Context) :
             put(C_CID, msg.cid)
             put(C_GRP, msg.groupKey())
             put(C_EXTRA, extraOf(msg))
+            put(C_ID, msg.id)
         }
-        return writableDatabase.insertWithOnConflict(T_MSG, null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
 
     fun maxSeq(): Long = longQuery("SELECT IFNULL(MAX($C_SEQ), 0) FROM $T_MSG")
@@ -76,7 +103,7 @@ class MessageDb private constructor(context: Context) :
         return lasts.map { m ->
             val key = m.groupKey()
             val unread = longQuery(
-                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_SRC NOT LIKE ?",
+                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE",
                 arrayOf(key, groupRead(key).toString(), "${Constants.DEVICE_PREFIX}%"),
             )
             GroupSummary(key, m, unread.toInt())
@@ -95,12 +122,12 @@ class MessageDb private constructor(context: Context) :
 
     // 未读: 序号大于已读位置, 且不是本机发出的
     fun unread(selfPrefix: String, limit: Int): List<ServerFrame.Msg> = query(
-        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ? ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
+        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
         arrayOf(readSeq().toString(), "$selfPrefix%", limit.toString()),
     )
 
     fun unreadCount(selfPrefix: String): Long = longQuery(
-        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ?",
+        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE",
         arrayOf(readSeq().toString(), "$selfPrefix%"),
     )
 
@@ -128,6 +155,7 @@ class MessageDb private constructor(context: Context) :
             val cid = c.getColumnIndexOrThrow(C_CID)
             val grp = c.getColumnIndexOrThrow(C_GRP)
             val extra = c.getColumnIndexOrThrow(C_EXTRA)
+            val id = c.getColumnIndexOrThrow(C_ID)
             buildList {
                 while (c.moveToNext()) {
                     val srcV = c.getString(src)
@@ -137,7 +165,8 @@ class MessageDb private constructor(context: Context) :
                     val reply = x?.optJSONObject(X_REPLY)?.let { MsgRef(it.optLong(C_SEQ), it.optString(C_SRC), it.optString(C_TEXT)) }
                     val fwd = x?.optJSONObject(X_FWD)?.let { FwdInfo(it.optString(C_SRC), it.optLong(C_TS)) }
                     val html = x?.optString(X_HTML)?.ifEmpty { null }
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html))
+                    val del = x?.optString(X_DELETED)?.ifEmpty { null }
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del))
                 }
             }
         }
@@ -145,7 +174,14 @@ class MessageDb private constructor(context: Context) :
     companion object {
         const val MEMO_GROUP = "备忘"
         private const val DB_NAME = "messages.db"
-        private const val DB_VERSION = 3
+        private const val DB_VERSION = 4
+        const val DELETE_MODE = "delete"
+        const val RECALL_MODE = "recall"
+        private const val C_ID = "id"
+        private const val X_DELETED = "deleted"
+        // 撤回留下的墓碑不算未读, 也不进通知
+        private const val LIVE = "(extra IS NULL OR extra NOT LIKE '%\"deleted\":\"recall\"%')"
+        private const val ID_INDEX = "CREATE INDEX IF NOT EXISTS msg_id ON msg (id)"
         private const val C_EXTRA = "extra"
         private const val X_REPLY = "reply"
         private const val X_FWD = "fwd"
@@ -153,11 +189,12 @@ class MessageDb private constructor(context: Context) :
 
         // 引用与转发的快照存成一列 JSON, 没有就是 null
         private fun extraOf(m: ServerFrame.Msg): String? {
-            if (m.reply == null && m.fwd == null && m.html == null) return null
+            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null) return null
             val o = JSONObject()
             m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
             m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
             m.html?.let { o.put(X_HTML, it) }
+            m.deleted?.let { o.put(X_DELETED, it) }
             return o.toString()
         }
         private const val T_MSG = "msg"

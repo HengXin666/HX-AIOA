@@ -9,11 +9,13 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.data.GroupSummary
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.data.groupKey
+import com.hengxin.aioa.data.replacedBy
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.ChatDirectory
+import com.hengxin.aioa.ui.chat.ChatHistory
 import com.hengxin.aioa.ui.chat.ChatMeta
 import com.hengxin.aioa.ui.chat.plainPreview
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +69,8 @@ class ChatGroups(
     var syncing by mutableStateOf(false)
         private set
     private var loadingOlder = false
+    private var cloudEnd = false
+    private val history = ChatHistory(context)
     /** 某个群被清空到 seq 时通知外层 (总览的今日消息等内存列表一起删)。 */
     var onCleared: ((String, Long) -> Unit)? = null
 
@@ -169,6 +173,7 @@ class ChatGroups(
         messages.clear()
         pending.clear()
         hasMore = false
+        cloudEnd = false
         fromDb(key, first = true)
     }
 
@@ -180,28 +185,56 @@ class ChatGroups(
     private fun fromDb(key: String, first: Boolean) = scope.launch {
         val list = withContext(Dispatchers.IO) { db.inGroup(key, Constants.HISTORY_PAGE) }
         if (open != key) return@launch
+        // 本地不满一页也允许继续上翻, 由云端补
+        if (first) hasMore = true
         // 读库期间可能已有新消息追加进来, 合并去重; 已加载的更早几页保留
         val merged = (list + messages).distinctBy { it.seq }.sortedBy { it.seq }
-        if (merged.size == messages.size) return@launch
-        messages.clear()
-        messages.addAll(merged)
-        if (first) hasMore = list.size >= Constants.HISTORY_PAGE
-        list.lastOrNull()?.let { markRead(key, it.seq) }
+        if (merged.size != messages.size) {
+            messages.clear()
+            messages.addAll(merged)
+            list.lastOrNull()?.let { markRead(key, it.seq) }
+        }
+        if (first && list.size < Constants.HISTORY_PAGE) loadOlder()
     }
 
-    /** 上滑到顶时向前翻一页。 */
+    /** 上滑到顶时向前翻一页: 先读本地库, 本地不够一页再向云端要更早的并落库。 */
     fun loadOlder() {
         val key = open ?: return
-        val first = messages.firstOrNull()?.seq ?: return
+        val first = messages.firstOrNull()?.seq ?: Long.MAX_VALUE
         if (loadingOlder || !hasMore) return
         loadingOlder = true
         scope.launch {
-            val list = withContext(Dispatchers.IO) { db.inGroup(key, Constants.HISTORY_PAGE, first) }
+            val list = withContext(Dispatchers.IO) {
+                val local = db.inGroup(key, Constants.HISTORY_PAGE, first)
+                if (local.size >= Constants.HISTORY_PAGE) return@withContext local
+                val remote = history.before(key, local.firstOrNull()?.seq ?: first, Constants.HISTORY_PAGE - local.size)
+                remote.forEach { db.insert(it) }
+                // 云端也翻到头了才算没有更多
+                cloudEnd = remote.size < Constants.HISTORY_PAGE - local.size
+                remote.filter { it.deleted != MessageDb.DELETE_MODE } + local
+            }
             if (open == key) {
                 messages.addAll(0, list.filter { m -> messages.none { it.seq == m.seq } })
-                hasMore = list.size >= Constants.HISTORY_PAGE
+                hasMore = !cloudEnd || list.size >= Constants.HISTORY_PAGE
             }
             loadingOlder = false
+        }
+    }
+
+    /** 撤回或删除一条消息: 成功后按服务端返回的墓碑直接更新, 其它设备由推送同步。 */
+    fun remove(msg: ServerFrame.Msg, mode: String) {
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { history.remove(msg.seq, mode).onSuccess { db.insert(it) } }
+            r.onSuccess { onMessage(it) }.onFailure { error = it.message }
+        }
+    }
+
+    /** 服务端说本机断线太久: 丢掉 floor 之前的本地缓存, 正在看的群重读。 */
+    fun dropBefore(floor: Long) {
+        scope.launch {
+            withContext(Dispatchers.IO) { db.dropBefore(floor) }
+            open?.let { key -> messages.removeAll { it.seq < floor }; fromDb(key, first = false) }
+            reload()
         }
     }
 
@@ -261,11 +294,13 @@ class ChatGroups(
 
     private fun channelOf(key: String): String? = if (key == MessageDb.MEMO_GROUP) null else key
 
-    /** 新消息已入库后调用: 正在看的群直接追加并标已读, 群列表重算。 */
+    /** 新消息已入库后调用: 正在看的群直接追加并标已读, 群列表重算; 墓碑替换或删掉原消息。 */
     fun onMessage(msg: ServerFrame.Msg) {
         val key = msg.groupKey()
         msg.cid?.let { cid -> pending.removeAll { it.cid == cid } }
-        if (open == key && messages.none { it.seq == msg.seq }) {
+        if (open == key) messages.removeAll { it.replacedBy(msg) }
+        if (replyTo?.replacedBy(msg) == true) replyTo = null
+        if (open == key && msg.deleted != MessageDb.DELETE_MODE && messages.none { it.seq == msg.seq }) {
             messages.add(msg)
             markRead(key, msg.seq)
         }

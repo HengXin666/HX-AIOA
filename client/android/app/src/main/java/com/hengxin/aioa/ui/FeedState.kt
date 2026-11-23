@@ -108,6 +108,7 @@ class FeedState(private val send: (String) -> Boolean, private val save: (String
         ev.task?.let { tasks[it.id] = it }
         if (ev.kind == Constants.KIND_METRIC) return
         layers.keys.toList().forEach { key -> layers[key] = layers[key].orEmpty().filter { it.ev.id != ev.id } }
+        if (ev.deleted != null) return touch()
         val target = if (ev.resolved && ev.priority == Constants.PRIORITY_NEED_ME) Constants.PRIORITY_HAPPENING else ev.priority
         layers[target] = (listOf(OverviewItem(ev, 1, listOf(ev.id))) + layers[target].orEmpty()).take(LAYER_MAX)
         touch()
