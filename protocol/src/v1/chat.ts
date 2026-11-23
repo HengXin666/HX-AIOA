@@ -1,5 +1,6 @@
 import { API_V1 } from "./constants";
 import type { Envelope } from "./event";
+import type { ChatView } from "./mail";
 import type { RoomRole } from "./room";
 
 // 群资料: 群就是 channel; 字段都可选, 没设置的群不存行
@@ -18,6 +19,8 @@ export type ChatMeta = {
   members?: number;
   // 清空聊天记录时的位置: 该群 seq <= cleared 的消息客户端一并删掉
   cleared?: number;
+  // 展示方式, 不写为聊天; 邮件群为 mail
+  view?: ChatView;
   updated: number;
 };
 // 群里接入的 Agent: 一个来源 + 一把 key; 主人只定名字和可读的群, 指令由服务端下发

@@ -16,6 +16,7 @@ export * from "./v1/chat";
 export * from "./v1/room";
 export * from "./v1/files";
 export * from "./v1/plugin";
+export * from "./v1/mail";
 export * from "./v1/term";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 

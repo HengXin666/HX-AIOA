@@ -5,6 +5,7 @@ import type { Env } from "./env";
 import { json, preflight } from "./http";
 import { fileData } from "./files/data";
 import { cleanupTempMail, MAIL_CLEANUP_CRON } from "./mail-cleanup";
+import { handleEmail } from "./mail/email";
 
 export { Hub } from "./hub";
 
@@ -21,9 +22,15 @@ export default {
     headers.delete(HEADER_INTERNAL_USER);
     return env.HUB.get(env.HUB.idFromName(HUB_NAME)).fetch(new Request(req, { headers }));
   },
+  // CF 邮件路由投到本 Worker 的信: 解析后交给 Hub 进邮件群
+  async email(msg: ForwardableEmailMessage, env: Env): Promise<void> {
+    const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
+    await handleEmail(msg, async (input) => void (await hub.mailIn(input)));
+  },
   async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (ctrl.cron === MAIL_CLEANUP_CRON) {
       ctx.waitUntil(cleanupTempMail(env).then((n) => console.log("临时邮箱清理:", n)).catch((e) => console.error("临时邮箱清理失败:", e)));
+      ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).mailPrune().then((n) => console.log("邮件索引清理:", n)));
       if (env.FILES) ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).fileSweep().then((n) => console.log("文件清理:", n)));
       return;
     }

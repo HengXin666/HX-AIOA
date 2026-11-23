@@ -1,4 +1,5 @@
 import type { FileStore } from "./files/store";
+import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
 import type { PluginStore } from "./plugins/store";
 import type { TodoStore } from "./plugins/todos";
@@ -38,6 +39,7 @@ export type Core = {
   rooms: RoomStore;
   files: FileStore;
   plugins: PluginStore;
+  mail: MailStore;
   todos: TodoStore;
   market: Market;
   users: Users;

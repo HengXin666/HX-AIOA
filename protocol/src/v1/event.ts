@@ -1,4 +1,5 @@
 import type { FileRef } from "./files";
+import type { MailInfo } from "./mail";
 import {
   EVENT_STATUSES,
   KINDS,
@@ -37,6 +38,8 @@ export type EventData = {
   html?: string;
   // 附件: 先 POST /files 上传, 发消息时只带 file id, 服务端换成完整引用
   file?: FileRef;
+  // 邮件群里的信: 发件人, 收件账号, 厂商, 验证码; 只由服务端填写
+  mail?: MailInfo;
 };
 export type ReportData = {
   title: string;

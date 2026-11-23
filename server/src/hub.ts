@@ -1,5 +1,7 @@
 import { attachFile } from "./files/api";
 import { FileStore } from "./files/store";
+import { mailIn } from "./mail/ingest";
+import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
 import { PluginStore } from "./plugins/store";
 import { TodoStore } from "./plugins/todos";
@@ -20,6 +22,7 @@ import {
   parseStreamFrame,
   type ClientFrame,
   type GithubSyncResult,
+  type MailInput,
   type StreamClientFrame,
   type StreamRole,
   type RouteInfo,
@@ -123,7 +126,7 @@ export class Hub extends DurableObject<Env> {
       ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
     };
     const chats = new ChatStore(sql);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -143,6 +146,16 @@ export class Hub extends DurableObject<Env> {
   // RPC (每天的清理 cron): 删掉传了没发出去的文件
   async fileSweep(): Promise<number> {
     return this.core.files.sweep();
+  }
+
+  // RPC (Worker 的 email 入口): CF 邮件路由收到的信, 已在 Worker 里解析好
+  async mailIn(input: MailInput): Promise<string> {
+    return (await mailIn(this.core, input, "cf")).id;
+  }
+
+  // RPC (每天的清理 cron): 删掉消息已不在的邮件索引
+  async mailPrune(): Promise<number> {
+    return this.core.mail.prune();
   }
 
   // RPC (cron 每 30 分钟): 任一额度用到 80% 时提醒一次, 每天最多一条
