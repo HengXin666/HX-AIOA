@@ -130,6 +130,6 @@ class SpaceScreenshotTest {
         assertEquals(PanelSize.S, PanelSize.S.step(-1))
         val moved = SPACE.layout.apply(LayoutChange.Size(P_NAS, PanelSize.S))
         assertEquals(PanelSize.S, moved.sizes[P_NAS])
-        assertEquals(11, CATEGORY_OF.size)
+        assertEquals(12, CATEGORY_OF.size)
     }
 }
