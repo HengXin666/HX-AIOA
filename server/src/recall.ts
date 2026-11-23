@@ -9,7 +9,9 @@ import {
 } from "@hx-aioa/protocol";
 import { originOf } from "./api-events";
 import { CODE_BAD_REQUEST, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE } from "./constants";
-import { type Core, type Principal, type ReqCtx, type Route, route } from "./core";
+import { type Core, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
+import { authorOf, rank, roleIn } from "./room-access";
+import { groupOf } from "./store";
 import { ApiFail, fail, json } from "./http";
 
 const TEXT_RECALLED = "消息已撤回";
@@ -30,24 +32,35 @@ export function tombstoneOf(ev: Envelope, mode: DeleteMode, now: number): Envelo
   } as Envelope;
   if (ev.channel) t.channel = ev.channel;
   if (ev.cid) t.cid = ev.cid;
+  if (ev.by) t.by = ev.by;
   return t;
 }
 
-// 作者: 主人从自己的客户端发的 (带 cid), 或这把 key 对应的来源发的
+const SEND_SCOPE = "messages:send";
+
+// 作者: 人按发送者账号 (旧消息没有 by, 主人带 cid 的算自己的); Agent 按自己的来源
 function isAuthor(core: Core, who: Principal, ev: Envelope): boolean {
-  return who.owner ? !!ev.cid : ev.source.id === originOf(core, who).source.id;
+  if (who.owner) return !!ev.cid && (!ev.by || ev.by === authorOf(core, who));
+  if (who.member) return !!ev.by && ev.by === who.member.user.id;
+  return who.key.scopes.includes(SEND_SCOPE) && ev.source.id === originOf(core, who).source.id;
 }
 
-/** 撤回: 作者随时可撤; 删除: 主人 (群管理员) 删任何消息, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
+// 删除: 主人任何消息; 群管理员本群; Agent 自己所在的群
+function mayDelete(core: Core, who: Principal, ev: Envelope): boolean {
+  if (who.owner) return true;
+  const grp = groupOf(ev);
+  if (who.member) return !!grp && rank(roleIn(core, who, grp) ?? "member") >= rank("admin");
+  return who.key.scopes.includes(SEND_SCOPE) && !!ev.channel && ev.channel === who.key.channels[0];
+}
+
+/** 撤回: 作者随时可撤; 删除: 主人删任何消息, 群管理员删本群的, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
 export function removeMessage(core: Core, who: Principal, seq: number, mode: DeleteMode, now = Date.now()): Envelope {
   const ev = core.store.bySeq(seq);
   if (!ev) throw new ApiFail(404, CODE_NOT_FOUND, ERR_NO_RESOURCE);
   if (ev.deleted?.mode === mode || ev.deleted?.mode === "delete") return ev;
   if (ev.kind === "metric" || ev.kind === "task") throw new ApiFail(400, CODE_BAD_REQUEST, "指标和任务不能撤回或删除");
   if (mode === "recall" && !ev.deleted && !isAuthor(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只能撤回自己发的消息");
-  if (mode === "delete" && !who.owner && !(ev.channel && ev.channel === who.key.channels[0])) {
-    throw new ApiFail(403, CODE_FORBIDDEN, "Agent 只能删除自己所在群的消息");
-  }
+  if (mode === "delete" && !mayDelete(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只有群主, 管理员和本群的 Agent 能删除消息");
   const saved = core.store.put(tombstoneOf(ev, mode, now));
   core.store.pruneTombstones(now - TOMBSTONE_KEEP_MS);
   if (core.chats.removeFavorite(saved.deleted?.seq ?? seq)) {
@@ -65,4 +78,4 @@ function deleteBySeq(c: ReqCtx): Response {
   return json(removeMessage(c.core, c.who, seq, mode as DeleteMode));
 }
 
-export const RECALL_ROUTES: Route[] = [route(DELETE, PATH_EVENT_BY_SEQ, "messages:send", deleteBySeq)];
+export const RECALL_ROUTES: Route[] = [route(DELETE, PATH_EVENT_BY_SEQ, ROOM, deleteBySeq)];

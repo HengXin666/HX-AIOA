@@ -78,14 +78,15 @@ r = await call(POST, `${V1}/auth/login`, null, { name: "mom", password: PASS, de
 check("子号登录", r.status === 200 && r.body.user.role === "member");
 const mom = r.body;
 
+// 子号与母号共用一个库, 只能进自己所在的多人群 (见 e2e-room), 母号的收件箱一律 403
 r = await call(GET, `${V1}/events?since=0`, mom.access);
-check("子号收件箱与母号隔离", r.status === 200 && r.body.events.length === 0, JSON.stringify(r.body));
+check("子号读不到母号收件箱", r.status === 403, JSON.stringify(r.body));
 r = await call(POST, `${V1}/messages`, mom.access, { text: "妈妈的备忘" });
-check("子号发消息", r.status === 200);
-r = await call(GET, `${V1}/events?since=0`, mom.access);
-check("子号读到自己的消息", r.body?.events?.length === 1);
+check("子号不能直接写收件箱", r.status === 403);
+r = await call(GET, `${V1}/chats`, mom.access);
+check("子号的群列表为空", r.status === 200 && r.body.chats.length === 0, JSON.stringify(r.body));
 r = await call(GET, `${V1}/events?since=0`, LEGACY);
-check("母号看不到子号消息", (r.body?.events?.length ?? -1) === legacyCount);
+check("母号收件箱不变", (r.body?.events?.length ?? -1) === legacyCount);
 r = await call(GET, `${V1}/users`, mom.access);
 check("子号不能列用户", r.status === 403);
 r = await call(POST, `${V1}/keys`, mom.access, { name: "x", scopes: ["events:write"] });

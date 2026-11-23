@@ -85,6 +85,8 @@ type Common = {
   reply?: MsgRef;
   fwd?: FwdInfo;
   deleted?: DeletedInfo;
+  // 发送者的账号 id (人发的聊天消息); 客户端据此判断是不是自己发的
+  by?: string;
 };
 export type MetricEnvelope = Common & { kind: "metric"; data: MetricData };
 export type EventEnvelope = Common & { kind: "event"; data: EventData };

@@ -13,6 +13,7 @@ export * from "./v1/source";
 export * from "./v1/paths";
 export * from "./v1/github";
 export * from "./v1/chat";
+export * from "./v1/room";
 export * from "./v1/term";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 

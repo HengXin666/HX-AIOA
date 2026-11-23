@@ -1,4 +1,4 @@
-import type { DeviceInput, JoinResult, Role, UserStatus } from "@hx-aioa/protocol";
+import { ROOM_INVITE_PREFIX, type DeviceInput, type JoinResult, type Role, type UserStatus } from "@hx-aioa/protocol";
 import { safeEqual } from "../auth";
 import { CODE_CONFLICT, CODE_EXPIRED, CODE_FORBIDDEN, CODE_NOT_CONFIGURED, CODE_UNAUTHORIZED } from "../constants";
 import { ApiFail, json } from "../http";
@@ -63,9 +63,27 @@ export async function login(a: Accounts, b: Body): Promise<Response> {
   return json(await a.issue(row.user, device(b)));
 }
 
+// 群邀请链接: 注册成普通成员并直接进群, 不需要审批; 邀请码先校验, 建号成功后才记一次使用
+async function joinByRoom(a: Accounts, b: Body, code: string): Promise<Response> {
+  const { name, password } = checkCredentials(b);
+  if (a.dir.find(name)) throw new ApiFail(409, CODE_CONFLICT, ERR_NAME_TAKEN);
+  if (!a.joinRoom) throw new ApiFail(404, "not_found", ERR_BAD_INVITE);
+  const user = a.dir.createUser(name, display(b, name), "member", "active", await hashPassword(password));
+  try {
+    await a.joinRoom(user.id, code);
+  } catch (e) {
+    a.dir.deleteUser(user.id);
+    throw e;
+  }
+  a.dir.audit(user.id, "join", user.id, "room");
+  return json(await a.issue(user, device(b)));
+}
+
 // 邀请一次性: 先作废再建号, 建号失败也不能复用
 export async function join(a: Accounts, b: Body): Promise<Response> {
   a.secret();
+  const code = str(b.code).trim();
+  if (code.startsWith(ROOM_INVITE_PREFIX)) return joinByRoom(a, b, code);
   const invite = await a.dir.inviteByCode(str(b.code));
   if (!invite) throw new ApiFail(404, "not_found", ERR_BAD_INVITE);
   if (invite.expires <= Date.now()) {

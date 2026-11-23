@@ -14,6 +14,9 @@ export type Kicker = (user: UserPublic, sessions: string[]) => Promise<void>;
 export class Accounts {
   readonly dir: Directory;
   private readonly fails = new Map<string, { since: number; count: number }>();
+  // 由 Hub 接上: 用群邀请码注册时直接进群, 删号时退出所有群
+  joinRoom?: (uid: string, code: string) => Promise<string>;
+  onDelete?: (uid: string) => void;
 
   constructor(
     sql: SqlStorage,

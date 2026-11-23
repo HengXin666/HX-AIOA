@@ -51,6 +51,8 @@ export type StreamWelcome = {
   now: number;
   user?: UserPublic;
   session?: string;
+  // 当前账号 id, 与消息的 by 比较判断是不是自己发的 (用母号 token 连接时是母号 id)
+  uid?: string;
   role: "client" | "agent" | "probe";
   // 断线太久 (since 早于已清理的墓碑) 时为 true: 本地 seq < floor 的缓存可能漏了删除, 应丢掉后重拉
   resync?: boolean;

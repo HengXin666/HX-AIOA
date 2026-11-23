@@ -13,7 +13,7 @@
 | §8 设置 | 已实现 |
 | §10 旧接口与迁移 | 已实现, 旧 `msg` 表首次启动时并入新收件箱, seq 不变 |
 | §7 工作台 (#5) | 已实现单账号版本: 下发, 删除, 显示状态, 按钮动作, 连接时推送 `space_update` |
-| §1 账号 | 已实现: 母号初始化, 登录刷新登出, 我, 设备吊销, 邀请加入, 用户管理, 群组, 审计。子号数据在各自的 DO (`u:<userId>`), 由主 Hub 转发; 子号暂不能建接入 key 与来源 |
+| §1 账号 | 已实现: 母号初始化, 登录刷新登出, 我, 设备吊销, 邀请加入, 用户管理, 群组, 审计。整个部署只有主 Hub 一个库; 子号直接连主 Hub, 只能进自己所在的多人群 (§1.7), 不能建接入 key 与来源, 也没有私人收件箱 |
 | §2 频道订阅, §9 探针管理接口 (#11) | 未实现, 设计草案; 接入 key 都属于母号, `to` 字段被忽略 |
 
 所有路径常量见 `protocol/src/v1/paths.ts`。
@@ -152,6 +152,23 @@ admin 只能邀请 `member`; owner 可邀请 `admin`。`GET /api/v1/invites` 列
 - `DELETE /api/v1/groups/{id}` (admin)
 
 `GroupInfo`: `{ "id": "g_...", "name": "family", "title": "家人", "members": ["u_...", "u_..."] }`
+
+### 1.7 多人群
+
+群就是 channel, 消息只在主库存一份 (`ev.grp` 列, `(grp, seq)` 索引)。`room_member (grp, member)` 记成员; 不在表里的群只有主人自己。主人在所有群都是群主 (`owner`), 成员是 `admin` 或 `member`。
+
+- `GET /api/v1/chats/{channel}/members` → `{ "members": [RoomMember] }` (群里任何人), `RoomMember`: `{ id, name, display, role, joined }`, 群主排第一。
+- `POST /api/v1/chats/{channel}/members` `{ "user": "名或 id", "role": "member" }` (群主 / 管理员): 直接拉已有账号进群。只有群主能直接设 `admin`。
+- `PATCH /api/v1/chats/{channel}/members/{id}` `{ "role": "admin" | "member" }` (群主)。
+- `DELETE /api/v1/chats/{channel}/members/{id}`: 管理员踢普通成员, 群主踢任何人; 删自己就是退群。
+- `POST /api/v1/chats/{channel}/invites` `{ "ttlHours": 72, "maxUses": 50 }` (群主 / 管理员) → `{ code, link, appLink, expires, maxUses }`。`code` 以 `hxr_` 开头; `link` 是浏览器说明页 `/join/{code}` (不需要登录), `appLink` 是 `hxaioa://join?server=..&code=..`, App 直接接住。
+- `POST /api/v1/rooms/join` `{ "code": "hxr_..." }` (已登录账号) → `{ "chat": ChatMeta }`。
+- `POST /api/v1/join` 的 `code` 也可以是 `hxr_` 群邀请码: 直接注册为普通成员 (不需要审批) 并进群, 返回 `TokenPair`。
+- 邀请用满后保留到过期, 期间再用返回 410。
+
+成员能做的: `GET /api/v1/chats` (只有自己的群, 带 `role` 与 `members` 人数), `GET .../messages` (`since` / `before`), `PATCH /api/v1/chats/{channel}` (`pinned` / `muted` / `read` 只影响自己; 管理员还能改 `title` / `avatar`), 头像, 撤回自己的消息, 管理员删除本群消息, 长连接收发本群消息。其他接口一律 403。
+
+推送: 人发的消息带 `by` (账号 id)。多人群里的消息路由为 `push`, 只推给群成员的在线连接和主人; 发送者自己的设备按 `welcome.uid == ev.by` 认出是自己发的, 不提醒。只有自己的群照旧 `silent`。
 
 ## 2. 频道与订阅
 

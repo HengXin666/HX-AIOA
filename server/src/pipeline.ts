@@ -34,7 +34,7 @@ import { EventStore } from "./store";
 import type { Timers } from "./timers";
 
 type Bucket = { count: number; title: string; rule?: string; subject?: string; channels: DeliveryChannel[] };
-type Origin = { source: SourceRef; sourceInfo?: SourceInfo | null; cid?: string };
+type Origin = { source: SourceRef; sourceInfo?: SourceInfo | null; cid?: string; by?: string };
 
 const FALLBACK: DeliveryChannel[] = ["mipush", "wxpusher"];
 const ringing = (r: RouteInfo | undefined) => r !== undefined && (r.action === "alert" || r.action === "push");
@@ -70,6 +70,7 @@ export class Pipeline {
     for (const k of ["dedupeKey", "groupKey", "actions", "ttl", "reply", "fwd"] as const) if (input[k] !== undefined) Object.assign(draft, { [k]: input[k] });
     if (input.resolved) draft.resolved = true;
     if (origin.cid) draft.cid = origin.cid;
+    if (origin.by) draft.by = origin.by;
     return this.ingest(draft, info ?? null, fixed);
   }
 

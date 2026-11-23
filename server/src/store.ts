@@ -138,6 +138,19 @@ export class EventStore {
     return rows.toArray().map(parse);
   }
 
+  // 子号补拉: 只要自己所在群的; 按 seq 范围扫增量再按 grp 过滤
+  sinceIn(grps: string[], seq: number, limit: number): Envelope[] {
+    if (!grps.length) return [];
+    const marks = grps.map(() => "?").join(", ");
+    return this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE seq > ? AND grp IN (${marks}) ORDER BY seq LIMIT ?`, seq, ...grps, limit).toArray().map(parse);
+  }
+
+  recentIn(grps: string[], n: number): Envelope[] {
+    if (!grps.length) return [];
+    const marks = grps.map(() => "?").join(", ");
+    return this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE grp IN (${marks}) ORDER BY seq DESC LIMIT ?`, ...grps, n).toArray().map(parse).reverse();
+  }
+
   before(seq: number, limit: number, kind: Kind): Envelope[] {
     return this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE seq < ? AND kind = ? ORDER BY seq DESC LIMIT ?`, seq, kind, limit).toArray().map(parse);
   }

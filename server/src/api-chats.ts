@@ -34,7 +34,8 @@ import {
 } from "@hx-aioa/protocol";
 import { agentBootstrap, agentGuide } from "./agent-prompt";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
-import { type Core, OWNER, type Principal, type ReqCtx, type Route, route } from "./core";
+import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
+import { memberView, ownerView, roleIn } from "./room-access";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 
 const AGENT_SCOPES: Scope[] = ["messages:send", "events:write"];
@@ -53,7 +54,10 @@ const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function sync(core: Core, topic: ChatSyncFrame["topic"], channel?: string): void {
-  core.sockets.toV1Clients({ t: "chat_sync", topic, ...(channel ? { channel } : {}) } satisfies ChatSyncFrame);
+  const frame = { t: "chat_sync", topic, ...(channel ? { channel } : {}) } satisfies ChatSyncFrame;
+  // 群资料子号也要知道, 收藏只是主人的
+  if (topic === "chats") core.sockets.toAllClients(frame);
+  else core.sockets.toV1Clients(frame);
 }
 
 // 资料带弱 ETag, 没变时 304, 客户端缓存直接用
@@ -65,14 +69,22 @@ function cached(req: Request, tag: string, body: unknown): Response {
   return res;
 }
 
-function canRead(who: Principal, channel: string): boolean {
+function canRead(core: Core, who: Principal, channel: string): boolean {
   if (who.owner) return true;
+  if (who.member) return roleIn(core, who, channel) !== null;
   return who.key.scopes.includes(READ_SCOPE) && who.key.channels.some((p) => globMatch(p, channel));
 }
 
+function visibleChats(c: ReqCtx): ChatMeta[] {
+  if (c.who.owner) return c.core.chats.chats().map((m) => ownerView(c.core, m));
+  const member = c.who.member;
+  if (member) return c.core.rooms.roomsOf(member.user.id).flatMap((m) => memberView(c.core, m.grp, member.user.id) ?? []);
+  return c.core.chats.chats().filter((m) => canRead(c.core, c.who, m.channel)).map(({ agents: _a, ...rest }) => rest);
+}
+
 function listChats(c: ReqCtx): Response {
-  const all = c.core.chats.chats().filter((m) => canRead(c.who, m.channel));
-  const visible = c.who.owner ? all : all.map(({ agents: _a, ...rest }) => rest);
+  if (!c.who.owner && !c.who.member && !c.who.key.scopes.includes(READ_SCOPE)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const visible = visibleChats(c);
   const tag = `${visible.length}-${Math.max(0, ...visible.map((m) => m.updated))}`;
   return cached(c.req, tag, { chats: visible });
 }
@@ -106,6 +118,19 @@ async function patchChat(c: ReqCtx): Promise<Response> {
   if (!channel || channel.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
   const p = parsePatch(await readJson(c.req));
   if (typeof p === "string") return fail(400, p);
+  const role = roleIn(c.core, c.who, channel);
+  if (!role) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  // 子号: 置顶, 免打扰, 已读是自己的; 管理员还能改标题和头像
+  if (role !== "owner") {
+    const uid = c.who.owner ? "" : (c.who.member?.user.id ?? "");
+    const { pinned, muted, read, title, avatar } = p;
+    c.core.rooms.patchPrefs(channel, uid, { ...(pinned !== undefined ? { pinned } : {}), ...(muted !== undefined ? { muted } : {}), ...(read !== undefined ? { read } : {}) });
+    if (role === "admin" && (title !== undefined || avatar !== undefined)) {
+      c.core.chats.patchChat(channel, { ...(title !== undefined ? { title } : {}), ...(avatar !== undefined ? { avatar } : {}) });
+      sync(c.core, "chats", channel);
+    }
+    return json({ chat: memberView(c.core, channel, uid) });
+  }
   const meta = c.core.chats.patchChat(channel, p);
   sync(c.core, "chats", channel);
   return json({ chat: meta });
@@ -113,7 +138,7 @@ async function patchChat(c: ReqCtx): Promise<Response> {
 
 function chatMessages(c: ReqCtx): Response {
   const channel = param(c, 0);
-  if (!canRead(c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  if (!canRead(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
   const limit = clampInt(c.url.searchParams.get(QUERY_LIMIT), HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT);
   // before: 向前翻页, 群键与客户端一致 (没写 channel 的按来源名, 本机发出的归备忘)
   const before = c.url.searchParams.get(QUERY_BEFORE);
@@ -317,9 +342,9 @@ function getAvatar(c: ReqCtx): Response {
 }
 
 export const CHAT_ROUTES: Route[] = [
-  route(GET, PATH_CHATS, READ_SCOPE, listChats),
-  route(PATCH, PATH_CHAT, OWNER, patchChat),
-  route(GET, PATH_CHAT_MESSAGES, READ_SCOPE, chatMessages),
+  route(GET, PATH_CHATS, ROOM, listChats),
+  route(PATCH, PATH_CHAT, ROOM, patchChat),
+  route(GET, PATH_CHAT_MESSAGES, ROOM, chatMessages),
   route(DELETE, PATH_CHAT_MESSAGES, OWNER, clearChat),
   route(POST, PATH_CHAT_AGENTS, OWNER, addAgent),
   route(PATCH, PATH_CHAT_AGENT, OWNER, patchAgent),
@@ -332,7 +357,7 @@ export const CHAT_ROUTES: Route[] = [
   route(PUT, PATH_FAVORITE, OWNER, putFavorite),
   route(DELETE, PATH_FAVORITE, OWNER, deleteFavorite),
   route(PUT, PATH_AVATARS, OWNER, putAvatar),
-  route(GET, PATH_AVATAR, OWNER, getAvatar),
+  route(GET, PATH_AVATAR, ROOM, getAvatar),
   route(GET, PATH_EVENT_BY_SEQ, OWNER, (c) => {
     const ev = c.core.store.bySeq(seqParam(c));
     return ev ? json(ev) : notFound();

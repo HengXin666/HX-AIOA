@@ -1,5 +1,6 @@
 import { API_V1 } from "./constants";
 import type { Envelope } from "./event";
+import type { RoomRole } from "./room";
 
 // 群资料: 群就是 channel; 字段都可选, 没设置的群不存行
 export type DigestKind = "daily" | "weekly";
@@ -12,6 +13,9 @@ export type ChatMeta = {
   read?: number;
   digest?: DigestKind;
   agents?: ChatAgent[];
+  // 多人群: 我在群里的身份与成员数; 只有自己的群没有这两项
+  role?: RoomRole;
+  members?: number;
   // 清空聊天记录时的位置: 该群 seq <= cleared 的消息客户端一并删掉
   cleared?: number;
   updated: number;

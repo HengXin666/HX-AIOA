@@ -129,6 +129,7 @@ export async function deleteUser(a: Accounts, w: AcctWho, id: string): Promise<R
   const u = target(a, w, id);
   await a.revokeAll(u);
   a.dir.deleteUser(u.id);
+  a.onDelete?.(u.id);
   await a.userHub(u).wipe();
   a.dir.audit(w.actor, "delete_user", u.id, u.name);
   return json({ ok: true });

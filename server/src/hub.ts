@@ -2,8 +2,6 @@ import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
   ANDROID_DEVICE_PREFIX,
-  PATH_KEYS,
-  PATH_SOURCES,
   PING_TEXT,
   PONG_TEXT,
   PROBE_DEVICE_PREFIX,
@@ -19,10 +17,11 @@ import {
   type GithubSyncResult,
   type StreamClientFrame,
   type StreamRole,
+  type RouteInfo,
   type UserPublic,
 } from "@hx-aioa/protocol";
 import { handleAccounts } from "./accounts/api";
-import { ERR_MEMBER_NO_KEYS, HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from "./accounts/constants";
+import { HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from "./accounts/constants";
 import { Accounts, type Session } from "./accounts/service";
 import { verifyPassword } from "./accounts/crypto";
 import { messageInput } from "./api-events";
@@ -55,6 +54,8 @@ import {
   UNKNOWN_DEVICE,
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
+import { joinPage } from "./join-page";
+import { authorOf } from "./room-access";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
 import { buildOverview } from "./group";
@@ -66,7 +67,10 @@ import { MetricRouter, isProbe } from "./metrics";
 import { Pipeline } from "./pipeline";
 import { Registry } from "./registry";
 import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
-import { EventStore } from "./store";
+import { EventStore, groupOf } from "./store";
+import { RoomStore } from "./rooms";
+import { joinRoom } from "./api-rooms";
+import { memberKey } from "./member";
 import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
@@ -77,6 +81,8 @@ const CF_SOURCE = "CF 额度";
 const KEY_CF_ALERT = "cf_alert_day";
 const CF_ALERT_RATIO = 0.8;
 const PCT = 100;
+const ROUTE_SELF: RouteInfo = { action: "silent", channels: ["ws"], reason: "本人发送" };
+const ROUTE_ROOM: RouteInfo = { action: "push", channels: ["ws"], reason: "群聊" };
 
 // 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
@@ -87,11 +93,17 @@ export class Hub extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     const sql = ctx.storage.sql;
-    const all = () => this.ctx.getWebSockets();
+    const every = () => this.ctx.getWebSockets();
+    // 子号的连接只收群消息, 探针, 指标, 终端都看不到
+    const all = () => every().filter((ws) => !attOf(ws).member);
     const store = new EventStore(sql, (fn) => ctx.storage.transactionSync(fn));
     const config = new Config(ctx.storage);
     const metrics = new MetricRouter(all, sql);
-    const sockets = new Sockets(all);
+    const rooms = new RoomStore(sql);
+    const sockets = new Sockets(every, (ev) => {
+      const grp = groupOf(ev);
+      return new Set(grp ? rooms.members(grp).map((m) => m.member) : []);
+    });
     this.timers = new Timers(ctx.storage);
     const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers);
     const spaces = new Spaces(ctx.storage);
@@ -100,7 +112,13 @@ export class Hub extends DurableObject<Env> {
     const github = new GithubService(env, sql, ctx.storage, registry);
     const terms = new Terminals(all, () => env.TOKEN_SECRET || env.AUTH_TOKEN, (text, loud) => this.termAudit(text, loud));
     const checkPassword = async (id: string, pw: string) => verifyPassword(pw, this.acct().dir.passOf(id) ?? "");
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats: new ChatStore(sql), terms, checkPassword, dbSize: () => sql.databaseSize };
+    const users = {
+      get: (id: string) => this.acct().dir.user(id),
+      find: (ref: string) => this.acct().dir.find(ref),
+      ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
+    };
+    const chats = new ChatStore(sql);
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -125,13 +143,18 @@ export class Hub extends DurableObject<Env> {
 
   // 主 Hub 才有账号目录; 子号 DO 只收主 Hub 转发来的请求
   private acct(): Accounts {
-    this.accounts ??= new Accounts(this.ctx.storage.sql, this.env, (u, ids) => this.kickUser(u, ids));
+    if (!this.accounts) {
+      this.accounts = new Accounts(this.ctx.storage.sql, this.env, (u, ids) => this.kickUser(u, ids));
+      this.accounts.joinRoom = (uid, code) => joinRoom(this.core, uid, code);
+      this.accounts.onDelete = (uid) => this.core.rooms.forget(uid);
+    }
     return this.accounts;
   }
 
+  // 子号现在也连主 Hub; 旧的子号 DO 里可能还挂着老连接, 一并踢
   private async kickUser(user: UserPublic, ids: string[]): Promise<void> {
-    if (user.role === "owner") return this.kick(ids);
-    await this.acct().userHub(user).kick(ids);
+    await this.kick(ids);
+    if (user.role !== "owner") await this.acct().userHub(user).kick(ids);
   }
 
   // RPC: 断开这些会话的长连接
@@ -161,18 +184,6 @@ export class Hub extends DurableObject<Env> {
     await this.ctx.storage.deleteAll();
   }
 
-  // 子号不能建接入 key 与来源: webhook 与 key 查找都在主 Hub, 子号 DO 里建了也用不上
-  private async forward(req: Request, url: URL, s: Session): Promise<Response> {
-    if ([PATH_KEYS, PATH_SOURCES].some((p) => url.pathname.startsWith(p))) {
-      await req.body?.cancel();
-      return fail(403, ERR_MEMBER_NO_KEYS, CODE_FORBIDDEN);
-    }
-    const headers = new Headers(req.headers);
-    headers.delete("Authorization");
-    headers.set(HEADER_INTERNAL_USER, encodeURIComponent(JSON.stringify(s)));
-    return this.acct().userHub(s.user).fetch(new Request(req, { headers }));
-  }
-
   private async preAuth(req: Request, url: URL): Promise<Response | Principal | undefined> {
     const internal = req.headers.get(HEADER_INTERNAL_USER);
     if (internal) {
@@ -185,12 +196,15 @@ export class Hub extends DurableObject<Env> {
     if (!cred.startsWith(ACCESS_PREFIX)) return undefined;
     const s = await this.acct().resolve(cred);
     if (!s) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
-    if (s.user.role !== "owner") return this.forward(req, url, s);
+    // 子号与主人共用这一个库, 只能进自己所在的多人群
+    if (s.user.role !== "owner") return { owner: false, key: memberKey(s.user), member: { user: s.user, session: s.session } };
     return { owner: true, user: s.user, session: s.session };
   }
 
   override async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
+    const page = await joinPage(this.core, req, url);
+    if (page) return page;
     let pre: Principal | undefined;
     try {
       const r = await this.preAuth(req, url);
@@ -210,15 +224,19 @@ export class Hub extends DurableObject<Env> {
     if (!role || !this.mayConnect(who, role, device)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
 
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
-    const session = who.owner ? who.session : undefined;
+    const session = who.owner ? who.session : who.member?.session;
     this.ctx.acceptWebSocket(server, session ? [device, SESSION_TAG_PREFIX + session] : [device]);
     const att: Attachment = { device, proto: v1 ? PROTO_V1 : PROTO_LEGACY, role };
     if (!who.owner) att.keyId = who.key.id;
     if (role === "probe") att.shell = allowed(who, "probe:shell");
+    const uid = role === "client" ? authorOf(this.core, who) : undefined;
+    if (uid) att.uid = uid;
+    if (!who.owner && who.member) att.member = true;
     server.serializeAttachment(att);
 
     const head = this.core.store.head();
-    const me = who.owner && who.user ? { user: who.user, session } : {};
+    const user = who.owner ? who.user : who.member?.user;
+    const me = { ...(user ? { user, session } : {}), ...(uid ? { uid } : {}) };
     const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
     const floor = this.core.store.floor();
     // 断线期间有墓碑被清理: 让客户端丢掉 floor 之前的缓存, 补拉改为最近一批
@@ -226,6 +244,14 @@ export class Hub extends DurableObject<Env> {
     if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me, ...(resync ? { resync, floor } : {}) });
     else sendFrame(server, { t: "welcome", head });
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
+    if (att.member) {
+      if (uid && Number.isFinite(since)) {
+        const grps = this.core.rooms.roomsOf(uid).map((m) => m.grp);
+        const evs = resync ? this.core.store.recentIn(grps, HISTORY_MAX_LIMIT) : this.core.store.sinceIn(grps, since, HISTORY_MAX_LIMIT);
+        for (const ev of evs) sendFrame(server, { t: "ev", ev });
+      }
+      return new Response(null, { status: 101, webSocket: client });
+    }
     sendFrame(server, this.core.metrics.probes());
     // 装过的主机 (含离线) 一连上就给, 总览不必等到有在线探针才看得到它们
     sendFrame(server, this.core.metrics.hostsFrame());
@@ -244,7 +270,7 @@ export class Hub extends DurableObject<Env> {
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {
-    if (role === "client") return who.owner;
+    if (role === "client") return who.owner || !!who.member;
     if (role === "agent") return allowed(who, "agent");
     if (!allowed(who, "probe") || !device.startsWith(PROBE_DEVICE_PREFIX)) return false;
     return who.owner || !who.key.subject || device === `${PROBE_DEVICE_PREFIX}-${who.key.subject}`;
@@ -284,6 +310,7 @@ export class Hub extends DurableObject<Env> {
   private async handleStream(ws: WebSocket, att: Attachment, f: StreamClientFrame): Promise<void> {
     const agents = this.core.agents;
     const isAgent = att.role === "agent";
+    if (att.member) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
     if ((f.t === "task" || f.t === "agent_hello" || f.t === "act_ack") !== isAgent) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
     switch (f.t) {
       case "act": {
@@ -315,6 +342,7 @@ export class Hub extends DurableObject<Env> {
 
   private async handleLegacy(ws: WebSocket, att: Attachment, frame: ClientFrame): Promise<void> {
     const metrics = this.core.metrics;
+    if (att.member && frame.t !== "send") return;
     switch (frame.t) {
       case "watch":
         ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
@@ -343,8 +371,13 @@ export class Hub extends DurableObject<Env> {
         if (att.role !== "client") return;
         const input = chatInput(this.core.store, frame);
         if (typeof input === "string") return this.err(ws, CODE_BAD_REQUEST, input);
-        // 自己发给自己的备忘不响铃, 也不触发兜底推送
-        const ev = await this.core.pipeline.fromInput(input, { source: { id: att.device, name: att.device }, cid: frame.cid }, { action: "silent", channels: ["ws"], reason: "本人发送" });
+        const grp = input.channel ?? "";
+        if (att.member && !(att.uid && this.core.rooms.member(grp, att.uid))) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
+        // 多人群照常提醒其他人 (发送者自己的设备按 by 认出是自己发的); 只有自己的群不响铃, 也不触发兜底推送
+        const shared = !!grp && this.core.rooms.shared(grp);
+        const route = shared ? ROUTE_ROOM : ROUTE_SELF;
+        const name = (att.uid && this.core.users.get(att.uid)?.display) || att.device;
+        const ev = await this.core.pipeline.fromInput(input, { source: { id: att.device, name }, cid: frame.cid, ...(att.uid ? { by: att.uid } : {}) }, route);
         sendFrame(ws, { t: "sent", cid: frame.cid, seq: ev.seq, ts: ev.ts });
         return;
       }
