@@ -46,6 +46,7 @@
 | [ui-gallery.md](client/ui-gallery.md) | 组件库与电脑端预览画廊 |
 | [settings-map.md](client/settings-map.md) | 安卓 "我的" 与设置页结构 |
 | [android-battery.md](client/android-battery.md) | 后台耗电测量方法与记录 |
+| [browser.md](client/browser.md) | 安卓内置浏览器: 链接入口, 登录态, 走订阅代理, 广告拦截 |
 
 ## 设计与调研 `design/`
 

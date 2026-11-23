@@ -1,8 +1,8 @@
 package com.hengxin.aioa.ui.chat
 
+import com.hengxin.aioa.browser.Browser
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.util.LruCache
 import android.view.MotionEvent
 import android.webkit.WebResourceRequest
@@ -77,7 +77,7 @@ private fun page(body: String, t: CardTheme) =
         "<style>:root{color-scheme:${if (t.dark) "dark" else "light"}}html,body{margin:0;padding:0;word-wrap:break-word;color:${css(t.text)}}" +
         "a{color:${css(t.link)}}img{max-width:100%}</style></head><body>${adapt(body, t.dark)}</body></html>"
 
-/** 沙箱 WebView: 不跑脚本, 不联网 (只能用内联样式和 data: 图片), 不读文件; 点链接交给浏览器。 */
+/** 沙箱 WebView: 不跑脚本, 不联网 (只能用内联样式和 data: 图片), 不读文件; 点链接进内置浏览器。 */
 @SuppressLint("ClickableViewAccessibility")
 private fun sandbox(context: Context, onHeight: (Int) -> Unit): WebView = WebView(context).apply {
     settings.javaScriptEnabled = false
@@ -89,7 +89,7 @@ private fun sandbox(context: Context, onHeight: (Int) -> Unit): WebView = WebVie
     webViewClient = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
-            if (url.scheme in SCHEMES) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            if (url.scheme in SCHEMES) Browser.open(context, url.toString())
             return true
         }
 

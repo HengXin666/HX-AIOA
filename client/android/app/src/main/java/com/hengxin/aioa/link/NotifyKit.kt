@@ -1,5 +1,6 @@
 package com.hengxin.aioa.link
 
+import com.hengxin.aioa.browser.Browser
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
@@ -54,11 +55,10 @@ object NotifyKit {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    /** 有链接就用浏览器打开, 没有或打不开就回到 App。 */
+    /** 有链接就在内置浏览器打开, 没有或不是网页就回到 App。 */
     fun openUrl(context: Context, url: String?): PendingIntent {
-        val uri = url?.let { runCatching { Uri.parse(it) }.getOrNull() }?.takeIf { it.scheme?.startsWith("http") == true }
-            ?: return openApp(context)
-        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val uri = url?.let { runCatching { Uri.parse(it) }.getOrNull() }?.takeIf(Browser::isWeb) ?: return openApp(context)
+        val intent = Browser.intent(context, uri.toString())
         return PendingIntent.getActivity(context, url.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 

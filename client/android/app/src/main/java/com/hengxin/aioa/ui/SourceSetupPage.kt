@@ -1,9 +1,9 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.browser.Browser
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -144,6 +144,5 @@ private fun copy(context: Context, value: String) {
 }
 
 private fun open(context: Context, url: String) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-        .onFailure { Toast.makeText(context, "没有可以打开链接的应用", Toast.LENGTH_SHORT).show() }
+    Browser.open(context, url)
 }

@@ -1,9 +1,7 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.browser.Browser
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,9 +69,7 @@ fun activityIcon(kind: String): String = when (kind) {
 }
 
 fun openUrl(context: Context, url: String?) {
-    if (url.isNullOrEmpty()) return
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        .onFailure { Toast.makeText(context, "没有可以打开链接的应用", Toast.LENGTH_SHORT).show() }
+    Browser.open(context, url)
 }
 
 /** 页面可见期间登记到 GithubState, 收到 github 事件时才刷新。 */

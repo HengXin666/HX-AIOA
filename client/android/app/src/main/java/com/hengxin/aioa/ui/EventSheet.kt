@@ -1,7 +1,6 @@
 package com.hengxin.aioa.ui
 
-import android.content.Intent
-import android.net.Uri
+import com.hengxin.aioa.browser.Browser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +59,7 @@ fun EventSheet(ev: Envelope, onClose: () -> Unit, toChat: () -> Unit) {
             }
             Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) {
                 ev.url?.let { url ->
-                    TextButton({ runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) { Text("打开链接", c.accent, 14) }
+                    TextButton({ Browser.open(context, url) }) { Text("打开链接", c.accent, 14) }
                 }
                 TextButton(toChat) { Text("去消息里看", c.accent, 14) }
             }

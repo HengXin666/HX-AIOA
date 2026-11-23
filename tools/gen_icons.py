@@ -14,6 +14,7 @@ ICONS = [
     "bot", "chevron-down", "chevron-up", "file-text", "layout-dashboard", "maximize-2", "minimize-2", "send", "shield-check",
     "git-branch", "git-pull-request", "circle-dot", "git-commit-horizontal", "tag", "star", "message-square",
     "circle-play", "external-link", "puzzle", "list-checks", "square", "square-check", "download", "trash-2", "copy",
+    "chevron-left", "chevron-right", "x", "globe", "shield-off",
 ]
 # Lucide 已移除品牌图标, 这些名字借用相近图标的路径
 ALIASES = {"github": "git-branch"}

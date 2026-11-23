@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -21,6 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalUriHandler
+import com.hengxin.aioa.browser.BrowserUriHandler
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
 import com.hengxin.aioa.config.AppearanceStore
@@ -54,12 +57,14 @@ class MainActivity : ComponentActivity() {
         handleLink(intent)
         announce()
         val actions = SystemActions(::requestBatteryWhitelist, ::openAppSettings, ::openNotificationSettings)
+        val uriHandler = BrowserUriHandler(this)
         setContent {
             var prefs by remember { mutableStateOf(AppearanceStore.load(this)) }
             val appearance = prefs.resolve(isSystemInDarkTheme())
             AioaTheme(appearance) {
                 MaterialTheme(colorScheme = materialScheme(Aioa.colors, appearance.dark)) {
-                    Surface {
+                    // 文本里的链接 (Markdown 等) 也进内置浏览器
+                    CompositionLocalProvider(LocalUriHandler provides uriHandler) { Surface {
                         if (!chat.configured) {
                             // 首次配置保存后进入主界面; 之后的修改都在 "我的" 里
                             SettingsScreen(settings, joinCode) {
@@ -73,7 +78,7 @@ class MainActivity : ComponentActivity() {
                             }, ::showHistory)
                         }
                         notes?.let { NotesSheet(it, ::closeNotes) }
-                    }
+                    } }
                 }
             }
         }
