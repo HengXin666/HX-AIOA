@@ -89,17 +89,17 @@ fun ChatScreen(model: ChatModel) {
     val g = model.groups
     if (g.favoritesOpen) {
         BackHandler { g.favoritesOpen = false }
-        FavoritesPage(model) { g.favoritesOpen = false }
+        KeepState("chat:fav") { FavoritesPage(model) { g.favoritesOpen = false } }
         return
     }
     val open = g.open
     if (open == null) {
-        GroupList(model)
+        KeepState("chat:list") { GroupList(model) }
         return
     }
     if (g.page == ChatPage.SETTINGS) {
         BackHandler { g.page = ChatPage.CHAT }
-        GroupSettingsPage(model, open) { g.page = ChatPage.CHAT }
+        KeepState("chat:set:$open") { GroupSettingsPage(model, open) { g.page = ChatPage.CHAT } }
         return
     }
     BackHandler { g.close() }
@@ -119,7 +119,8 @@ fun ChatScreen(model: ChatModel) {
         ChatTopBar(model, open) { g.close() }
         val err = g.error ?: dir.error
         if (err != null) Text(err, Modifier.fillMaxWidth().clickable { g.clearError() }.padding(horizontal = PAD, vertical = 4.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-        MessageList(model, open, actions, Modifier.weight(1f))
+        // 进群设置再回来时停在原来的位置; 换群或退出群后是新的一页
+        KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
         Composer(g)
     }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }

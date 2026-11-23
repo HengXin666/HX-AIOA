@@ -39,7 +39,7 @@ fun TodayCard(mine: GithubMine) {
     val context = LocalContext.current
     val c = Aioa.colors
     val t = mine.today ?: return
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon("github", c.textSecondary, 16.dp)

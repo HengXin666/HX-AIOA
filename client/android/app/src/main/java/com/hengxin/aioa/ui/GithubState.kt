@@ -19,6 +19,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val GET = "GET"
+// 一分钟内再进 GitHub 页不重复请求
+private const val STALE_MS = 60_000L
 private const val CACHE_REPOS = "gh-repos"
 private const val POST = "POST"
 private const val F_URL = "url"
@@ -100,7 +102,16 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
     val ciFailures: Int get() = repos.count { it.ci?.status == CiStatus.FAILURE }
     val latestCi: GhCi? get() = repos.mapNotNull { it.ci }.maxByOrNull { it.at }
 
+    private var lastRefresh = 0L
+
+    /** 进页面时用: 刚刷过就不再请求, 返回上一页不会重新加载。 */
+    fun refreshIfStale(withRecent: Boolean = false) {
+        if (System.currentTimeMillis() - lastRefresh < STALE_MS) return
+        refresh(withRecent)
+    }
+
     fun refresh(withRecent: Boolean = false) {
+        lastRefresh = System.currentTimeMillis()
         refreshing = true
         io {
             // 先显示上次的列表, 服务端有变化再替换

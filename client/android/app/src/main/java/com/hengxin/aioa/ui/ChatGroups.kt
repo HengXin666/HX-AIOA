@@ -167,8 +167,13 @@ class ChatGroups(
     /** 删组不删群, 群回到未分组。 */
     fun removeFolder(name: String) = save(folders.filter { it.name != name })
 
+    // 第几次打开群: 消息列表的保存状态按次区分, 重新进群从最新一条开始
+    var visit = 0
+        private set
+
     fun openGroup(key: String) {
         if (open == key) return
+        visit += 1
         open = key
         page = ChatPage.CHAT
         replyTo = null

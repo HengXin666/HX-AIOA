@@ -38,8 +38,10 @@ export function activityOf(e: Obj): GithubActivityItem | null {
       const url = before && head ? `${repoUrl}/compare/${before.slice(0, 12)}...${head.slice(0, 12)}` : head ? `${repoUrl}/commit/${head}` : repoUrl;
       return item("push", title, url, commits ? { commits } : {});
     }
-    case "PullRequestEvent":
-      return item("pr", join(verb(s(p.action)), `PR #${prNo ?? ""}`, s(pr.title) || prRefs), prUrl);
+    case "PullRequestEvent": {
+      const action = s(p.action) === "closed" && pr.merged === true ? "merged" : s(p.action);
+      return item("pr", join(verb(action), `PR #${prNo ?? ""}`, s(pr.title) || prRefs), prUrl, action ? { action } : {});
+    }
     case "PullRequestReviewEvent":
       return item("review", join("评审", `PR #${prNo ?? ""}`, s(pr.title)), s(obj(p.review).html_url) || prUrl);
     case "PullRequestReviewCommentEvent":
@@ -51,7 +53,8 @@ export function activityOf(e: Obj): GithubActivityItem | null {
     }
     case "IssuesEvent": {
       const n = num(issue.number) ?? num(p.number);
-      return item("issue", join(verb(s(p.action)), `Issue #${n ?? ""}`, s(issue.title)), s(issue.html_url) || (n ? `${repoUrl}/issues/${n}` : repoUrl));
+      const action = s(p.action);
+      return item("issue", join(verb(action), `Issue #${n ?? ""}`, s(issue.title)), s(issue.html_url) || (n ? `${repoUrl}/issues/${n}` : repoUrl), action ? { action } : {});
     }
     case "CreateEvent":
       return item("create", join("创建", s(p.ref_type), s(p.ref)), repoUrl);
@@ -91,6 +94,7 @@ export function statsOf(items: GithubActivityItem[]): GithubActivityStats {
 export class ActivityStore {
   constructor(private readonly sql: SqlStorage) {
     sql.exec("CREATE TABLE IF NOT EXISTS gh_activity (id TEXT PRIMARY KEY, ts INTEGER NOT NULL, body TEXT NOT NULL)");
+    sql.exec("CREATE INDEX IF NOT EXISTS gh_activity_ts ON gh_activity (ts)");
   }
 
   add(items: GithubActivityItem[], now = Date.now()): number {

@@ -20,7 +20,7 @@ import com.hengxin.aioa.kit.Text
 @Composable
 fun GithubOverviewCard(state: GithubState, open: () -> Unit) {
     val c = Aioa.colors
-    LaunchedEffect(Unit) { state.refresh(withRecent = true) }
+    LaunchedEffect(Unit) { state.refreshIfStale(withRecent = true) }
     WatchGithub(state)
     Card(onClick = open) {
         CardHeader(ICON_GITHUB, GITHUB_TITLE)

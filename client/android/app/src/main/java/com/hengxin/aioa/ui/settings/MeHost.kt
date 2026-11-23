@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.settings
 
+import com.hengxin.aioa.ui.KeepState
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -65,10 +66,10 @@ fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
             // 宽屏默认展示 "关于", 不创建 SettingsModel
             val detail = if (page == SettingsPage.ROOT) SettingsPage.ABOUT else page
             Row(Modifier.fillMaxSize()) {
-                Box(Modifier.width(LIST_PANE).fillMaxHeight()) { MeRoot(summary, detail, { page = it }, deps.openWorkspace) }
+                Box(Modifier.width(LIST_PANE).fillMaxHeight()) { KeepState("me:root") { MeRoot(summary, detail, { page = it }, deps.openWorkspace) } }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(Aioa.colors.border))
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    Crossfade(detail, animationSpec = tween(FADE_MS)) { Detail(it, deps, null, toRoot) }
+                    Crossfade(detail, animationSpec = tween(FADE_MS)) { KeepState("me:${it.name}") { Detail(it, deps, null, toRoot) } }
                 }
             }
         } else {
@@ -81,7 +82,9 @@ fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
                 },
                 label = "me",
             ) { p ->
-                if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace) else Detail(p, deps, toRoot, toRoot)
+                KeepState("me:${p.name}") {
+                    if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace) else Detail(p, deps, toRoot, toRoot)
+                }
             }
         }
     }

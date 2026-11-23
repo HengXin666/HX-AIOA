@@ -33,6 +33,7 @@ export const PATH_GITHUB_SYNC = `${API_V1}/github/sync`;
 export const PATH_GITHUB_AVAILABLE = `${API_V1}/github/available`;
 export const PATH_GITHUB_TRACKED = `${API_V1}/github/tracked`;
 export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
+export const PATH_GITHUB_DAILY = `${API_V1}/github/daily`;
 
 export const QUERY_KIND = "kind";
 export const QUERY_BEFORE = "before";

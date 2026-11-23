@@ -52,6 +52,7 @@ private fun num(v: Long) = String.format(Locale.US, "%,d", v)
 /** 只能在协程里调用: 返回 (内容, 错误)。 */
 private suspend fun loadUsage(context: android.content.Context): Pair<JSONObject?, String> {
     val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(PATH)) }
+    r.body?.let { com.hengxin.aioa.ui.PageCache.put(PATH, it) }
     return r.body to r.error.orEmpty()
 }
 
@@ -72,7 +73,7 @@ private const val KIB = 1024.0
 @Composable
 fun CfUsageCard() {
     val context = LocalContext.current
-    var body by remember { mutableStateOf<JSONObject?>(null) }
+    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
     var open by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { loadUsage(context).let { (b, e) -> if (e.isEmpty()) body = b } }
     val b = body ?: return
@@ -104,11 +105,11 @@ fun CfUsageCard() {
 fun CfUsagePage(onBack: (() -> Unit)?) {
     val context = LocalContext.current
     var reload by remember { mutableIntStateOf(0) }
-    var body by remember { mutableStateOf<JSONObject?>(null) }
+    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
     var error by remember { mutableStateOf("") }
     LaunchedEffect(reload) {
         val (b, e) = loadUsage(context)
-        body = b
+        body = b ?: body
         error = e
     }
     val c = Aioa.colors

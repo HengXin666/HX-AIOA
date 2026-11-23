@@ -52,11 +52,12 @@ private fun periodText(p: String) = when (p) {
 @Composable
 fun CfStorageSection() {
     val context = LocalContext.current
-    var body by remember { mutableStateOf<JSONObject?>(null) }
+    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
     var error by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(PATH)) }
-        body = r.body
+        r.body?.let { com.hengxin.aioa.ui.PageCache.put(PATH, it) }
+        body = r.body ?: body
         error = r.error.orEmpty()
     }
     val c = Aioa.colors

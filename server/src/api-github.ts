@@ -1,4 +1,4 @@
-import { PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
+import { GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
 import { CODE_NOT_CONFIGURED, CODE_NOT_FOUND, ERR_NO_GITHUB_TOKEN, ERR_NO_RESOURCE, GET, POST, PUT } from "./constants";
 import { OWNER, type Route, route } from "./core";
 import { fail, json, readJson } from "./http";
@@ -6,6 +6,7 @@ import { fail, json, readJson } from "./http";
 const READ = "events:read";
 const DAY_MS = 24 * 3600_000;
 const MAX_RANGE_MS = 31 * DAY_MS;
+const TZ_MAX_MIN = 14 * 60;
 const MAX_TRACKED = 100;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
 const noToken = () => fail(400, ERR_NO_GITHUB_TOKEN, CODE_NOT_CONFIGURED);
@@ -38,5 +39,11 @@ export const GITHUB_ROUTES: Route[] = [
     const since = Number(c.url.searchParams.get("since")) || until - DAY_MS;
     if (since >= until || until - since > MAX_RANGE_MS) return fail(400, "since / until 范围错误, 最长 31 天");
     return json(await c.core.github.activity(since, until));
+  }),
+  // 柱状图: days 天 (默认 14, 最多 30), tz 为客户端时区东区分钟数 (北京时间 480)
+  route(GET, PATH_GITHUB_DAILY, READ, async (c) => {
+    const days = Math.min(GITHUB_DAILY_MAX_DAYS, Math.max(1, Number(c.url.searchParams.get("days")) || GITHUB_DAILY_DEFAULT_DAYS));
+    const tz = Math.max(-TZ_MAX_MIN, Math.min(TZ_MAX_MIN, Number(c.url.searchParams.get("tz")) || 0));
+    return json(await c.core.github.daily(days, tz));
   }),
 ];

@@ -46,6 +46,26 @@ export type GithubTrackedRequest = { repos: string[] };
 // 个人动态: 来自 GitHub 用户事件流, ETag 增量拉取, 保留 30 天
 export const GITHUB_ACTIVITY_KINDS = ["push", "pr", "review", "issue", "comment", "create", "delete", "release", "star", "fork", "other"] as const;
 export type GithubActivityKind = (typeof GITHUB_ACTIVITY_KINDS)[number];
-export type GithubActivityItem = { id: string; ts: number; kind: GithubActivityKind; repo: string; title: string; url: string; commits?: number };
+// action: PR / Issue 的动作 (opened / closed / merged / reopened), 旧数据没有时按标题推断
+export type GithubActivityItem = { id: string; ts: number; kind: GithubActivityKind; repo: string; title: string; url: string; commits?: number; action?: string };
 export type GithubActivityStats = { pushes: number; commits: number; prs: number; issues: number; comments: number; repos: number };
+// 每日统计: 柱状图用, day 是客户端时区的日期 (YYYY-MM-DD), start 为当天零点
+export type GithubDay = {
+  day: string;
+  start: number;
+  commits: number;
+  pushes: number;
+  prOpened: number;
+  prMerged: number;
+  prClosed: number;
+  issueOpened: number;
+  issueClosed: number;
+  reviews: number;
+  comments: number;
+};
+// open*: 关注的仓库当前还开着的 PR / Issue; streak: 截至今天连续有动态的天数
+export type GithubDailyResult = { login: string; days: GithubDay[]; openPrs: number; openIssues: number; streak: number; syncedAt?: number };
+export const GITHUB_DAILY_DEFAULT_DAYS = 14;
+export const GITHUB_DAILY_MAX_DAYS = 30;
+
 export type GithubActivityResult = { login: string; since: number; until: number; items: GithubActivityItem[]; stats: GithubActivityStats; syncedAt?: number };

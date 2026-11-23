@@ -1,6 +1,7 @@
 import type {
   GithubActivityResult,
   GithubAvailableResult,
+  GithubDailyResult,
   GithubRepoDetail,
   GithubReposResult,
   GithubSyncResult,
@@ -11,6 +12,7 @@ import type { Registry } from "../registry";
 import { fetchActivity, fetchAvailable, fetchLogin } from "./account";
 import { ActivityStore, statsOf } from "./activity";
 import { applyGithubEvent } from "./apply";
+import { dailyOf, dayStart, streakOf } from "./daily";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -92,6 +94,23 @@ export class GithubService {
     const login = (await this.storage.get<string>(KV_GITHUB_LOGIN)) ?? "";
     const syncedAt = await this.storage.get<number>(KV_GITHUB_ACTIVITY_SYNCED);
     return { login, since, until, items, stats: statsOf(items), ...(syncedAt ? { syncedAt } : {}) };
+  }
+
+  /** 最近 days 天每天的提交 / PR / Issue, 加上关注仓库当前未处理的 PR 与 Issue。 */
+  async daily(days: number, tz: number, now = Date.now()): Promise<GithubDailyResult> {
+    const since = dayStart(now, tz) - (days - 1) * 24 * 3600_000;
+    const list = dailyOf(this.activityStore.range(since, now + 60_000), now, days, tz);
+    const { repos } = await this.repos();
+    const login = (await this.storage.get<string>(KV_GITHUB_LOGIN)) ?? "";
+    const syncedAt = await this.storage.get<number>(KV_GITHUB_ACTIVITY_SYNCED);
+    return {
+      login,
+      days: list,
+      openPrs: repos.reduce((n, r) => n + r.openPrs, 0),
+      openIssues: repos.reduce((n, r) => n + r.openIssues, 0),
+      streak: streakOf(list),
+      ...(syncedAt ? { syncedAt } : {}),
+    };
   }
 
   private async syncActivity(token: string): Promise<string | null> {

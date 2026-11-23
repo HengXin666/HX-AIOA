@@ -37,15 +37,16 @@ fun GhRefreshBox(refreshing: Boolean, onRefresh: () -> Unit, content: @Composabl
 fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Unit, onPick: () -> Unit, onAddSource: () -> Unit) {
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        state.refresh(withRecent = true)
-        state.mine.loadToday()
+        state.refreshIfStale(withRecent = true)
+        state.mine.refreshIfStale()
     }
     WatchGithub(state)
     BackHandler(onBack = onBack)
     val sync = { state.sync { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }
-    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday() }) {
+    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday(); state.mine.loadDaily() }) {
         SubPage(GITHUB_TITLE, onBack, (if (state.syncing) "同步中..." else "同步") to sync) {
             state.error?.let { ErrorCard(it) }
+            DailyCard(state.mine)
             TodayCard(state.mine)
             when {
                 !state.loaded -> Card { StateBody(CardState.Loading) {} }

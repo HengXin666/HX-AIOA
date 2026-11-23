@@ -46,10 +46,12 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     var github by rememberSaveable { mutableStateOf<String?>(null) }
     val openGithub = { github = "" }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
+    val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
         AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
             val gh = github
-            if (gh != null) {
+            if (gh != null) KeepState("gh:$gh") {
                 if (gh == GH_PICK) {
                     GithubPickPage(chat.github) { github = "" }
                 } else if (gh.isEmpty()) {
@@ -60,8 +62,9 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                         tab = Tab.ME
                     }
                 } else GithubRepoPage(chat.github, gh) { github = "" }
-                return@AppScaffold
             }
+            if (gh != null) return@AppScaffold
+            KeepState("tab:${tab.name}") {
             when (tab) {
                 Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
                 Tab.CHAT -> ChatScreen(chat)
@@ -70,12 +73,14 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                 // "我的" 的子页自己处理返回键, 逐级回到列表
                 Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart)
             }
+            }
         }
         MessageBanner(chat) {
             github = null
             tab = Tab.CHAT
             chat.openBanner()
         }
+    }
     }
 }
 
