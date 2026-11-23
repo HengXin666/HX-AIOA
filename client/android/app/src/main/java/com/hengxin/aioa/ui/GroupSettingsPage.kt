@@ -1,8 +1,5 @@
 package com.hengxin.aioa.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.ui.chat.Avatars
+import com.hengxin.aioa.ui.chat.rememberAvatarPicker
 import com.hengxin.aioa.ui.chat.ChatAgent
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.DIGEST_DAILY
@@ -80,15 +78,10 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     var dialog by remember { mutableStateOf<GsDialog?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    val pickAvatar = rememberAvatarPicker({ dir.error = it }) { bytes ->
         busy = "正在上传头像..."
-        scope.launch {
-            val bytes = Avatars.encode(context, uri)
-            val r = bytes?.let { Avatars.upload(context, it) } ?: Result.failure(Exception("读不了这张图片"))
-            r.onSuccess { dir.setAvatar(group, it) }.onFailure { dir.error = "头像上传失败: ${it.message}" }
-            busy = null
-        }
+        Avatars.upload(context, bytes).onSuccess { dir.setAvatar(group, it) }.onFailure { dir.error = "头像上传失败: ${it.message}" }
+        busy = null
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -97,7 +90,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = PAD), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.clickable(enabled = manage) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                Box(Modifier.clickable(enabled = manage) { pickAvatar() }) {
                     ChatAvatar(group, meta?.avatar, BIG_AVATAR)
                 }
                 Text(meta?.title ?: group, Modifier.padding(top = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)

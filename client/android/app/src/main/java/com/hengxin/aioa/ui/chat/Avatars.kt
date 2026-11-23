@@ -3,6 +3,8 @@ package com.hengxin.aioa.ui.chat
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.util.LruCache
 import androidx.compose.foundation.Image
@@ -30,6 +32,7 @@ object Avatars {
     private const val PATH = "api/v1/avatars"
     private const val MEM_ITEMS = 64
     private const val SIDE = 256
+    private const val MAX_DECODE = 2048
     private const val MAX_BYTES = 60 * 1024
     private const val START_QUALITY = 90
     private const val QUALITY_STEP = 10
@@ -53,12 +56,36 @@ object Avatars {
         bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()?.also { mem.put(id, it) }
     }
 
-    /** 选中的图片居中裁成正方形, 缩到 256px, 压成 WebP 直到不超过 60KB。 */
-    suspend fun encode(context: Context, uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
-        val src = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return@withContext null
-        val side = minOf(src.width, src.height)
-        val square = Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
-        val scaled = Bitmap.createScaledBitmap(square, SIDE, SIDE, true)
+    /** 读入选中的图片: 按 EXIF 摆正, 长边先降到 2048px 以内, 免得大图撑爆内存。 */
+    suspend fun decode(context: Context, uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            val resolver = context.contentResolver
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_DECODE) sample *= 2
+            val bmp = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@runCatching null
+            val turn = resolver.openInputStream(uri)?.use { exifDegrees(ExifInterface(it)) } ?: 0
+            if (turn == 0) bmp else rotate(bmp, turn)
+        }.getOrNull()
+    }
+
+    fun rotate(src: Bitmap, degrees: Int): Bitmap =
+        Bitmap.createBitmap(src, 0, 0, src.width, src.height, Matrix().apply { postRotate(degrees.toFloat()) }, true)
+
+    private fun exifDegrees(e: ExifInterface): Int = when (e.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270
+        else -> 0
+    }
+
+    /** 按裁剪框 (位图坐标的正方形) 取图, 缩到 256px, 压成 WebP 直到不超过 60KB。 */
+    suspend fun encode(src: Bitmap, left: Int, top: Int, side: Int): ByteArray = withContext(Dispatchers.Default) {
+        val s = side.coerceIn(1, minOf(src.width, src.height))
+        val x = left.coerceIn(0, src.width - s)
+        val y = top.coerceIn(0, src.height - s)
+        val scaled = Bitmap.createScaledBitmap(Bitmap.createBitmap(src, x, y, s, s), SIDE, SIDE, true)
         @Suppress("DEPRECATION")
         val format = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
         var q = START_QUALITY
