@@ -22,7 +22,10 @@ data class ChatMeta(
     /** 多人群里我的身份 (owner / admin / member) 与人数; 只有自己的群为空。 */
     val role: String? = null,
     val members: Int = 0,
+    /** 展示方式: 空为聊天, mail 为邮件列表。 */
+    val view: String? = null,
 ) {
+    val isMail get() = view == VIEW_MAIL
     val shared get() = role != null
     val canManage get() = role == ROLE_OWNER || role == ROLE_ADMIN
     val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
@@ -33,6 +36,8 @@ data class ChatAgent(val keyId: String, val name: String, val reads: List<String
 
 /** 收藏: 消息快照。 */
 data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg)
+
+const val VIEW_MAIL = "mail"
 
 const val ROLE_OWNER = "owner"
 const val ROLE_ADMIN = "admin"
@@ -80,6 +85,7 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 cleared = o.optLong("cleared"),
                 role = o.optStr("role"),
                 members = o.optInt("members"),
+                view = o.optStr("view"),
             )
         }.getOrNull()
     }.associateBy { it.channel }

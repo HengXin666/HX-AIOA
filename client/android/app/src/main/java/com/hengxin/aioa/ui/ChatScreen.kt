@@ -49,6 +49,7 @@ import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.ChatAvatar
+import com.hengxin.aioa.ui.chat.MailView
 import com.hengxin.aioa.ui.chat.digestLabel
 import com.hengxin.aioa.ui.chat.plainPreview
 import kotlinx.coroutines.delay
@@ -120,8 +121,12 @@ fun ChatScreen(model: ChatModel) {
         val err = g.error ?: dir.error
         if (err != null) Text(err, Modifier.fillMaxWidth().clickable { g.clearError() }.padding(horizontal = PAD, vertical = 4.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
         // 进群设置再回来时停在原来的位置; 换群或退出群后是新的一页
-        KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
-        Composer(g)
+        if (dir.metas[open]?.isMail == true) {
+            KeepState("chat:mail:${g.visit}") { MailView(g.messages.lastOrNull()?.seq, Modifier.weight(1f)) }
+        } else {
+            KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
+            Composer(g)
+        }
     }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
 }
