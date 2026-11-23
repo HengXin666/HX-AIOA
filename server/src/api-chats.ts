@@ -36,6 +36,7 @@ import { agentBootstrap, agentGuide } from "./agent-prompt";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { memberView, ownerView, roleIn } from "./room-access";
+import { cloudRequest } from "./plugins/cloud-request";
 import { autoUpgrade } from "./plugins/update";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 
@@ -240,7 +241,7 @@ async function addAgent(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
   const { agent, key } = await createAgent(c.core, channel, p.name!, p.reads ?? []);
-  return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key) } satisfies OnboardResult);
+  return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key), key } satisfies OnboardResult);
 }
 
 // 重新接入: 作废旧 key, 发新 key, 来源与历史消息不变
@@ -255,7 +256,17 @@ async function rotateAgent(c: ReqCtx): Promise<Response> {
   const { brief: _b, ...rest } = old;
   const agent: ChatAgent = { ...rest, keyId: info.id, rotated: Date.now(), pending: true };
   saveAgents(c.core, channel, (meta?.agents ?? []).map((x) => (x.keyId === old.keyId ? agent : x)));
-  return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key) } satisfies OnboardResult);
+  const base = baseOf(c.url);
+  const out: OnboardResult = { agent, prompt: agentBootstrap(base, agent, key), key };
+  if (agent.plugin) {
+    // 插件记录跟着换 keyId, 否则卸载时找不到这个 Agent
+    const rec = c.core.plugins.get(agent.plugin);
+    if (rec?.keyId === old.keyId) c.core.plugins.setInstall({ ...rec, keyId: info.id });
+    const title = titleOf(c.core, channel);
+    const task = c.core.plugins.promptFor(agent.plugin, base, channel, title);
+    if (task) out.request = cloudRequest(base, title, task);
+  }
+  return json(out);
 }
 
 async function patchAgent(c: ReqCtx): Promise<Response> {

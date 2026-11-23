@@ -15,6 +15,7 @@ class ApiReply(val body: JSONObject?, val error: String?)
 /** 带 token 调服务端 REST 接口, 失败时带回服务端的中文报错。只能在后台线程调用。 */
 object Api {
     private const val JSON_TYPE = "application/json"
+    private val BODY_METHODS = setOf("POST", "PUT", "PATCH")
 
     fun call(
         context: Context,
@@ -27,10 +28,14 @@ object Api {
         val b = runCatching { config.server.toHttpUrl().newBuilder() }.getOrNull() ?: return ApiReply(null, "服务端地址无效")
         segments.forEachIndexed { i, s -> if (i == 0) b.addPathSegments(s) else b.addPathSegment(s) }
         query.forEach { (k, v) -> b.addQueryParameter(k, v) }
-        val req = Request.Builder().url(b.build())
-            .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
-            .method(method, body?.toString()?.toRequestBody(JSON_TYPE.toMediaType()))
-            .build()
+        // POST / PUT / PATCH 必须带请求体, 没给就发 {}; 否则 OkHttp 直接抛异常 (重新接入曾因此闪退)
+        val payload = body ?: if (method in BODY_METHODS) JSONObject() else null
+        val req = runCatching {
+            Request.Builder().url(b.build())
+                .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
+                .method(method, payload?.toString()?.toRequestBody(JSON_TYPE.toMediaType()))
+                .build()
+        }.getOrElse { return ApiReply(null, "请求无效: ${it.message}") }
         return runCatching {
             Net.client(context).newCall(req).execute().use { res ->
                 val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()

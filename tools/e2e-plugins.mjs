@@ -139,11 +139,17 @@ const t2 = await call(key, "POST", TODOS, { id: "t-2", title: "临时" });
 const del = await call(key, "DELETE", `${TODOS}/t-2`);
 check("单条写入与删除", t2.status === 200 && del.status === 200, [t2.data, del.data]);
 
+// 重新接入: 不带请求体的 POST, 返回新密钥与云端委托语; 插件记录跟着换 keyId, 卸载仍能清掉
+const rot = await api("POST", `${V1}/chats/${CHANNEL}/agents/${inst.data.install.keyId}/rotate`);
+const key2 = rot.data?.key;
+check("重新接入给出单独密钥和委托语", rot.status === 200 && !!key2 && key2 !== key && rot.data.prompt.includes(key2) && rot.data.request?.includes("待办接口") && !rot.data.request.includes(key2), rot.data);
+const oldDead = await call(key, "GET", `${V1}/chat-agent/guide`);
+check("重新接入后旧密钥失效", oldDead.status === 401 || oldDead.status === 403, oldDead.status);
 const off = await api("DELETE", `${V1}/plugins/${ID}`);
 check("卸载", off.status === 200, off.data);
 const gone = await api("GET", `${V1}/spaces`);
 check("卸载后工作台移除", !gone.data?.spaces?.some((s) => s.id === `plugin-${ID}`), gone.data);
-const dead = await call(key, "GET", `${V1}/chat-agent/guide`);
+const dead = await call(key2 ?? key, "GET", `${V1}/chat-agent/guide`);
 check("卸载后密钥失效", dead.status === 401 || dead.status === 403, dead.status);
 const kept = await api("GET", TODOS);
 check("卸载后待办保留", kept.data?.todos?.length === 1, kept.data);

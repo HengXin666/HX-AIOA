@@ -18,7 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 接入 / 重新接入的结果: 提示词只在这一次带明文 key。 */
-data class Onboard(val agent: ChatAgent, val prompt: String)
+data class Onboard(val agent: ChatAgent, val prompt: String, val key: String, val request: String?)
 
 // 群资料与收藏: 先读本地缓存秒出, 再带 ETag 增量刷新; 服务端广播 chat_sync 时再刷一次
 class ChatDirectory(private val context: Context, private val scope: CoroutineScope) {
@@ -151,7 +151,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     private suspend fun onboard(call: () -> ApiReply): Result<Onboard> = withContext(Dispatchers.IO) { call() }.let { r ->
         refreshChats()
         val b = r.body ?: return Result.failure(Exception(r.error))
-        Result.success(Onboard(parseAgent(b.getJSONObject("agent")), b.optString("prompt")))
+        runCatching { Onboard(parseAgent(b.getJSONObject("agent")), b.optString("prompt"), b.optString("key"), b.optString("request").ifEmpty { null }) }
     }
 
     /** 清空群消息, 成功时返回清到的 seq; 在 IO 线程调用。 */
