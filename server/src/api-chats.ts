@@ -69,7 +69,7 @@ function cached(req: Request, tag: string, body: unknown): Response {
   return res;
 }
 
-function canRead(core: Core, who: Principal, channel: string): boolean {
+export function canRead(core: Core, who: Principal, channel: string): boolean {
   if (who.owner) return true;
   if (who.member) return roleIn(core, who, channel) !== null;
   return who.key.scopes.includes(READ_SCOPE) && who.key.channels.some((p) => globMatch(p, channel));
@@ -152,12 +152,13 @@ function chatMessages(c: ReqCtx): Response {
 }
 
 // 清空聊天记录: 删服务端存档, 并把位置记进群资料, 各端据此删本地
-function clearChat(c: ReqCtx): Response {
+async function clearChat(c: ReqCtx): Promise<Response> {
   const channel = param(c, 0);
   if (!channel || channel.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
   const head = c.core.store.head();
   const before = clampInt(c.url.searchParams.get(QUERY_BEFORE), head + 1, head + 1);
   const deleted = c.core.store.clearGroup(channel, before);
+  await c.core.files.dropGroup(channel);
   const meta = c.core.chats.patchChat(channel, {});
   const cleared = Math.max(meta.cleared ?? 0, before - 1);
   c.core.chats.replaceChat({ ...meta, cleared });

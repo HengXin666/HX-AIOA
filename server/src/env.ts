@@ -15,4 +15,6 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   // 可选, 临时邮箱库, 每天清理超期邮件
   TEMP_MAIL_DB?: D1Database;
+  // 可选, 文件桶 (R2), 没绑定时文件接口返回 503
+  FILES?: R2Bucket;
 }

@@ -1,3 +1,4 @@
+import type { FileStore } from "./files/store";
 import {
   defaultPriority,
   type DeliveryChannel,
@@ -49,6 +50,7 @@ export class Pipeline {
     private readonly metrics: MetricRouter,
     private readonly sockets: Sockets,
     private readonly timers: Timers,
+    private readonly files?: FileStore,
   ) {}
 
   // 外部写入: EventInput + 来源 -> 信封
@@ -96,6 +98,7 @@ export class Pipeline {
       ev.route = decide(ev, sets, ctx);
     }
     const saved = this.store.put(ev);
+    await this.files?.track(previous, saved);
     await this.deliver(saved, sets);
     return saved;
   }

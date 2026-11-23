@@ -41,6 +41,7 @@ sealed interface ServerFrame {
         val id: String? = null,
         val deleted: String? = null,
         val deletedSeq: Long = 0,
+        val file: FileRef? = null,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
@@ -171,7 +172,7 @@ object Frames {
     fun watch(subjects: List<String>): String = JSONObject().put(KEY_T, "watch").put("subjects", JSONArray(subjects)).toString()
 
     /** 发消息: channel 为目标群 (备忘不写), reply / fwd 为被引用 / 被转发消息的 seq。 */
-    fun send(cid: String, text: String, channel: String? = null, reply: Long? = null, fwd: Long? = null): String {
+    fun send(cid: String, text: String, channel: String? = null, reply: Long? = null, fwd: Long? = null, file: String? = null): String {
         val o = JSONObject()
             .put(KEY_T, "send")
             .put(KEY_CID, cid)
@@ -179,6 +180,7 @@ object Frames {
         channel?.let { o.put("channel", it) }
         reply?.let { o.put("reply", it) }
         fwd?.let { o.put("fwd", it) }
+        file?.let { o.put("file", it) }
         return o.toString()
     }
 

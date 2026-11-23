@@ -66,7 +66,22 @@ data class Envelope(
     val deletedSeq: Long = 0,
     // 发送者账号 id (人发的聊天消息)
     val by: String? = null,
+    val file: FileRef? = null,
 )
+
+/** 消息附件: 字节在服务端 R2, 消息里只有引用。 */
+data class FileRef(val id: String, val name: String, val size: Long, val mime: String) {
+    val image get() = mime.startsWith("image/")
+
+    fun toJson(): org.json.JSONObject = org.json.JSONObject().put("id", id).put("name", name).put("size", size).put("mime", mime)
+
+    companion object {
+        fun parse(o: org.json.JSONObject?): FileRef? {
+            val id = o?.optString("id")?.ifEmpty { null } ?: return null
+            return FileRef(id, o.optString("name").ifEmpty { id }, o.optLong("size"), o.optString("mime").ifEmpty { "application/octet-stream" })
+        }
+    }
+}
 
 /** 引用的快照: 原消息的序号, 来源与摘要。 */
 data class MsgRef(val seq: Long, val src: String, val text: String)

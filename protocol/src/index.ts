@@ -14,6 +14,7 @@ export * from "./v1/paths";
 export * from "./v1/github";
 export * from "./v1/chat";
 export * from "./v1/room";
+export * from "./v1/files";
 export * from "./v1/term";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 
@@ -44,7 +45,8 @@ export type TextBody = { kind: "text"; text: string };
 export type Body = TextBody;
 
 // reply / fwd 为被引用 / 被转发消息的 seq, channel 为目标群 (不写为备忘)
-export type SendFrame = { t: "send"; cid: string; body: Body; reply?: number; fwd?: number; channel?: string };
+// file: 已上传文件的 id, 作为这条消息的附件
+export type SendFrame = { t: "send"; cid: string; body: Body; reply?: number; fwd?: number; channel?: string; file?: string };
 export type AckFrame = { t: "ack"; seq: number };
 export type RegFrame = { t: "reg"; pushToken: string };
 // 懒更新指标: 客户端声明在看哪些主体, 探针声明能提供哪些主体, 服务端只在有人看时向探针要数据

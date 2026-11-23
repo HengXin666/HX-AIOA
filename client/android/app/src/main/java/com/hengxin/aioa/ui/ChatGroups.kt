@@ -37,7 +37,21 @@ data class GroupRowData(val key: String, val meta: ChatMeta?, val last: ServerFr
 }
 
 /** 还没被服务端确认的消息, 先显示在本地 (乐观上屏)。 */
-data class Pending(val cid: String, val text: String, val ts: Long, val reply: MsgRef?, val failed: Boolean = false)
+/** 还没回执的本机消息; upload 非空表示带附件, progress 为上传进度, error 为上传失败原因。 */
+data class Pending(
+    val cid: String,
+    val text: String,
+    val ts: Long,
+    val reply: MsgRef?,
+    val failed: Boolean = false,
+    val upload: android.net.Uri? = null,
+    val progress: Float? = null,
+    val error: String? = null,
+)
+
+private const val PROGRESS_STEP = 0.02f
+// 只发文件时的正文, 通知和列表预览用它; 气泡里有文件卡时不再重复显示
+const val FILE_TEXT_PREFIX = "[文件] "
 
 /** 消息栏当前在看什么。 */
 enum class ChatPage { CHAT, SETTINGS }
@@ -289,8 +303,36 @@ class ChatGroups(
         return ok
     }
 
+    /** 发文件: 先上传 (显示进度), 传完再发一条带附件的消息; caption 为空时正文写 "[文件] 名字"。 */
+    fun sendFile(uri: android.net.Uri, caption: String, retryOf: Pending? = null) {
+        val key = open ?: return
+        val name = runCatching { com.hengxin.aioa.ui.chat.FileTransfer.describe(context, uri).first }.getOrDefault("文件")
+        val text = caption.trim().ifEmpty { "$FILE_TEXT_PREFIX$name" }
+        val reply = retryOf?.reply ?: replyTo?.let { MsgRef(it.seq, it.src, plainPreview(it.text).take(REPLY_EXCERPT)) }
+        val p0 = Pending(retryOf?.cid ?: UUID.randomUUID().toString(), text, System.currentTimeMillis(), reply, upload = uri, progress = 0f)
+        retryOf?.let { pending.remove(it) }
+        pending.add(p0)
+        replyTo = null
+        val update = { next: Pending -> pending.indexOfFirst { it.cid == p0.cid }.takeIf { it >= 0 }?.let { pending[it] = next } }
+        scope.launch {
+            var last = 0f
+            val r = com.hengxin.aioa.ui.chat.FileTransfer.upload(context, uri, channelOf(key)) { f ->
+                // 每 2% 刷一次界面就够了
+                if (f - last >= PROGRESS_STEP || f >= 1f) {
+                    last = f
+                    scope.launch { update(p0.copy(progress = f)) }
+                }
+            }
+            r.onSuccess { ref ->
+                val ok = socketSend(Frames.send(p0.cid, text, channelOf(key), reply?.seq, file = ref.id))
+                update(p0.copy(progress = null, failed = !ok))
+            }.onFailure { update(p0.copy(progress = null, failed = true, error = it.message)) }
+        }
+    }
+
     fun retry(p: Pending) {
         val key = open ?: return
+        if (p.upload != null) return sendFile(p.upload, if (p.text.startsWith(FILE_TEXT_PREFIX)) "" else p.text, p)
         pending.remove(p)
         val ok = socketSend(Frames.send(p.cid, p.text, channelOf(key), p.reply?.seq))
         pending.add(p.copy(failed = !ok, ts = System.currentTimeMillis()))

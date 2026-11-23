@@ -27,6 +27,9 @@ export function chatInput(store: EventStore, f: SendFrame): EventInput | string 
     input.channel = f.channel;
   }
   if (fwd) input.fwd = fwd;
+  // 转发带上原消息的附件 (同一个文件, 引用数 +1)
+  const orig = f.fwd ? store.bySeq(f.fwd) : null;
+  if (orig?.kind === "event" && orig.data.file && input.kind === "event") input.data = { ...input.data, file: orig.data.file };
   if (f.reply) {
     const r = store.bySeq(f.reply);
     if (r) input.reply = refOf(r);

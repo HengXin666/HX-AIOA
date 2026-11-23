@@ -54,7 +54,7 @@ function mayDelete(core: Core, who: Principal, ev: Envelope): boolean {
 }
 
 /** 撤回: 作者随时可撤; 删除: 主人删任何消息, 群管理员删本群的, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
-export function removeMessage(core: Core, who: Principal, seq: number, mode: DeleteMode, now = Date.now()): Envelope {
+export async function removeMessage(core: Core, who: Principal, seq: number, mode: DeleteMode, now = Date.now()): Promise<Envelope> {
   const ev = core.store.bySeq(seq);
   if (!ev) throw new ApiFail(404, CODE_NOT_FOUND, ERR_NO_RESOURCE);
   if (ev.deleted?.mode === mode || ev.deleted?.mode === "delete") return ev;
@@ -62,6 +62,7 @@ export function removeMessage(core: Core, who: Principal, seq: number, mode: Del
   if (mode === "recall" && !ev.deleted && !isAuthor(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只能撤回自己发的消息");
   if (mode === "delete" && !mayDelete(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只有群主, 管理员和本群的 Agent 能删除消息");
   const saved = core.store.put(tombstoneOf(ev, mode, now));
+  await core.files.track(ev, saved);
   core.store.pruneTombstones(now - TOMBSTONE_KEEP_MS);
   if (core.chats.removeFavorite(saved.deleted?.seq ?? seq)) {
     core.sockets.toV1Clients({ t: "chat_sync", topic: "favorites" } satisfies ChatSyncFrame);
@@ -70,12 +71,12 @@ export function removeMessage(core: Core, who: Principal, seq: number, mode: Del
   return saved;
 }
 
-function deleteBySeq(c: ReqCtx): Response {
+async function deleteBySeq(c: ReqCtx): Promise<Response> {
   const seq = Number.parseInt(decodeURIComponent(c.params[0] ?? ""), 10);
   if (!Number.isFinite(seq) || seq <= 0) return fail(400, "seq 不合法");
   const mode = c.url.searchParams.get(QUERY_MODE) ?? "delete";
   if (!(DELETE_MODES as readonly string[]).includes(mode)) return fail(400, "mode 只能是 recall 或 delete");
-  return json(removeMessage(c.core, c.who, seq, mode as DeleteMode));
+  return json(await removeMessage(c.core, c.who, seq, mode as DeleteMode));
 }
 
 export const RECALL_ROUTES: Route[] = [route(DELETE, PATH_EVENT_BY_SEQ, ROOM, deleteBySeq)];

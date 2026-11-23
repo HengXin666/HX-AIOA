@@ -49,6 +49,22 @@ jobs:
       - name: 复制探针脚本到静态资源
         run: cp ../tools/probe.mjs ../tools/probe-term.mjs public/
 
+      # 文件桶 (#45): 没有就建; 部署 token 没有 R2 权限建不了时去掉绑定照常部署, 文件接口返回 503
+      - name: 确保 R2 文件桶
+        run: |
+          BUCKET=hx-aioa-files
+          if npx wrangler r2 bucket info "$BUCKET" >/dev/null 2>&1 || npx wrangler r2 bucket create "$BUCKET"; then
+            echo "R2 桶 $BUCKET 就绪"
+          else
+            echo "::warning::建不了 R2 桶 $BUCKET (部署 token 需要 Workers R2 Storage 编辑权限), 本次部署不绑定文件桶"
+            python3 - <<'PY'
+          import re
+          p = "wrangler.toml"
+          s = open(p).read()
+          open(p, "w").write(re.sub(r"\[\[r2_buckets\]\]\nbinding = \"FILES\"\nbucket_name = \"[^\"]+\"\n", "", s))
+          PY
+          fi
+
       - name: 部署到 Cloudflare
         run: npx wrangler deploy
 

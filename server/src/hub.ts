@@ -1,3 +1,5 @@
+import { attachFile } from "./files/api";
+import { FileStore } from "./files/store";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -104,7 +106,8 @@ export class Hub extends DurableObject<Env> {
       return new Set(grp ? rooms.members(grp).map((m) => m.member) : []);
     });
     this.timers = new Timers(ctx.storage);
-    const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers);
+    const files = new FileStore(sql, env.FILES);
+    const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers, files);
     const spaces = new Spaces(ctx.storage);
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
     const registry = new Registry(sql);
@@ -117,8 +120,26 @@ export class Hub extends DurableObject<Env> {
       ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
     };
     const chats = new ChatStore(sql);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
+  }
+
+  // 长连接上的人: 主人或子号; 子号查不到账号时当成没有任何群的成员
+  private principalOf(att: Attachment): Principal | null {
+    if (!att.member || !att.uid) return { owner: true };
+    const user = this.core.users.get(att.uid);
+    if (!user) return null;
+    return { owner: false, key: memberKey(user), member: { user, session: "" } };
+  }
+
+  // RPC (Worker): R2 写完后回报实际大小; 登记已被删掉时返回 false, Worker 会删掉刚写的对象
+  async fileDone(id: string, size: number): Promise<boolean> {
+    return this.core.files.done(id, size);
+  }
+
+  // RPC (每天的清理 cron): 删掉传了没发出去的文件
+  async fileSweep(): Promise<number> {
+    return this.core.files.sweep();
   }
 
   // RPC (cron 每 30 分钟): 任一额度用到 80% 时提醒一次, 每天最多一条
@@ -370,6 +391,11 @@ export class Hub extends DurableObject<Env> {
         if (att.role !== "client") return;
         const input = chatInput(this.core.store, frame);
         if (typeof input === "string") return this.err(ws, CODE_BAD_REQUEST, input);
+        const sender = frame.file ? this.principalOf(att) : null;
+        if (frame.file && !sender) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
+        const file = sender ? attachFile(this.core, sender, frame.file, input.channel) : undefined;
+        if (typeof file === "string") return this.err(ws, CODE_BAD_REQUEST, file);
+        if (file && input.kind === "event") input.data = { ...input.data, file };
         const grp = input.channel ?? "";
         if (att.member && !(att.uid && this.core.rooms.member(grp, att.uid))) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
         // 多人群照常提醒其他人 (发送者自己的设备按 by 认出是自己发的); 只有自己的群不响铃, 也不触发兜底推送

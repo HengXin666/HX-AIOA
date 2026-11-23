@@ -1,3 +1,4 @@
+import { attachFile } from "./files/api";
 import {
   MAX_BATCH,
   PATH_EVENTS,
@@ -142,6 +143,9 @@ async function postMessage(c: ReqCtx): Promise<Response> {
   if (typeof body !== "object" || body === null) return badJson();
   const input = messageInput(body as Record<string, unknown>);
   if (typeof input === "string") return fail(400, input);
+  const file = attachFile(c.core, c.who, (body as Record<string, unknown>).file, input.channel);
+  if (typeof file === "string") return fail(400, file);
+  if (file && input.kind === "event") input.data = { ...input.data, file };
   return json(await writeEvent(c.core, c.who, input));
 }
 

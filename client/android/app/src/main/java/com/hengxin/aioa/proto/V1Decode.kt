@@ -68,6 +68,7 @@ internal object V1Decode {
             deleted = o.optJSONObject(KEY_DELETED)?.let { opt(it, "mode") },
             deletedSeq = o.optJSONObject(KEY_DELETED)?.optLong("seq") ?: 0L,
             by = opt(o, "by"),
+            file = FileRef.parse(data.optJSONObject("file")),
         )
     }
 
@@ -143,7 +144,7 @@ fun Envelope.toMsg(): ServerFrame.Msg {
         source.id.startsWith(Constants.DEVICE_PREFIX) -> source.id
         else -> "${Constants.DEVICE_PREFIX}-${source.id}"
     }
-    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq)
+    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq, file)
 }
 
 /** 聊天里显示的正文 (Markdown): 报告带标题与全文, 有标题的消息标题加粗; 纯文本消息 summary 就是原文。 */

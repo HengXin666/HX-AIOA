@@ -1,3 +1,4 @@
+import type { FileStore } from "./files/store";
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
 import type { ChatStore } from "./chat-store";
@@ -32,6 +33,7 @@ export type Core = {
   github: GithubService;
   chats: ChatStore;
   rooms: RoomStore;
+  files: FileStore;
   users: Users;
   terms: Terminals;
   // 账号密码复核 (终端票据用), 只有主 Hub 有账号目录

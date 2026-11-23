@@ -28,6 +28,11 @@ binding = "TEMP_MAIL_DB"
 database_name = "temp-email-db"
 database_id = "eeda9a60-a925-400e-8020-ad76c731aab1"
 
+# 文件桶: 部署流程会先确保桶存在, 建不了就去掉这段, 文件接口返回 503
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "hx-aioa-files"
+
 [[routes]]
 pattern = "aioa.woa.qzz.io/*"
 zone_name = "woa.qzz.io"

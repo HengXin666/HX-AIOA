@@ -3,6 +3,7 @@ import { HEADER_INTERNAL_USER } from "./accounts/constants";
 import { HUB_NAME } from "./constants";
 import type { Env } from "./env";
 import { json, preflight } from "./http";
+import { fileData } from "./files/data";
 import { cleanupTempMail, MAIL_CLEANUP_CRON } from "./mail-cleanup";
 
 export { Hub } from "./hub";
@@ -13,6 +14,8 @@ export default {
     if (req.method === "OPTIONS") return preflight();
     const url = new URL(req.url);
     if (url.pathname === HEALTH_PATH) return json({ ok: true, v: PROTOCOL_VERSION });
+    const file = await fileData(req, env, url);
+    if (file) return file;
     // 内部转发头只能由主 Hub 加, 外部传入的一律剥掉
     const headers = new Headers(req.headers);
     headers.delete(HEADER_INTERNAL_USER);
@@ -21,6 +24,7 @@ export default {
   async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (ctrl.cron === MAIL_CLEANUP_CRON) {
       ctx.waitUntil(cleanupTempMail(env).then((n) => console.log("临时邮箱清理:", n)).catch((e) => console.error("临时邮箱清理失败:", e)));
+      if (env.FILES) ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).fileSweep().then((n) => console.log("文件清理:", n)));
       return;
     }
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));

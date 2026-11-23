@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.ui.chat.FileCard
 import android.text.format.DateFormat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -118,7 +119,9 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                     // HTML 卡片的 "全屏" 和时间同一行
                     HtmlCard(html, Modifier.padding(top = 2.dp), footer = time)
                 } else {
-                    MarkdownText(msg.text, md)
+                    msg.file?.let { FileCard(it, fg, Modifier.padding(top = 2.dp, bottom = 2.dp)) }
+                    // 只发文件时正文就是 "[文件] 名字", 有文件卡就不重复
+                    if (msg.file == null || !msg.text.startsWith(FILE_TEXT_PREFIX)) MarkdownText(msg.text, md)
                     Box(Modifier.align(Alignment.End)) { time() }
                 }
             }

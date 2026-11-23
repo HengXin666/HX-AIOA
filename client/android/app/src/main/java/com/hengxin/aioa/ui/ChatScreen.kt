@@ -244,7 +244,11 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
                         BubbleSpot(head = true, showSender = false, highlight = false),
                         null,
                         mod,
-                        status = if (p.failed) "发送失败, 点击重发" else "发送中",
+                        status = when {
+                            p.progress != null -> "上传中 ${(p.progress * PCT_SCALE).toInt()}%"
+                            p.failed -> (p.error?.let { "$it, " } ?: "发送失败, ") + "点击重发"
+                            else -> "发送中"
+                        },
                         onStatus = if (p.failed) ({ g.retry(p) }) else null,
                     )
                 }
@@ -252,6 +256,8 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
         }
     }
 }
+
+private const val PCT_SCALE = 100
 
 @Composable
 private fun DayChip(ts: Long, modifier: Modifier) {
@@ -286,7 +292,17 @@ private fun Composer(g: ChatGroups) {
                 Text("✕", Modifier.clickable { g.replyTo = null }.padding(8.dp), color = c.outline)
             }
         }
+        // 附件: 选中就上传, 输入框里的字作为说明一起发
+        val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                g.sendFile(uri, text)
+                text = ""
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
+            Box(Modifier.padding(end = 6.dp).size(42.dp).clickable { pick.launch("*/*") }, contentAlignment = Alignment.Center) {
+                Text("+", fontSize = 26.sp, color = c.outline)
+            }
             Box(Modifier.weight(1f).background(c.surfaceVariant, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 10.dp)) {
                 if (text.isEmpty()) Text(stringResource(R.string.input_hint), color = c.outline, fontSize = 15.sp)
                 BasicTextField(

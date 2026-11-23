@@ -1,3 +1,4 @@
+import type { FileRef } from "./files";
 import {
   EVENT_STATUSES,
   KINDS,
@@ -34,6 +35,8 @@ export type EventData = {
   url?: string;
   // HTML 卡片 (周报之类): 客户端在沙箱里渲染, 不跑脚本不联网; 通知与列表仍用 title / summary
   html?: string;
+  // 附件: 先 POST /files 上传, 发消息时只带 file id, 服务端换成完整引用
+  file?: FileRef;
 };
 export type ReportData = {
   title: string;
