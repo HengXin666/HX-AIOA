@@ -65,7 +65,8 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             PluginIcon(e.icon)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(e.name, c.text, TITLE_SP, weight = FontWeight.SemiBold)
-                Text(listOf("v${e.version}", e.author).filter { it.isNotEmpty() }.joinToString(" · "), c.textSecondary, META_SP)
+                val ver = if (e.outdated) "已装 v${e.installed?.version}, 最新 v${e.version}" else "v${e.version}"
+                Text(listOf(ver, e.author).filter { it.isNotEmpty() }.joinToString(" · "), c.textSecondary, META_SP)
             }
         }
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
@@ -84,6 +85,22 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         } else {
             SettingsGroup("已安装", d.schedule?.let { "建议的定时: $it" }) {
                 InfoRow("群", installed.channel)
+                RowDivider()
+                ActionRow(
+                    if (busy) "更新中..." else if (e.outdated) "更新到 v${e.version}" else "重新拉取最新版",
+                    "refresh-cw",
+                    enabled = !busy,
+                ) {
+                    busy = true
+                    scope.launch {
+                        api.update(id).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
+                        busy = false
+                    }
+                }
+                RowDivider()
+                SwitchRow("自动更新", installed.auto, "市场出新版后, 下次打开市场或 Agent 拉指令时自动换上。群, 密钥, 待办都不变。") { on ->
+                    scope.launch { api.setAuto(id, on).onSuccess { reload() }.onFailure { error = it.message } }
+                }
                 RowDivider()
                 ActionRow("打开群", "message-circle") { openGroup(installed.channel) }
                 RowDivider()

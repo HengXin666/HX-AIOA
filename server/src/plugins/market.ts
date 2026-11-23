@@ -20,9 +20,10 @@ export class Market {
     return `${(this.base || DEFAULT_MARKET).replace(/\/+$/, "")}/${path}`;
   }
 
-  async text(path: string): Promise<string> {
+  /** fresh: 跳过缓存, 用在打开详情和更新这类主人主动的操作上。 */
+  async text(path: string, fresh = false): Promise<string> {
     const hit = this.cache.get(path);
-    if (hit && Date.now() - hit.at < CACHE_MS) return hit.text;
+    if (!fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.text;
     const res = await fetch(this.url(path), { headers: { "User-Agent": UA } }).catch(() => null);
     if (!res) throw new ApiFail(502, CODE_MARKET, "插件市场暂时连不上");
     if (res.status === 404) throw new ApiFail(404, CODE_NOT_FOUND, `市场里没有 ${path}`);
@@ -38,14 +39,14 @@ export class Market {
     return Array.isArray(raw.plugins) ? (raw.plugins as PluginEntry[]).filter((p) => p && typeof p.id === "string") : [];
   }
 
-  async manifest(id: string): Promise<PluginManifest> {
-    const m = parseManifest(JSON.parse(await this.text(`${id}/${PLUGIN_MANIFEST_FILE}`)));
+  async manifest(id: string, fresh = false): Promise<PluginManifest> {
+    const m = parseManifest(JSON.parse(await this.text(`${id}/${PLUGIN_MANIFEST_FILE}`, fresh)));
     if (typeof m === "string") throw new ApiFail(400, CODE_BAD_REQUEST, `插件 ${id} 的 plugin.json 有误: ${m}`);
     if (m.id !== id) throw new ApiFail(400, CODE_BAD_REQUEST, `插件目录 ${id} 与 plugin.json 的 id 不一致`);
     return m;
   }
 
-  file(id: string, name: string): Promise<string> {
-    return this.text(`${id}/${name}`);
+  file(id: string, name: string, fresh = false): Promise<string> {
+    return this.text(`${id}/${name}`, fresh);
   }
 }

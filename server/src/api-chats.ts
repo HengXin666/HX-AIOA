@@ -36,6 +36,7 @@ import { agentBootstrap, agentGuide } from "./agent-prompt";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { memberView, ownerView, roleIn } from "./room-access";
+import { autoUpgrade } from "./plugins/update";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 
 const AGENT_SCOPES: Scope[] = ["messages:send", "events:write"];
@@ -301,8 +302,10 @@ function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAg
   throw new ApiFail(403, CODE_FORBIDDEN, "这把密钥不是群里接入的 Agent");
 }
 
-function agentGuideOf(c: ReqCtx): Response {
+async function agentGuideOf(c: ReqCtx): Promise<Response> {
   const { channel, agent } = agentByKey(c);
+  // 插件 Agent 拉指令时顺手做自动更新, 新版提示词当场生效
+  if (agent.plugin) await autoUpgrade(c.core, agent.plugin);
   const g = guideFor(c.core, baseOf(c.url), channel, agent);
   return new Response(g.text, { headers: { "Content-Type": MARKDOWN, [HEADER_GUIDE_VERSION]: g.version } });
 }

@@ -21,11 +21,17 @@ const CHANNEL = `plugin-${ID}`;
 const TODOS = `${V1}/chats/${CHANNEL}/todos`;
 const UA = "hx-aioa-agent/1";
 let failed = 0;
+// 模拟市场发新版: 设了就改写版本号, 并在提示词末尾加标记
+let bumped = null;
+const BUMP_MARK = "<!-- e2e 新版 -->";
 
 const market = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(req.url ?? "/")).replace(/^(\.\.[/\\])+/, "");
   try {
-    res.end(await readFile(join(ROOT, path)));
+    let text = await readFile(join(ROOT, path), "utf8");
+    if (bumped && path.endsWith(".json")) text = text.replace(/"version": "[^"]+"/g, `"version": "${bumped}"`);
+    if (bumped && path.endsWith("prompt.md")) text += `\n${BUMP_MARK} ${bumped}\n`;
+    res.end(text);
   } catch {
     res.statusCode = 404;
     res.end("not found");
@@ -64,6 +70,7 @@ check("市场列表", list.status === 200 && !!entry && !entry.installed && !lis
 const detail = await api("GET", `${V1}/plugins/${ID}`);
 check("插件详情带介绍", detail.status === 200 && detail.data.readmeType === "markdown" && detail.data.readme.includes("点子待办"), detail.data);
 check("未安装也能预览任务提示词", typeof detail.data.task === "string" && detail.data.task.includes("plugin-todo") && detail.data.task.includes("待办接口") && !detail.data.task.includes("{{"), detail.data.task);
+check("市场索引与清单版本一致", entry?.version === detail.data.manifest?.version, [entry?.version, detail.data.manifest?.version]);
 const missing = await api("POST", `${V1}/plugins/nope/install`);
 check("市场里没有的插件装不了", missing.status === 404, missing.data);
 
@@ -76,6 +83,23 @@ const after = await api("GET", `${V1}/plugins/${ID}`);
 check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
 const again = await api("POST", `${V1}/plugins/${ID}/install`);
 check("重复安装被拒", again.status === 409, again.data);
+
+// 更新: 自动 (打开详情时) 与手动; 群, 密钥不变, 专属指令换新
+const guideOld = await call(key, "GET", `${V1}/chat-agent/guide`);
+bumped = "9.9.9";
+const auto = await api("GET", `${V1}/plugins/${ID}`);
+check("自动更新: 打开详情即换到新版", auto.data?.installed?.version === "9.9.9" && auto.data.installed.updated > 0 && auto.data.task?.includes(BUMP_MARK), auto.data?.installed);
+const guideNew = await call(key, "GET", `${V1}/chat-agent/guide`);
+check("更新后密钥照用, 专属指令换了版本", guideNew.status === 200 && guideNew.data.includes(BUMP_MARK) && guideNew.data !== guideOld.data, guideNew.status);
+const autoOff = await api("PATCH", `${V1}/plugins/${ID}`, { auto: false });
+check("关闭自动更新", autoOff.status === 200 && autoOff.data.install.auto === false, autoOff.data);
+bumped = "9.9.10";
+const held = await api("GET", `${V1}/plugins/${ID}`);
+check("关了自动更新就停在旧版", held.data?.installed?.version === "9.9.9" && held.data.manifest.version === "9.9.10", held.data?.installed);
+const manual = await api("POST", `${V1}/plugins/${ID}/update`);
+check("手动更新", manual.status === 200 && manual.data.install.version === "9.9.10" && manual.data.install.auto === false && manual.data.install.keyId === inst.data.install.keyId, manual.data);
+bumped = null;
+await api("PATCH", `${V1}/plugins/${ID}`, { auto: true });
 
 const spaces = await api("GET", `${V1}/spaces`);
 const space = spaces.data?.spaces?.find((s) => s.id === `plugin-${ID}`);

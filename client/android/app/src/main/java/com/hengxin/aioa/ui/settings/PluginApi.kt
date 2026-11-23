@@ -6,8 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** 已安装的实例: 群, 工作台, 版本。 */
-data class PluginInstall(val channel: String, val space: String?, val version: String, val installed: Long)
+/** 已安装的实例: 群, 工作台, 当前版本, 自动更新开关 (缺省开)。 */
+data class PluginInstall(val channel: String, val space: String?, val version: String, val installed: Long, val auto: Boolean)
 
 /** 市场里的一项, 对应协议 PluginEntry + 本机安装状态。 */
 data class PluginEntry(
@@ -19,7 +19,10 @@ data class PluginEntry(
     val tags: List<String>,
     val author: String,
     val installed: PluginInstall?,
-)
+) {
+    /** 市场有比已装更新的版本。 */
+    val outdated get() = installed != null && installed.version != version
+}
 
 /** 详情: 介绍原文 (Markdown 或 HTML), 建议的定时, 任务提示词 (不含密钥)。 */
 data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?)
@@ -52,6 +55,17 @@ class PluginApi(private val context: Context) {
         PluginInstalled(b.optString("prompt"), b.optString("request"), b.optString("key"))
     }
 
+    /** 手动更新到市场最新版; 版本相同也重新拉一遍模板。群, 密钥, 待办不变。 */
+    suspend fun update(id: String): Result<Unit> = io {
+        val r = Api.call(context, POST, listOf(PATH, id, "update"), JSONObject())
+        if (r.body == null) error(r.error ?: FAILED)
+    }
+
+    suspend fun setAuto(id: String, on: Boolean): Result<Unit> = io {
+        val r = Api.call(context, PATCH, listOf(PATH, id), JSONObject().put("auto", on))
+        if (r.body == null) error(r.error ?: FAILED)
+    }
+
     suspend fun uninstall(id: String): Result<Unit> = io {
         val r = Api.call(context, DELETE, listOf(PATH, id))
         if (r.body == null) error(r.error ?: FAILED)
@@ -71,7 +85,7 @@ class PluginApi(private val context: Context) {
         )
     }
 
-    private fun install(o: JSONObject) = PluginInstall(o.optString("channel"), o.optString("space").ifEmpty { null }, o.optString("version"), o.optLong("installed"))
+    private fun install(o: JSONObject) = PluginInstall(o.optString("channel"), o.optString("space").ifEmpty { null }, o.optString("version"), o.optLong("installed"), o.optBoolean("auto", true))
 
     private suspend fun <T> io(block: () -> T): Result<T> = withContext(Dispatchers.IO) { runCatching(block) }
 
@@ -82,6 +96,7 @@ class PluginApi(private val context: Context) {
         private const val GET = "GET"
         private const val POST = "POST"
         private const val DELETE = "DELETE"
+        private const val PATCH = "PATCH"
         private const val FAILED = "操作失败"
     }
 }

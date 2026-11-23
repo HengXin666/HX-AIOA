@@ -42,7 +42,14 @@ export type PluginInstall = {
   space?: string;
   keyId: string;
   installed: number;
+  // 上次更新时间; 没更新过就没有
+  updated?: number;
+  // 自动更新, 缺省为开: 市场版本变了就在下次打开市场或 Agent 拉指令时换成新版
+  auto?: boolean;
 };
+
+// PATCH /api/v1/plugins/{id} 的请求体
+export type PluginSettings = { auto: boolean };
 
 // 市场列表: 每项带本机安装状态; error 为拉取市场失败的原因 (已安装的照常返回)
 export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall })[]; error?: string };
@@ -79,6 +86,7 @@ export type TodoList = { todos: TodoItem[] };
 export const PATH_PLUGINS = `${API_V1}/plugins`;
 export const PATH_PLUGIN = `${API_V1}/plugins/{id}`;
 export const PATH_PLUGIN_INSTALL = `${API_V1}/plugins/{id}/install`;
+export const PATH_PLUGIN_UPDATE = `${API_V1}/plugins/{id}/update`;
 export const PATH_TODOS = `${API_V1}/chats/{channel}/todos`;
 export const PATH_TODO = `${API_V1}/chats/{channel}/todos/{id}`;
 

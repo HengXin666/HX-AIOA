@@ -31,6 +31,12 @@ export class PluginStore {
     this.all().set(install.id, saved);
   }
 
+  /** 只改安装记录 (如自动更新开关), 提示词模板不动。 */
+  setInstall(install: PluginInstall): void {
+    const s = this.all().get(install.id);
+    if (s) this.save(install, s.name, s.prompt);
+  }
+
   remove(id: string): void {
     this.sql.exec("DELETE FROM plugin WHERE id = ?", id);
     this.all().delete(id);

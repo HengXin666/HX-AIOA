@@ -90,8 +90,9 @@ private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(p.name, c.text, NAME_SP, weight = FontWeight.SemiBold)
-                Text("v${p.version}", c.textSecondary, SMALL_SP)
-                if (p.installed != null) Text("已安装", c.success, SMALL_SP)
+                Text("v${p.installed?.version ?: p.version}", c.textSecondary, SMALL_SP)
+                if (p.outdated) Text("可更新到 v${p.version}", c.accent, SMALL_SP)
+                else if (p.installed != null) Text("已安装", c.success, SMALL_SP)
             }
             if (p.summary.isNotEmpty()) Paragraph(p.summary, c.textSecondary, BODY_SP, maxLines = 2)
             if (p.tags.isNotEmpty()) Text(p.tags.joinToString("  ") { "#$it" }, c.accent, SMALL_SP)
