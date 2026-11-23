@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,19 +46,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class MailTab(val label: String) { LATEST("最新"), VENDOR("按厂商"), ACCOUNT("按账号") }
 
 private const val PREFETCH = 8
 private const val AVATAR = 36
+private const val BODY_HTML = "html"
 private const val PAD = 12
+// 停止输入这么久才搜, 避免每个字都请求
+private const val SEARCH_DEBOUNCE_MS = 400L
 
 /** 邮件群的状态: 当前分段, 筛选, 已加载的列表与统计。离开再回来不重拉。 */
-private class MailState(private val api: MailApi) {
+private class MailState(val api: MailApi) {
     var tab by mutableStateOf(MailTab.LATEST)
     var vendor by mutableStateOf<String?>(null)
     var account by mutableStateOf<String?>(null)
+    // 输入框内容, 与防抖后真正去搜的词
+    var search by mutableStateOf("")
+    var query by mutableStateOf<String?>(null)
     val items = mutableStateListOf<MailItem>()
     var more by mutableStateOf(false)
     var loading by mutableStateOf(false)
@@ -71,7 +79,7 @@ private class MailState(private val api: MailApi) {
 
     suspend fun reload() {
         loading = true
-        api.list(vendor, account, null).onSuccess { items.clear(); items.addAll(it.items); more = it.more; error = null }.onFailure { error = it.message }
+        api.list(vendor, account, query, null).onSuccess { items.clear(); items.addAll(it.items); more = it.more; error = null }.onFailure { error = it.message }
         api.facets().onSuccess { vendors = it.first; accounts = it.second }
         loading = false
     }
@@ -79,7 +87,7 @@ private class MailState(private val api: MailApi) {
     suspend fun older() {
         if (loading || !more) return
         loading = true
-        api.list(vendor, account, items.lastOrNull()?.ts).onSuccess { p -> items.addAll(p.items.filter { n -> items.none { it.seq == n.seq } }); more = p.more }.onFailure { error = it.message }
+        api.list(vendor, account, query, items.lastOrNull()?.ts).onSuccess { p -> items.addAll(p.items.filter { n -> items.none { it.seq == n.seq } }); more = p.more }.onFailure { error = it.message }
         loading = false
     }
 }
@@ -91,7 +99,8 @@ fun MailView(head: Long?, modifier: Modifier = Modifier) {
     val s = remember { MailState(MailApi(context.applicationContext)) }
     val scope = rememberCoroutineScope()
     // 群里来了新信 (head 变了) 就刷新第一页
-    LaunchedEffect(head, s.vendor, s.account) { s.reload() }
+    LaunchedEffect(head, s.vendor, s.account, s.query) { s.reload() }
+    LaunchedEffect(s.search) { delay(SEARCH_DEBOUNCE_MS); s.query = s.search.trim().ifEmpty { null } }
     if (s.filtered) BackHandler { s.vendor = null; s.account = null }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,6 +109,13 @@ fun MailView(head: Long?, modifier: Modifier = Modifier) {
         val filter = s.vendor ?: s.account
         if (filter != null) {
             InputChip(true, { s.vendor = null; s.account = null }, { Text("$filter  ×", maxLines = 1, overflow = TextOverflow.Ellipsis) }, Modifier.padding(horizontal = PAD.dp))
+        }
+        if (s.showList) {
+            OutlinedTextField(
+                s.search, { s.search = it }, Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 4.dp),
+                singleLine = true, placeholder = { Text("搜主题或发件人") },
+                trailingIcon = { if (s.search.isNotEmpty()) Text("×", Modifier.clickable { s.search = "" }.padding(8.dp)) },
+            )
         }
         s.error?.let { Text(it, Modifier.padding(horizontal = PAD.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
         when {
@@ -116,20 +132,23 @@ private fun MailList(s: MailState, context: Context, loadMore: () -> Unit) {
     val nearEnd by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - PREFETCH } }
     LaunchedEffect(nearEnd, s.items.size) { if (nearEnd) loadMore() }
     if (s.items.isEmpty() && !s.loading) {
-        Text("还没有邮件。把信转发到邮件路由地址, 或在 HX-Email 里配置 Webhook。", Modifier.padding(PAD.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val empty = if (s.query != null) "没有匹配的邮件。" else "还没有邮件。把信转发到邮件路由地址, 或在 HX-Email 里配置 Webhook。"
+        Text(empty, Modifier.padding(PAD.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     LazyColumn(Modifier.fillMaxWidth(), state, contentPadding = PaddingValues(bottom = 16.dp)) {
         items(s.items, key = { it.seq }) { m ->
-            MailRow(m, s.open == m.seq, context) { s.open = if (s.open == m.seq) null else m.seq }
+            MailRow(m, s.open == m.seq, context, s.api) { s.open = if (s.open == m.seq) null else m.seq }
             HorizontalDivider(Modifier.padding(start = (PAD * 2 + AVATAR).dp))
         }
     }
 }
 
 @Composable
-private fun MailRow(m: MailItem, expanded: Boolean, context: Context, toggle: () -> Unit) {
-    var full by remember { mutableStateOf(false) }
+private fun MailRow(m: MailItem, expanded: Boolean, context: Context, api: MailApi, toggle: () -> Unit) {
+    var full by remember { mutableStateOf<String?>(null) }
+    var fetching by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     Row(Modifier.fillMaxWidth().clickable(onClick = toggle).padding(horizontal = PAD.dp, vertical = 10.dp)) {
         Box(Modifier.size(AVATAR.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape), contentAlignment = Alignment.Center) {
             Text(m.vendor.take(1).uppercase(), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -139,6 +158,7 @@ private fun MailRow(m: MailItem, expanded: Boolean, context: Context, toggle: ()
                 Text(m.name ?: m.vendor, Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(timeOf(context, m.ts), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (m.spoof) Text("可疑: 发件域名校验失败, 可能是冒充", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
             Text(m.subject, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
             m.code?.let { code ->
                 Text(
@@ -153,10 +173,19 @@ private fun MailRow(m: MailItem, expanded: Boolean, context: Context, toggle: ()
             }
             Text("${m.from} → ${m.account}", Modifier.padding(top = 4.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SelectionContainer { Text(m.summary, Modifier.padding(top = 6.dp), fontSize = 13.sp) }
-            if (m.html != null) TextButton({ full = true }) { Text("查看原文") }
+            if (m.body != null) {
+                TextButton({
+                    if (fetching) return@TextButton
+                    fetching = true
+                    scope.launch {
+                        api.body(m.id).onSuccess { full = it }.onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
+                        fetching = false
+                    }
+                }) { Text(if (fetching) "加载中..." else if (m.body == BODY_HTML) "查看原文" else "查看全文") }
+            }
         }
     }
-    if (full && m.html != null) HtmlViewer(m.html, m.subject) { full = false }
+    full?.let { HtmlViewer(it, m.subject) { full = null } }
 }
 
 @Composable

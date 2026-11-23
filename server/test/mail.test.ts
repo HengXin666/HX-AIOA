@@ -38,3 +38,16 @@ test("解析原始邮件: 直投用投递地址, Gmail 转发用原收件地址"
   const outlook = await parseRaw(raw(`From: a@b.com\r\nTo: me@outlook.com\r\nSubject: s`, "t"), "x@outlook.com", INBOX);
   assert.equal(outlook.to, "me@outlook.com");
 });
+
+test("冒充判断: 只信 CF 最上面那条, 经可信转发看上一跳", async () => {
+  const cf = (v: string) => `ARC-Authentication-Results: i=2; mx.cloudflare.net; ${v}`;
+  const base = `From: a@bank.com\r\nTo: ${INBOX}\r\nSubject: s`;
+  const parse = (h: string) => parseRaw(raw(`${h}\r\n${base}`, "t"), "x@y.z", INBOX);
+  assert.equal((await parse(cf("dkim=pass; spf=pass; dmarc=pass"))).spoof, undefined);
+  assert.equal((await parse(cf("spf=fail; dmarc=fail"))).spoof, true);
+  // 伪造的通过头在 CF 那条下面, 不算数
+  assert.equal((await parse(`${cf("dmarc=fail")}\r\nAuthentication-Results: mx.google.com; dmarc=pass`)).spoof, true);
+  // Gmail 转发: CF 看到 SPF 失败, 但 ARC 链有效且 Gmail 那跳通过
+  assert.equal((await parse(`${cf("arc=pass; dmarc=fail")}\r\nARC-Authentication-Results: i=1; mx.google.com; dmarc=pass`)).spoof, undefined);
+  assert.equal((await parse("Authentication-Results: x; dmarc=fail")).spoof, undefined);
+});

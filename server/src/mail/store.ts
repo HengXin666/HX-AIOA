@@ -2,14 +2,21 @@ import type { MailFacet, MailFacets } from "@hx-aioa/protocol";
 
 type IdRow = { ev: string };
 type FacetRow = { k: string; n: number; m: number };
-export type MailRow = { ev: string; ts: number; account: string; vendor: string; frm: string };
-export type MailQuery = { vendor?: string; account?: string; before?: number; limit: number };
+export type MailRow = { ev: string; ts: number; account: string; vendor: string; frm: string; subj: string };
+export type MailQuery = { vendor?: string; account?: string; before?: number; q?: string; limit: number };
+
+// 统计结果缓存: 新信到达立即失效, 删信靠过期兜底
+const FACET_TTL_MS = 60_000;
+const LIKE_ESCAPE = "\\";
+const likeOf = (q: string) => `%${q.toLowerCase().replace(/[\\%_]/g, (c) => LIKE_ESCAPE + c)}%`;
 
 // 只有消息还在 (没被删 / 清空) 的信才算数; ev.id 唯一索引, 联表很便宜
 const ALIVE = "JOIN ev e ON e.id = m.ev AND e.gone IS NULL";
 
 /** 邮件索引: 一封信一行, 厂商 / 账号 / 时间都有索引, 筛选不扫 JSON。 */
 export class MailStore {
+  private cache: { at: number; v: MailFacets } | null = null;
+
   constructor(private readonly sql: SqlStorage) {
     sql.exec(`CREATE TABLE IF NOT EXISTS mail (
       ev TEXT PRIMARY KEY,
@@ -18,13 +25,16 @@ export class MailStore {
       vendor TEXT NOT NULL,
       frm TEXT NOT NULL
     )`);
+    // 后加的列: 主题 (小写), 只用于关键词搜索
+    if (!sql.exec<{ name: string }>("PRAGMA table_info(mail)").toArray().some((c) => c.name === "subj")) sql.exec("ALTER TABLE mail ADD COLUMN subj TEXT");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_ts ON mail (ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_vendor ON mail (vendor, ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_account ON mail (account, ts)");
   }
 
   add(r: MailRow): void {
-    this.sql.exec("INSERT OR REPLACE INTO mail (ev, ts, account, vendor, frm) VALUES (?, ?, ?, ?, ?)", r.ev, r.ts, r.account, r.vendor, r.frm);
+    this.sql.exec("INSERT OR REPLACE INTO mail (ev, ts, account, vendor, frm, subj) VALUES (?, ?, ?, ?, ?, ?)", r.ev, r.ts, r.account, r.vendor, r.frm, r.subj.toLowerCase());
+    this.cache = null;
   }
 
   /** 按时间倒序的事件 id; 多取一条用来判断还有没有更早的。 */
@@ -34,6 +44,8 @@ export class MailStore {
     if (q.vendor) (where.push("m.vendor = ?"), args.push(q.vendor));
     if (q.account) (where.push("m.account = ?"), args.push(q.account));
     if (q.before) (where.push("m.ts < ?"), args.push(q.before));
+    // 关键词只扫索引表 (短字段), 不碰消息正文
+    if (q.q) (where.push(`(m.subj LIKE ? ESCAPE '${LIKE_ESCAPE}' OR m.frm LIKE ? ESCAPE '${LIKE_ESCAPE}')`), args.push(likeOf(q.q), likeOf(q.q)));
     const cond = where.length ? `WHERE ${where.join(" AND ")}` : "";
     return this.sql
       .exec<IdRow>(`SELECT m.ev FROM mail m ${ALIVE} ${cond} ORDER BY m.ts DESC LIMIT ?`, ...args, q.limit + 1)
@@ -41,8 +53,11 @@ export class MailStore {
       .map((r) => r.ev);
   }
 
-  facets(): MailFacets {
-    return { vendors: this.facet("vendor"), accounts: this.facet("account") };
+  facets(now = Date.now()): MailFacets {
+    if (this.cache && now - this.cache.at < FACET_TTL_MS) return this.cache.v;
+    const v = { vendors: this.facet("vendor"), accounts: this.facet("account") };
+    this.cache = { at: now, v };
+    return v;
   }
 
   private facet(col: "vendor" | "account"): MailFacet[] {
@@ -52,8 +67,10 @@ export class MailStore {
       .map((r) => ({ key: r.k, count: r.n, last: r.m }));
   }
 
-  /** 消息已被删掉的索引行, 每天随文件清理一起扫。 */
+  /** 消息已被删掉的索引行, 每天扫一次; 按 ev.id 逐行查, 不扫整张消息表。 */
   prune(): number {
-    return this.sql.exec("DELETE FROM mail WHERE ev NOT IN (SELECT id FROM ev WHERE gone IS NULL)").rowsWritten;
+    const n = this.sql.exec("DELETE FROM mail WHERE NOT EXISTS (SELECT 1 FROM ev e WHERE e.id = mail.ev AND e.gone IS NULL)").rowsWritten;
+    if (n) this.cache = null;
+    return n;
   }
 }

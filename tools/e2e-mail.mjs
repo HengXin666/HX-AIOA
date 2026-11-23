@@ -78,6 +78,25 @@ if (del.status < 300) {
   check("删除后列表不再有", after.data.messages.length === 0, after.data);
 } else console.log(`跳过 删除 (${del.status})`);
 
+// 正文: HTML 原文与长文本单独取, 列表不带 HTML
+const html = `<div><h1>欢迎 ${RUN}</h1><p>${"x".repeat(2000)}</p></div>`;
+const hm = await call("POST", `${V1}/mail`, { from: "hi@vercel.com", to: ACC_A, subject: `HTML 信 ${RUN}`, html });
+const hl = await call("GET", `${V1}/mail?vendor=Vercel`);
+const hev = hl.data.messages?.find((m) => m.id === hm.data.id);
+check("列表不带 HTML, 标记有原文", hev && hev.data.html === undefined && hev.data.mail.body === "html", hev);
+const hb = await call("GET", `${V1}/mail/${hm.data.id}/body`);
+check("取 HTML 原文", hb.status === 200 && hb.data.html === html, hb.status);
+const long = `第一行 <b>\n${"长文本 ".repeat(200)}`;
+const tm = await call("POST", `${V1}/mail`, { from: "news@notion.so", to: ACC_A, subject: `长文 ${RUN}`, text: long });
+const tb = await call("GET", `${V1}/mail/${tm.data.id}/body`);
+check("长文本转成 HTML", tb.status === 200 && tb.data.html.startsWith("<pre") && tb.data.html.includes("&lt;b&gt;"), tb.data);
+check("短信没有正文接口", (await call("GET", `${V1}/mail/${gh.data.id}/body`)).status === 404);
+const found = await call("GET", `${V1}/mail?q=${encodeURIComponent(`长文 ${RUN}`)}`);
+check("关键词搜主题", found.data.messages?.length === 1 && found.data.messages[0].id === tm.data.id, found.data);
+const byFrom = await call("GET", `${V1}/mail?q=${encodeURIComponent("vercel.com")}`);
+check("关键词搜发件人", byFrom.data.messages?.some((m) => m.id === hm.data.id), byFrom.data);
+check("关键词里的 % 不当通配", (await call("GET", `${V1}/mail?q=%25`)).data.messages?.length === 0);
+
 const eml = [`From: Cloudflare <noreply@notify.cloudflare.com>`, `To: ${ACC_A}`, `Subject: cf ${RUN}`, `Message-ID: <cf-${RUN}@cf>`, "Content-Type: text/plain", "", "hello from email routing", ""].join("\r\n");
 const r = await fetch(`${server}/cdn-cgi/handler/email?from=noreply%40notify.cloudflare.com&to=${encodeURIComponent(ACC_A)}`, { method: "POST", body: eml, headers: { "user-agent": UA } }).catch(() => null);
 if (r && r.status < 300) {

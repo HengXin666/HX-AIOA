@@ -45,6 +45,19 @@ export class FileStore {
     return r?.done ? { id: r.id, name: r.name, size: r.size, mime: r.mime } : null;
   }
 
+  /** 服务端自己产生的内容 (如邮件原文) 直接写 R2, 不走上传票据。没绑桶返回 null。 */
+  async save(grp: string, name: string, body: string, mime: string, by: string): Promise<FileRef | null> {
+    if (!this.bucket) return null;
+    const ref = this.create(grp, name, 0, mime, by);
+    const obj = await this.bucket.put(ref.id, body, { httpMetadata: { contentType: mime } });
+    this.done(ref.id, obj.size);
+    return { ...ref, size: obj.size };
+  }
+
+  async text(id: string): Promise<string | null> {
+    return (await this.bucket?.get(id))?.text() ?? null;
+  }
+
   /** Worker 写完 R2 后回报: 以 R2 实际大小为准。 */
   done(id: string, size: number): boolean {
     return this.sql.exec("UPDATE file SET done = 1, size = ? WHERE id = ?", size, id).rowsWritten > 0;

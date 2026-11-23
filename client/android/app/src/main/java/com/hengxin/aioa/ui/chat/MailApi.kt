@@ -9,16 +9,20 @@ import org.json.JSONObject
 
 /** 邮件群里的一封信 (服务端事件 + data.mail)。 */
 data class MailItem(
+    val id: String,
     val seq: Long,
     val ts: Long,
     val subject: String,
     val summary: String,
-    val html: String?,
+    // 有完整正文可取: html 原版网页, text 长文本
+    val body: String?,
     val from: String,
     val name: String?,
     val account: String,
     val vendor: String,
     val code: String?,
+    // 发件域名校验失败, 可能是冒充
+    val spoof: Boolean,
 )
 
 /** 筛选项: 厂商或账号, 封数与最新一封的时间。 */
@@ -29,10 +33,11 @@ data class MailPage(val items: List<MailItem>, val more: Boolean)
 /** 邮件接口: 列表按时间倒序, 可按厂商 / 账号过滤; 统计给分组用。 */
 class MailApi(private val context: Context) {
 
-    suspend fun list(vendor: String?, account: String?, before: Long?): Result<MailPage> = io {
+    suspend fun list(vendor: String?, account: String?, search: String?, before: Long?): Result<MailPage> = io {
         val q = buildMap {
             vendor?.let { put("vendor", it) }
             account?.let { put("account", it) }
+            search?.let { put("q", it) }
             before?.let { put("before", it.toString()) }
         }
         val r = Api.call(context, GET, listOf(PATH), query = q)
@@ -47,6 +52,12 @@ class MailApi(private val context: Context) {
         facets(b.optJSONArray("vendors")) to facets(b.optJSONArray("accounts"))
     }
 
+    /** 完整正文, 服务端统一给 HTML。 */
+    suspend fun body(id: String): Result<String> = io {
+        val r = Api.call(context, GET, listOf(PATH, id, "body"))
+        r.body?.optString("html")?.ifEmpty { null } ?: error(r.error ?: FAILED)
+    }
+
     private fun facets(a: JSONArray?) = (0 until (a?.length() ?: 0)).mapNotNull { i ->
         a?.optJSONObject(i)?.let { MailFacet(it.optString("key"), it.optInt("count"), it.optLong("last")) }
     }
@@ -56,16 +67,18 @@ class MailApi(private val context: Context) {
         val m = data.optJSONObject("mail") ?: return null
         fun JSONObject.s(k: String) = optString(k).ifEmpty { null }
         return MailItem(
+            id = o.optString("id"),
             seq = o.optLong("seq"),
             ts = o.optLong("ts"),
             subject = data.optString("title"),
             summary = data.optString("summary"),
-            html = data.s("html"),
+            body = m.s("body"),
             from = m.optString("from"),
             name = m.s("name"),
             account = m.optString("to"),
             vendor = m.optString("vendor"),
             code = m.s("code"),
+            spoof = m.optBoolean("spoof"),
         )
     }
 

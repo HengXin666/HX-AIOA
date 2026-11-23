@@ -1,20 +1,24 @@
 import {
   MAIL_PAGE_DEFAULT,
   MAIL_PAGE_MAX,
+  MAIL_SEARCH_MAX,
   MAX_MAIL_TEXT,
   PATH_MAIL,
+  PATH_MAIL_BODY,
   PATH_MAIL_FACETS,
   PATH_MAIL_HX_EMAIL,
   QUERY_ACCOUNT,
   QUERY_BEFORE,
   QUERY_LIMIT,
+  QUERY_MAIL_SEARCH,
   QUERY_VENDOR,
   parseMailInput,
   type Envelope,
+  type MailBody,
   type MailInput,
   type MailList,
 } from "@hx-aioa/protocol";
-import { GET, POST } from "../constants";
+import { CODE_NOT_FOUND, GET, POST } from "../constants";
 import { OWNER, type ReqCtx, type Route, route } from "../core";
 import { badJson, clampInt, fail, json, readJson } from "../http";
 import { mailIn } from "./ingest";
@@ -22,6 +26,16 @@ import { mailIn } from "./ingest";
 const WRITE = "events:write";
 const HX_EMAIL_EVENT = "new_mail";
 const HX_EMAIL_TEST = "test";
+const ERR_NO_BODY = "这封信没有完整正文";
+const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const textPage = (t: string) => `<pre style="white-space:pre-wrap;word-break:break-word;font:inherit">${escapeHtml(t)}</pre>`;
+
+/** 列表只要摘要: 去掉内联 HTML, 正文另取 (GET /mail/{id}/body)。 */
+function slim(ev: Envelope): Envelope {
+  if (ev.kind !== "event" || ev.data.html === undefined) return ev;
+  const { html: _h, ...data } = ev.data;
+  return { ...ev, data };
+}
 
 function list(c: ReqCtx): Response {
   const q = c.url.searchParams;
@@ -31,9 +45,20 @@ function list(c: ReqCtx): Response {
     vendor: q.get(QUERY_VENDOR) || undefined,
     account: q.get(QUERY_ACCOUNT) || undefined,
     before: clampInt(q.get(QUERY_BEFORE), 0, Number.MAX_SAFE_INTEGER) || undefined,
+    q: q.get(QUERY_MAIL_SEARCH)?.trim().slice(0, MAIL_SEARCH_MAX) || undefined,
   });
-  const messages = ids.slice(0, limit).flatMap((id) => c.core.store.get(id) ?? []) as Envelope[];
+  const messages = ids.slice(0, limit).flatMap((id) => c.core.store.get(id) ?? []).map(slim);
   return json({ messages, more: ids.length > limit } satisfies MailList);
+}
+
+/** 完整正文: 内联 HTML, 或 R2 里的原文 / 长文本 (文本转成可显示的 HTML)。 */
+async function body(c: ReqCtx): Promise<Response> {
+  const ev = c.core.store.get(decodeURIComponent(c.params[0] ?? ""));
+  if (!ev || ev.kind !== "event" || ev.deleted || !ev.data.mail) return fail(404, ERR_NO_BODY, CODE_NOT_FOUND);
+  const { html, file, mail } = ev.data;
+  const raw = html ?? (file ? await c.core.files.text(file.id) : null);
+  if (raw === null) return fail(404, ERR_NO_BODY, CODE_NOT_FOUND);
+  return json({ html: mail.body === "text" ? textPage(raw) : raw } satisfies MailBody);
 }
 
 async function push(c: ReqCtx): Promise<Response> {
@@ -68,6 +93,7 @@ async function hxEmail(c: ReqCtx): Promise<Response> {
 export const MAIL_ROUTES: Route[] = [
   route(GET, PATH_MAIL, OWNER, list),
   route(GET, PATH_MAIL_FACETS, OWNER, (c) => json(c.core.mail.facets())),
+  route(GET, PATH_MAIL_BODY, OWNER, body),
   route(POST, PATH_MAIL, WRITE, push),
   route(POST, PATH_MAIL_HX_EMAIL, WRITE, hxEmail),
 ];

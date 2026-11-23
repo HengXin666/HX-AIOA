@@ -48,14 +48,18 @@ HX-Email → 设置 → 通知 → Webhook:
 
 ## 存储
 
-- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, code, via }`; 标题是主题, 摘要是正文前 500 字, HTML 不超过 64KB 时随卡片保存
+- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, code, via, body, spoof }`; 标题是主题, 摘要是正文前 500 字
+- 完整正文 (HTML 原文, 或超过 500 字的纯文本) 存 R2 (`data.file`), 库里只留摘要, 删信时随引用计数一起删; `body` 为 `html` / `text`。CF 入口的 HTML 上限 2MB。没绑 R2 时 HTML 不超过 64KB 才内联保存
+- `spoof`: CF 校验头里发件域名 DMARC 失败 (经 Gmail 等可信转发时看转发方那一跳), 显示 "可疑", 带验证码也不响铃
 - 同一个 Message-ID 再来只覆盖, 不重复 (HX-Email 用 `hx-email:<message_id>`)
-- 另有 `mail` 索引表 (事件 id, 时间, 账号, 厂商, 发件人), 筛选和统计只走索引; 消息删掉或清空后自动不算, 每天清理一次残留索引
+- 另有 `mail` 索引表 (事件 id, 时间, 账号, 厂商, 发件人, 主题), 筛选, 搜索和统计只走索引; 消息删掉或清空后自动不算, 每天清理一次残留索引
+- 统计在内存缓存 1 分钟, 新信到达立即失效
 - 有验证码的信优先级为 "需要我", 会响铃; 其余为 "值得看"
 
 ## 查询 (主人)
 
-- `GET /api/v1/mail?vendor=&account=&before=&limit=`: 按时间倒序, `before` 为上一页最后一封的 `ts`, 返回 `{ messages, more }`
+- `GET /api/v1/mail?vendor=&account=&q=&before=&limit=`: 按时间倒序, `q` 匹配主题与发件地址, `before` 为上一页最后一封的 `ts`, 返回 `{ messages, more }` (不带内联 HTML)
+- `GET /api/v1/mail/{id}/body`: 完整正文 `{ html }`, 纯文本已转成可显示的 HTML; 没有完整正文的信返回 404
 - `GET /api/v1/mail/facets`: `{ vendors, accounts }`, 每项 `{ key, count, last }`
 
 厂商表在 `protocol/src/v1/mail.ts`, 认不出的用发件人主域名。

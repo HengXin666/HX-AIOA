@@ -12,11 +12,18 @@ export type MailVia = (typeof MAIL_VIAS)[number];
 export const CHAT_VIEWS = ["chat", "mail"] as const;
 export type ChatView = (typeof CHAT_VIEWS)[number];
 
-/** 随事件保存的邮件信息。to 为收件账号 (转发时是原收件地址)。 */
-export type MailInfo = { from: string; name?: string; to: string; vendor: string; code?: string; via: MailVia };
+/**
+ * 随事件保存的邮件信息。to 为收件账号 (转发时是原收件地址)。
+ * body: 有完整正文可取 (GET /mail/{id}/body), html 为原版网页, text 为长纯文本。
+ * spoof: 发件域名的 DMARC 校验失败, 可能是冒充。
+ */
+export type MailInfo = { from: string; name?: string; to: string; vendor: string; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
+export type MailBodyKind = "html" | "text";
+/** GET /mail/{id}/body: 统一给 HTML (纯文本已转成可显示的 HTML)。 */
+export type MailBody = { html: string };
 
 /** 外部推送一封信 (POST /mail)。text 与 html 至少一个。 */
-export type MailInput = { from: string; name?: string; to: string; subject?: string; text?: string; html?: string; code?: string; messageId?: string; ts?: number };
+export type MailInput = { from: string; name?: string; to: string; subject?: string; text?: string; html?: string; code?: string; messageId?: string; ts?: number; spoof?: boolean };
 
 export type MailList = { messages: Envelope[]; more: boolean };
 export type MailFacet = { key: string; count: number; last: number };
@@ -25,13 +32,19 @@ export type MailFacets = { vendors: MailFacet[]; accounts: MailFacet[] };
 export const PATH_MAIL = `${API_V1}/mail`;
 export const PATH_MAIL_FACETS = `${API_V1}/mail/facets`;
 export const PATH_MAIL_HX_EMAIL = `${API_V1}/mail/hx-email`;
+export const PATH_MAIL_BODY = `${API_V1}/mail/{id}/body`;
 export const QUERY_VENDOR = "vendor";
 export const QUERY_ACCOUNT = "account";
+// 关键词: 匹配主题与发件地址
+export const QUERY_MAIL_SEARCH = "q";
+export const MAIL_SEARCH_MAX = 64;
 export const MAIL_PAGE_DEFAULT = 50;
 export const MAIL_PAGE_MAX = 200;
 const MAX_ADDR = 320;
 const MAX_SUBJECT = 300;
 export const MAX_MAIL_TEXT = 200_000;
+// CF 路由收到的原版 HTML 存 R2, 上限放宽到 2MB
+export const MAX_MAIL_HTML = 2 * 1024 * 1024;
 
 // 发件域名 -> 厂商名; 子域名也算 (mail.github.com -> GitHub)
 const VENDORS: Record<string, string> = {

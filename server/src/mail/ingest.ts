@@ -7,8 +7,10 @@ import {
   vendorOf,
   type ChatSyncFrame,
   type EventData,
+  type FileRef,
   type EventInput,
   type IngestResult,
+  type MailBodyKind,
   type MailInfo,
   type MailInput,
   type MailVia,
@@ -17,6 +19,7 @@ import {
 } from "@hx-aioa/protocol";
 import { htmlToText, writeEvent } from "../api-events";
 import type { Core, Principal } from "../core";
+import { EventStore } from "../store";
 
 // 列表摘要与 HTML 卡片的上限, 与普通消息一致
 const MAX_SUMMARY = 500;
@@ -24,6 +27,9 @@ const MAX_HTML = 64 * 1024;
 const NO_SUBJECT = "(无主题)";
 const MAIL_ICON = "mail";
 const OWNER: Principal = { owner: true };
+const BY = "mail";
+const HTML_FILE = { name: "原文.html", mime: "text/html; charset=utf-8" };
+const TEXT_FILE = { name: "正文.txt", mime: "text/plain; charset=utf-8" };
 
 const clean = (addr: string) => addr.trim().toLowerCase();
 
@@ -38,21 +44,42 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const mail: MailInfo = { from, to, vendor, via };
   if (input.name) mail.name = input.name.trim();
   if (code) mail.code = code;
-  const data: EventData = { title: subject, severity: code ? "normal" : "info", mail };
+  if (input.spoof) mail.spoof = true;
+  const data: EventData = { title: subject, severity: input.spoof ? "warning" : code ? "normal" : "info", mail };
   const summary = text.slice(0, MAX_SUMMARY);
   if (summary) data.summary = summary;
-  if (input.html && input.html.length <= MAX_HTML) data.html = input.html;
-  const ev: EventInput = { kind: "event", channel: MAIL_CHANNEL, priority: code ? "need_me" : "worth_reading", data };
-  if (input.ts) ev.ts = input.ts;
-  if (input.messageId) ev.dedupeKey = input.messageId.trim();
-  // 来源按厂商分: 群里头像 / 名字显示厂商, 同一家的信能被规则一起处理
   const source: SourceRef = { id: MAIL_SOURCE_PREFIX + vendor, name: vendor, type: "email", icon: MAIL_ICON };
+  const key = input.messageId?.trim();
+  await keepBody(core, data, input.html, text, key ? EventStore.dedupeOf({ source, dedupeKey: key }) : null);
+  // 冒充的信不响铃, 即使带验证码
+  const priority = code && !input.spoof ? "need_me" : "worth_reading";
+  const ev: EventInput = { kind: "event", channel: MAIL_CHANNEL, priority, data };
+  if (input.ts) ev.ts = input.ts;
+  if (key) ev.dedupeKey = key;
+  // 来源按厂商分: 群里头像 / 名字显示厂商, 同一家的信能被规则一起处理
   const origin: { source: SourceRef; sourceInfo: SourceInfo | null } = { source, sourceInfo: null };
   const r = await writeEvent(core, who, ev, origin);
   const saved = core.store.get(r.id);
-  if (saved) core.mail.add({ ev: saved.id, ts: saved.ts, account: to, vendor, frm: from });
+  if (saved) core.mail.add({ ev: saved.id, ts: saved.ts, account: to, vendor, frm: from, subj: subject });
   ensureMailChat(core);
   return r;
+}
+
+/**
+ * 完整正文: HTML 原文或超过摘要的长文本存 R2 (data.file, 删信时随引用计数删掉), 库里只留摘要。
+ * 同一封信重投时沿用已存的文件。没绑 R2 时小 HTML 内联, 长文本只留摘要。
+ */
+async function keepBody(core: Core, data: EventData, html: string | undefined, text: string, dedupe: string | null): Promise<void> {
+  const kind: MailBodyKind | undefined = html ? "html" : text.length > MAX_SUMMARY ? "text" : undefined;
+  if (!kind || !data.mail) return;
+  const prev = dedupe ? core.store.byDedupe(dedupe) : null;
+  const old = prev?.kind === "event" && prev.data.mail?.body === kind ? prev.data.file : undefined;
+  const spec = kind === "html" ? HTML_FILE : TEXT_FILE;
+  const file: FileRef | null = old ?? (await core.files.save(MAIL_CHANNEL, spec.name, html ?? text, spec.mime, BY));
+  if (file) data.file = file;
+  else if (html && html.length <= MAX_HTML) data.html = html;
+  else return;
+  data.mail.body = kind;
 }
 
 // 第一封信到达时建好邮件群: 标题 "邮件", 用邮件视图
