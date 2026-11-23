@@ -12,6 +12,7 @@ class AioaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        com.hengxin.aioa.data.Me.load(this)
         Thread { runCatching { Updater.cleanup(this) } }.start()
         Channels.create(this)
         com.hengxin.aioa.config.SetupImport.apply(this)

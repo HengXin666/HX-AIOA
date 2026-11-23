@@ -38,6 +38,8 @@ private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 @Composable
 fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
+    // 邀请链接拉起 App: 切到消息页弹出加入框
+    androidx.compose.runtime.LaunchedEffect(chat.groups.pendingInvite) { if (chat.groups.pendingInvite != null) tab = Tab.CHAT }
     // 从 GitHub 空状态跳来时直接进数据源页
     var meStart by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
     // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏

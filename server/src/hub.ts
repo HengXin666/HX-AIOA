@@ -40,7 +40,6 @@ import {
   ERR_UNAUTHORIZED,
   HISTORY_DEFAULT_LIMIT,
   HISTORY_MAX_LIMIT,
-  KEY_ACKED_SEQ,
   KEY_PUSH_TOKEN,
   NORMAL_CLOSE,
   NO_STATUS_CLOSE,
@@ -382,7 +381,7 @@ export class Hub extends DurableObject<Env> {
         return;
       }
       case "ack":
-        if (att.device.startsWith(ANDROID_DEVICE_PREFIX)) await this.ctx.storage.put(KEY_ACKED_SEQ, frame.seq);
+        if (att.device.startsWith(ANDROID_DEVICE_PREFIX)) await this.core.pipeline.onAck(frame.seq);
         return;
       case "reg":
         if (att.role === "client") await this.ctx.storage.put(KEY_PUSH_TOKEN, frame.pushToken);

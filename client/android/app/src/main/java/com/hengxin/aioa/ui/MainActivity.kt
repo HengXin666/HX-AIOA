@@ -39,6 +39,9 @@ class MainActivity : ComponentActivity() {
     // 非空时显示更新公告抽屉
     private var notes by mutableStateOf<List<ReleaseNote>?>(null)
 
+    // 还没配置时从邀请链接带来的邀请码, 预填进注册页
+    private var joinCode by mutableStateOf("")
+
     private val notifyPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +51,7 @@ class MainActivity : ComponentActivity() {
             notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         if (chat.configured) LinkService.start(this)
+        handleLink(intent)
         announce()
         val actions = SystemActions(::requestBatteryWhitelist, ::openAppSettings, ::openNotificationSettings)
         setContent {
@@ -58,7 +62,7 @@ class MainActivity : ComponentActivity() {
                     Surface {
                         if (!chat.configured) {
                             // 首次配置保存后进入主界面; 之后的修改都在 "我的" 里
-                            SettingsScreen(settings) {
+                            SettingsScreen(settings, joinCode) {
                                 chat.onConfigSaved()
                                 chat.resume()
                             }
@@ -72,6 +76,25 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
+    }
+
+    // hxaioa://join?server=..&code=..: 已登录就弹加入框, 没配置就预填服务地址和邀请码
+    private fun handleLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != Constants.APP_SCHEME || uri.host != Constants.JOIN_HOST) return
+        val code = uri.getQueryParameter(Constants.QUERY_CODE)?.ifEmpty { null } ?: return
+        intent.data = null
+        if (chat.configured) {
+            chat.groups.pendingInvite = code
+        } else {
+            uri.getQueryParameter(Constants.QUERY_SERVER)?.ifEmpty { null }?.let { settings.server = it }
+            joinCode = code
         }
     }
 

@@ -19,8 +19,13 @@ data class ChatMeta(
     val updated: Long,
     /** 清空聊天记录的位置: seq <= cleared 的本地消息要删掉。 */
     val cleared: Long = 0,
+    /** 多人群里我的身份 (owner / admin / member) 与人数; 只有自己的群为空。 */
+    val role: String? = null,
+    val members: Int = 0,
 ) {
-    val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty()
+    val shared get() = role != null
+    val canManage get() = role == ROLE_OWNER || role == ROLE_ADMIN
+    val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
 }
 
 /** 群里接入的 Agent; reads 是它能读的群, joined 是最近报到时间, pending 表示指令变了还没重新报到。 */
@@ -28,6 +33,10 @@ data class ChatAgent(val keyId: String, val name: String, val reads: List<String
 
 /** 收藏: 消息快照。 */
 data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg)
+
+const val ROLE_OWNER = "owner"
+const val ROLE_ADMIN = "admin"
+const val ROLE_MEMBER = "member"
 
 const val DIGEST_DAILY = "daily"
 const val DIGEST_WEEKLY = "weekly"
@@ -69,6 +78,8 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 agents = (0 until (agents?.length() ?: 0)).mapNotNull { j -> agents?.optJSONObject(j)?.let { runCatching { parseAgent(it) }.getOrNull() } },
                 updated = o.optLong("updated"),
                 cleared = o.optLong("cleared"),
+                role = o.optStr("role"),
+                members = o.optInt("members"),
             )
         }.getOrNull()
     }.associateBy { it.channel }

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.data.MessageDb
+import kotlinx.coroutines.launch
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.digestLabel
@@ -54,6 +55,7 @@ private sealed interface Dialog {
     data object NewGroup : Dialog
     data object NewFolder : Dialog
     data class DropFolder(val name: String) : Dialog
+    data object Join : Dialog
 }
 
 /** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群挪组, 长按组标题删组。 */
@@ -64,6 +66,7 @@ fun GroupList(model: ChatModel) {
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     var menu by remember { mutableStateOf(false) }
     var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    androidx.compose.runtime.LaunchedEffect(g.pendingInvite) { if (g.pendingInvite != null) dialog = Dialog.Join }
     val rows = g.rows()
     val byKey = rows.associateBy { it.key }
     val grouped = g.folders.flatMap { it.groups }.toSet()
@@ -77,6 +80,7 @@ fun GroupList(model: ChatModel) {
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text("新建群") }, { dialog = Dialog.NewGroup; menu = false })
                     DropdownMenuItem({ Text("新建组") }, { dialog = Dialog.NewFolder; menu = false })
+                    DropdownMenuItem({ Text("加入群") }, { dialog = Dialog.Join; menu = false })
                 }
             }
         }
@@ -114,6 +118,12 @@ fun GroupList(model: ChatModel) {
             g.directory.createGroup(name).also { if (it) g.openGroup(name.trim()) }
         }
         Dialog.NewFolder -> NameDialog("新建组", "例如 工作", { dialog = null }) { g.addFolder(it) }
+        Dialog.Join -> JoinDialog(g.pendingInvite.orEmpty(), { dialog = null; g.pendingInvite = null }) { channel ->
+            dialog = null
+            g.pendingInvite = null
+            g.directory.refreshChats()
+            g.openGroup(channel)
+        }
         is Dialog.DropFolder -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("删除组 \"${d.name}\"?") },
@@ -245,4 +255,34 @@ private fun timeOfDay(ts: Long): String {
     val context = LocalContext.current
     return if (DateUtils.isToday(ts)) DateFormat.getTimeFormat(context).format(ts)
     else DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH)
+}
+
+/** 粘贴邀请链接或邀请码进群; 成功后打开那个群, 历史由云端补。 */
+@Composable
+private fun JoinDialog(initial: String, close: () -> Unit, joined: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var text by remember { mutableStateOf(initial) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("加入群") },
+        text = {
+            Column {
+                androidx.compose.material3.OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), label = { Text("邀请链接或邀请码") })
+                error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                busy = true
+                scope.launch {
+                    com.hengxin.aioa.ui.chat.RoomApi(context).join(text).onSuccess(joined).onFailure { error = it.message }
+                    busy = false
+                }
+            }, enabled = !busy && text.isNotBlank()) { Text(if (busy) "加入中..." else "加入") }
+        },
+        dismissButton = { TextButton(close) { Text("取消") } },
+    )
 }

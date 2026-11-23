@@ -16,6 +16,7 @@ import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.data.CrashLog
+import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.data.replacedBy
 import com.hengxin.aioa.link.LinkSocket
@@ -132,6 +133,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
+        if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {

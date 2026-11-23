@@ -58,6 +58,8 @@ class ChatGroups(
         private set
     var page by mutableStateOf(ChatPage.CHAT)
     var favoritesOpen by mutableStateOf(false)
+    // 从邀请链接拉起 App 时带来的邀请码, 群列表看到后弹出加入框
+    var pendingInvite by mutableStateOf<String?>(null)
     val messages = mutableStateListOf<ServerFrame.Msg>()
     val pending = mutableStateListOf<Pending>()
     var replyTo by mutableStateOf<ServerFrame.Msg?>(null)

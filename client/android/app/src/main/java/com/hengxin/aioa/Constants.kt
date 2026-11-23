@@ -105,6 +105,11 @@ object Constants {
     const val EVENTS_PATH = "api/v1/events"
     const val KEYS_PATH = "api/v1/keys"
     const val CHATS_API = "api/v1/chats"
+    // 群邀请链接: hxaioa://join?server=..&code=.., 与服务端 APP_SCHEME 一致
+    const val APP_SCHEME = "hxaioa"
+    const val JOIN_HOST = "join"
+    const val QUERY_CODE = "code"
+    const val QUERY_SERVER = "server"
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
     const val SOURCE_AGENT = "agent"

@@ -64,6 +64,8 @@ data class Envelope(
     // 墓碑: recall / delete, 以及被替换那条的旧序号
     val deleted: String? = null,
     val deletedSeq: Long = 0,
+    // 发送者账号 id (人发的聊天消息)
+    val by: String? = null,
 )
 
 /** 引用的快照: 原消息的序号, 来源与摘要。 */

@@ -116,8 +116,19 @@ export class Pipeline {
     if (route.action === "aggregate") await this.bucket(ev, sets);
   }
 
+  // 安卓的 ack 只记在内存; 只有等着兜底推送时才落盘, 平时每条消息不必多写一次
+  private ackedMem = 0;
+  private waiting = false;
+
+  async onAck(seq: number): Promise<void> {
+    this.ackedMem = Math.max(this.ackedMem, seq);
+    if (this.waiting) await this.storage.put(KEY_ACKED_SEQ, this.ackedMem);
+  }
+
   private async armFallback(seq: number): Promise<void> {
     if (!hasFallback(this.env)) return;
+    this.waiting = true;
+    if (this.ackedMem) await this.storage.put(KEY_ACKED_SEQ, this.ackedMem);
     await this.storage.put(KEY_PENDING_SEQ, seq);
     await this.timers.set(TIMER_FALLBACK, Date.now() + FALLBACK_DELAY_MS, true);
   }
@@ -125,7 +136,8 @@ export class Pipeline {
   // 安卓 1.5 秒内没有 ack 才走厂商推送, 多条合并成一次
   async runFallback(): Promise<void> {
     const pending = (await this.storage.get<number>(KEY_PENDING_SEQ)) ?? 0;
-    const acked = (await this.storage.get<number>(KEY_ACKED_SEQ)) ?? 0;
+    const acked = Math.max(this.ackedMem, (await this.storage.get<number>(KEY_ACKED_SEQ)) ?? 0);
+    this.waiting = false;
     await this.storage.delete(KEY_PENDING_SEQ);
     if (pending <= acked) return;
     const missed = this.store.since(acked, HISTORY_MAX_LIMIT).filter((e) => ringing(e.route));

@@ -1,6 +1,7 @@
 package com.hengxin.aioa.proto
 
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.data.Me
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -66,6 +67,7 @@ internal object V1Decode {
             fwd = o.optJSONObject("fwd")?.let { FwdInfo(it.optString("src"), it.optLong("ts")) },
             deleted = o.optJSONObject(KEY_DELETED)?.let { opt(it, "mode") },
             deletedSeq = o.optJSONObject(KEY_DELETED)?.optLong("seq") ?: 0L,
+            by = opt(o, "by"),
         )
     }
 
@@ -132,9 +134,15 @@ fun Envelope.preview(): String = when (kind) {
     else -> summary?.let { "$title: $it" } ?: title
 }
 
-/** 写进旧消息库的形状: 聊天页与通知继续按 Msg 工作; 本机发出的保留设备 id 以便识别 "我"。 */
+/** 写进旧消息库的形状: 聊天页与通知继续按 Msg 工作; "我" 发的 src 以设备前缀开头, 别人发的用显示名。 */
 fun Envelope.toMsg(): ServerFrame.Msg {
-    val src = if (source.id.startsWith(Constants.DEVICE_PREFIX)) source.id else source.name.ifEmpty { source.id }
+    val me = Me.uid
+    val mine = if (by != null && me != null) by == me else source.id.startsWith(Constants.DEVICE_PREFIX)
+    val src = when {
+        !mine -> source.name.ifEmpty { source.id }
+        source.id.startsWith(Constants.DEVICE_PREFIX) -> source.id
+        else -> "${Constants.DEVICE_PREFIX}-${source.id}"
+    }
     return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq)
 }
 

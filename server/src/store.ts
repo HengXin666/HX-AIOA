@@ -11,6 +11,10 @@ const GROUP_KEY = `COALESCE(NULLIF(json_extract(body, '$.channel'), ''), CASE WH
 
 // 收件箱: 每条事件一行; 覆盖更新 = 删旧行 + 插新行 (id 不变, seq 变新), 便于客户端按 since 补拉
 export class EventStore {
+  // 最近事件的内存尾巴 (升序): 规则合并, 总览每次都要看最近几百条, 唤醒后只读一次库, 之后随写入更新
+  private tail: Envelope[] | null = null;
+  private tailCap = 0;
+
   constructor(
     private readonly sql: SqlStorage,
     tx: (fn: () => void) => void,
@@ -81,7 +85,14 @@ export class EventStore {
         ev.deleted?.at ?? null,
       )
       .one();
-    return { ...ev, seq: row.seq };
+    const saved = { ...ev, seq: row.seq };
+    if (this.tail) {
+      const next = this.tail.filter((x) => x.id !== ev.id);
+      next.push(saved);
+      if (next.length > this.tailCap) next.shift();
+      this.tail = next;
+    }
+    return saved;
   }
 
   get(id: string): Envelope | null {
@@ -98,6 +109,7 @@ export class EventStore {
 
   // 清空一个群 seq < before 的消息 (指标不算), 返回删掉的条数
   clearGroup(key: string, before: number): number {
+    this.tail = null;
     return this.sql.exec("DELETE FROM ev WHERE grp = ? AND seq < ?", key, before).rowsWritten;
   }
 
@@ -115,6 +127,7 @@ export class EventStore {
     const r = this.sql.exec<{ m: number | null }>("SELECT MAX(seq) AS m FROM ev WHERE gone < ?", cutoff).one();
     if (!r.m) return 0;
     const n = this.sql.exec("DELETE FROM ev WHERE gone < ?", cutoff).rowsWritten;
+    this.tail = null;
     this.sql.exec("INSERT INTO ev_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = MAX(v, excluded.v)", META_FLOOR, r.m);
     return n;
   }
@@ -157,7 +170,11 @@ export class EventStore {
 
   // 最近 n 条 (按 seq 升序), 供聚合与根因判断
   recent(n: number): Envelope[] {
-    return this.sql.exec<Row>(`SELECT ${COLS} FROM ev ORDER BY seq DESC LIMIT ?`, n).toArray().map(parse).reverse();
+    if (!this.tail || n > this.tailCap) {
+      this.tail = this.sql.exec<Row>(`SELECT ${COLS} FROM ev ORDER BY seq DESC LIMIT ?`, n).toArray().map(parse).reverse();
+      this.tailCap = n;
+    }
+    return this.tail.slice(-n);
   }
 
   head(): number {

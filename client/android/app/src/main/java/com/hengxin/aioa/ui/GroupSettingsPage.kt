@@ -46,6 +46,9 @@ import com.hengxin.aioa.ui.chat.ChatAgent
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.DIGEST_DAILY
 import com.hengxin.aioa.ui.chat.DIGEST_WEEKLY
+import com.hengxin.aioa.ui.chat.MembersCard
+import com.hengxin.aioa.ui.chat.ROLE_ADMIN
+import com.hengxin.aioa.ui.chat.ROLE_OWNER
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,6 +72,9 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     val g = model.groups
     val dir = g.directory
     val meta = dir.metas[group]
+    // 只有自己的群没有 role, 主人就是群主; 成员看不到 Agent, 群类型与清空
+    val owner = meta?.role == null || meta.role == ROLE_OWNER
+    val manage = owner || meta?.role == ROLE_ADMIN
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -91,19 +97,20 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = PAD), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                Box(Modifier.clickable(enabled = manage) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     ChatAvatar(group, meta?.avatar, BIG_AVATAR)
                 }
                 Text(meta?.title ?: group, Modifier.padding(top = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text(busy ?: "点头像更换 · channel: $group", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Text(busy ?: if (manage) "点头像更换 · channel: $group" else "channel: $group", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 dir.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
             }
             Card {
-                ValueRow("群名称", meta?.title ?: group) { dialog = GsDialog.Rename }
+                ValueRow("群名称", meta?.title ?: group) { if (manage) dialog = GsDialog.Rename }
                 SwitchRow("置顶", meta?.pinned == true) { dir.setPinned(group, it) }
                 SwitchRow("免打扰", meta?.muted == true, "照常收消息, 只是不响铃不弹通知") { dir.setMuted(group, it) }
             }
-            Card {
+            if (group != MessageDb.MEMO_GROUP) Card { MembersCard(group, meta, { dir.refreshChats() }, onBack) }
+            if (owner) Card {
                 Text("群类型", fontSize = 15.sp)
                 Text("标成日报 / 周报后, 其它群的消息长按可以 \"收录\" 到这里, 精选 Agent 也可以直接往这里发报告。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,7 +119,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                     }
                 }
             }
-            if (group != MessageDb.MEMO_GROUP) AgentsCard(meta?.agents.orEmpty(), { dialog = GsDialog.EditAgent(null) }) { agent, action ->
+            if (owner && group != MessageDb.MEMO_GROUP) AgentsCard(meta?.agents.orEmpty(), { dialog = GsDialog.EditAgent(null) }) { agent, action ->
                 when (action) {
                     AgentAction.COPY -> scope.launch {
                         dir.savedPrompt(group, agent.keyId)
@@ -128,7 +135,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                     AgentAction.REMOVE -> dialog = GsDialog.Remove(agent)
                 }
             }
-            Card {
+            if (owner) Card {
                 Row(Modifier.fillMaxWidth().clickable { dialog = GsDialog.Clear }.padding(vertical = 8.dp)) {
                     Text("清空聊天记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
                 }

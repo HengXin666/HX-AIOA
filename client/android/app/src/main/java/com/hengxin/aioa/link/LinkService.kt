@@ -12,6 +12,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.hengxin.aioa.AioaApp
 import com.hengxin.aioa.Constants
+import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.data.MutedGroups
 import com.hengxin.aioa.data.groupKey
@@ -100,6 +101,7 @@ class LinkService : Service(), LinkSocket.Listener {
         when (frame) {
             is ServerFrame.Welcome -> {
                 replayHead = frame.head
+                Me.set(this, frame.uid)
                 if (frame.resync && frame.floor > 0) db.dropBefore(frame.floor)
             }
             is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !MutedGroups.contains(this, frame.groupKey())) notifier.message(frame)

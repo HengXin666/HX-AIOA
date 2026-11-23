@@ -36,12 +36,12 @@ class SystemActions(
 
 /** 首次配置: 服务端, 账号登录与可选订阅, 保存后进入主界面; 其余设置都在 "我的" 里。 */
 @Composable
-fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
+fun SettingsScreen(model: SettingsModel, presetInvite: String = "", onSaved: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var invite by remember { mutableStateOf("") }
+    var invite by remember(presetInvite) { mutableStateOf(presetInvite) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -53,7 +53,7 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
                 RowDivider(false)
                 InputRow("密码", password, "至少 8 位", secret = true) { password = it }
                 RowDivider(false)
-                InputRow("邀请码", invite, "已有账号留空") { invite = it }
+                InputRow("邀请码", invite, "已有账号留空; 可粘贴群邀请链接") { invite = it }
             }
             ProxyFields(model, onSaved, withSave = false)
             if (message.isNotEmpty()) SettingsGroup { NoteRow(message, Aioa.colors.danger) }
@@ -66,7 +66,7 @@ fun SettingsScreen(model: SettingsModel, onSaved: () -> Unit) {
                 scope.launch {
                     val r = withContext(Dispatchers.IO) {
                         if (invite.isBlank()) Auth.login(context, model.server, name, password)
-                        else Auth.join(context, model.server, invite, name, password)
+                        else Auth.join(context, model.server, com.hengxin.aioa.ui.chat.RoomApi.codeOf(invite) ?: invite, name, password)
                     }
                     busy = false
                     if (r.session == null) message = r.error ?: "登录失败"
