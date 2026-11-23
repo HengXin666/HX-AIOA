@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui.chat
 
+import com.hengxin.aioa.proto.plainLine
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -204,16 +206,5 @@ private fun Block(b: MdBlock, c: MdColors) {
     }
 }
 
-/** 列表和通知里用的一行摘要: 去掉 Markdown 标记。 */
-fun plainPreview(src: String): String = parseMarkdown(src).joinToString(" ") { b ->
-    when (b) {
-        is MdBlock.Para -> b.text
-        is MdBlock.Heading -> b.text
-        is MdBlock.Quote -> b.lines.joinToString(" ")
-        is MdBlock.Bullets -> b.items.joinToString(" ") { it.second }
-        is MdBlock.Code -> b.text
-        MdBlock.Rule -> ""
-    }
-}.let { inlineMarkdown(it, PLAIN).text }.replace('\n', ' ')
-
-private val PLAIN = MdColors(Color.Unspecified, Color.Unspecified, Color.Unspecified, Color.Unspecified)
+/** 列表和通知里用的一行摘要: 去掉 Markdown 与 HTML 标记。 */
+fun plainPreview(src: String): String = plainLine(src)

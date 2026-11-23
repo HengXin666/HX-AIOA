@@ -10,6 +10,8 @@ import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.TaskSnapshot
+import com.hengxin.aioa.proto.plainLine
+import com.hengxin.aioa.proto.plainText
 
 /** v1 事件按内容分样式: 告警, GitHub, Agent 待确认, 报告。loud 为 false 时只更新已有通知, 不新弹。 */
 class EventNotifier(private val context: Context) {
@@ -39,7 +41,7 @@ class EventNotifier(private val context: Context) {
             .setSilent(true)
             .build()
         NotifyKit.post(context, alertTag(key), Constants.NOTIFY_ID_ALERT, n)
-        alertSummary()
+        alertSummary(alertTag(key) to NotifyKit.line(repo ?: ev.source.name, text))
         return true
     }
 
@@ -62,8 +64,9 @@ class EventNotifier(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setVibrate(Constants.VIBRATE_PATTERN)
             .build()
-        NotifyKit.post(context, alertTag(ev.dedupeKey ?: ev.id), Constants.NOTIFY_ID_ALERT, n)
-        alertSummary()
+        val tag = alertTag(ev.dedupeKey ?: ev.id)
+        NotifyKit.post(context, tag, Constants.NOTIFY_ID_ALERT, n)
+        alertSummary(tag to NotifyKit.line(repo ?: ev.source.name, text))
     }
 
     fun github(ev: Envelope) {
@@ -79,16 +82,19 @@ class EventNotifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .build()
         // 同一个 PR 或 Issue 的后续事件覆盖同一条
-        NotifyKit.post(context, GITHUB_TAG + (ev.dedupeKey ?: ev.id), Constants.NOTIFY_ID_EVENT, n)
-        eventSummary()
+        val tag = GITHUB_TAG + (ev.dedupeKey ?: ev.id)
+        NotifyKit.post(context, tag, Constants.NOTIFY_ID_EVENT, n)
+        eventSummary(tag to NotifyKit.line(repo ?: ev.source.name, text))
     }
 
     fun report(ev: Envelope) {
+        val title = plainLine(ev.title)
+        val summary = ev.summary?.let(::plainText)?.ifBlank { null }
         val n = NotifyKit.builder(context, Constants.CHANNEL_REPORT, R.drawable.ic_stat_report)
-            .setContentTitle(ev.title)
-            .setContentText(ev.summary ?: ev.source.name)
+            .setContentTitle(title)
+            .setContentText(summary?.let(::plainLine) ?: ev.source.name)
             .setSubText(ev.source.name)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(ev.summary ?: ev.title).setBigContentTitle(ev.title))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(summary ?: title).setBigContentTitle(title))
             .setContentIntent(NotifyKit.openUrl(context, ev.url))
             .setGroup(Constants.GROUP_EVENT)
             .setWhen(ev.ts)
@@ -97,8 +103,9 @@ class EventNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .build()
-        NotifyKit.post(context, REPORT_TAG + (ev.dedupeKey ?: ev.id), Constants.NOTIFY_ID_EVENT, n)
-        eventSummary()
+        val tag = REPORT_TAG + (ev.dedupeKey ?: ev.id)
+        NotifyKit.post(context, tag, Constants.NOTIFY_ID_EVENT, n)
+        eventSummary(tag to NotifyKit.line(title, summary?.let(::plainLine)))
     }
 
     /** 任务快照: 等待确认且允许弹出时发带按钮的通知; 一旦不再等待就撤掉。 */
@@ -113,11 +120,11 @@ class EventNotifier(private val context: Context) {
             return
         }
         if (!loud) return
-        val text = prompt.question.ifEmpty { task.title }
+        val text = plainLine(prompt.question.ifEmpty { task.title })
         val b = NotifyKit.builder(context, Constants.CHANNEL_AGENT, R.drawable.ic_stat_agent)
             .setContentTitle(context.getString(R.string.notify_agent_title, agentName))
             .setContentText(text)
-            .setSubText(task.title)
+            .setSubText(plainLine(task.title))
             .setStyle(NotificationCompat.BigTextStyle().bigText(body(text, task.summary)))
             .setContentIntent(NotifyKit.openApp(context))
             .setGroup(Constants.GROUP_AGENT)
@@ -134,7 +141,7 @@ class EventNotifier(private val context: Context) {
         }
         b.addAction(0, context.getString(R.string.notify_reject), act(task.id, Constants.ACT_REJECT))
         NotifyKit.post(context, tag, Constants.NOTIFY_ID_AGENT, b.build())
-        agentSummary()
+        agentSummary(latest = tag to NotifyKit.line(context.getString(R.string.notify_agent_title, agentName), text))
     }
 
     private fun act(taskId: String, kind: String): PendingIntent {
@@ -145,30 +152,37 @@ class EventNotifier(private val context: Context) {
         return PendingIntent.getBroadcast(context, (taskId + kind).hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    fun agentSummary(atLeast: Int = 1, except: String? = null) = NotifyKit.summary(
+    fun agentSummary(atLeast: Int = 1, except: String? = null, latest: Pair<String, String>? = null) = NotifyKit.summary(
         context, Constants.CHANNEL_AGENT, R.drawable.ic_stat_agent, Constants.GROUP_AGENT, SUMMARY_AGENT,
-        context.getString(R.string.notify_group_agent), atLeast, except,
+        context.getString(R.string.notify_group_agent), atLeast, except, latest,
     )
 
-    private fun alertSummary() = summary(Constants.CHANNEL_ALERT, R.drawable.ic_stat_alert, Constants.GROUP_ALERT, R.string.notify_group_alert, SUMMARY_ALERT)
+    private fun alertSummary(latest: Pair<String, String>) =
+        summary(Constants.CHANNEL_ALERT, R.drawable.ic_stat_alert, Constants.GROUP_ALERT, R.string.notify_group_alert, SUMMARY_ALERT, latest)
 
-    private fun eventSummary() = summary(Constants.CHANNEL_GITHUB, R.drawable.ic_stat_app, Constants.GROUP_EVENT, R.string.notify_group_event, SUMMARY_EVENT)
+    private fun eventSummary(latest: Pair<String, String>) =
+        summary(Constants.CHANNEL_GITHUB, R.drawable.ic_stat_app, Constants.GROUP_EVENT, R.string.notify_group_event, SUMMARY_EVENT, latest)
 
-    private fun summary(channel: String, @DrawableRes icon: Int, group: String, title: Int, id: Int) =
-        NotifyKit.summary(context, channel, icon, group, id, context.getString(title))
+    private fun summary(channel: String, @DrawableRes icon: Int, group: String, title: Int, id: Int, latest: Pair<String, String>) =
+        NotifyKit.summary(context, channel, icon, group, id, context.getString(title), latest = latest)
 
     private fun active(tag: String, id: Int): Boolean =
         context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.tag == tag && it.id == id }
 
     // 服务端的 GitHub 标题形如 "[仓库] 内容": 拆成标题 "[仓库]" 与正文
     private fun githubTitle(ev: Envelope): Pair<String?, String> {
-        val m = REPO_PREFIX.find(ev.title) ?: return (if (isGithub(ev)) repoOf(ev) else null) to ev.title
+        val title = plainLine(ev.title)
+        val m = REPO_PREFIX.find(title) ?: return (if (isGithub(ev)) repoOf(ev) else null) to title
         return m.groupValues[1] to m.groupValues[2]
     }
 
     private fun repoOf(ev: Envelope): String? = ev.subject?.removePrefix(GITHUB_SUBJECT)?.let { "[$it]" }
 
-    private fun body(text: String, extra: String?): String = if (extra.isNullOrBlank()) text else "$text\n$extra"
+    // 展开后的全文: 摘要去掉 Markdown / HTML 标记, 和标题重复的就不再写一遍
+    private fun body(text: String, extra: String?): String {
+        val more = extra?.let(::plainText)?.takeIf { it.isNotBlank() && it != text } ?: return text
+        return if (more.startsWith(text)) more else "$text\n$more"
+    }
 
     private fun alertTag(key: String) = ALERT_TAG + key
 

@@ -53,8 +53,9 @@ fun DevBoard(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
 fun ServerBoard(chat: ChatModel, open: (Tab) -> Unit) {
     val c = Aioa.colors
     val hosts = chat.metrics.hosts
-    if (hosts.isEmpty()) NoProbe()
-    if (hosts.isNotEmpty()) {
+    if (hosts.isEmpty()) {
+        Card(onClick = { open(Tab.RESOURCES) }) { CardHeader("server", "设备", "还没有探针, 到资源页添加主机") }
+    } else {
         Card(onClick = { open(Tab.RESOURCES) }) {
             CardHeader("server", "设备", "${hosts.count { it.online }}/${hosts.size} 在线")
             hosts.forEach { h -> DeviceRow(chat.metrics, h) }
@@ -81,7 +82,7 @@ fun ServerBoard(chat: ChatModel, open: (Tab) -> Unit) {
 }
 
 @Composable
-private fun DeviceRow(state: MetricsState, h: HostCard) {
+internal fun DeviceRow(state: MetricsState, h: HostCard) {
     val c = Aioa.colors
     val live = if (h.online) state.samples[h.subject]?.lastOrNull() else null
     val v = h.last?.values.orEmpty() + live?.values.orEmpty()

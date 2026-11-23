@@ -103,8 +103,17 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                 }
                 msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
                 msg.reply?.let { QuoteBlock(it, fg, if (mine) fg else c.primary) { actions?.onJump?.invoke(it.seq) } }
-                msg.html?.let { HtmlCard(it, Modifier.padding(vertical = 2.dp)) } ?: MarkdownText(msg.text, md)
-                Text(status ?: timeOf(msg.ts), Modifier.align(Alignment.End), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
+                val time: @Composable () -> Unit = {
+                    Text(status ?: timeOf(msg.ts), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
+                }
+                val html = msg.html
+                if (html != null) {
+                    // HTML 卡片的 "全屏" 和时间同一行
+                    HtmlCard(html, Modifier.padding(top = 2.dp), footer = time)
+                } else {
+                    MarkdownText(msg.text, md)
+                    Box(Modifier.align(Alignment.End)) { time() }
+                }
             }
             if (actions != null) BubbleMenu(menu, { menu = false }, msg, actions, onCopy = { clipboard.setText(AnnotatedString(msg.text)) })
         }

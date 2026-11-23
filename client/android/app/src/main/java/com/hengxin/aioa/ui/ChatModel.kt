@@ -64,6 +64,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         viewModelScope.launch(Dispatchers.IO) { runCatching { ApiCache.write(app, CACHE_OVERVIEW, org.json.JSONObject(raw)) } }
     }
     val spaces = SpacesState(app, viewModelScope, metrics)
+    val seen = SeenStore(app)
     val sources = SourcesState(app, viewModelScope)
     val github = GithubState(app, viewModelScope)
     val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g ->

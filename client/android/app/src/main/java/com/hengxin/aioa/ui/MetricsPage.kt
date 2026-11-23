@@ -57,7 +57,6 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
         CfUsageCard()
         val carded = state.hosts.map { it.subject }.toSet()
         Card { SettingRow("server", "添加主机", "一行命令安装探针", { adding = true }) }
-        if (state.probes.isEmpty() && carded.isEmpty()) NoProbe()
         state.hosts.forEach { h -> HostPanel(state, h) { askFor = h.subject } }
         // 旧版探针不发主机卡片, 仍用原来的指标格子
         state.probes.filter { it !in carded }.forEach { Probe(state, it) }
@@ -72,11 +71,6 @@ fun WatchProbes(state: MetricsState, extra: Set<String> = emptySet()) {
         state.watch(subjects)
         onDispose { state.watch(emptyList()) }
     }
-}
-
-@Composable
-fun NoProbe() {
-    StatCard("server", "探针", 0f, "", state = CardState.Error("没有在线探针, 点上面的 添加主机 生成安装命令"))
 }
 
 @Composable

@@ -3,6 +3,7 @@ package com.hengxin.aioa.ui.chat
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.util.LruCache
 import android.view.MotionEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -13,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 private const val MIME = "text/html"
 private const val UTF8 = "utf-8"
 private const val MIN_HEIGHT = 48
+private const val HEIGHT_CACHE = 200
 private val CARD_SHAPE = RoundedCornerShape(10.dp)
 private val SCHEMES = setOf("http", "https")
 
@@ -102,11 +106,19 @@ private fun WebView.show(html: String, t: CardTheme) {
     loadDataWithBaseURL(null, page(html, t), MIME, UTF8, null)
 }
 
-/** 消息里的 HTML 卡片: 内联最多 maxHeight 高, 超出可全屏看; 卡片内滑动交给外层列表。 */
+// 量过的高度按内容记住: 列表回收后重新进屏直接用旧高度, 不再从最小值长回去把相邻消息顶开
+private val heights = LruCache<String, Int>(HEIGHT_CACHE)
+
+private fun heightKey(html: String, width: Int) = "${html.hashCode()}/${html.length}/$width"
+
+/** 消息里的 HTML 卡片: 内联最多 maxHeight 高, 超出可全屏看; 卡片内滑动交给外层列表。
+ *  footer 放在 "全屏" 同一行的右侧 (比如消息时间), 省掉单独一行留白。 */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
-fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp) {
-    var height by remember { mutableIntStateOf(MIN_HEIGHT) }
+fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp, footer: (@Composable () -> Unit)? = null) {
+    val width = LocalConfiguration.current.screenWidthDp
+    val key = heightKey(html, width)
+    var height by remember(key) { mutableIntStateOf(heights.get(key) ?: MIN_HEIGHT) }
     var full by remember { mutableStateOf(false) }
     val theme = cardTheme()
     val tall = height > maxHeight.value
@@ -114,7 +126,7 @@ fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp
         Box(Modifier.fillMaxWidth().clip(CARD_SHAPE)) {
             AndroidView(
                 factory = { ctx ->
-                    sandbox(ctx) { height = maxOf(it, MIN_HEIGHT) }.apply {
+                    sandbox(ctx) { h -> maxOf(h, MIN_HEIGHT).let { height = it; heights.put(key, it) } }.apply {
                         // 拖动不让 WebView 自己滚, 外层列表才能接住; 点按照常处理链接
                         setOnTouchListener { _, e -> e.actionMasked == MotionEvent.ACTION_MOVE }
                     }
@@ -123,13 +135,15 @@ fun HtmlCard(html: String, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp
                 modifier = Modifier.fillMaxWidth().height(minOf(height.toFloat(), maxHeight.value).dp),
             )
         }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (tall) "展开全部" else "全屏查看",
-                Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(horizontal = 6.dp, vertical = 2.dp),
-                fontSize = 12.sp,
+                if (tall) "展开全部" else "全屏",
+                Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(end = 6.dp, top = 1.dp, bottom = 1.dp),
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.primary,
             )
+            Spacer(Modifier.weight(1f))
+            footer?.invoke()
         }
     }
     if (full) HtmlViewer(html) { full = false }

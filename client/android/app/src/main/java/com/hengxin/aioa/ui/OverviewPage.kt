@@ -17,7 +17,6 @@ import com.hengxin.aioa.kit.Chip
 import com.hengxin.aioa.proto.Envelope
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
-import com.hengxin.aioa.kit.AdaptiveGrid
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.CardState
 import com.hengxin.aioa.kit.Dot
@@ -29,17 +28,22 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.Tone
 import com.hengxin.aioa.link.LinkLog
 import java.util.Calendar
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.font.FontWeight
+import com.hengxin.aioa.kit.Card
+import com.hengxin.aioa.kit.CardHeader
+import com.hengxin.aioa.proto.plainLine
 
 private const val ALERT_SRC_PREFIX = "probe"
 private const val ALERT_WINDOW_MS = 24 * 60 * 60 * 1000L
 private const val ALERTS_SHOWN = 3
 private const val TITLE_NEED_ME = "需要我"
 private const val TITLE_HAPPENING = "正在发生"
-
-private sealed interface HomeTile {
-    data class Cpu(val subject: String) : HomeTile
-    data object Messages : HomeTile
-}
+private const val NEED_ME_SHOWN = 5
+private const val LAYER_SHOWN = 3
 
 /** 总览三层: 需要我 (等待确认的任务与重要告警), 正在发生 (动态与资源), 值得一看 (报告与摘要)。 */
 @Composable
@@ -82,10 +86,25 @@ private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit, sho
     AnimatedItems(feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }, { it.id }) { task ->
         TaskCard(task.toCard(feed.pending[task.id]), onOption = { answer(task, it) }) { open(Tab.AGENT) }
     }
-    LayerSection(TITLE_NEED_ME, "少而重要", items(feed, Constants.PRIORITY_NEED_ME), state, "一切正常, 没有需要处理的事") { show(it.id) }
-    LayerSection(TITLE_HAPPENING, "值得知道, 不必立即处理", items(feed, Constants.PRIORITY_HAPPENING), state, "暂时风平浪静") { show(it.id) }
+    Layer(chat, TITLE_NEED_ME, "少而重要", Constants.PRIORITY_NEED_ME, state, "一切正常, 没有需要处理的事", NEED_ME_SHOWN, show)
+    Layer(chat, TITLE_HAPPENING, "不必立即处理", Constants.PRIORITY_HAPPENING, state, "暂时风平浪静", LAYER_SHOWN, show)
     ResourceTiles(chat, open)
-    LayerSection("值得一看", "日报, 周报与摘要", items(feed, Constants.PRIORITY_WORTH_READING), state, "今天没有新内容") { show(it.id) }
+    Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show)
+}
+
+// 点开看过或点 x 划掉的不再占位置; 新来的照常出现
+@Composable
+private fun Layer(chat: ChatModel, title: String, hint: String, priority: String, state: CardState, empty: String, limit: Int, show: (String) -> Unit) {
+    val list = items(chat.feed, priority).filter { !chat.seen.has(it.id) }
+    LayerSection(
+        title, hint, list, state, empty,
+        limit = limit,
+        onDismiss = { chat.seen.mark(listOf(it.id)) },
+        onClear = { chat.seen.mark(list.map { it.id }) },
+    ) {
+        chat.seen.mark(listOf(it.id))
+        show(it.id)
+    }
 }
 
 fun layerState(online: Boolean, loaded: Boolean, updatedAt: Long): CardState = when {
@@ -105,37 +124,46 @@ private fun LegacyLayers(chat: ChatModel, state: CardState, open: (Tab) -> Unit)
     val now = System.currentTimeMillis()
     val alerts = chat.messages.filter { it.src.startsWith(ALERT_SRC_PREFIX) && now - it.ts < ALERT_WINDOW_MS }
         .takeLast(ALERTS_SHOWN).reversed()
-        .map { FeedItem(it.seq.toString(), "alert-triangle", it.text, null, it.src.removePrefix("$ALERT_SRC_PREFIX-"), ago(it.ts), Tone.Warning) }
+        .map { FeedItem(it.seq.toString(), "alert-triangle", plainLine(it.text), null, it.src.removePrefix("$ALERT_SRC_PREFIX-"), ago(it.ts), Tone.Warning) }
     val shown = if (state is CardState.Loading) CardState.Ready else state
     LayerSection(TITLE_NEED_ME, "近 24 小时告警", alerts, shown, "一切正常, 没有需要处理的事") { open(Tab.CHAT) }
     PageSection(TITLE_HAPPENING)
     ResourceTiles(chat, open)
 }
 
+// 装过的探针都列出来 (离线的也在), 一张卡看完; 没装过就什么都不放, 添加入口在资源页
 @Composable
 private fun ResourceTiles(chat: ChatModel, open: (Tab) -> Unit) {
     val metrics = chat.metrics
-    val tiles = metrics.probes.map { HomeTile.Cpu(it) } + HomeTile.Messages
-    AdaptiveGrid(tiles) { tile ->
-        when (tile) {
-            is HomeTile.Cpu -> {
-                val cpu = metrics.series(tile.subject, KEY_CPU).map { it.second }
-                StatCard(
-                    "cpu", "CPU", cpu.lastOrNull() ?: 0f, PERCENT,
-                    state = if (cpu.isEmpty()) CardState.Loading else CardState.Ready,
-                    delta = tile.subject, trend = cpu, source = SOURCE_PROBE,
-                ) { open(Tab.RESOURCES) }
-            }
-            HomeTile.Messages -> {
-                val today = chat.messages.count { it.ts >= startOfToday() }
-                StatCard(
-                    "message-circle", "今日消息", today.toFloat(), "条",
-                    delta = chat.messages.lastOrNull()?.text, source = "HX-AIOA",
-                ) { open(Tab.CHAT) }
-            }
+    val carded = metrics.hosts.map { it.subject }.toSet()
+    val legacy = metrics.probes.filter { it !in carded }
+    if (metrics.hosts.isNotEmpty() || legacy.isNotEmpty()) {
+        Card(onClick = { open(Tab.RESOURCES) }) {
+            val online = metrics.hosts.count { it.online } + legacy.size
+            CardHeader("server", "设备", "$online/${metrics.hosts.size + legacy.size} 在线")
+            metrics.hosts.forEach { h -> DeviceRow(metrics, h) }
+            legacy.forEach { s -> LegacyRow(metrics, s) }
         }
     }
-    if (metrics.probes.isEmpty()) NoProbe()
+    val today = chat.messages.count { it.ts >= startOfToday() }
+    if (today > 0) {
+        StatCard(
+            "message-circle", "今日消息", today.toFloat(), "条",
+            delta = chat.messages.lastOrNull()?.text?.let(::plainLine), source = "HX-AIOA",
+        ) { open(Tab.CHAT) }
+    }
+}
+
+@Composable
+private fun LegacyRow(metrics: MetricsState, subject: String) {
+    val c = Aioa.colors
+    val cpu = metrics.series(subject, KEY_CPU).lastOrNull()?.second
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Dot(c.success)
+        Spacer(Modifier.width(8.dp))
+        Text(subject, c.text, 14, Modifier.weight(1f), FontWeight.Medium)
+        Text(cpu?.let { "在线 · CPU ${one(it.toDouble())}%" } ?: "在线", c.textSecondary, 12)
+    }
 }
 
 @Composable

@@ -66,6 +66,7 @@
     <string name="notify_approve">批准</string>
     <string name="notify_reject">拒绝</string>
     <string name="notify_open">打开</string>
+    <string name="notify_card">卡片消息</string>
     <string name="notify_agent_title">%1$s 等你确认</string>
     <string name="notify_agent_danger">危险操作, 请在 App 里二次确认</string>
     <string name="notify_agent_sending">正在提交...</string>

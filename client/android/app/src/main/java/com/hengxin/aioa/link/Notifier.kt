@@ -13,6 +13,8 @@ import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.TaskSnapshot
+import com.hengxin.aioa.proto.plainLine
+import com.hengxin.aioa.proto.plainText
 
 /** :link 进程的通知入口: 常驻连接, 普通消息会话, 以及按内容分派的 v1 事件。 */
 class Notifier(private val context: Context, private val db: MessageDb) {
@@ -58,11 +60,13 @@ class Notifier(private val context: Context, private val db: MessageDb) {
         val people = HashMap<String, Person>()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(title)
             .setGroupConversation(history.any { it.src != title })
-        history.forEach { m -> style.addMessage(m.text, m.ts, people.getOrPut(m.src) { Person.Builder().setName(m.src).setKey(m.src).build() }) }
+        history.forEach { m -> style.addMessage(plainText(m.text), m.ts, people.getOrPut(m.src) { Person.Builder().setName(m.src).setKey(m.src).build() }) }
         val total = db.unreadCount(Constants.DEVICE_PREFIX)
+        val preview = plainLine(msg.text).ifEmpty { context.getString(R.string.notify_card) }
+        val line = if (msg.src == title) preview else "${msg.src}: $preview"
         val notification = NotifyKit.builder(context, Constants.CHANNEL_MESSAGE, R.drawable.ic_stat_message)
             .setContentTitle(title)
-            .setContentText(if (msg.src == title) msg.text else "${msg.src}: ${msg.text}")
+            .setContentText(line)
             .setStyle(style)
             .setNumber(history.size)
             .setContentIntent(NotifyKit.openApp(context))
@@ -86,6 +90,7 @@ class Notifier(private val context: Context, private val db: MessageDb) {
             Constants.GROUP_MESSAGE,
             Constants.NOTIFY_ID_MESSAGE,
             context.getString(R.string.unread_title, total),
+            latest = tag to NotifyKit.line(title, line),
         )
     }
 

@@ -1,7 +1,5 @@
 package com.hengxin.aioa.ui
 
-import com.hengxin.aioa.ui.chat.plainPreview
-
 import android.text.format.DateUtils
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.ButtonStyle
@@ -12,6 +10,7 @@ import com.hengxin.aioa.kit.TaskPhase
 import com.hengxin.aioa.kit.Tone
 import com.hengxin.aioa.proto.OverviewItem
 import com.hengxin.aioa.proto.TaskSnapshot
+import com.hengxin.aioa.proto.plainLine
 
 // 协议对象到组件展示数据的转换, 组件库不认识协议
 
@@ -29,9 +28,10 @@ fun OverviewItem.toFeed(): FeedItem {
         Constants.KIND_REPORT -> "sun"
         else -> ev.source.icon ?: if (tone == Tone.Critical || tone == Tone.Warning) "alert-triangle" else "bell"
     }
-    val title = if (ev.resolved) "已恢复: ${ev.title}" else ev.title
-    // 列表里只放一两行摘要: 去掉 Markdown 标记, 点开再完整渲染
-    val summary = ev.summary?.let(::plainPreview)?.ifBlank { null } ?: if (ev.html != null) "HTML 卡片, 点开查看" else null
+    val plain = plainLine(ev.title)
+    val title = if (ev.resolved) "已恢复: $plain" else plain
+    // 列表里只放一两行摘要: 去掉 Markdown / HTML 标记, 点开再完整渲染; 和标题一样的不重复
+    val summary = ev.summary?.let(::plainLine)?.takeIf { it.isNotBlank() && it != plain } ?: if (ev.html != null) "卡片, 点开查看" else null
     return FeedItem(ev.id, icon, title, summary, ev.source.name, ago(ev.ts), if (ev.resolved) Tone.Info else tone, count)
 }
 

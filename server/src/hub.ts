@@ -223,6 +223,8 @@ export class Hub extends DurableObject<Env> {
     else sendFrame(server, { t: "welcome", head });
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
     sendFrame(server, this.core.metrics.probes());
+    // 装过的主机 (含离线) 一连上就给, 总览不必等到有在线探针才看得到它们
+    sendFrame(server, this.core.metrics.hostsFrame());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
     if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
     const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);

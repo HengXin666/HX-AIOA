@@ -7,29 +7,25 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toBitmap
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.R
 import com.hengxin.aioa.config.JsonFile
 import java.io.File
 
-/** 通知的公共外观: 品牌色, App 大图标, 打开界面或链接, 分组摘要。不依赖 Compose, :link 进程可用。 */
+/** 通知的公共外观: 品牌色, 打开界面或链接, 分组摘要。不依赖 Compose, :link 进程可用。 */
 object NotifyKit {
 
     // 外观设置文件与键名, 与 config/AppearanceStore 一致; 那边依赖 Compose, 这里只读原始 JSON
     private const val APPEARANCE_FILE = "appearance.json"
     private const val KEY_ACCENT = "accent"
     private const val UI_ACTIVITY = "com.hengxin.aioa.ui.MainActivity"
-
-    @Volatile
-    private var largeIcon: Bitmap? = null
+    private const val SUMMARY_LINES = 5
 
     fun granted(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -43,20 +39,12 @@ object NotifyKit {
 
     fun color(context: Context, @ColorRes id: Int): Int = ContextCompat.getColor(context, id)
 
-    // 大图标用应用插画的头像裁切 (res/drawable-nodpi/notify_large.webp); 整张自适应图标缩到 64dp 人物太小, 看不出来
-    fun appIcon(context: Context): Bitmap? = largeIcon ?: runCatching {
-        val size = context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
-        ContextCompat.getDrawable(context, R.drawable.notify_large)?.toBitmap(size, size)
-    }.getOrNull()?.also { largeIcon = it }
-
-    fun builder(context: Context, channel: String, @DrawableRes icon: Int, withLarge: Boolean = true): NotificationCompat.Builder {
-        val b = NotificationCompat.Builder(context, channel)
+    // 不设大图标: 系统已在左上角显示 App 图标, 再放一张大图只会挤占正文
+    fun builder(context: Context, channel: String, @DrawableRes icon: Int): NotificationCompat.Builder =
+        NotificationCompat.Builder(context, channel)
             .setSmallIcon(icon)
             .setColor(brandColor(context))
             .setShowWhen(true)
-        if (withLarge) appIcon(context)?.let(b::setLargeIcon)
-        return b
-    }
 
     // 用类名启动界面, 避免 :link 进程加载 Activity 及 Compose 相关类
     fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
@@ -83,34 +71,46 @@ object NotifyKit {
         NotificationManagerCompat.from(context).cancel(tag, id)
     }
 
-    /** 组内子通知的数量 (不含摘要)。 */
-    fun groupSize(context: Context, group: String, except: String? = null): Int =
-        context.getSystemService(NotificationManager::class.java).activeNotifications.count {
-            it.notification.group == group && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 && it.tag != except
-        }
-
     /** 组摘要: 子通知只剩零条时撤掉, 否则刷新计数。摘要本身不响铃, 由子通知负责提醒。
      *  刚发出的子通知可能还没出现在 activeNotifications 里, 所以发完调用时 atLeast 取 1; 刚撤掉的用 except 排除。 */
-    fun summary(context: Context, channel: String, @DrawableRes icon: Int, group: String, id: Int, title: String, atLeast: Int = 1, except: String? = null) {
-        val n = maxOf(groupSize(context, group, except), atLeast)
+    fun summary(context: Context, channel: String, @DrawableRes icon: Int, group: String, id: Int, title: String, atLeast: Int = 1, except: String? = null, latest: Pair<String, String>? = null) {
+        // 刚发出的子通知可能还不在 activeNotifications 里, 用 latest (tag 与预览) 补上
+        val children = (listOfNotNull(latest) + children(context, group, except)).distinctBy { it.first }.map { it.second }
+        val n = maxOf(children.size, atLeast)
         if (n == 0) {
             cancel(context, null, id)
             return
         }
-        val notification = builder(context, channel, icon, withLarge = false)
+        val count = context.getString(R.string.notify_group_count, n)
+        // 折叠时摘要自己就列出各条标题, 不必展开也能看; 不设点击动作, 有的系统点摘要会直接进 App 而不是展开
+        val inbox = NotificationCompat.InboxStyle().setBigContentTitle(title).setSummaryText(count)
+        children.take(SUMMARY_LINES).forEach { inbox.addLine(it) }
+        val notification = builder(context, channel, icon)
             .setContentTitle(title)
-            .setContentText(context.getString(R.string.notify_group_count, n))
-            .setStyle(NotificationCompat.InboxStyle().setSummaryText(context.getString(R.string.notify_group_count, n)))
+            .setContentText(children.firstOrNull() ?: count)
+            .setStyle(inbox)
             .setGroup(group)
             .setGroupSummary(true)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setNumber(n)
-            .setContentIntent(openApp(context))
-            .setAutoCancel(true)
             .setSilent(true)
             .build()
         post(context, null, id, notification)
     }
+
+    // 组内子通知的一行预览 (标题: 正文), 新的在前
+    private fun children(context: Context, group: String, except: String?): List<Pair<String, String>> =
+        context.getSystemService(NotificationManager::class.java).activeNotifications
+            .filter { it.notification.group == group && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 && it.tag != except }
+            .sortedByDescending { it.notification.`when` }
+            .map { sbn ->
+                val e = sbn.notification.extras
+                val t = e.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+                val x = e.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+                sbn.tag.orEmpty() to line(t, x)
+            }
+
+    fun line(title: CharSequence?, text: CharSequence?): String = listOf(title, text).filter { !it.isNullOrBlank() }.joinToString(": ")
 
     /** 看完消息时撤掉全部消息通知 (各来源的会话加上摘要)。 */
     fun clearMessages(context: Context) {
