@@ -3,6 +3,7 @@ import {
   MAIL_SOURCE_PREFIX,
   MAIL_TITLE,
   MAX_TITLE_LENGTH,
+  categoryOf,
   extractCode,
   vendorOf,
   type ChatSyncFrame,
@@ -41,7 +42,8 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const subject = (input.subject ?? "").trim().slice(0, MAX_TITLE_LENGTH) || NO_SUBJECT;
   const text = input.text?.trim() || (input.html ? htmlToText(input.html) : "");
   const code = input.code ?? extractCode(subject, text);
-  const mail: MailInfo = { from, to, vendor, via };
+  const category = categoryOf(from);
+  const mail: MailInfo = { from, to, vendor, category, via };
   if (input.name) mail.name = input.name.trim();
   if (code) mail.code = code;
   if (input.spoof) mail.spoof = true;
@@ -60,7 +62,7 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const origin: { source: SourceRef; sourceInfo: SourceInfo | null } = { source, sourceInfo: null };
   const r = await writeEvent(core, who, ev, origin);
   const saved = core.store.get(r.id);
-  if (saved) core.mail.add({ ev: saved.id, ts: saved.ts, account: to, vendor, frm: from, subj: subject });
+  if (saved) core.mail.add({ ev: saved.id, ts: saved.ts, account: to, vendor, frm: from, subj: subject, cat: category });
   ensureMailChat(core);
   return r;
 }

@@ -28,7 +28,7 @@ plugins/
 | `prompt` | 提示词模板文件名, `.md` |
 | `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` |
 | `agent.name` | 接入 Agent 的名字; `agent.schedule` 是建议的定时, 会附在接入语后 |
-| `space` | 可选, 工作台布局 (格式见 `docs/api-v1-spaces.md`), 安装后 id 固定为 `plugin-<id>` |
+| `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
 
 模板占位符: `{{channel}}` 群 channel, `{{title}}` 群标题, `{{base}}` 服务地址。`prompt.md` 与 `space` 里都能用。
 

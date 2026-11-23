@@ -40,6 +40,7 @@ HX-AIOA (All In One App) 是一个个人用的随处可用对话入口: 把各�
 5. 同一个字面量出现 3 次及以上, 提取为常量, 放进该模块的常量文件 (`constants.ts` / `Constants.kt`)。
 6. 代码中禁止出现任何绝对路径, 包括拼接出来的绝对路径。
 7. 密钥只放环境变量或 secret, 不进仓库。
+8. 文档放进 `docs/` 对应子目录 (api, features, deploy, client, design), 新增时在 `docs/README.md` 登记一行; `docs/agent-guide.md` 地址已写进各 Agent, 不得移动。
 
 ## 5. 验证命令
 
@@ -49,7 +50,7 @@ npm run typecheck          # protocol + server + web
 npm run build -w client/web
 ```
 
-安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/android-signing.md`, 更新与代理见 `docs/android-update-proxy.md`。
+安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/deploy/android-signing.md`, 更新与代理见 `docs/deploy/android-update-proxy.md`。
 
 - 密钥, 令牌, 服务端地址不得写进 APK 或仓库, 仓库是公开的。
 

@@ -30,13 +30,23 @@ data class MailFacet(val key: String, val count: Int, val last: Long)
 
 data class MailPage(val items: List<MailItem>, val more: Boolean)
 
+/** 三种分组的统计。 */
+data class MailFacets(val categories: List<MailFacet>, val vendors: List<MailFacet>, val accounts: List<MailFacet>)
+
+/** 列表筛选条件, 都是可选的。 */
+data class MailFilter(val category: String? = null, val vendor: String? = null, val account: String? = null) {
+    val active get() = category != null || vendor != null || account != null
+    val label get() = category ?: vendor ?: account
+}
+
 /** 邮件接口: 列表按时间倒序, 可按厂商 / 账号过滤; 统计给分组用。 */
 class MailApi(private val context: Context) {
 
-    suspend fun list(vendor: String?, account: String?, search: String?, before: Long?): Result<MailPage> = io {
+    suspend fun list(f: MailFilter, search: String?, before: Long?): Result<MailPage> = io {
         val q = buildMap {
-            vendor?.let { put("vendor", it) }
-            account?.let { put("account", it) }
+            f.category?.let { put("category", it) }
+            f.vendor?.let { put("vendor", it) }
+            f.account?.let { put("account", it) }
             search?.let { put("q", it) }
             before?.let { put("before", it.toString()) }
         }
@@ -46,10 +56,10 @@ class MailApi(private val context: Context) {
         MailPage((0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::item) }, b.optBoolean("more"))
     }
 
-    suspend fun facets(): Result<Pair<List<MailFacet>, List<MailFacet>>> = io {
+    suspend fun facets(): Result<MailFacets> = io {
         val r = Api.call(context, GET, listOf(PATH, "facets"))
         val b = r.body ?: error(r.error ?: FAILED)
-        facets(b.optJSONArray("vendors")) to facets(b.optJSONArray("accounts"))
+        MailFacets(facets(b.optJSONArray("categories")), facets(b.optJSONArray("vendors")), facets(b.optJSONArray("accounts")))
     }
 
     /** 完整正文, 服务端统一给 HTML。 */

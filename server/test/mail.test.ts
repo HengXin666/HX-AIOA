@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractCode, parseMailInput, vendorOf } from "@hx-aioa/protocol";
+import { categoryOf, extractCode, parseMailInput, vendorOf } from "@hx-aioa/protocol";
 import { parseRaw } from "../src/mail/email";
 
 const INBOX = "aioa@example.org";
@@ -50,4 +50,17 @@ test("冒充判断: 只信 CF 最上面那条, 经可信转发看上一跳", asy
   // Gmail 转发: CF 看到 SPF 失败, 但 ARC 链有效且 Gmail 那跳通过
   assert.equal((await parse(`${cf("arc=pass; dmarc=fail")}\r\nARC-Authentication-Results: i=1; mx.google.com; dmarc=pass`)).spoof, undefined);
   assert.equal((await parse("Authentication-Results: x; dmarc=fail")).spoof, undefined);
+});
+
+test("分类: 厂商表优先, 不认识的按域名关键词猜", () => {
+  assert.equal(categoryOf("noreply@tm.openai.com"), "AI");
+  assert.equal(categoryOf("noreply@github.com"), "开发");
+  assert.equal(categoryOf("x@aws.amazon.com"), "云服务");
+  assert.equal(categoryOf("x@amazon.com"), "购物");
+  assert.equal(categoryOf("info@mybank.com"), "其他");
+  assert.equal(categoryOf("info@bank-of-x.com"), "金融");
+  assert.equal(categoryOf("hi@mail.tsinghua.edu.cn"), "教育");
+  assert.equal(categoryOf("hi@display.com"), "其他");
+  assert.equal(categoryOf("bot@foo.ai"), "AI");
+  assert.equal(categoryOf("random@example.org"), "其他");
 });

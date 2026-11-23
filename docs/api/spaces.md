@@ -1,6 +1,6 @@
 # HX-AIOA API v1: 工作台 (已实现单账号版本)
 
-从 [api-v1.md](api-v1.md) §7 拆出, 类型真源为 `protocol/src/v1/space.ts` (schema 与校验), `protocol/src/v1/space-layout.ts` (显示状态, 排序, 尺寸, 当前值), `protocol/src/v1/metric-fields.ts` (标准指标字段与来源别名)。
+从 [接口总览](v1.md) §7 拆出, 类型真源为 `protocol/src/v1/space.ts` (schema 与校验), `protocol/src/v1/space-layout.ts` (显示状态, 排序, 尺寸, 当前值), `protocol/src/v1/metric-fields.ts` (标准指标字段与来源别名)。
 
 ## 1. 声明格式 (#5)
 

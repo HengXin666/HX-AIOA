@@ -8,6 +8,8 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +51,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class MailTab(val label: String) { LATEST("最新"), VENDOR("按厂商"), ACCOUNT("按账号") }
+private enum class MailTab(val label: String) { LATEST("最新"), CATEGORY("按分类"), VENDOR("按厂商"), ACCOUNT("按账号") }
 
 private const val PREFETCH = 8
 private const val AVATAR = 36
@@ -61,8 +63,7 @@ private const val SEARCH_DEBOUNCE_MS = 400L
 /** 邮件群的状态: 当前分段, 筛选, 已加载的列表与统计。离开再回来不重拉。 */
 private class MailState(val api: MailApi) {
     var tab by mutableStateOf(MailTab.LATEST)
-    var vendor by mutableStateOf<String?>(null)
-    var account by mutableStateOf<String?>(null)
+    var filter by mutableStateOf(MailFilter())
     // 输入框内容, 与防抖后真正去搜的词
     var search by mutableStateOf("")
     var query by mutableStateOf<String?>(null)
@@ -70,24 +71,22 @@ private class MailState(val api: MailApi) {
     var more by mutableStateOf(false)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
-    var vendors by mutableStateOf<List<MailFacet>>(emptyList())
-    var accounts by mutableStateOf<List<MailFacet>>(emptyList())
+    var facets by mutableStateOf(MailFacets(emptyList(), emptyList(), emptyList()))
     var open by mutableStateOf<Long?>(null)
 
-    val filtered get() = vendor != null || account != null
-    val showList get() = tab == MailTab.LATEST || filtered
+    val showList get() = tab == MailTab.LATEST || filter.active
 
     suspend fun reload() {
         loading = true
-        api.list(vendor, account, query, null).onSuccess { items.clear(); items.addAll(it.items); more = it.more; error = null }.onFailure { error = it.message }
-        api.facets().onSuccess { vendors = it.first; accounts = it.second }
+        api.list(filter, query, null).onSuccess { items.clear(); items.addAll(it.items); more = it.more; error = null }.onFailure { error = it.message }
+        api.facets().onSuccess { facets = it }
         loading = false
     }
 
     suspend fun older() {
         if (loading || !more) return
         loading = true
-        api.list(vendor, account, query, items.lastOrNull()?.ts).onSuccess { p -> items.addAll(p.items.filter { n -> items.none { it.seq == n.seq } }); more = p.more }.onFailure { error = it.message }
+        api.list(filter, query, items.lastOrNull()?.ts).onSuccess { p -> items.addAll(p.items.filter { n -> items.none { it.seq == n.seq } }); more = p.more }.onFailure { error = it.message }
         loading = false
     }
 }
@@ -99,16 +98,15 @@ fun MailView(head: Long?, modifier: Modifier = Modifier) {
     val s = remember { MailState(MailApi(context.applicationContext)) }
     val scope = rememberCoroutineScope()
     // 群里来了新信 (head 变了) 就刷新第一页
-    LaunchedEffect(head, s.vendor, s.account, s.query) { s.reload() }
+    LaunchedEffect(head, s.filter, s.query) { s.reload() }
     LaunchedEffect(s.search) { delay(SEARCH_DEBOUNCE_MS); s.query = s.search.trim().ifEmpty { null } }
-    if (s.filtered) BackHandler { s.vendor = null; s.account = null }
+    if (s.filter.active) BackHandler { s.filter = MailFilter() }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MailTab.values().forEach { t -> FilterChip(s.tab == t, { s.tab = t; s.vendor = null; s.account = null }, { Text(t.label) }) }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = PAD.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MailTab.values().forEach { t -> FilterChip(s.tab == t, { s.tab = t; s.filter = MailFilter() }, { Text(t.label) }) }
         }
-        val filter = s.vendor ?: s.account
-        if (filter != null) {
-            InputChip(true, { s.vendor = null; s.account = null }, { Text("$filter  ×", maxLines = 1, overflow = TextOverflow.Ellipsis) }, Modifier.padding(horizontal = PAD.dp))
+        s.filter.label?.let { label ->
+            InputChip(true, { s.filter = MailFilter() }, { Text("$label  ×", maxLines = 1, overflow = TextOverflow.Ellipsis) }, Modifier.padding(horizontal = PAD.dp))
         }
         if (s.showList) {
             OutlinedTextField(
@@ -120,8 +118,9 @@ fun MailView(head: Long?, modifier: Modifier = Modifier) {
         s.error?.let { Text(it, Modifier.padding(horizontal = PAD.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
         when {
             s.showList -> MailList(s, context) { scope.launch { s.older() } }
-            s.tab == MailTab.VENDOR -> FacetList(s.vendors) { s.vendor = it }
-            else -> FacetList(s.accounts) { s.account = it }
+            s.tab == MailTab.CATEGORY -> FacetList(s.facets.categories) { s.filter = MailFilter(category = it) }
+            s.tab == MailTab.VENDOR -> FacetList(s.facets.vendors) { s.filter = MailFilter(vendor = it) }
+            else -> FacetList(s.facets.accounts) { s.filter = MailFilter(account = it) }
         }
     }
 }

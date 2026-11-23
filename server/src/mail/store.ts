@@ -1,9 +1,10 @@
-import type { MailFacet, MailFacets } from "@hx-aioa/protocol";
+import { categoryOf, type MailFacet, type MailFacets } from "@hx-aioa/protocol";
 
 type IdRow = { ev: string };
 type FacetRow = { k: string; n: number; m: number };
-export type MailRow = { ev: string; ts: number; account: string; vendor: string; frm: string; subj: string };
-export type MailQuery = { vendor?: string; account?: string; before?: number; q?: string; limit: number };
+export type MailRow = { ev: string; ts: number; account: string; vendor: string; frm: string; subj: string; cat: string };
+export type MailQuery = { vendor?: string; account?: string; category?: string; before?: number; q?: string; limit: number };
+type FacetCol = "vendor" | "account" | "cat";
 
 // 统计结果缓存: 新信到达立即失效, 删信靠过期兜底
 const FACET_TTL_MS = 60_000;
@@ -25,15 +26,21 @@ export class MailStore {
       vendor TEXT NOT NULL,
       frm TEXT NOT NULL
     )`);
-    // 后加的列: 主题 (小写), 只用于关键词搜索
-    if (!sql.exec<{ name: string }>("PRAGMA table_info(mail)").toArray().some((c) => c.name === "subj")) sql.exec("ALTER TABLE mail ADD COLUMN subj TEXT");
+    // 后加的列: 主题 (小写, 只用于关键词搜索), 分类 (加列时按发件人补上旧信)
+    const cols = sql.exec<{ name: string }>("PRAGMA table_info(mail)").toArray().map((c) => c.name);
+    if (!cols.includes("subj")) sql.exec("ALTER TABLE mail ADD COLUMN subj TEXT");
+    if (!cols.includes("cat")) {
+      sql.exec("ALTER TABLE mail ADD COLUMN cat TEXT");
+      for (const r of sql.exec<{ ev: string; frm: string }>("SELECT ev, frm FROM mail").toArray()) sql.exec("UPDATE mail SET cat = ? WHERE ev = ?", categoryOf(r.frm), r.ev);
+    }
     sql.exec("CREATE INDEX IF NOT EXISTS mail_ts ON mail (ts)");
+    sql.exec("CREATE INDEX IF NOT EXISTS mail_cat ON mail (cat, ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_vendor ON mail (vendor, ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_account ON mail (account, ts)");
   }
 
   add(r: MailRow): void {
-    this.sql.exec("INSERT OR REPLACE INTO mail (ev, ts, account, vendor, frm, subj) VALUES (?, ?, ?, ?, ?, ?)", r.ev, r.ts, r.account, r.vendor, r.frm, r.subj.toLowerCase());
+    this.sql.exec("INSERT OR REPLACE INTO mail (ev, ts, account, vendor, frm, subj, cat) VALUES (?, ?, ?, ?, ?, ?, ?)", r.ev, r.ts, r.account, r.vendor, r.frm, r.subj.toLowerCase(), r.cat);
     this.cache = null;
   }
 
@@ -43,6 +50,7 @@ export class MailStore {
     const args: (string | number)[] = [];
     if (q.vendor) (where.push("m.vendor = ?"), args.push(q.vendor));
     if (q.account) (where.push("m.account = ?"), args.push(q.account));
+    if (q.category) (where.push("m.cat = ?"), args.push(q.category));
     if (q.before) (where.push("m.ts < ?"), args.push(q.before));
     // 关键词只扫索引表 (短字段), 不碰消息正文
     if (q.q) (where.push(`(m.subj LIKE ? ESCAPE '${LIKE_ESCAPE}' OR m.frm LIKE ? ESCAPE '${LIKE_ESCAPE}')`), args.push(likeOf(q.q), likeOf(q.q)));
@@ -55,12 +63,12 @@ export class MailStore {
 
   facets(now = Date.now()): MailFacets {
     if (this.cache && now - this.cache.at < FACET_TTL_MS) return this.cache.v;
-    const v = { vendors: this.facet("vendor"), accounts: this.facet("account") };
+    const v = { vendors: this.facet("vendor"), accounts: this.facet("account"), categories: this.facet("cat") };
     this.cache = { at: now, v };
     return v;
   }
 
-  private facet(col: "vendor" | "account"): MailFacet[] {
+  private facet(col: FacetCol): MailFacet[] {
     return this.sql
       .exec<FacetRow>(`SELECT m.${col} AS k, COUNT(*) AS n, MAX(m.ts) AS m FROM mail m ${ALIVE} GROUP BY m.${col} ORDER BY m DESC`)
       .toArray()

@@ -38,7 +38,7 @@ export const beszel: Adapter = ({ body, source }) => {
   return [event(title, severity, { ...ex })];
 };
 
-// Healthchecks: 推荐的请求体模板见 docs/api-v1.md, 也兼容表单与 query 形式的 $NAME / $STATUS
+// Healthchecks: 推荐的请求体模板见 docs/api/v1.md, 也兼容表单与 query 形式的 $NAME / $STATUS
 export const healthchecks: Adapter = ({ body }) => {
   if (!isObj(body)) return "Healthchecks 请求体必须是对象";
   const name = s(body.name) || s(body.check) || "check";

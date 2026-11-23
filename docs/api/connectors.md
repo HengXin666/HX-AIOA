@@ -1,6 +1,6 @@
 # HX-AIOA API v1: 来源适配器 (#3)
 
-接入总览见 [api-v1.md](api-v1.md) §3。适配器实现在 `server/src/adapters/`, 来源类型登记在 `SOURCE_TYPE_INFOS`, 类型定义在 `protocol/src/v1/source.ts`。
+接入总览见 [接口总览](v1.md) §3。适配器实现在 `server/src/adapters/`, 来源类型登记在 `SOURCE_TYPE_INFOS`, 类型定义在 `protocol/src/v1/source.ts`。
 
 ## 1. 接入步骤
 
@@ -53,7 +53,7 @@ Beszel 通过 shoutrrr 发通知, 地址写 `generic://<域名>/api/v1/hooks/bes
 
 ### netdata / prometheus (指标)
 
-只产出 `metric`, 字段统一换成标准名 (`cpu`, `mem`, `disk`, `load` 等), 工作台组件按 `subject + field` 绑定, 与来源无关, 详见 [api-v1-spaces.md](api-v1-spaces.md) §1。
+只产出 `metric`, 字段统一换成标准名 (`cpu`, `mem`, `disk`, `load` 等), 工作台组件按 `subject + field` 绑定, 与来源无关, 详见 [工作台接口](spaces.md) §1。
 
 - netdata: 拉取 `/api/v1/allmetrics?format=json`, 整体 POST 一次; subject 取来源上配置的 `subject`。
 - prometheus: 拉取 `/api/v1/query`, `itemsPath` 填 `data.result`, 每条 POST 一次; 字段取 `field` 标签 (用 `label_replace` 打上), subject 取 `subject` 标签或 `instance`。

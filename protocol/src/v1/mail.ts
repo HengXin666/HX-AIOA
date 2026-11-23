@@ -17,7 +17,7 @@ export type ChatView = (typeof CHAT_VIEWS)[number];
  * body: 有完整正文可取 (GET /mail/{id}/body), html 为原版网页, text 为长纯文本。
  * spoof: 发件域名的 DMARC 校验失败, 可能是冒充。
  */
-export type MailInfo = { from: string; name?: string; to: string; vendor: string; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
+export type MailInfo = { from: string; name?: string; to: string; vendor: string; category?: MailCategory; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
 export type MailBodyKind = "html" | "text";
 /** GET /mail/{id}/body: 统一给 HTML (纯文本已转成可显示的 HTML)。 */
 export type MailBody = { html: string };
@@ -27,7 +27,7 @@ export type MailInput = { from: string; name?: string; to: string; subject?: str
 
 export type MailList = { messages: Envelope[]; more: boolean };
 export type MailFacet = { key: string; count: number; last: number };
-export type MailFacets = { vendors: MailFacet[]; accounts: MailFacet[] };
+export type MailFacets = { vendors: MailFacet[]; accounts: MailFacet[]; categories: MailFacet[] };
 
 export const PATH_MAIL = `${API_V1}/mail`;
 export const PATH_MAIL_FACETS = `${API_V1}/mail/facets`;
@@ -35,6 +35,7 @@ export const PATH_MAIL_HX_EMAIL = `${API_V1}/mail/hx-email`;
 export const PATH_MAIL_BODY = `${API_V1}/mail/{id}/body`;
 export const QUERY_VENDOR = "vendor";
 export const QUERY_ACCOUNT = "account";
+export const QUERY_CATEGORY = "category";
 // 关键词: 匹配主题与发件地址
 export const QUERY_MAIL_SEARCH = "q";
 export const MAIL_SEARCH_MAX = 64;
@@ -46,58 +47,107 @@ export const MAX_MAIL_TEXT = 200_000;
 // CF 路由收到的原版 HTML 存 R2, 上限放宽到 2MB
 export const MAX_MAIL_HTML = 2 * 1024 * 1024;
 
-// 发件域名 -> 厂商名; 子域名也算 (mail.github.com -> GitHub)
-const VENDORS: Record<string, string> = {
-  "openai.com": "GPT",
-  "chatgpt.com": "GPT",
-  "anthropic.com": "Claude",
-  "github.com": "GitHub",
-  "gitlab.com": "GitLab",
-  "google.com": "Google",
-  "youtube.com": "YouTube",
-  "microsoft.com": "Microsoft",
-  "outlook.com": "Microsoft",
-  "live.com": "Microsoft",
-  "apple.com": "Apple",
-  "icloud.com": "Apple",
-  "cloudflare.com": "Cloudflare",
-  "amazon.com": "Amazon",
-  "aws.amazon.com": "AWS",
-  "x.com": "X",
-  "twitter.com": "X",
-  "discord.com": "Discord",
-  "telegram.org": "Telegram",
-  "steampowered.com": "Steam",
-  "bilibili.com": "B站",
-  "qq.com": "QQ",
-  "tencent.com": "腾讯",
-  "alipay.com": "支付宝",
-  "aliyun.com": "阿里云",
-  "jetbrains.com": "JetBrains",
-  "vercel.com": "Vercel",
-  "npmjs.com": "npm",
-  "docker.com": "Docker",
-  "linear.app": "Linear",
-  "notion.so": "Notion",
-  "figma.com": "Figma",
-  "stripe.com": "Stripe",
-  "paypal.com": "PayPal",
+// 分类: 先查厂商表, 认不出的按域名里的关键词猜, 再不行归 "其他"
+export const MAIL_CATEGORIES = ["AI", "开发", "云服务", "账号安全", "金融", "购物", "社交", "影音", "游戏", "办公", "教育", "政务", "其他"] as const;
+export type MailCategory = (typeof MAIL_CATEGORIES)[number];
+export const MAIL_CATEGORY_OTHER: MailCategory = "其他";
+
+// 发件域名 -> [厂商名, 分类]; 子域名也算 (mail.github.com -> GitHub)
+const VENDORS: Record<string, [string, MailCategory]> = {
+  "openai.com": ["GPT", "AI"],
+  "chatgpt.com": ["GPT", "AI"],
+  "anthropic.com": ["Claude", "AI"],
+  "github.com": ["GitHub", "开发"],
+  "gitlab.com": ["GitLab", "开发"],
+  "google.com": ["Google", "账号安全"],
+  "youtube.com": ["YouTube", "影音"],
+  "microsoft.com": ["Microsoft", "账号安全"],
+  "outlook.com": ["Microsoft", "账号安全"],
+  "live.com": ["Microsoft", "账号安全"],
+  "apple.com": ["Apple", "账号安全"],
+  "icloud.com": ["Apple", "账号安全"],
+  "cloudflare.com": ["Cloudflare", "云服务"],
+  "amazon.com": ["Amazon", "购物"],
+  "aws.amazon.com": ["AWS", "云服务"],
+  "x.com": ["X", "社交"],
+  "twitter.com": ["X", "社交"],
+  "discord.com": ["Discord", "社交"],
+  "telegram.org": ["Telegram", "社交"],
+  "steampowered.com": ["Steam", "游戏"],
+  "bilibili.com": ["B站", "影音"],
+  "qq.com": ["QQ", "社交"],
+  "tencent.com": ["腾讯", "社交"],
+  "alipay.com": ["支付宝", "金融"],
+  "aliyun.com": ["阿里云", "云服务"],
+  "jetbrains.com": ["JetBrains", "开发"],
+  "vercel.com": ["Vercel", "云服务"],
+  "npmjs.com": ["npm", "开发"],
+  "docker.com": ["Docker", "开发"],
+  "linear.app": ["Linear", "办公"],
+  "notion.so": ["Notion", "办公"],
+  "figma.com": ["Figma", "办公"],
+  "stripe.com": ["Stripe", "金融"],
+  "paypal.com": ["PayPal", "金融"],
+  "huggingface.co": ["Hugging Face", "AI"],
+  "deepseek.com": ["DeepSeek", "AI"],
+  "x.ai": ["Grok", "AI"],
+  "gemini.google.com": ["Gemini", "AI"],
+  "netlify.com": ["Netlify", "云服务"],
+  "digitalocean.com": ["DigitalOcean", "云服务"],
+  "oracle.com": ["Oracle", "云服务"],
+  "epicgames.com": ["Epic", "游戏"],
+  "netflix.com": ["Netflix", "影音"],
+  "spotify.com": ["Spotify", "影音"],
+  "slack.com": ["Slack", "办公"],
+  "zoom.us": ["Zoom", "办公"],
+  "taobao.com": ["淘宝", "购物"],
+  "jd.com": ["京东", "购物"],
+  "wise.com": ["Wise", "金融"],
+  "stackoverflow.com": ["Stack Overflow", "开发"],
+  "pypi.org": ["PyPI", "开发"],
 };
+
+// 不认识的域名: 按关键词猜分类, 顺序即优先级; 关键词须在域名段开头 (避免 display 命中 play)
+const seg = (words: string) => new RegExp(`(^|[.-])(${words})`);
+const GUESS: [RegExp, MailCategory][] = [
+  [/(^|\.)(edu|ac)(\.[a-z]{2})?$/, "教育"],
+  [seg("universit|school|college"), "教育"],
+  [/(^|\.)gov(\.[a-z]{2})?$/, "政务"],
+  [seg("bank|pay|card|financ|invest|insur|wallet"), "金融"],
+  [seg("shop|store|mall|order|deliver|express"), "购物"],
+  [seg("game|play|esport"), "游戏"],
+  [seg("cloud|host|vps|cdn|dns"), "云服务"],
+  [/(^|[.-])ai[.-]|\.ai$/, "AI"],
+  [seg("git|dev|code|api"), "开发"],
+  [seg("music|video|tv|movie|news"), "影音"],
+];
 
 export function domainOf(addr: string): string {
   const at = addr.lastIndexOf("@");
   return (at >= 0 ? addr.slice(at + 1) : addr).trim().toLowerCase().replace(/[>\s].*$/, "");
 }
 
-/** 认识的厂商给名字, 不认识的用主域名 (a.b.example.com -> example.com)。 */
-export function vendorOf(addr: string): string {
-  const d = domainOf(addr);
-  for (let cur = d; cur.includes("."); cur = cur.slice(cur.indexOf(".") + 1)) {
+const known = (domain: string): [string, MailCategory] | undefined => {
+  for (let cur = domain; cur.includes("."); cur = cur.slice(cur.indexOf(".") + 1)) {
     const v = VENDORS[cur];
     if (v) return v;
   }
+  return undefined;
+};
+
+/** 认识的厂商给名字, 不认识的用主域名 (a.b.example.com -> example.com)。 */
+export function vendorOf(addr: string): string {
+  const d = domainOf(addr);
+  const v = known(d);
+  if (v) return v[0];
   const parts = d.split(".").filter(Boolean);
   return parts.length >= 2 ? parts.slice(-2).join(".") : d || "未知";
+}
+
+/** 按发件域名自动分类。 */
+export function categoryOf(addr: string): MailCategory {
+  const d = domainOf(addr);
+  return known(d)?.[1] ?? GUESS.find(([re]) => re.test(d))?.[1] ?? MAIL_CATEGORY_OTHER;
 }
 
 const CODE_HINT = /(验证码|校验码|动态码|code|otp|verification|verify|passcode|一次性)/i;

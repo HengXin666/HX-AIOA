@@ -15,7 +15,7 @@
 | `src/v1/space-layout.ts` | 工作台显示状态 (排序, 尺寸, 隐藏) 的解析与排序, 服务端解析的当前值 `SpaceData` |
 | `src/v1/metric-fields.ts` | 标准指标字段与各来源 (探针, Beszel, Netdata, Prometheus) 的别名 |
 
-v1 契约见 `docs/api-v1.md`, `docs/api-v1-stream.md`, `docs/api-v1-connectors.md`, `docs/api-v1-spaces.md`。下文是旧版 `/ws` 协议, 继续可用: 服务端内部已统一为事件模型, 旧客户端收到的 `msg` 帧由事件压成一行文本生成, `seq` 与新模型连续。
+v1 契约见 `docs/api/v1.md`, `docs/api/stream.md`, `docs/api/connectors.md`, `docs/api/spaces.md`。下文是旧版 `/ws` 协议, 继续可用: 服务端内部已统一为事件模型, 旧客户端收到的 `msg` 帧由事件压成一行文本生成, `seq` 与新模型连续。
 
 ## 旧版 /ws 协议
 
@@ -55,7 +55,7 @@ wss://<域名>/ws?token=<令牌>&device=<设备 id>&since=<已收到的最大 se
 | `metric` | `subject`, `points`, `history?` | 转发自探针, 只发给在看的连接 |
 | `demand` | `subjects`, `intervalMs` | 仅探针: 需要实时推送的主体 |
 
-指标细节见 `docs/metrics.md`。
+指标细节见 `docs/features/metrics.md`。
 
 `body` 目前只有 `{ "kind": "text", "text": "..." }`, 后续微页面组件会扩展为 `{ "kind": "ui", "tree": ... }`。
 

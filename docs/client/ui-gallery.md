@@ -35,4 +35,4 @@
 
 ## 连真数据
 
-设置 `AIOA_SERVER`, `AIOA_TOKEN`, `AIOA_SUBJECT` 后画廊总览页的 CPU 和内存改用探针实时数据, 详见 `docs/metrics.md`。
+设置 `AIOA_SERVER`, `AIOA_TOKEN`, `AIOA_SUBJECT` 后画廊总览页的 CPU 和内存改用探针实时数据, 详见 `docs/features/metrics.md`。

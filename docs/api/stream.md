@@ -1,6 +1,6 @@
 # HX-AIOA API v1: WebSocket 流
 
-HTTP 接口与数据类型见 [api-v1.md](api-v1.md)。本文是 `/api/v1/stream` 的帧契约。
+HTTP 接口与数据类型见 [接口总览](v1.md)。本文是 `/api/v1/stream` 的帧契约。
 
 ## 1. 连接
 

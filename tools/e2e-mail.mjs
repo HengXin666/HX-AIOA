@@ -66,6 +66,11 @@ check("翻页 before", older.data.messages.every((m) => m.ts < first.ts), older.
 const f = await call("GET", `${V1}/mail/facets`);
 const accB = f.data.accounts?.find((x) => x.key === ACC_B);
 check("统计: 厂商与账号", f.data.vendors?.some((x) => x.key === "GPT") && accB?.count === 1, f.data);
+check("统计: 分类", f.data.categories?.some((x) => x.key === "AI") && f.data.categories?.some((x) => x.key === "开发"), f.data);
+const byCat = await call("GET", `${V1}/mail?category=${encodeURIComponent("开发")}`);
+// 旧库升级时只补索引的分类, 所以只看本轮的信
+const mine = byCat.data.messages.filter((m) => m.data.title.includes(RUN));
+check("按分类筛选", mine.length > 0 && mine.every((m) => m.data.mail.category === "开发") && byCat.data.messages.every((m) => m.data.mail.vendor !== "GPT"), byCat.data);
 const chats = await call("GET", `${V1}/chats`);
 const list = Array.isArray(chats.data) ? chats.data : chats.data.chats ?? [];
 const mailChat = list.find((c) => c.channel === "mail");

@@ -1,6 +1,6 @@
 # 接入数据源
 
-数据源就是 "事件从哪里来": GitHub 仓库, Uptime Kuma, 自己的脚本等。每个数据源创建时会绑定一把接入 key, 外部系统用它把事件推进来。适配器细节见 [api-v1-connectors.md](api-v1-connectors.md)。
+数据源就是 "事件从哪里来": GitHub 仓库, Uptime Kuma, 自己的脚本等。每个数据源创建时会绑定一把接入 key, 外部系统用它把事件推进来。适配器细节见 [接入适配器](../api/connectors.md)。
 
 ## 1. 前提
 
@@ -33,7 +33,7 @@
 
 ### GitHub 页面与 GITHUB_TOKEN (可选)
 
-App 的 GitHub 页面展示每个仓库的 stars, 开放 PR / Issue, 最近推送, CI 状态与动态, 接口见 [api-v1-github.md](api-v1-github.md)。只靠 webhook 时, 接入之前已经存在的 PR 和 Issue 看不到; 配上只读令牌后服务端会回填, 并每 30 分钟自动同步一次。
+App 的 GitHub 页面展示每个仓库的 stars, 开放 PR / Issue, 最近推送, CI 状态与动态, 接口见 [GitHub 接口](../api/github.md)。只靠 webhook 时, 接入之前已经存在的 PR 和 Issue 看不到; 配上只读令牌后服务端会回填, 并每 30 分钟自动同步一次。
 
 1. 打开 GitHub Settings → Developer settings → Fine-grained personal access tokens → Generate new token。
 2. Repository access 选要展示的仓库 (或 All repositories)。
@@ -84,7 +84,7 @@ curl -s -X DELETE "$SERVER/api/v1/sources/{id}" -H "Authorization: Bearer $TOKEN
 
 在 App 里选对应类型创建, 详情页给出:
 
-- 有适配器的类型 (通用 Webhook, Uptime Kuma, Beszel, Healthchecks, Netdata, Prometheus): 一个带 `?key=` 的 Webhook 地址, 直接填进对方系统的通知设置。各类型的具体填法见详情页的配置说明与 [api-v1-connectors.md](api-v1-connectors.md)。
+- 有适配器的类型 (通用 Webhook, Uptime Kuma, Beszel, Healthchecks, Netdata, Prometheus): 一个带 `?key=` 的 Webhook 地址, 直接填进对方系统的通知设置。各类型的具体填法见详情页的配置说明与 [接入适配器](../api/connectors.md)。
 - 没有适配器的类型 (脚本, Agent, 探针, 邮件, 拉取任务): 给出事件接口 `/api/v1/events` 与 key, 请求头 `Authorization: Bearer <key>`。
 
 curl 方式同样是 `POST /api/v1/sources` 带 `"key":{}`, 把 `type` 换成对应类型, 再用 `key.webhookUrls[适配器]?key=<key.key>` 作为对方的推送地址。例如通用 Webhook:

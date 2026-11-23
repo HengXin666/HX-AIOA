@@ -5,7 +5,7 @@ import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
 import { gql } from "./api-cf";
 
-// CF 总览: 按根域名 (zone) 看流量, 再看域名下挂的服务 (Worker / Pages); 见 docs/cf-usage.md
+// CF 总览: 按根域名 (zone) 看流量, 再看域名下挂的服务 (Worker / Pages); 见 docs/deploy/cf-usage.md
 const REST = "https://api.cloudflare.com/client/v4";
 const CACHE_MS = 5 * 60_000;
 const HOUR_MS = 3_600_000;

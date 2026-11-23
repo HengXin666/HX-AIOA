@@ -48,18 +48,24 @@ HX-Email → 设置 → 通知 → Webhook:
 
 ## 存储
 
-- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, code, via, body, spoof }`; 标题是主题, 摘要是正文前 500 字
+- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, category, code, via, body, spoof }`; 标题是主题, 摘要是正文前 500 字
 - 完整正文 (HTML 原文, 或超过 500 字的纯文本) 存 R2 (`data.file`), 库里只留摘要, 删信时随引用计数一起删; `body` 为 `html` / `text`。CF 入口的 HTML 上限 2MB。没绑 R2 时 HTML 不超过 64KB 才内联保存
 - `spoof`: CF 校验头里发件域名 DMARC 失败 (经 Gmail 等可信转发时看转发方那一跳), 显示 "可疑", 带验证码也不响铃
 - 同一个 Message-ID 再来只覆盖, 不重复 (HX-Email 用 `hx-email:<message_id>`)
-- 另有 `mail` 索引表 (事件 id, 时间, 账号, 厂商, 发件人, 主题), 筛选, 搜索和统计只走索引; 消息删掉或清空后自动不算, 每天清理一次残留索引
+- 另有 `mail` 索引表 (事件 id, 时间, 账号, 厂商, 分类, 发件人, 主题), 筛选, 搜索和统计只走索引; 消息删掉或清空后自动不算, 每天清理一次残留索引
 - 统计在内存缓存 1 分钟, 新信到达立即失效
 - 有验证码的信优先级为 "需要我", 会响铃; 其余为 "值得看"
 
 ## 查询 (主人)
 
-- `GET /api/v1/mail?vendor=&account=&q=&before=&limit=`: 按时间倒序, `q` 匹配主题与发件地址, `before` 为上一页最后一封的 `ts`, 返回 `{ messages, more }` (不带内联 HTML)
+- `GET /api/v1/mail?category=&vendor=&account=&q=&before=&limit=`: 按时间倒序, `q` 匹配主题与发件地址, `before` 为上一页最后一封的 `ts`, 返回 `{ messages, more }` (不带内联 HTML)
 - `GET /api/v1/mail/{id}/body`: 完整正文 `{ html }`, 纯文本已转成可显示的 HTML; 没有完整正文的信返回 404
-- `GET /api/v1/mail/facets`: `{ vendors, accounts }`, 每项 `{ key, count, last }`
+- `GET /api/v1/mail/facets`: `{ categories, vendors, accounts }`, 每项 `{ key, count, last }`
 
-厂商表在 `protocol/src/v1/mail.ts`, 认不出的用发件人主域名。
+## 厂商与分类
+
+厂商表在 `protocol/src/v1/mail.ts`: 发件域名 (含子域名) -> 厂商名 + 分类, 认不出的厂商用发件人主域名。
+
+分类: AI, 开发, 云服务, 账号安全, 金融, 购物, 社交, 影音, 游戏, 办公, 教育, 政务, 其他。厂商表优先; 不在表里的按域名关键词猜 (如 `.edu` 归教育, `bank-` 开头的段归金融), 都不中归 "其他"。旧库升级时按发件人补上分类。
+
+计划: 用户自定义映射表 (域名 -> 厂商 / 分类 / 图标), 图标可取邮件里的 BIMI 标志 (`BIMI-Location` 头) 作为权威来源。

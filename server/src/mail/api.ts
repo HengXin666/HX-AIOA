@@ -9,6 +9,7 @@ import {
   PATH_MAIL_HX_EMAIL,
   QUERY_ACCOUNT,
   QUERY_BEFORE,
+  QUERY_CATEGORY,
   QUERY_LIMIT,
   QUERY_MAIL_SEARCH,
   QUERY_VENDOR,
@@ -44,6 +45,7 @@ function list(c: ReqCtx): Response {
     limit,
     vendor: q.get(QUERY_VENDOR) || undefined,
     account: q.get(QUERY_ACCOUNT) || undefined,
+    category: q.get(QUERY_CATEGORY) || undefined,
     before: clampInt(q.get(QUERY_BEFORE), 0, Number.MAX_SAFE_INTEGER) || undefined,
     q: q.get(QUERY_MAIL_SEARCH)?.trim().slice(0, MAIL_SEARCH_MAX) || undefined,
   });

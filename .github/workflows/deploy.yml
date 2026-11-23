@@ -38,11 +38,11 @@ jobs:
       - name: 检查部署凭据
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::缺少 CLOUDFLARE_API_TOKEN, 配置方法见 docs/cloudflare-deploy.md"
+            echo "::error::缺少 CLOUDFLARE_API_TOKEN, 配置方法见 docs/deploy/cloudflare.md"
             exit 1
           fi
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID, 配置方法见 docs/cloudflare-deploy.md"
+            echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID, 配置方法见 docs/deploy/cloudflare.md"
             exit 1
           fi
 

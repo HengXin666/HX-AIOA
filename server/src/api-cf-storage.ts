@@ -5,7 +5,7 @@ import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
 import { gql } from "./api-cf";
 
-// CF 存储总览: R2 桶 / KV 命名空间 / D1 数据库的大小与本期用量, 对照免费额度; 见 docs/cf-usage.md
+// CF 存储总览: R2 桶 / KV 命名空间 / D1 数据库的大小与本期用量, 对照免费额度; 见 docs/deploy/cf-usage.md
 const REST = "https://api.cloudflare.com/client/v4";
 const CACHE_MS = 5 * 60_000;
 const DAY_MS = 86_400_000;

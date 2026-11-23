@@ -50,7 +50,7 @@
 - 使唤提示词存服务端; Agent 挂了点 "重新接入" 作废旧 key 拿新提示词。
 - 可授权 Agent 读别的群 (`events:read` + 群白名单), 用来做精选; 群可标成日报 / 周报, 长按消息可 "收录" 进去。
 - 免打扰的群照常收消息但不响铃 (:link 进程读 muted-groups.txt)。
-- 接口见 `docs/api-v1-chat.md`。
+- 接口见 `docs/api/chat.md`。
 
 ## 验收
 

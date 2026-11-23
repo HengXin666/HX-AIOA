@@ -9,7 +9,7 @@ const CACHE_MS = 10 * 60_000;
 const DAY_MS = 86_400_000;
 const ROWS = 100;
 
-// 免费计划每日额度 (UTC 0 点重置), 见 docs/cf-usage.md
+// 免费计划每日额度 (UTC 0 点重置), 见 docs/deploy/cf-usage.md
 export const CF_LIMITS = [
   { key: "workerRequests", label: "Worker 请求", limit: 100_000, unit: "次" },
   { key: "doRequests", label: "DO 请求 (原始计数, 偏保守)", limit: 100_000, unit: "次" },
