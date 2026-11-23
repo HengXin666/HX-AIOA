@@ -23,6 +23,8 @@ interface SpaceSource {
     fun tasks(): List<TaskCardData>
     fun chat(taskId: String): List<ChatLine>
     fun clock(ts: Long): String
+    /** 群下的待办; null 表示还在加载。 */
+    fun todos(subject: String): List<TodoRow>? = emptyList()
 }
 
 /** 组件上的用户操作; 危险按钮的二次确认由实现方负责。 */
@@ -31,6 +33,8 @@ interface SpaceHandler {
     fun option(task: TaskCardData, option: TaskOption)
     fun ask(taskId: String, text: String)
     fun layout(space: Space, change: LayoutChange)
+    fun todo(subject: String, row: TodoRow, done: Boolean) {}
+    fun openTodo(subject: String, row: TodoRow) {}
 }
 
 const val ANY_SUBJECT = "*"

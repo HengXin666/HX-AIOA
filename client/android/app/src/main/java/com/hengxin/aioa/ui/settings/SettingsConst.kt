@@ -20,6 +20,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     MEMBERS("成员与邀请", "user"),
     SOURCES("数据源", "send"),
     INTEGRATIONS("接入总览", "bot"),
+    PLUGINS("插件市场", "puzzle"),
     SERVER("服务端", "server"),
     PROXY("代理", "plug"),
     LINK_LOG("连接日志", "file-text"),

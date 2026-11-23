@@ -24,6 +24,7 @@ export const CATEGORY_OF: Record<ItemType, ItemCategory> = {
   approval: "interaction",
   button: "action",
   report: "reading",
+  todo: "list",
 };
 // 这些组件读指标, 必须绑定; 图表还必须写明它回答什么问题
 export const BIND_REQUIRED: readonly ItemType[] = ["value", "sparkline", "line", "ring", "status_grid"];

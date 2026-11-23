@@ -3,6 +3,7 @@ import { renderLine } from "./chart";
 import type { Ctx } from "./frame";
 import { renderApproval, renderChat } from "./interact";
 import { renderButton, renderList, renderReport, renderStatusGrid, renderTaskCard } from "./lists";
+import { renderTodo } from "./todo";
 import { renderRing, renderSparkline, renderValue } from "./metric";
 
 const RENDERERS: Record<ItemType, (ctx: Ctx) => HTMLElement> = {
@@ -17,6 +18,7 @@ const RENDERERS: Record<ItemType, (ctx: Ctx) => HTMLElement> = {
   button: renderButton,
   chat: renderChat,
   approval: renderApproval,
+  todo: renderTodo,
 };
 
 export function renderItem(ctx: Ctx): HTMLElement {

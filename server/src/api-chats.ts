@@ -48,7 +48,7 @@ const IMAGE_PREFIX = "image/";
 
 const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
 // 线上一律给 https 地址, 本地调试保持原样
-const baseOf = (u: URL) => (LOCAL_HOSTS.includes(u.hostname) ? u.origin : `https://${u.host}`);
+export const baseOf = (u: URL) => (LOCAL_HOSTS.includes(u.hostname) ? u.origin : `https://${u.host}`);
 const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -207,20 +207,38 @@ function titleOf(core: Core, channel: string): string {
   return core.chats.chat(channel)?.title || channel;
 }
 
+// 新建接入: 来源 + key + 群资料里的一项; 插件安装也走这里
+export async function createAgent(core: Core, channel: string, name: string, reads: string[], plugin?: string): Promise<{ agent: ChatAgent; key: string }> {
+  const src = core.registry.createSource({ name, type: "agent", channel });
+  const draft = { name, sourceId: src.id, reads };
+  const { info, key } = await issueKey(core, channel, draft);
+  src.keyId = info.id;
+  core.registry.saveSource(src);
+  const agent: ChatAgent = { ...draft, keyId: info.id, created: Date.now(), pending: true, ...(plugin ? { plugin } : {}) };
+  saveAgents(core, channel, [...(core.chats.chat(channel)?.agents ?? []), agent]);
+  return { agent, key };
+}
+
+export function dropAgent(core: Core, channel: string, keyId: string): void {
+  const meta = core.chats.chat(channel);
+  const old = agentOf(meta, keyId);
+  core.registry.deleteSource(old.sourceId);
+  core.registry.deleteKey(old.keyId);
+  saveAgents(core, channel, (meta?.agents ?? []).filter((x) => x.keyId !== old.keyId));
+}
+
+// 专属指令: 插件装的 Agent 额外带上插件提示词
+function guideFor(core: Core, base: string, channel: string, agent: ChatAgent) {
+  const title = titleOf(core, channel);
+  return agentGuide(base, channel, title, agent, agent.plugin ? core.plugins.promptFor(agent.plugin, base, channel, title) : undefined);
+}
+
 async function addAgent(c: ReqCtx): Promise<Response> {
   const channel = param(c, 0);
   const p = parseAgent(await readJson(c.req), false);
   if (typeof p === "string") return fail(400, p);
-  const meta = c.core.chats.chat(channel);
-  const agents = meta?.agents ?? [];
-  if (agents.length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
-  const src = c.core.registry.createSource({ name: p.name!, type: "agent", channel });
-  const draft = { name: p.name!, sourceId: src.id, reads: p.reads ?? [] };
-  const { info, key } = await issueKey(c.core, channel, draft);
-  src.keyId = info.id;
-  c.core.registry.saveSource(src);
-  const agent: ChatAgent = { ...draft, keyId: info.id, created: Date.now(), pending: true };
-  saveAgents(c.core, channel, [...agents, agent]);
+  if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
+  const { agent, key } = await createAgent(c.core, channel, p.name!, p.reads ?? []);
   return json({ agent, prompt: agentBootstrap(baseOf(c.url), agent, key) } satisfies OnboardResult);
 }
 
@@ -246,10 +264,9 @@ async function patchAgent(c: ReqCtx): Promise<Response> {
   const p = parseAgent(await readJson(c.req), true);
   if (typeof p === "string") return fail(400, p);
   const base = baseOf(c.url);
-  const title = titleOf(c.core, channel);
   const agent: ChatAgent = { ...old, ...p };
   // 指令内容变了, 等它下次拉取后重新报到
-  if (agentGuide(base, channel, title, agent).version !== agentGuide(base, channel, title, old).version) agent.pending = true;
+  if (guideFor(c.core, base, channel, agent).version !== guideFor(c.core, base, channel, old).version) agent.pending = true;
   // 读权限变了就改 key 的白名单与 scope, key 本身不变
   const key = c.core.registry.key(old.keyId);
   if (key && p.reads) {
@@ -264,19 +281,14 @@ async function patchAgent(c: ReqCtx): Promise<Response> {
 }
 
 function removeAgent(c: ReqCtx): Response {
-  const channel = param(c, 0);
-  const meta = c.core.chats.chat(channel);
-  const old = agentOf(meta, param(c, 1));
-  c.core.registry.deleteSource(old.sourceId);
-  c.core.registry.deleteKey(old.keyId);
-  saveAgents(c.core, channel, (meta?.agents ?? []).filter((x) => x.keyId !== old.keyId));
+  dropAgent(c.core, param(c, 0), param(c, 1));
   return json({ ok: true });
 }
 
 function agentPromptOf(c: ReqCtx): Response {
   const channel = param(c, 0);
   const agent = agentOf(c.core.chats.chat(channel), param(c, 1));
-  return json({ agent, prompt: agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent).text });
+  return json({ agent, prompt: guideFor(c.core, baseOf(c.url), channel, agent).text });
 }
 
 // 按 key 找到它所在的群和 Agent 资料
@@ -291,14 +303,14 @@ function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAg
 
 function agentGuideOf(c: ReqCtx): Response {
   const { channel, agent } = agentByKey(c);
-  const g = agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent);
+  const g = guideFor(c.core, baseOf(c.url), channel, agent);
   return new Response(g.text, { headers: { "Content-Type": MARKDOWN, [HEADER_GUIDE_VERSION]: g.version } });
 }
 
 async function agentAck(c: ReqCtx): Promise<Response> {
   const { channel, meta, agent } = agentByKey(c);
   const raw = await readJson(c.req);
-  const g = agentGuide(baseOf(c.url), channel, titleOf(c.core, channel), agent);
+  const g = guideFor(c.core, baseOf(c.url), channel, agent);
   if (!isObj(raw) || raw.version !== g.version) return fail(409, `指令已更新到 ${g.version}, 请重新 GET ${PATH_AGENT_GUIDE}`);
   const next: ChatAgent = { ...agent, joined: Date.now(), pending: false };
   saveAgents(c.core, channel, (meta.agents ?? []).map((x) => (x.keyId === agent.keyId ? next : x)));

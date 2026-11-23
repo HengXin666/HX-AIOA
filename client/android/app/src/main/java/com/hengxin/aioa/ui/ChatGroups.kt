@@ -74,6 +74,9 @@ class ChatGroups(
     var favoritesOpen by mutableStateOf(false)
     // 从邀请链接拉起 App 时带来的邀请码, 群列表看到后弹出加入框
     var pendingInvite by mutableStateOf<String?>(null)
+    /** 别的页要求打开某个群时加一, 主界面据此切到消息栏。 */
+    var focusTick by mutableStateOf(0)
+        private set
     val messages = mutableStateListOf<ServerFrame.Msg>()
     val pending = mutableStateListOf<Pending>()
     var replyTo by mutableStateOf<ServerFrame.Msg?>(null)
@@ -259,6 +262,21 @@ class ChatGroups(
         }
     }
 
+    /** 从待办, 插件页等处打开某个群; seq 大于 0 时再翻到那条消息。 */
+    fun openAt(key: String, seq: Long) {
+        openGroup(key)
+        focusTick += 1
+        if (seq <= 0) return
+        scope.launch {
+            var waited = 0
+            while (messages.isEmpty() && waited < OPEN_WAIT_TRIES) {
+                kotlinx.coroutines.delay(JUMP_POLL_MS)
+                waited++
+            }
+            jumpTo(seq)
+        }
+    }
+
     /** 点引用跳到原消息: 不在当前页就往前翻, 最多翻几页。 */
     fun jumpTo(seq: Long) {
         scope.launch {
@@ -380,5 +398,6 @@ class ChatGroups(
         const val REPLY_EXCERPT = 200
         const val MAX_JUMP_PAGES = 5
         const val JUMP_POLL_MS = 30L
+        const val OPEN_WAIT_TRIES = 40
     }
 }

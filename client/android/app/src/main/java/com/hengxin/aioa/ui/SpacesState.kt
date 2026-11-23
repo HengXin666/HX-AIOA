@@ -13,6 +13,7 @@ import com.hengxin.aioa.kit.ChatLine
 import com.hengxin.aioa.kit.ChatRole
 import com.hengxin.aioa.kit.LayoutChange
 import com.hengxin.aioa.kit.Space
+import com.hengxin.aioa.kit.TodoRow
 import com.hengxin.aioa.kit.apply
 import com.hengxin.aioa.net.Net
 import com.hengxin.aioa.proto.Envelope
@@ -35,6 +36,8 @@ private const val ROLE_USER = "user"
 private const val ROLE_SYSTEM = "system"
 private const val KEY_TEXT = "text"
 private const val JSON_TYPE = "application/json"
+private const val KEY_TODOS = "todos"
+private const val TOPIC_TODOS = "todos"
 
 /** 工作台的界面状态: 布局来自 space_update 帧, 用户的排序与尺寸 PUT 到服务端, 打开时取一次服务端解析好的当前值。 */
 class SpacesState(
@@ -48,6 +51,9 @@ class SpacesState(
     val logs = mutableStateMapOf<String, List<ChatLine>>()
     /** /data 接口带回的最近事件, 补充流里还没有的部分。 */
     val events = mutableStateMapOf<String, Envelope>()
+    /** 群下的待办: 组件第一次显示某个群时拉一次, 之后收到 todos 同步再拉。 */
+    val todos = mutableStateMapOf<String, List<TodoRow>>()
+    private val todoAsked = HashSet<String>()
     private val primed = HashSet<String>()
     private val asked = HashSet<String>()
 
@@ -62,6 +68,10 @@ class SpacesState(
                 val raw = JSONObject(frame.raw).optJSONObject("space") ?: return true
                 val space = runCatching { SpaceDecode.space(raw) }.getOrNull() ?: return true
                 if (i >= 0) spaces[i] = space else spaces.add(space)
+            }
+            is ServerFrame.ChatSync -> {
+                if (frame.topic != TOPIC_TODOS) return false
+                frame.channel?.takeIf { it in todoAsked }?.let(::loadTodos)
             }
             is ServerFrame.TaskLog -> {
                 if (frame.taskId in logs) logs[frame.taskId] = logs[frame.taskId].orEmpty() + line(frame.role, frame.text ?: frame.kind)
@@ -118,6 +128,35 @@ class SpacesState(
                 }
             }
         }
+    }
+
+    fun todos(channel: String): List<TodoRow>? {
+        if (todoAsked.add(channel)) loadTodos(channel)
+        return todos[channel]
+    }
+
+    /** 勾选本地先生效, 失败时以服务端为准重拉。 */
+    fun setTodo(channel: String, row: TodoRow, done: Boolean) {
+        val state = if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN
+        todos[channel] = todos[channel].orEmpty().map { if (it.id == row.id) it.copy(state = state, updated = System.currentTimeMillis()) else it }
+        val body = JSONObject().put(KEY_TODOS, JSONArray().put(JSONObject().put("id", row.id).put("state", state)))
+        io { if (call(url(Constants.CHATS_API, channel, KEY_TODOS), "POST", body) == null) loadTodos(channel) }
+    }
+
+    private fun loadTodos(channel: String) = io {
+        val arr = call(url(Constants.CHATS_API, channel, KEY_TODOS), "GET", null)?.optJSONArray(KEY_TODOS) ?: return@io
+        val rows = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { o ->
+            TodoRow(
+                id = o.optString("id"),
+                title = o.optString("title"),
+                note = o.optString("note").ifEmpty { null },
+                state = o.optString("state", TodoRow.STATE_OPEN),
+                prio = o.optInt("prio", 2),
+                src = o.optLong("src").takeIf { it > 0 },
+                updated = o.optLong("updated"),
+            )
+        }
+        withContext(Dispatchers.Main) { todos[channel] = rows }
     }
 
     private fun line(role: String, text: String) = ChatLine(

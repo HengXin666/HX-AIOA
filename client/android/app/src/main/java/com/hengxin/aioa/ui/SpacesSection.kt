@@ -26,6 +26,7 @@ import com.hengxin.aioa.kit.SpaceItem
 import com.hengxin.aioa.kit.SpaceSource
 import com.hengxin.aioa.kit.TaskCardData
 import com.hengxin.aioa.kit.TaskOption
+import com.hengxin.aioa.kit.TodoRow
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.OverviewItem
 
@@ -58,6 +59,8 @@ private class AppSpaceSource(private val chat: ChatModel) : SpaceSource {
     override fun chat(taskId: String): List<ChatLine> = chat.spaces.chat(taskId)
 
     override fun clock(ts: Long): String = com.hengxin.aioa.ui.clock(ts)
+
+    override fun todos(subject: String): List<TodoRow>? = chat.spaces.todos(subject)
 }
 
 /** 资源页顶部的工作台: 与 Web 渲染同一份 schema; 危险按钮与危险选项先二次确认。 */
@@ -96,6 +99,12 @@ fun SpacesSection(chat: ChatModel, only: String? = null) {
             }
 
             override fun layout(space: Space, change: LayoutChange) = chat.spaces.change(space, change)
+
+            override fun todo(subject: String, row: TodoRow, done: Boolean) = chat.spaces.setTodo(subject, row, done)
+
+            override fun openTodo(subject: String, row: TodoRow) {
+                row.src?.let { chat.groups.openAt(subject, it) }
+            }
         }
     }
     // 总览把每个工作台当一个看板: only 指定时只显示这一个

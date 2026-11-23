@@ -1,5 +1,8 @@
 import { attachFile } from "./files/api";
 import { FileStore } from "./files/store";
+import { Market } from "./plugins/market";
+import { PluginStore } from "./plugins/store";
+import { TodoStore } from "./plugins/todos";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -120,7 +123,7 @@ export class Hub extends DurableObject<Env> {
       ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
     };
     const chats = new ChatStore(sql);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

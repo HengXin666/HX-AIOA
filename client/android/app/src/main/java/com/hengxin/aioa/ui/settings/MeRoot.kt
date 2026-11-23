@@ -93,6 +93,8 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
             RowDivider()
             PageRow(SettingsPage.INTEGRATIONS, "", selected, open)
             RowDivider()
+            PageRow(SettingsPage.PLUGINS, "", selected, open)
+            RowDivider()
             NavRow(WORKSPACE_ICON, WORKSPACE_TITLE, if (summary.spaces > 0) "${summary.spaces} 个" else "未下发", onClick = openWorkspace)
         }
         SettingsGroup("连接") {

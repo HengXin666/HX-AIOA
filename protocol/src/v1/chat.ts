@@ -32,6 +32,8 @@ export type ChatAgent = {
   joined?: number;
   pending?: boolean;
   brief?: string;
+  // 由插件安装创建时为插件 id, 专属指令里会带上插件的提示词
+  plugin?: string;
 };
 export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest">>;
 export type AgentRequest = { name: string; reads?: string[] };
@@ -41,7 +43,7 @@ export type OnboardResult = { agent: ChatAgent; prompt: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
 export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取
-export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites"; channel?: string };
+export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos"; channel?: string };
 
 export const DIGEST_KINDS = ["daily", "weekly"] as const;
 export const MAX_BRIEF_LENGTH = 8000;

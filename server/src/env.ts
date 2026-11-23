@@ -17,4 +17,6 @@ export interface Env {
   TEMP_MAIL_DB?: D1Database;
   // 可选, 文件桶 (R2), 没绑定时文件接口返回 503
   FILES?: R2Bucket;
+  // 可选, 插件市场根地址 (本地测试指向本机目录服务); 不配就用仓库 main 分支的 plugins/
+  PLUGIN_MARKET?: string;
 }

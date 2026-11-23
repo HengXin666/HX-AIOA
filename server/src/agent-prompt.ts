@@ -26,13 +26,14 @@ export function agentBootstrap(base: string, agent: ChatAgent, key: string): str
     "3. 密钥单独存进本地私密配置 (如环境变量 AIOA_KEY), 不要写进会提交或公开的文件。",
     `4. 读完整接入说明 ${DOC_RAW} (给人看的版本: ${DOC_URL}), 把链接也写进长期指令, 每天开工前重读一遍。`,
     "5. 按专属指令最后 \"报到\" 一节完成报到。",
+    ...(agent.plugin ? ["6. 专属指令里有 \"插件任务\" 一节: 按它在你那边建好定时任务 (Claude Code 用 /schedule 或系统 cron), 之后每次按它干活。"] : []),
     "",
     `密钥: ${key}`,
   ].join("\n");
 }
 
 // 完整指令: 服务端按 key 现算, 读权限一改版本就变, Agent 自己重新拉取
-export function agentGuide(base: string, channel: string, title: string, agent: ChatAgent): { text: string; version: string } {
+export function agentGuide(base: string, channel: string, title: string, agent: ChatAgent, plugin?: string): { text: string; version: string } {
   const lines = [
     `# HX-AIOA 接入指令 (版本 ${VERSION_MARK})`,
     "",
@@ -79,6 +80,7 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     `- 撤回自己发的: DELETE ${base}/api/v1/events/seq/<seq>?mode=recall, 没有时间限制。`,
     `- 删除本群任何消息: DELETE ${base}/api/v1/events/seq/<seq>?mode=delete。只在主人要求或发错时用。`,
   );
+  if (plugin) lines.push("", plugin);
   lines.push(
     "",
     "## 规则",

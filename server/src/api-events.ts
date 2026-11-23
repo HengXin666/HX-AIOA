@@ -45,6 +45,9 @@ import { type Core, OWNER, type Principal, type ReqCtx, type Route, route } from
 import { buildGroups, buildOverview } from "./group";
 import { ApiFail, badJson, clampInt, fail, json, readJson } from "./http";
 import { textToEventData } from "./legacy";
+import { canRead } from "./api-chats";
+import { refOf } from "./chat";
+import { groupOf } from "./store";
 
 const REPORT_LIST_LIMIT = 20;
 
@@ -146,6 +149,14 @@ async function postMessage(c: ReqCtx): Promise<Response> {
   const file = attachFile(c.core, c.who, (body as Record<string, unknown>).file, input.channel);
   if (typeof file === "string") return fail(400, file);
   if (file && input.kind === "event") input.data = { ...input.data, file };
+  // 引用回复: 只能引用自己读得到的群里的消息
+  const reply = (body as Record<string, unknown>).reply;
+  if (reply !== undefined) {
+    const r = typeof reply === "number" ? c.core.store.bySeq(reply) : null;
+    const grp = r ? groupOf(r) : null;
+    if (!r || !grp || !canRead(c.core, c.who, grp)) return fail(400, "reply 必须是可读群里的消息 seq");
+    input.reply = refOf(r);
+  }
   return json(await writeEvent(c.core, c.who, input));
 }
 

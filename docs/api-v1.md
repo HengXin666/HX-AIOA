@@ -484,6 +484,22 @@ Agent 用带 `agent` scope 的接入 key 接入, 属于 key 的主人, 任务只
 
 已实现 (单账号), 见 [api-v1-spaces.md](api-v1-spaces.md)。
 
+### 7.1 插件与待办
+
+插件市场是仓库 `plugins/` 目录 (格式见 `plugins/README.md`), 服务端按需拉取并在内存缓存 5 分钟; 本地测试用 `--var PLUGIN_MARKET:<地址>` 指向别处。
+
+| 方法 | 路径 | 权限 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/v1/plugins` | 主人 | 市场列表 + 安装状态; 市场连不上时只返回已安装的, 带 `error` |
+| GET | `/api/v1/plugins/{id}` | 主人 | 清单, 介绍原文 (`readmeType`: markdown / html), 安装状态 |
+| POST | `/api/v1/plugins/{id}/install` | 主人 | 建群 `plugin-<id>`, 接入 Agent (专属指令带插件提示词), 下发工作台; 返回接入语 (含密钥, 只给一次) |
+| DELETE | `/api/v1/plugins/{id}` | 主人 | 作废 Agent, 移除工作台; 群消息与待办保留 |
+| GET | `/api/v1/chats/{channel}/todos` | 能读该群者, 本群 Agent | 全部待办 |
+| POST | `/api/v1/chats/{channel}/todos` | 主人, 群管理员, 本群 Agent | `{ "todos": [TodoInput] }` 或单条, 按 id 合并, 内容没变不写库 |
+| DELETE | `/api/v1/chats/{channel}/todos/{id}` | 同上 | 删除一条 |
+
+待办变化时广播 `{ "t": "chat_sync", "topic": "todos", "channel" }`, 客户端重拉该群待办。类型见 `protocol/src/v1/plugin.ts`。
+
 ## 8. 设置 (随账号同步)
 
 - `GET /api/v1/settings` → `{ "settings": { "appearance": {...}, "tz": "Asia/Shanghai", "quiet": { "start": "23:00", "end": "08:00" } } }`

@@ -1,4 +1,7 @@
 import type { FileStore } from "./files/store";
+import type { Market } from "./plugins/market";
+import type { PluginStore } from "./plugins/store";
+import type { TodoStore } from "./plugins/todos";
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
 import type { ChatStore } from "./chat-store";
@@ -34,6 +37,9 @@ export type Core = {
   chats: ChatStore;
   rooms: RoomStore;
   files: FileStore;
+  plugins: PluginStore;
+  todos: TodoStore;
+  market: Market;
   users: Users;
   terms: Terminals;
   // 账号密码复核 (终端票据用), 只有主 Hub 有账号目录

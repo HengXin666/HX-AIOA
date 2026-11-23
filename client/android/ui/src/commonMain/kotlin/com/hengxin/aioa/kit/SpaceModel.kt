@@ -15,6 +15,7 @@ object ItemType {
     const val APPROVAL = "approval"
     const val BUTTON = "button"
     const val REPORT = "report"
+    const val TODO = "todo"
 }
 
 /** 标准指标字段的默认单位, 与协议 METRIC_FIELDS 一致; 采集器换了也不用改组件。 */
@@ -38,6 +39,7 @@ val CATEGORY_OF: Map<String, ItemCategory> = mapOf(
     ItemType.APPROVAL to ItemCategory.Interaction,
     ItemType.BUTTON to ItemCategory.Action,
     ItemType.REPORT to ItemCategory.Reading,
+    ItemType.TODO to ItemCategory.List,
 )
 
 /** 面板宽度: 按 4 列网格占的列数, 窄屏时由网格收拢。 */

@@ -34,6 +34,7 @@ Space → Panel → Item → Bind。每个组件 = 类型 + 数据绑定 + 显�
 | 交互 | `chat` Agent 对话, `approval` 待批准 | 可选 | `chat`: bind 任务 id 或 `props.agent`, 显示最近对话并可追问 (`ask`); `approval`: bind Agent id, 只列等待确认的任务 |
 | 动作 | `button` 按钮 | 无 | 必须有 `action` |
 | 阅读 | `report` 报告 | 可选 | 显示最新一篇报告摘要 |
+| 列表 | `todo` 待办 | 必须 | `bind[0].subject` 是群 channel (field 随意, 约定写 `todos`); 未完成按优先级排, 勾选即完成, 点条目跳回来源消息; `props.limit` |
 
 Web (`client/web/src/components/registry.ts`) 与安卓 (`client/android/ui/.../kit/SpaceItems.kt`) 实现同一组类型, 渲染同一份 JSON。
 

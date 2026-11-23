@@ -98,6 +98,7 @@ private fun Detail(p: SettingsPage, deps: MeDeps, onBack: (() -> Unit)?, toRoot:
         SettingsPage.ROOT -> Unit
         SettingsPage.SOURCES -> Box(Modifier.fillMaxSize().background(Aioa.colors.background)) { SourcesPage(chat.sources, toRoot) }
         SettingsPage.INTEGRATIONS -> IntegrationsPage(toRoot)
+        SettingsPage.PLUGINS -> PluginsPage(onBack) { chat.groups.openAt(it, 0) }
         SettingsPage.ACCOUNT -> AccountPage(deps.settings(), saved, onBack)
         SettingsPage.MEMBERS -> MembersPage(onBack)
         SettingsPage.SERVER -> ServerPage(deps.settings(), chat.online, saved, onBack)

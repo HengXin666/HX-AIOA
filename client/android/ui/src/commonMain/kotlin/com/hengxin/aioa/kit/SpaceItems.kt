@@ -70,6 +70,7 @@ fun SpaceItemView(space: Space, panel: SpacePanel, item: SpaceItem, source: Spac
             ItemType.CHAT -> ChatView(item, source, handler)
             ItemType.REPORT -> ReportItem(item, source)
             ItemType.BUTTON -> ButtonItem(space, item, handler)
+            ItemType.TODO -> TodoView(item, source, handler)
             else -> Text("未知组件 ${item.type}", c.danger, 12)
         }
     }
