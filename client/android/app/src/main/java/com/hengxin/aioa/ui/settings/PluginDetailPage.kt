@@ -45,13 +45,11 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
     val c = Aioa.colors
     val api = PluginApi(LocalContext.current)
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
     var detail by remember(id) { mutableStateOf<PluginDetail?>(null) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     // 接入语含密钥, 只放内存, 离开页面就没了
-    var prompt by remember(id) { mutableStateOf<String?>(null) }
-    var copied by remember { mutableStateOf(false) }
+    var prompt by remember(id) { mutableStateOf<PluginInstalled?>(null) }
     var confirm by rememberSaveable { mutableStateOf(false) }
     val reload = { scope.launch { api.detail(id).onSuccess { detail = it; error = null }.onFailure { error = it.message } } }
     LaunchedEffect(id) { reload() }
@@ -73,21 +71,12 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
         val installed = e.installed
         val p = prompt
-        if (p != null) {
-            SettingsGroup("接入语", "把这段话原样发给你的 Agent (Claude Code, Codex 等)。它会自己拉指令, 报到, 并建好定时任务。里面有密钥, 只显示这一次。") {
-                NoteRow(p, mono = true)
-                RowDivider(indent = false)
-                ActionRow(if (copied) "已复制" else "复制接入语", "copy") {
-                    clipboard.setText(AnnotatedString(p))
-                    copied = true
-                }
-            }
-        }
+        if (p != null) Handoff(p)
         if (installed == null) {
             PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy) {
                 busy = true
                 scope.launch {
-                    api.install(id).onSuccess { (_, text) -> prompt = text; onChanged(); reload() }.onFailure { error = it.message }
+                    api.install(id).onSuccess { prompt = it; onChanged(); reload() }.onFailure { error = it.message }
                     busy = false
                 }
             }
@@ -101,6 +90,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                 ActionRow("卸载", "trash-2", danger = true, enabled = !busy) { confirm = true }
             }
         }
+        d.task?.let { TaskPrompt(it, installed != null) }
         Column(Modifier.fillMaxWidth().clip(README_SHAPE).background(c.surface).padding(16.dp)) {
             if (d.html) HtmlCard(d.readme, maxHeight = README_MAX)
             else MarkdownText(d.readme, MdColors(c.text, c.textSecondary, c.accent, c.surfaceAlt))
@@ -123,5 +113,50 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             },
             dismissButton = { TextButton({ confirm = false }) { androidx.compose.material3.Text("取消") } },
         )
+    }
+}
+
+private const val TASK_PREVIEW_LINES = 6
+
+/** 任务提示词: 插件让 Agent 干什么, 不含密钥, 可以单独复制给任何 Agent (包括云端的)。 */
+@Composable
+private fun TaskPrompt(task: String, installed: Boolean) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val hint = if (installed) "这个插件让 Agent 干的活, 不含密钥。想换一个 Agent, 或只想看看规则, 复制这段即可; 接入本身仍用接入语。"
+    else "装好后 Agent 会照这段干活 (群名按默认预览), 不含密钥。"
+    SettingsGroup("任务提示词", hint) {
+        NoteRow(if (open) task else task.lineSequence().take(TASK_PREVIEW_LINES).joinToString("\n") + "\n...", mono = true)
+        RowDivider(indent = false)
+        ActionRow(if (open) "收起" else "展开全文", if (open) "chevron-up" else "chevron-down") { open = !open }
+        RowDivider(indent = false)
+        CopyRow("复制任务提示词", task)
+    }
+}
+
+/** 刚装完: 本地 Agent 用接入语; 云端 Agent 用委托语 + 单独的密钥。都只显示这一次。 */
+@Composable
+private fun Handoff(p: PluginInstalled) {
+    SettingsGroup("本地 Agent (Claude Code, Codex 等)", "把接入语原样发给它, 它会自己拉指令, 报到, 并建好定时任务。里面有密钥, 只显示这一次。") {
+        NoteRow(p.prompt, mono = true)
+        RowDivider(indent = false)
+        CopyRow("复制接入语", p.prompt)
+    }
+    if (p.request.isEmpty()) return
+    SettingsGroup("云端 Agent (Hark 等)", "委托语以你的口吻提请求, 规则全写在里面, 不含密钥。密钥另外复制, 让它存进自己的密钥保管处, 不要贴进对话。") {
+        NoteRow(p.request.lineSequence().take(TASK_PREVIEW_LINES).joinToString("\n") + "\n...", mono = true)
+        RowDivider(indent = false)
+        CopyRow("复制委托语", p.request)
+        RowDivider(indent = false)
+        CopyRow("复制密钥", p.key)
+    }
+}
+
+@Composable
+private fun CopyRow(label: String, text: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    ActionRow(if (copied) "已复制" else label, "copy") {
+        clipboard.setText(AnnotatedString(text))
+        copied = true
     }
 }

@@ -63,6 +63,7 @@ const entry = list.data?.plugins?.find((p) => p.id === ID);
 check("市场列表", list.status === 200 && !!entry && !entry.installed && !list.data.error, list.data);
 const detail = await api("GET", `${V1}/plugins/${ID}`);
 check("插件详情带介绍", detail.status === 200 && detail.data.readmeType === "markdown" && detail.data.readme.includes("点子待办"), detail.data);
+check("未安装也能预览任务提示词", typeof detail.data.task === "string" && detail.data.task.includes("plugin-todo") && detail.data.task.includes("待办接口") && !detail.data.task.includes("{{"), detail.data.task);
 const missing = await api("POST", `${V1}/plugins/nope/install`);
 check("市场里没有的插件装不了", missing.status === 404, missing.data);
 
@@ -70,6 +71,9 @@ const inst = await api("POST", `${V1}/plugins/${ID}/install`);
 const key = /密钥: (\S+)/.exec(inst.data?.prompt ?? "")?.[1];
 check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === `plugin-${ID}` && !!key, inst.data);
 check("接入语带定时建议与插件步骤", inst.data?.prompt?.includes("建议的定时") && inst.data.prompt.includes("插件任务"), inst.data?.prompt);
+check("云端委托语规则内联且不含密钥, 密钥单独给", inst.data?.key === key && inst.data.request?.includes("待办接口") && !inst.data.request.includes(key) && !inst.data.request.includes("一字不改"), inst.data.request?.slice(0, 200));
+const after = await api("GET", `${V1}/plugins/${ID}`);
+check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
 const again = await api("POST", `${V1}/plugins/${ID}/install`);
 check("重复安装被拒", again.status === 409, again.data);
 

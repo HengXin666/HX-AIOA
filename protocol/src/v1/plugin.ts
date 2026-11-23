@@ -46,9 +46,11 @@ export type PluginInstall = {
 
 // 市场列表: 每项带本机安装状态; error 为拉取市场失败的原因 (已安装的照常返回)
 export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall })[]; error?: string };
-export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall };
-// 安装结果: prompt 是交给外部 Agent 的接入语 (含密钥), 只返回这一次
-export type PluginInstalled = { install: PluginInstall; prompt: string };
+// task: 插件的任务提示词 (已代入群和服务地址, 不含密钥), 可单独复制给任何 Agent; 未安装时按默认群预览
+export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; task?: string };
+// 安装结果, 只返回这一次: prompt 是给本地 Agent (Claude Code 等) 的接入语, 含密钥;
+// request 是给云端 Agent (Hark 等) 的委托语, 规则内联, 不含密钥; key 单独给, 存进对方的密钥保管处
+export type PluginInstalled = { install: PluginInstall; prompt: string; request: string; key: string };
 
 // 待办: 挂在群下, 群里的 Agent 写, 主人在 App 里勾选
 export const TODO_STATES = ["open", "doing", "done", "dropped"] as const;

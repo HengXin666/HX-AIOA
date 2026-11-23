@@ -21,8 +21,11 @@ data class PluginEntry(
     val installed: PluginInstall?,
 )
 
-/** 详情: 介绍原文 (Markdown 或 HTML) 与建议的定时。 */
-data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?)
+/** 详情: 介绍原文 (Markdown 或 HTML), 建议的定时, 任务提示词 (不含密钥)。 */
+data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?)
+
+/** 安装结果, 只给这一次: 本地 Agent 接入语 (含密钥), 云端 Agent 委托语 (不含密钥), 密钥本身。 */
+data class PluginInstalled(val prompt: String, val request: String, val key: String)
 
 /** 插件市场接口: 市场内容由服务端去仓库拉, App 只和自己的服务端说话。 */
 class PluginApi(private val context: Context) {
@@ -40,14 +43,13 @@ class PluginApi(private val context: Context) {
         val b = r.body ?: error(r.error ?: FAILED)
         val m = b.getJSONObject("manifest")
         val e = entry(m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL))
-        PluginDetail(e, b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null })
+        PluginDetail(e, b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null })
     }
 
-    /** 安装成功返回接入语 (含密钥, 只给这一次)。 */
-    suspend fun install(id: String): Result<Pair<PluginInstall, String>> = io {
+    suspend fun install(id: String): Result<PluginInstalled> = io {
         val r = Api.call(context, POST, listOf(PATH, id, "install"), JSONObject())
         val b = r.body ?: error(r.error ?: FAILED)
-        install(b.getJSONObject("install")) to b.optString("prompt")
+        PluginInstalled(b.optString("prompt"), b.optString("request"), b.optString("key"))
     }
 
     suspend fun uninstall(id: String): Result<Unit> = io {

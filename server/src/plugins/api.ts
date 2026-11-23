@@ -27,6 +27,8 @@ import { CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, E
 import { type Core, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
 import { rank, roleIn } from "../room-access";
+import { cloudRequest } from "./cloud-request";
+import { renderTask } from "./store";
 
 const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
@@ -68,7 +70,19 @@ async function detail(c: ReqCtx): Promise<Response> {
   const manifest = await c.core.market.manifest(id);
   const readme = await c.core.market.file(id, manifest.readme);
   const installed = c.core.plugins.get(id);
-  const body: PluginDetail = { manifest, readme, readmeType: manifest.readme.endsWith(".html") ? "html" : "markdown", ...(installed ? { installed } : {}) };
+  const base = baseOf(c.url);
+  const channel = installed?.channel ?? `${PLUGIN_CHANNEL_PREFIX}${id}`;
+  const title = c.core.chats.chat(channel)?.title || manifest.group.title;
+  const task = installed
+    ? c.core.plugins.promptFor(id, base, channel, title)
+    : renderTask(manifest.name, await c.core.market.file(id, manifest.prompt), base, channel, title);
+  const body: PluginDetail = {
+    manifest,
+    readme,
+    readmeType: manifest.readme.endsWith(".html") ? "html" : "markdown",
+    ...(installed ? { installed } : {}),
+    ...(task ? { task } : {}),
+  };
   return json(body);
 }
 
@@ -94,8 +108,10 @@ async function install(c: ReqCtx): Promise<Response> {
   const { agent, key } = await createAgent(c.core, channel, m.agent.name, [channel], id);
   const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}) };
   c.core.plugins.save(rec, m.name, prompt);
+  const base = baseOf(c.url);
   const schedule = m.agent.schedule ? `\n建议的定时: ${m.agent.schedule}` : "";
-  return json({ install: rec, prompt: agentBootstrap(baseOf(c.url), agent, key) + schedule } satisfies PluginInstalled);
+  const request = cloudRequest(base, title, renderTask(m.name, prompt, base, channel, title), m.agent.schedule);
+  return json({ install: rec, prompt: agentBootstrap(base, agent, key) + schedule, request, key } satisfies PluginInstalled);
 }
 
 // 卸载: 去掉 Agent 与工作台; 群里的消息和待办留着, 重新安装还能接上
