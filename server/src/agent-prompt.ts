@@ -15,6 +15,9 @@ function fnv(text: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
+// 装命令行的一行, 从服务端拿, 版本总和服务端一致
+const install = (base: string) => `mkdir -p ~/.local/bin && curl -fsSLo ~/.local/bin/hxaioa ${base}/hxaioa.mjs && chmod +x ~/.local/bin/hxaioa`;
+
 // 接入语: 一段话整段复制给任何 Agent; 只让它装命令行, 登录, 拉专属指令, 规则都在专属指令里
 export function agentBootstrap(base: string, title: string, key: string, job?: { interval?: number; task?: string }): string {
   const ask = job
@@ -23,7 +26,7 @@ export function agentBootstrap(base: string, title: string, key: string, job?: {
   return [
     `帮我接入 HX-AIOA 群 "${title}"。用命令行 hxaioa (需要 Node 22+), 按顺序执行:`,
     "",
-    `mkdir -p ~/.local/bin && curl -fsSLo ~/.local/bin/hxaioa ${base}/hxaioa.mjs && chmod +x ~/.local/bin/hxaioa`,
+    install(base),
     `hxaioa login ${base} ${key}`,
     "hxaioa guide --ack",
     "",
@@ -42,6 +45,8 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     "- 读新消息: `hxaioa read --new` (自动记住读到哪)",
     "- 等主人回话: `hxaioa watch --once --timeout 300` (长连, 等到一条就退出, 超时退出码 2)",
     "- 其它接口: `hxaioa api <METHOD> <路径> [JSON]`",
+    "",
+    `还没装 hxaioa (以前按接口接入的): \`${install(base)}\`, 再 \`hxaioa login ${base} <你的密钥>\`。`,
   ];
   const others = agent.reads.filter((r) => r !== channel);
   if (others.length) lines.push(`- 还能读: ${others.map((r) => `\`${r}\``).join(", ")}, 用 \`-c <群>\``);
