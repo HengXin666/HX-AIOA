@@ -206,7 +206,8 @@ class MessageDb private constructor(context: Context) :
                     val html = x?.optString(X_HTML)?.ifEmpty { null }
                     val del = x?.optString(X_DELETED)?.ifEmpty { null }
                     val file = com.hengxin.aioa.proto.FileRef.parse(x?.optJSONObject(X_FILE))
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid)))
+                    val feed = x?.optJSONObject(X_FEED)?.toString()
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid), feed = feed))
                 }
             }
         }
@@ -227,15 +228,17 @@ class MessageDb private constructor(context: Context) :
         private const val X_FWD = "fwd"
         private const val X_HTML = "html"
         private const val X_FILE = "file"
+        private const val X_FEED = "feed"
 
         // 引用与转发的快照存成一列 JSON, 没有就是 null
         private fun extraOf(m: ServerFrame.Msg): String? {
-            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null) return null
+            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null && m.feed == null) return null
             val o = JSONObject()
             m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
             m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
             m.html?.let { o.put(X_HTML, it) }
             m.file?.let { o.put(X_FILE, it.toJson()) }
+            m.feed?.let { runCatching { o.put(X_FEED, JSONObject(it)) } }
             m.deleted?.let { o.put(X_DELETED, it) }
             return o.toString()
         }

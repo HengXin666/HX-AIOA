@@ -59,6 +59,8 @@ data class Envelope(
     val markdown: String? = null,
     val html: String? = null,
     val cid: String? = null,
+    // 统一推送卡片 data.feed 的原始 JSON, 由 ui/feed 解析
+    val feed: String? = null,
     val reply: MsgRef? = null,
     val fwd: FwdInfo? = null,
     // 墓碑: recall / delete, 以及被替换那条的旧序号

@@ -1,3 +1,4 @@
+import { feedText, parseFeed, type FeedData } from "./feed";
 import type { FileRef } from "./files";
 import type { MailInfo } from "./mail";
 import {
@@ -38,6 +39,8 @@ export type EventData = {
   html?: string;
   // 附件: 先 POST /files 上传, 发消息时只带 file id, 服务端换成完整引用
   file?: FileRef;
+  // 统一推送卡片 (见 feed.ts): 有它时客户端原生画条目, 不用 html
+  feed?: FeedData;
   // 邮件群里的信: 发件人, 收件账号, 厂商, 验证码; 只由服务端填写
   mail?: MailInfo;
 };
@@ -148,7 +151,13 @@ function parseMetric(d: Record<string, unknown>): MetricData | string {
 }
 
 function parseEventData(d: Record<string, unknown>): EventData | string {
-  const title = d.title ?? d.text;
+  let feed: FeedData | undefined;
+  if (d.feed !== undefined) {
+    const f = parseFeed(d.feed);
+    if (typeof f === "string") return f;
+    feed = f;
+  }
+  const title = d.title ?? d.text ?? (feed ? feedText(feed).split("\n")[0] : undefined);
   if (!str(title, MAX_TITLE_LENGTH)) return "event 需要 title (不超过 300 字)";
   if (!optStr(d.summary, MAX_SUMMARY_LENGTH)) return "summary 过长";
   const severity = d.severity ?? "normal";
@@ -161,6 +170,10 @@ function parseEventData(d: Record<string, unknown>): EventData | string {
   if (d.html !== undefined) {
     if (typeof d.html !== "string" || d.html.length > MAX_REPORT_LENGTH) return "html 过大 (上限 64KB)";
     if (d.html) out.html = d.html;
+  }
+  if (feed) {
+    out.feed = feed;
+    if (!out.summary) out.summary = feedText(feed).split("\n")[1];
   }
   return out;
 }
@@ -193,7 +206,7 @@ function parseActions(v: unknown): EventAction[] | string | undefined {
   return out;
 }
 
-const SHORTHAND = ["title", "text", "summary", "severity", "status", "url"];
+const SHORTHAND = ["title", "text", "summary", "severity", "status", "url", "feed"];
 
 export function parseEventInput(raw: unknown): Parsed<EventInput> {
   if (!isObj(raw)) return { ok: false, error: "事件必须是 JSON 对象" };

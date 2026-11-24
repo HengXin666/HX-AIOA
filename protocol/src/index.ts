@@ -2,6 +2,7 @@ export const PROTOCOL_VERSION = 2;
 
 export * from "./v1/constants";
 export * from "./v1/event";
+export * from "./v1/feed";
 export * from "./v1/task";
 export * from "./v1/space";
 export * from "./v1/space-layout";

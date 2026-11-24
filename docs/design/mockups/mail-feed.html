@@ -201,7 +201,7 @@ function feed() {
   <div class="scroll"><div class="chat"><div class="today"><div class="hd"><b>今天 · 11-25</b><span>截至 01:40</span></div>
   <div class="stats"><div class="stat"><div>12</div><div>福利</div></div><div class="stat"><div>5</div><div>开源</div></div><div class="stat"><div>6</div><div>资讯</div></div><div class="stat"><div style="color:var(--ok)">4</div><div>有效福利</div></div></div>
   <div class="srcs"><img src="${fav("linux.do")}">LinuxDO 每小时 <img src="${fav("nodeloc.com")}" style="margin-left:8px">NodeLoc 每 3 小时</div></div>
-  ${items.map(itemCard).join("")}<div class="note">每条都是同一种卡片, 由 App 原生画, 跟着深色模式走; 左滑 = 用过了, 右滑 = 失效; 一批推送只发一次通知。</div></div></div>`;
+  ${items.map(itemCard).join("")}<div class="note">每条都是同一种卡片, 由 App 原生画, 跟着深色模式走; 右滑 = 用过了, 左滑 = 失效 (与邮件右滑已读一致); 一批推送只发一次通知。</div></div></div>`;
 }
 
 function notif() {

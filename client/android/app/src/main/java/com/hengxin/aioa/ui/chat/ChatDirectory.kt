@@ -109,6 +109,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     fun setHideListening(channel: String, on: Boolean) = patch(channel, JSONObject().put("hideListening", on)) { it.copy(hideListening = on) }
 
     fun setHideTyping(channel: String, on: Boolean) = patch(channel, JSONObject().put("hideTyping", on)) { it.copy(hideTyping = on) }
+    fun setFeed(channel: String, on: Boolean) = (if (on) VIEW_FEED else VIEW_CHAT).let { v -> patch(channel, JSONObject().put("view", v)) { it.copy(view = v) } }
 
     fun setPinned(channel: String, on: Boolean) = patch(channel, JSONObject().put("pinned", on)) { it.copy(pinned = on) }
 

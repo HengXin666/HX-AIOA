@@ -109,6 +109,11 @@ function parsePatch(raw: unknown): ChatPatch | string {
     if (typeof raw.read !== "number") return "read 必须是 seq";
     out.read = raw.read;
   }
+  if ("view" in raw) {
+    // 邮件视图只由服务端设置, 主人只能在聊天与信息流之间切
+    if (raw.view !== "chat" && raw.view !== "feed") return "view 只能是 chat 或 feed";
+    out.view = raw.view;
+  }
   if ("digest" in raw) {
     if (raw.digest !== null && !(DIGEST_KINDS as readonly unknown[]).includes(raw.digest)) return "digest 只能是 daily 或 weekly";
     // null 表示取消, 由 patchChat 删除该字段
@@ -137,6 +142,7 @@ async function patchChat(c: ReqCtx): Promise<Response> {
     }
     return json({ chat: memberView(c.core, channel, uid) });
   }
+  if (p.view && c.core.chats.chat(channel)?.view === "mail") return fail(400, "邮件群不能切换展示方式");
   const meta = c.core.chats.patchChat(channel, p);
   sync(c.core, "chats", channel);
   return json({ chat: meta });

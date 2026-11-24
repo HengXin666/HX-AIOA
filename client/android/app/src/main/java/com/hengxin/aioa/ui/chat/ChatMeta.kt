@@ -22,7 +22,7 @@ data class ChatMeta(
     /** 多人群里我的身份 (owner / admin / member) 与人数; 只有自己的群为空。 */
     val role: String? = null,
     val members: Int = 0,
-    /** 展示方式: 空为聊天, mail 为邮件列表。 */
+    /** 展示方式: 空为聊天, mail 为邮件列表, feed 为信息流。 */
     val view: String? = null,
     /** 群主 / 管理员关掉了 "正在监听" / "正在输入" 提示。 */
     val hideListening: Boolean = false,
@@ -31,6 +31,7 @@ data class ChatMeta(
     val deleted: Long = 0,
 ) {
     val isMail get() = view == VIEW_MAIL
+    val isFeed get() = view == VIEW_FEED
     val shared get() = role != null
     val canManage get() = role == ROLE_OWNER || role == ROLE_ADMIN
     /** 自己的群 (没有 role) 也算能管。 */
@@ -57,6 +58,8 @@ data class ChatAgent(
 data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg, val gone: Boolean = false)
 
 const val VIEW_MAIL = "mail"
+const val VIEW_FEED = "feed"
+const val VIEW_CHAT = "chat"
 
 const val ROLE_OWNER = "owner"
 const val ROLE_ADMIN = "admin"

@@ -18,6 +18,7 @@
 | 文档 | 内容 |
 |---|---|
 | [mail.md](features/mail.md) | 邮件聚合: CF 邮件路由 / HX-Email / 通用推送, 分类, 搜索, 正文存储 |
+| [feed.md](features/feed.md) | 统一推送卡片: feed 格式, 信息流展示, 用过 / 失效标记 |
 | [files.md](features/files.md) | 文件: R2 存储, 票据, 额度 |
 | [sources.md](features/sources.md) | 接入数据源 (GitHub, Uptime Kuma 等) 的操作步骤 |
 | [metrics.md](features/metrics.md) | 实时指标的懒更新 |
@@ -59,7 +60,7 @@
 | [multi-account-draft.md](design/multi-account-draft.md) | 多账号早期草案, 已被单库方案取代 |
 | [push-experiment.md](design/push-experiment.md) | 推送延迟与耗电实验手册 |
 | [research-cf-probe-panels.md](design/research-cf-probe-panels.md) | CF 探针面板调研 (#11) |
-| [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿, 待确认 (#66 #70) |
+| [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
 
 ## 过程记录 `aegis/`
 

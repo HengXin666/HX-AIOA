@@ -2,6 +2,7 @@ package com.hengxin.aioa.ui
 
 import com.hengxin.aioa.ui.chat.FileCard
 import android.text.format.DateFormat
+import com.hengxin.aioa.ui.feed.FeedBubble
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -102,7 +103,7 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
         }
         Box {
             Column(
-                Modifier.widthIn(max = 290.dp)
+                Modifier.widthIn(max = if (msg.feed != null) 340.dp else 290.dp)
                     .background(bg, shape)
                     .combinedClickable(onClick = { onStatus?.invoke() }, onLongClick = { if (actions != null) menu = true })
                     .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = 5.dp),
@@ -116,7 +117,9 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                     Text(status ?: timeOf(msg.ts), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
                 }
                 val html = msg.html
-                if (html != null) {
+                if (msg.feed != null) {
+                    FeedBubble(msg, time)
+                } else if (html != null) {
                     // HTML 卡片的 "全屏" 和时间同一行
                     HtmlCard(html, Modifier.padding(top = 2.dp), footer = time)
                 } else {

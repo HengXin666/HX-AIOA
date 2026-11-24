@@ -1,5 +1,8 @@
 import { attachFile } from "./files/api";
 import {
+  feedText,
+  parseFeed,
+  type FeedData,
   MAX_BATCH,
   PATH_EVENTS,
   PATH_EVENT_ACTIONS,
@@ -82,7 +85,13 @@ export async function writeEvent(core: Core, who: Principal, input: EventInput, 
 const MAX_HTML_LENGTH = 64 * 1024;
 
 export function messageInput(raw: Record<string, unknown>): EventInput | string {
-  const text = raw.text;
+  let feed: FeedData | undefined;
+  if (raw.feed !== undefined) {
+    const f = parseFeed(raw.feed);
+    if (typeof f === "string") return f;
+    feed = f;
+  }
+  const text = raw.text || (feed ? feedText(feed) : undefined);
   if (typeof text !== "string" || !text) return "需要 text";
   if (text.length > MAX_TEXT_LENGTH) return ERR_TOO_LONG;
   const title = typeof raw.title === "string" && raw.title ? raw.title : undefined;
@@ -94,6 +103,7 @@ export function messageInput(raw: Record<string, unknown>): EventInput | string 
     return withMeta({ kind: "event", data }, raw);
   }
   const data = textToEventData(text, title);
+  if (feed) data.feed = feed;
   if (raw.html !== undefined) {
     if (typeof raw.html !== "string" || raw.html.length > MAX_HTML_LENGTH) return "html 过大 (上限 64KB)";
     if (raw.html) data.html = raw.html;

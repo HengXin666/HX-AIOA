@@ -9,7 +9,8 @@ export const MAIL_VIAS = ["cf", "hx-email", "api"] as const;
 export type MailVia = (typeof MAIL_VIAS)[number];
 
 // 群的展示方式: 默认聊天气泡, mail 为邮件列表 (带筛选)
-export const CHAT_VIEWS = ["chat", "mail"] as const;
+// feed: 信息流 (统一推送卡片按条目平铺), 主人可在群设置里切换; mail 只由服务端设置
+export const CHAT_VIEWS = ["chat", "mail", "feed"] as const;
 export type ChatView = (typeof CHAT_VIEWS)[number];
 
 /**

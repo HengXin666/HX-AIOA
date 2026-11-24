@@ -45,6 +45,8 @@ sealed interface ServerFrame {
         // 是不是自己 (当前账号) 发的; 来源 id (user:<uid> / Agent 来源 id), 用来按 id 取最新名字
         val mine: Boolean = false,
         val sid: String? = null,
+        // 统一推送卡片 (data.feed 原始 JSON)
+        val feed: String? = null,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame

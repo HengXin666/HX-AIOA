@@ -2,6 +2,7 @@ package com.hengxin.aioa.ui
 
 import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
+import com.hengxin.aioa.ui.feed.FeedView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -131,6 +132,8 @@ fun ChatScreen(model: ChatModel) {
         // 进群设置再回来时停在原来的位置; 换群或退出群后是新的一页
         if (dir.metas[open]?.isMail == true) {
             KeepState("chat:mail:${g.visit}") { MailView(g.messages.lastOrNull()?.seq, Modifier.weight(1f)) }
+        } else if (dir.metas[open]?.isFeed == true) {
+            KeepState("chat:feed:$open:${g.visit}") { FeedView(g.messages, Modifier.weight(1f)) }
         } else {
             KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
             Composer(g)

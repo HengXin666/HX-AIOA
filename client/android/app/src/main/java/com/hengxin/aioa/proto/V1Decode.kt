@@ -62,6 +62,7 @@ internal object V1Decode {
             dedupeKey = opt(o, "dedupeKey"),
             markdown = opt(data, "markdown"),
             html = opt(data, KEY_HTML) ?: sniffed,
+            feed = data.optJSONObject("feed")?.toString(),
             cid = opt(o, "cid"),
             reply = o.optJSONObject("reply")?.let(::ref),
             fwd = o.optJSONObject("fwd")?.let { FwdInfo(it.optString("src"), it.optLong("ts")) },
@@ -142,7 +143,7 @@ fun Envelope.toMsg(): ServerFrame.Msg {
     val human = source.type == Constants.SOURCE_TYPE_USER || source.id.startsWith(Constants.DEVICE_PREFIX)
     val mine = if (by != null && me != null) by == me else human
     val src = if (mine && source.id.startsWith(Constants.DEVICE_PREFIX)) Me.label else source.name.ifEmpty { source.id }
-    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq, file, mine, source.id)
+    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq, file, mine, source.id, feed)
 }
 
 /** 聊天里显示的正文 (Markdown): 报告带标题与全文, 有标题的消息标题加粗; 纯文本消息 summary 就是原文。 */

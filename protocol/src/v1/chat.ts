@@ -47,7 +47,7 @@ export type ChatAgent = {
 };
 // 接入时可选带上定时与任务, 只写进这次的接入语, 不存
 export type AgentJob = { interval?: number; task?: string };
-export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping">>;
+export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view">>;
 export type AgentRequest = { name: string; reads?: string[] } & AgentJob;
 export const AGENT_ACTIVE_STEP_MS = 600_000;
 export const MAX_AGENT_TASK = 2000;

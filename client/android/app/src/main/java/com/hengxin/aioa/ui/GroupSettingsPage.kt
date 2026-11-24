@@ -99,6 +99,9 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 ValueRow("群名称", (meta?.title ?: group) + if (manage) "  ›" else "") { if (manage) dialog = GsDialog.Rename }
                 SwitchRow("置顶", meta?.pinned == true) { dir.setPinned(group, it) }
                 SwitchRow("免打扰", meta?.muted == true, "照常收消息, 只是不响铃不弹通知") { dir.setMuted(group, it) }
+                if (owner && meta?.isMail != true && group != MessageDb.MEMO_GROUP) {
+                    SwitchRow("信息流展示", meta?.isFeed == true, "推送卡片按条目平铺, 有今天 / 全部 / 收藏, 适合福利, 资讯类群") { dir.setFeed(group, it) }
+                }
             }
             // 实时状态提示: 群主 / 管理员可关, 关了服务端不再推这类帧
             if (group != MessageDb.MEMO_GROUP && (meta?.canTune ?: true)) Card {
