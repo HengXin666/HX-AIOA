@@ -5,6 +5,7 @@ import { CF_ZONE_ROUTES } from "./api-cf-zones";
 import { CF_STORAGE_ROUTES } from "./api-cf-storage";
 import { CHAT_ROUTES } from "./api-chats";
 import { PRESENCE_ROUTES } from "./api-presence";
+import { CHAT_DELETE_ROUTES } from "./api-chat-delete";
 import { RECALL_ROUTES } from "./recall";
 import { ROOM_ROUTES } from "./api-rooms";
 import { FILE_ROUTES } from "./files/api";
@@ -39,7 +40,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...PRESENCE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...PLUGIN_ROUTES, ...MAIL_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...PRESENCE_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...PLUGIN_ROUTES, ...MAIL_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {

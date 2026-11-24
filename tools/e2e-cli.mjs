@@ -108,6 +108,17 @@ await api("POST", `${V1}/chats/${enc(GROUP)}/typing`, {}, key);
 check("关闭后不推输入", !(await ui2.next((f) => f.t === "presence" && f.channel === GROUP && f.typing.length)));
 ui2.ws.close();
 
-await api("DELETE", `${V1}/chats/${enc(GROUP)}/agents/${made.data.agent.keyId}`);
+// 删除群: 消息, Agent key 一起删, 群资料只留墓碑; 再设置同名群就复活
+const del = await api("DELETE", `${V1}/chats/${enc(GROUP)}`);
+check("删除群", del.status === 200 && del.data.deleted >= 3, del.data);
+const after = await api("GET", `${V1}/chats/${enc(GROUP)}/messages?since=0`);
+check("删除后没有消息", after.data?.messages?.length === 0, after.data);
+check("删除后 Agent 密钥失效", (await api("GET", `${V1}/chat-agent/me`, undefined, key)).status === 401);
+const list = await api("GET", `${V1}/chats`);
+const tomb = list.data.chats.find((m) => m.channel === GROUP);
+check("群资料只剩墓碑", !!tomb?.deleted && !tomb.title && !tomb.agents, tomb);
+const again = await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { title: "又建了" });
+check("同名群重建后不再是墓碑", again.data?.chat?.title === "又建了" && !again.data.chat.deleted, again.data);
+await api("DELETE", `${V1}/chats/${enc(GROUP)}`);
 console.log(failed ? `${failed} 项失败` : "全部通过");
 process.exit(failed ? 1 : 0);

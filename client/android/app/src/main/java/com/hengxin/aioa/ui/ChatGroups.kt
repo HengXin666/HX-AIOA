@@ -117,7 +117,7 @@ class ChatGroups(
         val known = fromDb.map { it.key }.toSet()
         // 没消息的群在建过资料或清空过时显示
         // 清空过的群也留着: 清空只删消息, 不删群
-        val empty = metas.values.filter { it.channel !in known && (it.configured || it.cleared > 0) }.map { GroupRowData(it.channel, it, null, 0) }
+        val empty = metas.values.filter { it.channel !in known && it.deleted == 0L && (it.configured || it.cleared > 0) }.map { GroupRowData(it.channel, it, null, 0) }
         return (fromDb + empty).sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
     }
 
@@ -152,6 +152,8 @@ class ChatGroups(
             }
             metas.filter { it.cleared > 0 }.forEach { m -> onCleared?.invoke(m.channel, m.cleared) }
             metas.firstOrNull { it.channel == open && it.cleared > 0 }?.let { m -> messages.removeAll { it.seq <= m.cleared } }
+            // 别的设备删了正在看的群
+            if (metas.any { it.channel == open && it.deleted > 0 } && messages.isEmpty()) close()
             reload()
         }
     }
@@ -167,6 +169,22 @@ class ChatGroups(
                 onCleared?.invoke(key, upTo)
                 reload()
                 directory.refreshChats()
+            }
+            done(r.exceptionOrNull()?.message)
+        }
+    }
+
+    /** 删除群: 服务端连 Agent 与成员一起删, 本地删记录, 移出分组, 正在看就退出。 */
+    fun deleteGroup(key: String, done: (String?) -> Unit) {
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { directory.deleteGroup(key) }
+            r.onSuccess { upTo ->
+                withContext(Dispatchers.IO) { db.clearGroup(key, upTo) }
+                onCleared?.invoke(key, upTo)
+                if (open == key) close()
+                if (folders.any { key in it.groups }) save(folders.map { it.copy(groups = it.groups - key) })
+                directory.refreshChats()
+                reload()
             }
             done(r.exceptionOrNull()?.message)
         }

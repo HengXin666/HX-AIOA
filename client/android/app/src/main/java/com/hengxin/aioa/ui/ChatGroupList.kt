@@ -56,9 +56,12 @@ private sealed interface Dialog {
     data object NewFolder : Dialog
     data class DropFolder(val name: String) : Dialog
     data object Join : Dialog
+    data class Actions(val group: String) : Dialog
+    data class Rename(val group: String) : Dialog
+    data class Delete(val group: String) : Dialog
 }
 
-/** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群挪组, 长按组标题删组。 */
+/** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群改名 / 挪组 / 删除, 长按组标题删组。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupList(model: ChatModel) {
@@ -97,10 +100,10 @@ fun GroupList(model: ChatModel) {
                         dialog = Dialog.DropFolder(f.name)
                     }
                 }
-                if (!shut) inFolder.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Move(r.key) } } }
+                if (!shut) inFolder.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Actions(r.key) } } }
             }
             if (g.folders.isNotEmpty() && loose.isNotEmpty()) item(key = "loose") { FolderHeader(Modifier, UNGROUPED, 0, false, null, null) }
-            loose.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Move(r.key) } } }
+            loose.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Actions(r.key) } } }
             if (rows.isEmpty()) item(key = "empty") {
                 Text(
                     "还没有群。右上角 + 新建群, 再在群设置里接入 Agent; 推送时带上 channel 也会自动进对应的群。",
@@ -114,6 +117,9 @@ fun GroupList(model: ChatModel) {
     }
     when (val d = dialog) {
         is Dialog.Move -> MoveDialog(d.group, g) { dialog = null }
+        is Dialog.Actions -> GroupActions(g, d.group, { dialog = it }) { dialog = null }
+        is Dialog.Rename -> NameDialog("群名称", d.group, { dialog = null }, g.directory.title(d.group)) { g.directory.rename(d.group, it); true }
+        is Dialog.Delete -> DeleteGroupDialog(g, d.group) { dialog = null }
         Dialog.NewGroup -> NameDialog("新建群", "例如 新闻", { dialog = null }) { name ->
             g.directory.createGroup(name).also { if (it) g.openGroup(name.trim()) }
         }
@@ -236,10 +242,49 @@ private fun MoveDialog(group: String, g: ChatGroups, close: () -> Unit) {
     )
 }
 
+/** 长按群: 改名, 挪组, 删除 (只有群主能删, 备忘不能删)。 */
+@Composable
+private fun GroupActions(g: ChatGroups, group: String, next: (Dialog) -> Unit, close: () -> Unit) {
+    val meta = g.directory.metas[group]
+    val owner = meta?.role == null || meta.role == com.hengxin.aioa.ui.chat.ROLE_OWNER
+    val canEdit = meta?.canTune ?: true
+    val memo = group == com.hengxin.aioa.data.MessageDb.MEMO_GROUP
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text(g.directory.title(group), maxLines = 1) },
+        text = {
+            Column {
+                if (canEdit && !memo) Text("重命名", Modifier.fillMaxWidth().clickable { next(Dialog.Rename(group)) }.padding(vertical = 10.dp))
+                Text("移到组", Modifier.fillMaxWidth().clickable { next(Dialog.Move(group)) }.padding(vertical = 10.dp))
+                if (owner && !memo) Text("删除群", Modifier.fillMaxWidth().clickable { next(Dialog.Delete(group)) }.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = { TextButton(close) { Text("取消") } },
+    )
+}
+
+/** 删除群确认: 说清楚会删掉什么。 */
+@Composable
+internal fun DeleteGroupDialog(g: ChatGroups, group: String, close: () -> Unit) {
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) close() },
+        title = { Text("删除群 \"${g.directory.title(group)}\"?") },
+        text = { Text("聊天记录, 文件, 接入的 Agent (密钥作废), 插件与待办, 群成员都会删掉, 所有设备同步, 不能恢复。之后再有推送进这个群, 它会重新出现。") },
+        confirmButton = {
+            TextButton({
+                busy = true
+                g.deleteGroup(group) { close() }
+            }, enabled = !busy) { Text(if (busy) "正在删除..." else "删除", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(close, enabled = !busy) { Text("取消") } },
+    )
+}
+
 /** 输入名字的对话框; ok 返回 false 表示重名或为空, 不关闭。 */
 @Composable
-internal fun NameDialog(title: String, hint: String, close: () -> Unit, ok: (String) -> Boolean) {
-    var name by remember { mutableStateOf("") }
+internal fun NameDialog(title: String, hint: String, close: () -> Unit, initial: String = "", ok: (String) -> Boolean) {
+    var name by remember { mutableStateOf(initial) }
     var bad by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = close,

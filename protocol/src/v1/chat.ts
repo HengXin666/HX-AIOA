@@ -24,6 +24,8 @@ export type ChatMeta = {
   // 群主 / 管理员关掉 "正在监听" 与 "正在输入" 提示 (省额度); 不写为开
   hideListening?: boolean;
   hideTyping?: boolean;
+  // 群被删除的时间: 只留这一行墓碑让各端删本地记录并隐藏; 之后再有消息进来群会重新出现
+  deleted?: number;
   updated: number;
 };
 // 群里接入的 Agent: 一个来源 + 一把 key; 主人只定名字和可读的群, 指令由服务端下发

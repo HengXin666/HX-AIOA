@@ -62,6 +62,7 @@ private sealed interface GsDialog {
     data class Prompt(val title: String, val text: String, val note: String, val key: String? = null) : GsDialog
     data class Remove(val agent: ChatAgent) : GsDialog
     data object Clear : GsDialog
+    data object Delete : GsDialog
 }
 
 /** 群设置: 头像, 名称, 置顶, 免打扰, 日报 / 周报, 以及接入的 Agent。 */
@@ -98,7 +99,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 dir.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
             }
             Card {
-                ValueRow("群名称", meta?.title ?: group) { if (manage) dialog = GsDialog.Rename }
+                ValueRow("群名称", (meta?.title ?: group) + if (manage) "  ›" else "") { if (manage) dialog = GsDialog.Rename }
                 SwitchRow("置顶", meta?.pinned == true) { dir.setPinned(group, it) }
                 SwitchRow("免打扰", meta?.muted == true, "照常收消息, 只是不响铃不弹通知") { dir.setMuted(group, it) }
             }
@@ -137,12 +138,16 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 Row(Modifier.fillMaxWidth().clickable { dialog = GsDialog.Clear }.padding(vertical = 8.dp)) {
                     Text("清空聊天记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
                 }
+                if (group != MessageDb.MEMO_GROUP) Row(Modifier.fillMaxWidth().clickable { dialog = GsDialog.Delete }.padding(vertical = 8.dp)) {
+                    Text("删除群", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
+                }
             }
             Box(Modifier.heightIn(min = 24.dp))
         }
     }
     when (val d = dialog) {
-        GsDialog.Rename -> NameDialog("群名称", meta?.title ?: group, { dialog = null }) { dir.rename(group, it); true }
+        GsDialog.Rename -> NameDialog("群名称", group, { dialog = null }, meta?.title ?: group) { dir.rename(group, it); true }
+        GsDialog.Delete -> DeleteGroupDialog(g, group) { dialog = null }
         is GsDialog.EditAgent -> AgentDialog(model, group, d.agent, { dialog = null }) { name, reads ->
             scope.launch {
                 if (d.agent == null) {

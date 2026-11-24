@@ -40,6 +40,8 @@ export class ChatStore {
   patchChat(channel: string, patch: ChatPatch, now = Date.now()): ChatMeta {
     const cur = this.chat(channel) ?? { channel, updated: now };
     const next: ChatMeta = { ...cur, updated: now };
+    // 删过的群再被设置 (重新建同名群) 就不再是墓碑
+    if (Object.keys(patch).length) delete next.deleted;
     for (const [k, v] of Object.entries(patch)) {
       if (k === "read" && typeof v === "number" && v <= (cur.read ?? 0)) continue;
       if (v === null || v === "" || v === false) delete (next as Record<string, unknown>)[k];

@@ -27,13 +27,15 @@ data class ChatMeta(
     /** 群主 / 管理员关掉了 "正在监听" / "正在输入" 提示。 */
     val hideListening: Boolean = false,
     val hideTyping: Boolean = false,
+    /** 群被删除的时间: 墓碑, 本地删记录并隐藏; 之后有新消息会重新出现。 */
+    val deleted: Long = 0,
 ) {
     val isMail get() = view == VIEW_MAIL
     val shared get() = role != null
     val canManage get() = role == ROLE_OWNER || role == ROLE_ADMIN
     /** 自己的群 (没有 role) 也算能管。 */
     val canTune get() = role == null || canManage
-    val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
+    val configured get() = deleted == 0L && title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
 }
 
 /** 群里接入的 Agent; reads 是它能读的群, joined 是最近报到时间, pending 表示指令变了还没重新报到。 */
@@ -93,6 +95,7 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 view = o.optStr("view"),
                 hideListening = o.optBoolean("hideListening"),
                 hideTyping = o.optBoolean("hideTyping"),
+                deleted = o.optLong("deleted"),
             )
         }.getOrNull()
     }.associateBy { it.channel }

@@ -165,6 +165,12 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         return r.error?.let { Result.failure(Exception(it)) } ?: Result.success(r.body?.optLong("cleared") ?: 0L)
     }
 
+    /** 删除群 (母号): 服务端删消息, Agent, 成员, 只留墓碑; 返回删到的 seq。 */
+    fun deleteGroup(channel: String): Result<Long> {
+        val r = Api.call(context, DELETE, listOf(CHATS, channel))
+        return r.error?.let { Result.failure(Exception(it)) } ?: Result.success(r.body?.optLong("cleared") ?: 0L)
+    }
+
     private fun agentBody(name: String, reads: List<String>) =
         JSONObject().put("name", name.trim()).put("reads", JSONArray(reads))
 

@@ -6,6 +6,7 @@
 
 - `GET /api/v1/chats` → `{ chats: [ChatMeta] }`, 带 `ETag`, 没变时 304。带 `events:read` 的 key 只看到白名单内的群, 且不含 `agents`。
 - `PATCH /api/v1/chats/{channel}` (母号) `{ title, avatar, pinned, muted, read, digest }`; 群不存在时即新建。值为 `null` / 空串 / `false` 表示清除。`read` 只前进。`digest` 为 `daily` / `weekly`, 标记日报 / 周报群。`hideListening` / `hideTyping` 为 true 时不再推 "正在监听" / "正在输入" (群主, 多人群管理员可改), 见 [stream.md](stream.md) 的 `presence`。
+- `DELETE /api/v1/chats/{channel}` (母号) 删除群: 消息, 文件, 接入的 Agent (key 作废), 插件安装与工作台, 待办, 多人群成员与邀请全删, 返回 `{ deleted, cleared }`。群资料只留墓碑 `{ channel, cleared, deleted: <时间> }`, 各端据此删本地记录并隐藏; 之后再有消息进来群会重新出现, 再 `PATCH` 同名群即复活为新群。
 - `POST /api/v1/chats/{channel}/typing` (群 Agent 的 key) 报 "正在输入"; 人走长连接的 `typing` 帧。`GET /api/v1/chat-agent/me` (群 Agent 的 key) 返回 `{ me: { keyId, name, channel, sourceId, reads } }`。命令行见 [cli.md](../client/cli.md)。
 - 变化后向客户端广播 `{ t: "chat_sync", topic: "chats", channel }`。
 
