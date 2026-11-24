@@ -12,6 +12,8 @@ import {
   PING_TEXT,
   PONG_TEXT,
   PROBE_DEVICE_PREFIX,
+  SOURCE_TYPE_USER,
+  USER_SOURCE_PREFIX,
   PROTOCOL_VERSION,
   QUERY_DEVICE,
   QUERY_ROLE,
@@ -59,6 +61,7 @@ import {
   TIMER_FALLBACK,
   TIMER_PROMPT_PREFIX,
   UNKNOWN_DEVICE,
+  OWNER_NAME,
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
 import { joinPage } from "./join-page";
@@ -417,8 +420,12 @@ export class Hub extends DurableObject<Env> {
         // 多人群照常提醒其他人 (发送者自己的设备按 by 认出是自己发的); 只有自己的群不响铃, 也不触发兜底推送
         const shared = !!grp && this.core.rooms.shared(grp);
         const route = shared ? ROUTE_ROOM : ROUTE_SELF;
-        const name = (att.uid && this.core.users.get(att.uid)?.display) || att.device;
-        const ev = await this.core.pipeline.fromInput(input, { source: { id: att.device, name }, cid: frame.cid, ...(att.uid ? { by: att.uid } : {}) }, route);
+        // 来源是人 (账号), 不是设备: 同一个人多台设备同一个来源, 名字取账号昵称
+        const user = att.uid ? this.core.users.get(att.uid) : undefined;
+        const source = att.uid
+          ? { id: USER_SOURCE_PREFIX + att.uid, name: user?.display || user?.name || OWNER_NAME, type: SOURCE_TYPE_USER }
+          : { id: att.device, name: OWNER_NAME, type: SOURCE_TYPE_USER };
+        const ev = await this.core.pipeline.fromInput(input, { source, cid: frame.cid, ...(att.uid ? { by: att.uid } : {}) }, route);
         sendFrame(ws, { t: "sent", cid: frame.cid, seq: ev.seq, ts: ev.ts });
         return;
       }

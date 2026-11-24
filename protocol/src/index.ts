@@ -35,6 +35,9 @@ export const QUERY_LIMIT = "limit";
 
 export const ANDROID_DEVICE_PREFIX = "android";
 export const PROBE_DEVICE_PREFIX = "probe";
+// 人发的消息: source.id = "user:<账号 id>", source.type = "user", name 为账号昵称; 设备 id 不再当来源
+export const USER_SOURCE_PREFIX = "user:";
+export const SOURCE_TYPE_USER = "user";
 
 export const METRIC_LIVE_INTERVAL_MS = 2000;
 export const MAX_SUBJECTS = 64;

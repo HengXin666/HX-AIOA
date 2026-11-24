@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.ui.chat.Names
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -57,8 +58,8 @@ fun FavoritesPage(model: ChatModel, onBack: () -> Unit) {
             items(dir.favorites, key = { it.seq }) { f ->
                 Column(Modifier.animateItem().fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.6f), CARD).padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LetterAvatar(f.msg.src, 26.dp)
-                        Text(f.msg.src, Modifier.padding(start = 8.dp).weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        LetterAvatar(Names.of(f.msg), 26.dp)
+                        Text(Names.of(f.msg), Modifier.padding(start = 8.dp).weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                         Text(DateUtils.formatDateTime(context, f.msg.ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH), fontSize = 11.sp, color = c.outline)
                     }
                     MarkdownText(f.msg.text, md, Modifier.padding(top = 6.dp))

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.ui.chat.Names
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.HtmlCard
@@ -78,7 +79,7 @@ data class BubbleSpot(val head: Boolean, val showSender: Boolean, val highlight:
 @Composable
 fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions: BubbleActions?, modifier: Modifier = Modifier, status: String? = null, onStatus: (() -> Unit)? = null) {
     val c = MaterialTheme.colorScheme
-    if (msg.deleted != null) return RecalledLine(if (mine) "你" else msg.src, modifier)
+    if (msg.deleted != null) return RecalledLine(if (mine) "你" else Names.of(msg), modifier)
     var menu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val shape = when {
@@ -96,7 +97,7 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
         verticalAlignment = Alignment.Top,
     ) {
         if (!mine && spot.showSender) {
-            if (spot.head) LetterAvatar(msg.src, SENDER_AVATAR) else Spacer(Modifier.width(SENDER_AVATAR))
+            if (spot.head) LetterAvatar(Names.of(msg), SENDER_AVATAR) else Spacer(Modifier.width(SENDER_AVATAR))
             Spacer(Modifier.width(6.dp))
         }
         Box {
@@ -107,7 +108,7 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                     .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = 5.dp),
             ) {
                 if (!mine && spot.showSender && spot.head) {
-                    Text(msg.src, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colorOf(msg.src), maxLines = 1)
+                    Text(Names.of(msg), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colorOf(msg.sid ?: msg.src), maxLines = 1)
                 }
                 msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
                 msg.reply?.let { QuoteBlock(it, fg, if (mine) fg else c.primary) { actions?.onJump?.invoke(it.seq) } }
@@ -163,7 +164,7 @@ private fun BubbleMenu(open: Boolean, close: () -> Unit, msg: ServerFrame.Msg, a
             dismissButton = { TextButton({ confirm = false }) { Text("取消") } },
         )
     }
-    val recallable = msg.cid != null && msg.src.startsWith(Constants.DEVICE_PREFIX)
+    val recallable = msg.cid != null && msg.mine
     DropdownMenu(open, close) {
         DropdownMenuItem({ Text("复制") }, { onCopy(); close() })
         DropdownMenuItem({ Text("引用") }, { a.onReply(msg); close() })

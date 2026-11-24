@@ -101,7 +101,7 @@ class LinkService : Service(), LinkSocket.Listener {
         when (frame) {
             is ServerFrame.Welcome -> {
                 replayHead = frame.head
-                Me.set(this, frame.uid)
+                Me.set(this, frame.uid, frame.name)
                 if (frame.resync && frame.floor > 0) db.dropBefore(frame.floor)
             }
             is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !MutedGroups.contains(this, frame.groupKey())) notifier.message(frame)
@@ -129,7 +129,7 @@ class LinkService : Service(), LinkSocket.Listener {
     private fun store(msg: ServerFrame.Msg): Boolean {
         val fresh = db.insert(msg)
         socket.send(Frames.ack(msg.seq))
-        return fresh && !msg.src.startsWith(Constants.DEVICE_PREFIX)
+        return fresh && !msg.mine
     }
 
     companion object {

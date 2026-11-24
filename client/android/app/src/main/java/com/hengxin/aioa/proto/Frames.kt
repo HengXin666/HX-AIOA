@@ -24,7 +24,7 @@ sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
     /** resync: 断线太久, 本地 seq < floor 的缓存可能漏了删除, 要丢掉。 */
     /** uid: 当前账号 id, 与消息的 by 比较认出自己发的。 */
-    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null, val resync: Boolean = false, val floor: Long = 0, val uid: String? = null) : ServerFrame
+    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null, val resync: Boolean = false, val floor: Long = 0, val uid: String? = null, val name: String? = null) : ServerFrame
     // group: 事件的 channel, 即消息所在的群; 旧消息与本机发出的没有
     data class Msg(
         val seq: Long,
@@ -42,6 +42,9 @@ sealed interface ServerFrame {
         val deleted: String? = null,
         val deletedSeq: Long = 0,
         val file: FileRef? = null,
+        // 是不是自己 (当前账号) 发的; 来源 id (user:<uid> / Agent 来源 id), 用来按 id 取最新名字
+        val mine: Boolean = false,
+        val sid: String? = null,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
@@ -101,7 +104,7 @@ object Frames {
 
     private fun decode(o: JSONObject): ServerFrame? {
         return when (o.optString(KEY_T)) {
-            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null }, o.optBoolean("resync"), o.optLong("floor"), o.optString("uid").ifEmpty { null })
+            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null }, o.optBoolean("resync"), o.optLong("floor"), o.optString("uid").ifEmpty { null }, o.optJSONObject("user")?.optString("display")?.ifEmpty { null })
             "msg" -> ServerFrame.Msg(
                 seq = o.getLong(KEY_SEQ),
                 ts = o.getLong(KEY_TS),

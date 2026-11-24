@@ -53,7 +53,7 @@ class Notifier(private val context: Context, private val db: MessageDb) {
         val key = msg.groupKey()
         val tag = MESSAGE_TAG + key
         if (!NotifyKit.active(context, tag, Constants.NOTIFY_ID_MESSAGE)) return
-        val left = db.unread(Constants.DEVICE_PREFIX, HISTORY_SCAN).lastOrNull { it.groupKey() == key }
+        val left = db.unread(HISTORY_SCAN).lastOrNull { it.groupKey() == key }
         if (left == null) NotifyKit.cancel(context, tag, Constants.NOTIFY_ID_MESSAGE) else message(left, quiet = true)
     }
 
@@ -65,13 +65,13 @@ class Notifier(private val context: Context, private val db: MessageDb) {
         if (!NotifyKit.granted(context)) return
         val key = msg.groupKey()
         val title = GroupTitles.of(context, key)
-        val history = db.unread(Constants.DEVICE_PREFIX, HISTORY_SCAN).filter { it.groupKey() == key }
+        val history = db.unread(HISTORY_SCAN).filter { it.groupKey() == key }
             .takeLast(Constants.NOTIFY_MAX_LINES).ifEmpty { listOf(msg) }
         val people = HashMap<String, Person>()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(title)
             .setGroupConversation(history.any { it.src != title })
         history.forEach { m -> style.addMessage(plainText(m.text), m.ts, people.getOrPut(m.src) { Person.Builder().setName(m.src).setKey(m.src).build() }) }
-        val total = db.unreadCount(Constants.DEVICE_PREFIX)
+        val total = db.unreadCount()
         val preview = plainLine(msg.text).ifEmpty { context.getString(R.string.notify_card) }
         val line = if (msg.src == title) preview else "${msg.src}: $preview"
         val notification = NotifyKit.builder(context, Constants.CHANNEL_MESSAGE, R.drawable.ic_stat_message)

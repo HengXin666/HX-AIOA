@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.R
+import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
@@ -244,7 +245,7 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
                 is ChatRow.Local -> {
                     val p = row.p
                     MessageBubble(
-                        ServerFrame.Msg(-1, p.ts, model.device, p.text, p.cid, group, p.reply),
+                        ServerFrame.Msg(-1, p.ts, Me.label, p.text, p.cid, group, p.reply, mine = true),
                         true,
                         BubbleSpot(head = true, showSender = false, highlight = false),
                         null,

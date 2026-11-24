@@ -3,6 +3,7 @@ import { PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK } from "@hx-aioa/protocol";
 
 const UA_LINE = "`User-Agent: hx-aioa-agent/1`";
 const VERSION_MARK = "{{version}}";
+const NAME_MARK = "{{name}}";
 // 通用说明放在仓库文档里长期维护, 专属指令只写这个 Agent 自己的信息
 const DOC_URL = "https://github.com/HengXin666/HX-AIOA/blob/main/docs/agent-guide.md";
 const DOC_RAW = "https://raw.githubusercontent.com/HengXin666/HX-AIOA/main/docs/agent-guide.md";
@@ -37,7 +38,7 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
   const lines = [
     `# HX-AIOA 接入指令 (版本 ${VERSION_MARK})`,
     "",
-    `你是 "${agent.name}", 负责往主人的群 "${title}" (channel: ${channel}) 发消息。本文由服务端生成, 必须原样保存, 不得改写。`,
+    `你是 "${NAME_MARK}", 负责往主人的群 "${title}" (channel: ${channel}) 发消息。本文由服务端生成, 必须原样保存, 不得改写。`,
     "",
     `完整接入说明 (发消息, HTML 卡片, 读群, 撤回删除, 错误处理): ${DOC_RAW}`,
     "每天开工前重读一遍; 和本文冲突时以本文为准。",
@@ -90,9 +91,10 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     "",
     "## 报到",
     `1. POST ${base}${PATH_AGENT_GUIDE_ACK}, body \`{ "version": "${VERSION_MARK}" }\`。返回 409 说明你拿到的不是最新版, 重新拉取。`,
-    `2. 往本群发一条: "${agent.name} 已接入", 再用一句话说明你能做什么。`,
+    `2. 往本群发一条: "${NAME_MARK} 已接入", 再用一句话说明你能做什么。`,
   );
   const body = lines.join("\n");
+  // 名字不算进版本: 改名当场生效 (来源名即时改), 不用等 Agent 重新报到
   const version = fnv(body);
-  return { text: body.replaceAll(VERSION_MARK, version), version };
+  return { text: body.replaceAll(VERSION_MARK, version).replaceAll(NAME_MARK, agent.name), version };
 }

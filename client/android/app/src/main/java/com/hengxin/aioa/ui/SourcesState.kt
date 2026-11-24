@@ -66,6 +66,7 @@ class SourcesState(private val context: Context, private val scope: CoroutineSco
             val next = objects(body.optJSONArray("sources") ?: return@get).map(::item)
             withContext(Dispatchers.Main) {
                 if (next != items.toList()) { items.clear(); items.addAll(next) }
+                com.hengxin.aioa.ui.chat.Names.update(next.associate { it.id to it.name })
                 loaded = true
             }
         }

@@ -10,8 +10,8 @@ import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import org.json.JSONObject
 
-/** 群: 推送方写的 channel; 没写时按来源名, 本机发出的归 "备忘"。 */
-fun ServerFrame.Msg.groupKey(): String = group ?: if (src.startsWith(Constants.DEVICE_PREFIX)) MessageDb.MEMO_GROUP else src
+/** 群: 推送方写的 channel; 没写时按来源名, 自己发的归 "备忘"。 */
+fun ServerFrame.Msg.groupKey(): String = group ?: if (mine) MessageDb.MEMO_GROUP else src
 
 /** n 是否替代了这条: 同 id 的新版本, 或墓碑指向它的旧序号。 */
 fun ServerFrame.Msg.replacedBy(n: ServerFrame.Msg): Boolean =
@@ -29,7 +29,7 @@ class MessageDb private constructor(context: Context) :
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT, $C_ID TEXT)")
+        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT, $C_ID TEXT, $C_MINE INTEGER NOT NULL DEFAULT 0, $C_SID TEXT)")
         db.execSQL("CREATE TABLE $T_KV (k TEXT PRIMARY KEY, v INTEGER NOT NULL)")
         db.execSQL(GRP_INDEX)
         db.execSQL(ID_INDEX)
@@ -45,6 +45,12 @@ class MessageDb private constructor(context: Context) :
         if (oldVersion < 4) {
             db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_ID TEXT")
             db.execSQL(ID_INDEX)
+        }
+        if (oldVersion < 5) {
+            // 以前靠 src 里的设备前缀认 "自己发的", 现在单独一列; 旧行按前缀回填
+            db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_MINE INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_SID TEXT")
+            db.execSQL("UPDATE $T_MSG SET $C_MINE = 1 WHERE $C_SRC LIKE '${Constants.DEVICE_PREFIX}%'")
         }
     }
 
@@ -76,6 +82,8 @@ class MessageDb private constructor(context: Context) :
             put(C_GRP, msg.groupKey())
             put(C_EXTRA, extraOf(msg))
             put(C_ID, msg.id)
+            put(C_MINE, if (msg.mine) 1 else 0)
+            put(C_SID, msg.sid)
         }
     }
 
@@ -103,8 +111,8 @@ class MessageDb private constructor(context: Context) :
         return lasts.map { m ->
             val key = m.groupKey()
             val unread = longQuery(
-                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE",
-                arrayOf(key, groupRead(key).toString(), "${Constants.DEVICE_PREFIX}%"),
+                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $LIVE",
+                arrayOf(key, groupRead(key).toString()),
             )
             GroupSummary(key, m, unread.toInt())
         }
@@ -120,15 +128,15 @@ class MessageDb private constructor(context: Context) :
         if (seq > groupRead(key)) putKv(K_GROUP_READ + key, seq)
     }
 
-    // 未读: 序号大于已读位置, 且不是本机发出的
-    fun unread(selfPrefix: String, limit: Int): List<ServerFrame.Msg> = query(
-        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
-        arrayOf(readSeq().toString(), "$selfPrefix%", limit.toString()),
+    // 未读: 序号大于已读位置, 且不是自己发的
+    fun unread(limit: Int): List<ServerFrame.Msg> = query(
+        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
+        arrayOf(readSeq().toString(), limit.toString()),
     )
 
-    fun unreadCount(selfPrefix: String): Long = longQuery(
-        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_SRC NOT LIKE ? AND $LIVE",
-        arrayOf(readSeq().toString(), "$selfPrefix%"),
+    fun unreadCount(): Long = longQuery(
+        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $LIVE",
+        arrayOf(readSeq().toString()),
     )
 
     fun readSeq(): Long = getKv(K_READ_SEQ)
@@ -156,18 +164,23 @@ class MessageDb private constructor(context: Context) :
             val grp = c.getColumnIndexOrThrow(C_GRP)
             val extra = c.getColumnIndexOrThrow(C_EXTRA)
             val id = c.getColumnIndexOrThrow(C_ID)
+            val mine = c.getColumnIndexOrThrow(C_MINE)
+            val sid = c.getColumnIndexOrThrow(C_SID)
             buildList {
                 while (c.moveToNext()) {
-                    val srcV = c.getString(src)
+                    val isMine = c.getInt(mine) == 1
+                    val rawSrc = c.getString(src)
+                    // 旧行里自己的消息存的是设备 id, 显示成自己的名字
+                    val srcV = if (isMine && rawSrc.startsWith(Constants.DEVICE_PREFIX)) Me.label else rawSrc
                     // 库里存的是群键; 只有推送方写了 channel 的才还原成 group
-                    val g = c.getString(grp)?.takeIf { it != srcV && it != MEMO_GROUP }
+                    val g = c.getString(grp)?.takeIf { it != rawSrc && it != MEMO_GROUP }
                     val x = c.getString(extra)?.let { runCatching { JSONObject(it) }.getOrNull() }
                     val reply = x?.optJSONObject(X_REPLY)?.let { MsgRef(it.optLong(C_SEQ), it.optString(C_SRC), it.optString(C_TEXT)) }
                     val fwd = x?.optJSONObject(X_FWD)?.let { FwdInfo(it.optString(C_SRC), it.optLong(C_TS)) }
                     val html = x?.optString(X_HTML)?.ifEmpty { null }
                     val del = x?.optString(X_DELETED)?.ifEmpty { null }
                     val file = com.hengxin.aioa.proto.FileRef.parse(x?.optJSONObject(X_FILE))
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file))
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid)))
                 }
             }
         }
@@ -175,7 +188,7 @@ class MessageDb private constructor(context: Context) :
     companion object {
         const val MEMO_GROUP = "备忘"
         private const val DB_NAME = "messages.db"
-        private const val DB_VERSION = 4
+        private const val DB_VERSION = 5
         const val DELETE_MODE = "delete"
         const val RECALL_MODE = "recall"
         private const val C_ID = "id"
@@ -208,6 +221,8 @@ class MessageDb private constructor(context: Context) :
         private const val C_TEXT = "text"
         private const val C_CID = "cid"
         private const val C_GRP = "grp"
+        private const val C_MINE = "mine"
+        private const val C_SID = "sid"
         private const val K_READ_SEQ = "read_seq"
         private const val K_GROUP_READ = "read:"
         private const val GRP_INDEX = "CREATE INDEX IF NOT EXISTS msg_grp ON $T_MSG ($C_GRP, $C_SEQ)"

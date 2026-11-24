@@ -1,5 +1,5 @@
 import type { Envelope, Kind } from "@hx-aioa/protocol";
-import { DEVICE_PREFIX, MEMO_GROUP } from "./constants";
+import { DEVICE_PREFIX, MEMO_GROUP, USER_SOURCE_PREFIX } from "./constants";
 import { legacyBodyText, textToEventData } from "./legacy";
 
 type Row = { seq: number; body: string };
@@ -182,11 +182,11 @@ export class EventStore {
   }
 }
 
-/** 事件所属的群: 有 channel 用 channel, 客户端自己发的进备忘, 否则按来源; 指标不属于任何群。 */
+/** 事件所属的群: 有 channel 用 channel, 人自己发的 (旧: 设备 id, 新: user:) 进备忘, 否则按来源; 指标不属于任何群。 */
 export function groupOf(ev: Envelope): string | null {
   if (ev.kind === "metric") return null;
   if (ev.channel) return ev.channel;
-  if (ev.source.id.startsWith(DEVICE_PREFIX)) return MEMO_GROUP;
+  if (ev.source.id.startsWith(DEVICE_PREFIX) || ev.source.id.startsWith(USER_SOURCE_PREFIX)) return MEMO_GROUP;
   return ev.source.name || ev.source.id;
 }
 

@@ -104,3 +104,6 @@ export const GITHUB_ADAPTER = "github";
 // 群键规则与安卓端 groupKey() 一致: 有 channel 用 channel, 本机发的归备忘, 否则按来源名
 export const MEMO_GROUP = "备忘";
 export const DEVICE_PREFIX = "android";
+export { USER_SOURCE_PREFIX } from "@hx-aioa/protocol";
+// 没有账号 (旧的 AUTH_TOKEN 连接) 时人发消息的显示名
+export const OWNER_NAME = "主人";

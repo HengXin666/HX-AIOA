@@ -67,7 +67,8 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
     val spaces = SpacesState(app, viewModelScope, metrics)
     val seen = SeenStore(app)
-    val sources = SourcesState(app, viewModelScope)
+    // 先拉一次来源列表: 聊天里按来源 id 显示最新名字要用
+    val sources = SourcesState(app, viewModelScope).also { it.refresh() }
     val github = GithubState(app, viewModelScope)
     val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g ->
         g.directory.onMetas = { g.applyReads() }
@@ -121,7 +122,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         feed.act(task.id, kind, picked, confirm)
     }
 
-    fun isMine(msg: ServerFrame.Msg): Boolean = msg.src.startsWith(Constants.DEVICE_PREFIX)
+    fun isMine(msg: ServerFrame.Msg): Boolean = msg.mine
 
     override fun onStatus(online: Boolean) {
         this.online = online
@@ -133,7 +134,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
-        if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid)
+        if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {
