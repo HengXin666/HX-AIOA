@@ -34,6 +34,7 @@ export const PATH_GITHUB_AVAILABLE = `${API_V1}/github/available`;
 export const PATH_GITHUB_TRACKED = `${API_V1}/github/tracked`;
 export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
 export const PATH_GITHUB_DAILY = `${API_V1}/github/daily`;
+export const PATH_GITHUB_BRANCHES = `${API_V1}/github/branches`;
 export const PATH_FILES = `${API_V1}/files`;
 export const PATH_FILE = `${API_V1}/files/{id}`;
 export const PATH_FILE_LINK = `${API_V1}/files/{id}/link`;

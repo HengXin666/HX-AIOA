@@ -37,7 +37,7 @@ export type CfStore = { kind: "r2" | "kv" | "d1"; id: string; name: string; byte
 export type CfStorage = { configured: boolean; at?: number; quotas?: CfQuota[]; stores?: CfStore[]; errors?: string[] };
 
 type Rest<T> = { success: boolean; result?: T; errors?: { message: string }[] };
-async function rest<T>(env: Env, path: string): Promise<T> {
+export async function rest<T>(env: Env, path: string): Promise<T> {
   const res = await fetch(REST + path, { headers: { authorization: `Bearer ${env.CF_API_TOKEN}` } });
   const body = (await res.json()) as Rest<T>;
   if (!res.ok || !body.success || body.result === undefined) throw new Error(body.errors?.[0]?.message ?? `HTTP ${res.status}`);

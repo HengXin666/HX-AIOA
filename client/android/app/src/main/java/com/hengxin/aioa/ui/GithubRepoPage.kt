@@ -26,14 +26,19 @@ import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.StateBody
 import com.hengxin.aioa.kit.Text
 
-private enum class RepoTab(val label: String) { TIMELINE("动态"), BRANCHES("分支"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
+private enum class RepoTab(val label: String) { TIMELINE("动态"), BRANCHES("未合入"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
 
 /** 仓库详情: 分段看动态, PR, Issue, CI; 每条点开浏览器, 返回键回列表。 */
 @Composable
 fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
     val context = LocalContext.current
-    var tab by rememberSaveable(repo) { mutableStateOf(RepoTab.TIMELINE) }
-    LaunchedEffect(repo) { state.loadDetail(repo) }
+    var tab by rememberSaveable(repo) { mutableStateOf(if (state.openBranchesTab) RepoTab.BRANCHES else RepoTab.TIMELINE) }
+    LaunchedEffect(repo) {
+        state.openBranchesTab = false
+        state.loadDetail(repo)
+        state.branches.refreshIfStale()
+    }
+    val open = state.branches.of(repo)?.takeIf { it.error == null }?.branches
     WatchGithub(state, repo)
     BackHandler(onBack = onBack)
     val detail = state.details[repo]
@@ -43,17 +48,17 @@ fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
         SubPage(repo.substringAfter('/'), onBack, "在 GitHub 打开" to { openUrl(context, url) }) {
             summary?.let { RepoHeader(it) }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RepoTab.entries.forEach { t -> Chip(t.label + count(detail, t), tab == t) { tab = t } }
+                RepoTab.entries.forEach { t -> Chip(t.label + count(detail, t, open), tab == t) { tab = t } }
             }
             val error = state.detailErrors[repo]
             Card {
                 val shown = when {
-                    detail != null -> if (rows(detail, tab) == 0) CardState.Empty else CardState.Ready
+                    detail != null -> if (rows(detail, tab, open) == 0) CardState.Empty else CardState.Ready
                     error != null -> CardState.Error(error)
                     else -> CardState.Loading
                 }
-                StateBody(shown, emptyText(tab), { state.loadDetail(repo) }) {
-                    if (detail != null) TabBody(detail, tab) { openUrl(context, it) }
+                StateBody(shown, emptyText(tab, open != null), { state.loadDetail(repo) }) {
+                    if (detail != null) TabBody(detail, tab, open) { openUrl(context, it) }
                 }
             }
         }
@@ -77,7 +82,7 @@ private fun RepoHeader(r: GhRepo) {
 }
 
 @Composable
-private fun TabBody(d: GhDetail, tab: RepoTab, open: (String?) -> Unit) {
+private fun TabBody(d: GhDetail, tab: RepoTab, unmerged: List<GhOpenBranch>?, open: (String?) -> Unit) {
     when (tab) {
         RepoTab.TIMELINE -> AnimatedItems(d.timeline.sortedByDescending { it.ts }, { "${it.ts}${it.kind}${it.title}" }) { a ->
             GhRow(activityIcon(a.kind), a.title, ago(a.ts)) { open(a.url) }
@@ -91,7 +96,9 @@ private fun TabBody(d: GhDetail, tab: RepoTab, open: (String?) -> Unit) {
             GhRow(ICON_ISSUE, i.title, meta) { open(i.url) }
         }
         RepoTab.CI -> AnimatedItems(d.runs, { it.url }) { r -> RunRow(r) { open(r.url) } }
-        RepoTab.BRANCHES -> AnimatedItems(d.branches, { it.name }) { b -> BranchRow(b) { open("${d.repo.url}/tree/${b.name}") } }
+        // 有 GITHUB_TOKEN 时列未合入分支, 否则退回 webhook 收到过推送的分支
+        RepoTab.BRANCHES -> if (unmerged != null) AnimatedItems(unmerged, { it.name }) { b -> OpenBranchRow(b) }
+        else AnimatedItems(d.branches, { it.name }) { b -> BranchRow(b) { open("${d.repo.url}/tree/${b.name}") } }
     }
 }
 
@@ -116,20 +123,20 @@ private fun RunRow(r: GhRun, onClick: () -> Unit) {
     }
 }
 
-private fun rows(d: GhDetail, tab: RepoTab): Int = when (tab) {
+private fun rows(d: GhDetail, tab: RepoTab, unmerged: List<GhOpenBranch>?): Int = when (tab) {
     RepoTab.TIMELINE -> d.timeline.size
     RepoTab.PRS -> d.prs.size
     RepoTab.ISSUES -> d.issues.size
     RepoTab.CI -> d.runs.size
-    RepoTab.BRANCHES -> d.branches.size
+    RepoTab.BRANCHES -> unmerged?.size ?: d.branches.size
 }
 
-private fun count(d: GhDetail?, tab: RepoTab): String = if (d == null || tab == RepoTab.TIMELINE) "" else " ${rows(d, tab)}"
+private fun count(d: GhDetail?, tab: RepoTab, unmerged: List<GhOpenBranch>?): String = if (d == null || tab == RepoTab.TIMELINE) "" else " ${rows(d, tab, unmerged)}"
 
-private fun emptyText(tab: RepoTab): String = when (tab) {
+private fun emptyText(tab: RepoTab, live: Boolean): String = when (tab) {
     RepoTab.TIMELINE -> "还没有动态, 配好 Webhook 后这里会实时出现"
     RepoTab.PRS -> "没有开放的 PR"
     RepoTab.ISSUES -> "没有开放的 Issue"
     RepoTab.CI -> "还没有 CI 记录"
-    RepoTab.BRANCHES -> "还没有收到推送; 配好 Webhook 后, 推送过的分支会按时间列在这里"
+    RepoTab.BRANCHES -> if (live) "所有分支都已合入默认分支" else "还没有收到推送; 配好 Webhook 后, 推送过的分支会按时间列在这里"
 }

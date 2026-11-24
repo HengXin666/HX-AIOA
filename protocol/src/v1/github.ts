@@ -73,3 +73,20 @@ export const GITHUB_DAILY_DEFAULT_DAYS = 14;
 export const GITHUB_DAILY_MAX_DAYS = 30;
 
 export type GithubActivityResult = { login: string; since: number; until: number; items: GithubActivityItem[]; stats: GithubActivityStats; syncedAt?: number };
+
+// 未合入分支: 有自己的提交 (ahead > 0), 没删, 也没通过 PR 合入; behind 是落后默认分支的提交数
+export type GithubOpenBranch = {
+  name: string;
+  at: number;
+  by?: string;
+  ahead: number;
+  behind: number;
+  url: string;
+  pr?: { number: number; url: string; draft: boolean };
+  ci?: GithubCiStatus;
+};
+export type GithubRepoBranches = { repo: string; url: string; defaultBranch: string; branches: GithubOpenBranch[]; error?: string };
+// days: 只算最近 days 天有提交的分支; 全局视图与单仓库共用
+export type GithubBranchesResult = { at: number; days: number; repos: GithubRepoBranches[] };
+export const GITHUB_BRANCH_DEFAULT_DAYS = 30;
+export const GITHUB_BRANCH_MAX_DAYS = 90;

@@ -1,4 +1,4 @@
-import { GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
+import { GITHUB_BRANCH_DEFAULT_DAYS, GITHUB_BRANCH_MAX_DAYS, PATH_GITHUB_BRANCHES, GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
 import { CODE_NOT_CONFIGURED, CODE_NOT_FOUND, ERR_NO_GITHUB_TOKEN, ERR_NO_RESOURCE, GET, POST, PUT } from "./constants";
 import { OWNER, type Route, route } from "./core";
 import { fail, json, readJson } from "./http";
@@ -45,5 +45,11 @@ export const GITHUB_ROUTES: Route[] = [
     const days = Math.min(GITHUB_DAILY_MAX_DAYS, Math.max(1, Number(c.url.searchParams.get("days")) || GITHUB_DAILY_DEFAULT_DAYS));
     const tz = Math.max(-TZ_MAX_MIN, Math.min(TZ_MAX_MIN, Number(c.url.searchParams.get("tz")) || 0));
     return json(await c.core.github.daily(days, tz));
+  }),
+  // 未合入分支: days 天内有提交 (默认 30, 最多 90); fresh=1 跳过 10 分钟缓存
+  route(GET, PATH_GITHUB_BRANCHES, READ, async (c) => {
+    const days = Math.min(GITHUB_BRANCH_MAX_DAYS, Math.max(1, Number(c.url.searchParams.get("days")) || GITHUB_BRANCH_DEFAULT_DAYS));
+    const r = await c.core.github.branches(days, c.url.searchParams.get("fresh") === "1");
+    return r ? json(r) : noToken();
   }),
 ];

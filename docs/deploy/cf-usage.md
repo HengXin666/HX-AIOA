@@ -39,3 +39,7 @@ cron 每 30 分钟检查一次, 任一项用到 80% 时在 "CF 额度" 群发一
 ## CF 存储 (R2 / KV / D1)
 
 `GET /api/v1/cf/storage` (owner), 缓存 5 分钟。每类存储的总大小与本期用量对照免费额度 (R2 操作按月, KV/D1 按天, UTC), 并列出每个桶/命名空间/数据库。R2 用 r2StorageAdaptiveGroups / r2OperationsAdaptiveGroups, KV 用 kvStorageAdaptiveGroups / kvOperationsAdaptiveGroups, D1 大小来自 REST `/d1/database` 的 file_size, 用量来自 d1AnalyticsAdaptiveGroups。token 需 Workers R2 存储 / KV 存储 / D1 读取。
+
+## 按 worker 拆分
+
+`/api/v1/cf/usage` 的每一项可带 `by: [{name, used}]`: Worker 请求与 DO 请求按 `scriptName` 分组; DO 时长与行读写只能按 `namespaceId` 分组, 用 DO 命名空间列表 (REST) 对回 worker, 对不上的显示为 `命名空间 xxxxxx`。拆分失败时 `split` 写原因, 总量照常。安卓额度页的进度条按 worker 分色, 点开看各 worker 的数字。

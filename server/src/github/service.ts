@@ -1,5 +1,6 @@
 import type {
   GithubActivityResult,
+  GithubBranchesResult,
   GithubAvailableResult,
   GithubDailyResult,
   GithubRepoDetail,
@@ -12,11 +13,16 @@ import type { Registry } from "../registry";
 import { fetchActivity, fetchAvailable, fetchLogin } from "./account";
 import { ActivityStore, statsOf } from "./activity";
 import { applyGithubEvent } from "./apply";
+import { fetchBranches } from "./branches";
+import { cfCached } from "../cf-cache";
 import { dailyOf, dayStart, streakOf } from "./daily";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
 const NO_PICKS: Picks = { picks: [], hidden: [] };
+// 分支状况 10 分钟缓存 (内存 + 边缘), 下拉刷新可跳过
+const BRANCH_CACHE_MS = 10 * 60_000;
+const GUESS_BASE = "main";
 
 // GitHub 页面状态: webhook 增量更新, 有 GITHUB_TOKEN 时可回填, 并拉取本人的动态
 export class GithubService {
@@ -111,6 +117,27 @@ export class GithubService {
       streak: streakOf(list),
       ...(syncedAt ? { syncedAt } : {}),
     };
+  }
+
+  /** 关注仓库里最近 days 天活跃, 还没合入默认分支的分支。fresh 跳过缓存。 */
+  async branches(days: number, fresh: boolean, now = Date.now()): Promise<GithubBranchesResult | null> {
+    const token = this.env.GITHUB_TOKEN;
+    if (!token) return null;
+    return cfCached(`gh-branches:${days}`, fresh ? 0 : BRANCH_CACHE_MS, now, () => this.loadBranches(token, days, now));
+  }
+
+  private async loadBranches(token: string, days: number, now: number): Promise<GithubBranchesResult> {
+    const ci = (repo: string, branch: string) => this.store.runs(repo).find((r) => r.branch === branch)?.status;
+    const want = (await this.tracked()).map((repo) => ({ repo, base: this.store.meta(repo)?.defaultBranch ?? GUESS_BASE }));
+    const repos = await fetchBranches(token, want, days, ci, now);
+    // 默认分支猜错的 (还没同步过的仓库) 用查到的名字再查一次
+    const redo = repos.flatMap((r, i) => (r.defaultBranch && r.defaultBranch !== want[i]?.base ? [{ i, repo: r.repo, base: r.defaultBranch }] : []));
+    if (redo.length) {
+      const again = await fetchBranches(token, redo, days, ci, now);
+      redo.forEach((x, k) => (repos[x.i] = again[k]!));
+    }
+    repos.sort((a, b) => (b.branches[0]?.at ?? 0) - (a.branches[0]?.at ?? 0));
+    return { at: now, days, repos };
   }
 
   private async syncActivity(token: string): Promise<string | null> {

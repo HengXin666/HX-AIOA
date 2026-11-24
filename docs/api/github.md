@@ -24,3 +24,12 @@
 - webhook 入库时同步更新: `ping` 登记仓库并取 stars, 描述, 默认分支, `open_issues_count` (减去已知 PR) 作为 Issue 数初值; 每个事件都会刷新 stars, 描述, 默认分支。
 - `push` 更新 `lastPush` 和活跃分支列表 (只认分支, 忽略 tag 与空推送; `deleted: true` 的推送把该分支从列表拿掉), 详情带 `branches: [{ branch, at, by, commits, sha?, ci? }]`, 最近的在前, 最多 8 个, `ci` 从已存的 runs 现算; `pull_request` opened / reopened / ready_for_review / converted_to_draft / edited 写入, closed (含合并) 删除; `issues` opened / reopened / edited 写入, closed 删除, 带 `pull_request` 的忽略; `workflow_run` 按 run id 覆盖; `release` published, `star` created, `issue_comment` created 进 timeline。
 - 有 `GITHUB_TOKEN` 时 Worker 的 cron 每 30 分钟自动回填一次。
+
+## 未合入分支
+
+`GET /api/v1/github/branches?days=30&fresh=1` (events:read): 关注仓库里最近 `days` 天 (默认 30, 最多 90) 有提交, 还没合入默认分支的分支。
+
+- 判定: 分支有自己的提交 (`ahead > 0`), 没被删, 最近关联的 PR 没有合入 (squash 合入也算已合)。
+- `behind`: 落后默认分支的提交数, 越大越难合。`pr`: 开着的 PR。`ci`: 该分支最近一次 CI (来自已存的 runs)。
+- 需要 `GITHUB_TOKEN`。服务端每 5 个仓库合成一次 GraphQL, 最多 40 个仓库; 结果缓存 10 分钟, `fresh=1` 跳过缓存。单个仓库出错写在它自己的 `error` 里。
+- 安卓: GitHub 页 "未合入分支" 卡 (全局, 新鲜度条 + 每仓库 3 条), 仓库详情 "未合入" tab。

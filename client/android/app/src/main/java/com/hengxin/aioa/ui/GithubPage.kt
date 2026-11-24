@@ -39,14 +39,16 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
     LaunchedEffect(Unit) {
         state.refreshIfStale(withRecent = true)
         state.mine.refreshIfStale()
+        state.branches.refreshIfStale()
     }
     WatchGithub(state)
     BackHandler(onBack = onBack)
     val sync = { state.sync { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }
-    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday(); state.mine.loadDaily() }) {
+    GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday(); state.mine.loadDaily(); state.branches.load(true) }) {
         SubPage(GITHUB_TITLE, onBack, (if (state.syncing) "同步中..." else "同步") to sync) {
             state.error?.let { ErrorCard(it) }
             DailyCard(state.mine)
+            BranchBoard(state.branches) { state.openBranchesTab = true; openRepo(it) }
             TodayCard(state.mine)
             when {
                 !state.loaded -> Card { StateBody(CardState.Loading) {} }
@@ -54,7 +56,7 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
                 state.repos.isNotEmpty() -> {
                     Summary(state)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Chip("选择仓库", false, onPick) }
-                    AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r) { openRepo(r.repo) } }
+                    AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r, state.branches.of(r.repo)?.branches?.size ?: 0) { openRepo(r.repo) } }
                 }
             }
         }
@@ -92,7 +94,7 @@ private fun EmptyRepos(synced: Boolean, onPick: () -> Unit, onAddSource: () -> U
 }
 
 @Composable
-private fun RepoCard(repo: GhRepo, open: () -> Unit) {
+private fun RepoCard(repo: GhRepo, unmerged: Int, open: () -> Unit) {
     val c = Aioa.colors
     Card(onClick = open) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -106,6 +108,7 @@ private fun RepoCard(repo: GhRepo, open: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             IconCount(ICON_PR, repo.openPrs, LABEL_PR)
             IconCount(ICON_ISSUE, repo.openIssues, LABEL_ISSUE)
+            if (unmerged > 0) IconCount(ICON_GITHUB, unmerged, "未合入")
         }
         pushLine(repo.lastPush)?.let {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

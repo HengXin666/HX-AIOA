@@ -1,6 +1,7 @@
 import { PATH_CF_USAGE } from "@hx-aioa/protocol";
 import { GET, WORKER_DAY_LIMIT } from "./constants";
 import { cfCached } from "./cf-cache";
+import { rest } from "./api-cf-storage";
 import type { Env } from "./env";
 import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
@@ -26,7 +27,9 @@ export type CfUsage = {
   configured: boolean;
   at?: number;
   day?: string;
-  items?: { key: string; label: string; used: number; limit: number; unit: string }[];
+  // by: 按 worker 拆开的用量 (从大到小); 拆不了的项没有 by
+  items?: { key: string; label: string; used: number; limit: number; unit: string; by?: { name: string; used: number }[] }[];
+  split?: string;
   // storedBytes: 整个账号 DO 存储 (CF 统计, 有延迟); hubBytes: 主 Hub 数据库当前大小 (实时)
   storage?: { storedBytes?: number; limit: number; hubBytes?: number; error?: string };
 };
@@ -41,7 +44,46 @@ const QUERY = `query($a: String!, $s: Time!, $e: Time!) { viewer { accounts(filt
   durableObjectsPeriodicGroups(limit: ${ROWS}, filter: {datetime_geq: $s, datetime_leq: $e}) { sum { duration rowsRead rowsWritten } }
 } } }`;
 
+// 按 worker 拆: 请求按 scriptName 分组; DO 时长 / 行读写只能按命名空间分组, 再用命名空间列表对回 worker
+const SPLIT_QUERY = `query($a: String!, $s: Time!, $e: Time!) { viewer { accounts(filter: {accountTag: $a}) {
+  workersInvocationsAdaptive(limit: ${ROWS}, filter: {datetime_geq: $s, datetime_leq: $e}) { sum { requests } dimensions { scriptName } }
+  durableObjectsInvocationsAdaptiveGroups(limit: ${ROWS}, filter: {datetime_geq: $s, datetime_leq: $e}) { sum { requests } dimensions { scriptName } }
+  durableObjectsPeriodicGroups(limit: ${ROWS}, filter: {datetime_geq: $s, datetime_leq: $e}) { sum { duration rowsRead rowsWritten } dimensions { namespaceId } }
+} } }`;
+const NS_SHORT = 6;
+
 type Sum = Record<string, number | undefined>;
+type DimGroups = { sum: Sum; dimensions?: Record<string, string | undefined> }[] | undefined;
+
+/** 按维度累加成 名字 -> 用量, 名字由 nameOf 决定。 */
+function byDim(g: DimGroups, k: string, dim: string, nameOf: (v: string) => string): { name: string; used: number }[] {
+  const m = new Map<string, number>();
+  for (const r of g ?? []) {
+    const name = nameOf(r.dimensions?.[dim] ?? "");
+    m.set(name, (m.get(name) ?? 0) + (r.sum[k] ?? 0));
+  }
+  return [...m].map(([name, used]) => ({ name, used: Math.round(used) })).filter((x) => x.used > 0).sort((a, b) => b.used - a.used);
+}
+
+type Namespace = { id: string; script?: string; name?: string };
+
+async function splitUsage(env: Env, vars: Record<string, string>): Promise<Record<string, { name: string; used: number }[]>> {
+  const [data, ns] = await Promise.all([
+    gql<{ viewer?: { accounts?: Record<string, DimGroups>[] } }>(env, SPLIT_QUERY, vars),
+    rest<Namespace[]>(env, `/accounts/${env.CF_ACCOUNT_ID}/workers/durable_objects/namespaces?per_page=100`).catch(() => [] as Namespace[]),
+  ]);
+  const acc = data.viewer?.accounts?.[0] ?? {};
+  const script = (v: string) => v || "其他";
+  const nsName = (v: string) => ns.find((n) => n.id === v)?.script ?? (v ? `命名空间 ${v.slice(0, NS_SHORT)}` : "其他");
+  const periodic = acc.durableObjectsPeriodicGroups;
+  return {
+    workerRequests: byDim(acc.workersInvocationsAdaptive, "requests", "scriptName", script),
+    doRequests: byDim(acc.durableObjectsInvocationsAdaptiveGroups, "requests", "scriptName", script),
+    doDuration: byDim(periodic, "duration", "namespaceId", nsName),
+    rowsWritten: byDim(periodic, "rowsWritten", "namespaceId", nsName),
+    rowsRead: byDim(periodic, "rowsRead", "namespaceId", nsName),
+  };
+}
 type Groups = { sum: Sum }[] | undefined;
 const total = (g: Groups, k: string) => (g ?? []).reduce((n, r) => n + (r.sum[k] ?? 0), 0);
 
@@ -82,9 +124,13 @@ export async function cfUsage(env: Env, now = Date.now(), hubBytes?: number): Pr
 
 async function loadUsage(env: Env, now: number): Promise<CfUsage> {
   const start = new Date(Math.floor(now / DAY_MS) * DAY_MS);
-  const [data, stored] = await Promise.all([
-    gql<{ viewer?: { accounts?: Record<string, Groups>[] } }>(env, QUERY, { a: env.CF_ACCOUNT_ID!, s: start.toISOString(), e: new Date(now).toISOString() }),
+  const vars = { a: env.CF_ACCOUNT_ID!, s: start.toISOString(), e: new Date(now).toISOString() };
+  let split: string | undefined;
+  const [data, stored, parts] = await Promise.all([
+    gql<{ viewer?: { accounts?: Record<string, Groups>[] } }>(env, QUERY, vars),
     storedBytes(env, now),
+    // 拆分失败不影响总量
+    splitUsage(env, vars).catch((e) => ((split = e instanceof Error ? e.message : String(e)), undefined)),
   ]);
   const acc = data.viewer?.accounts?.[0] ?? {};
   const used: Record<string, number> = {
@@ -94,8 +140,13 @@ async function loadUsage(env: Env, now: number): Promise<CfUsage> {
     rowsWritten: total(acc.durableObjectsPeriodicGroups, "rowsWritten"),
     rowsRead: total(acc.durableObjectsPeriodicGroups, "rowsRead"),
   };
-  const items = CF_LIMITS.map((l) => ({ ...l, used: used[l.key] ?? 0 }));
-  return { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, ...stored } };
+  const items = CF_LIMITS.map((l) => {
+    const by = parts?.[l.key];
+    return { ...l, used: used[l.key] ?? 0, ...(by?.length ? { by } : {}) };
+  });
+  const out: CfUsage = { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, ...stored } };
+  if (split) out.split = split;
+  return out;
 }
 
 export const CF_ROUTES: Route[] = [

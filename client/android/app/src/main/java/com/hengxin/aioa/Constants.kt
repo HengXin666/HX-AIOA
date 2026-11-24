@@ -125,6 +125,7 @@ object Constants {
     const val GITHUB_TRACKED_PATH = "api/v1/github/tracked"
     const val GITHUB_ACTIVITY_PATH = "api/v1/github/activity"
     const val GITHUB_DAILY_PATH = "api/v1/github/daily"
+    const val GITHUB_BRANCHES_PATH = "api/v1/github/branches"
     const val AUTH_LOGIN_PATH = "api/v1/auth/login"
     const val AUTH_REFRESH_PATH = "api/v1/auth/refresh"
     const val AUTH_LOGOUT_PATH = "api/v1/auth/logout"
