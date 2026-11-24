@@ -62,8 +62,8 @@ check("资料变化广播", Boolean(await client.next((f) => f.t === "chat_sync"
 await api(PATCH, `${V1}/chats/${enc(DIGEST)}`, { title: "日报", digest: "daily" });
 
 const writer = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "新闻抓取" });
-check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("agent-guide.md") && writer.data.prompt.includes(writer.data.key) && writer.data.key.startsWith("hxk_"), writer.data);
-const writerKey = /密钥: (\S+)/.exec(writer.data.prompt)?.[1] ?? "";
+check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("hxaioa login") && writer.data.prompt.includes(writer.data.key) && writer.data.key.startsWith("hxk_"), writer.data);
+const writerKey = writer.data.key ?? "";
 const guideRes = await fetch(`${server}${V1}/chat-agent/guide`, { headers: { Authorization: `Bearer ${writerKey}` } });
 const guideText = await guideRes.text();
 const version = guideRes.headers.get("X-Aioa-Guide-Version") ?? "";
@@ -86,9 +86,9 @@ const denied = await api(GET, `${V1}/chats/${enc(GROUP)}/messages`, undefined, w
 check("没给读权限不能读群", denied.status === 403, denied.status);
 
 const curator = await api(POST, `${V1}/chats/${enc(DIGEST)}/agents`, { name: "精选", reads: [GROUP] });
-const curatorKey = /密钥: (\S+)/.exec(curator.data.prompt)?.[1] ?? "";
+const curatorKey = curator.data.key ?? "";
 const curatorGuide = await (await fetch(`${server}${V1}/chat-agent/guide`, { headers: { Authorization: `Bearer ${curatorKey}` } })).text();
-check("精选 Agent 指令含读群说明", curatorGuide.includes(GROUP) && curatorGuide.includes("/messages?since="), curatorGuide);
+check("精选 Agent 指令含读群说明", curatorGuide.includes(GROUP) && curatorGuide.includes("-c <群>"), curatorGuide);
 const read = await api(GET, `${V1}/chats/${enc(GROUP)}/messages?since=0`, undefined, curatorKey);
 check("精选 Agent 读到新闻群", read.status === 200 && read.data.messages.length === 1 && read.data.head > 0, read.data);
 const chatsForKey = await api(GET, `${V1}/chats`, undefined, curatorKey);
@@ -128,13 +128,13 @@ check("读取头像且永久缓存", got.status === 200 && (got.headers.get("Cac
 
 const agentId = writer.data.agent.keyId;
 const rotated = await api(POST, `${V1}/chats/${enc(GROUP)}/agents/${agentId}/rotate`);
-const newKey = /密钥: (\S+)/.exec(rotated.data.prompt)?.[1] ?? "";
+const newKey = rotated.data.key ?? "";
 check("重新接入换 key", rotated.status === 200 && newKey && newKey !== writerKey, rotated.data);
 check("旧 key 作废", (await api(POST, `${V1}/messages`, { text: "x" }, writerKey)).status === 401);
 const viaNew = await api(POST, `${V1}/messages`, { text: "又来了" }, newKey);
 check("新 key 可用", viaNew.data?.channel === GROUP, [viaNew.status, viaNew.data]);
 const saved = await api(GET, `${V1}/chats/${enc(GROUP)}/agents/${rotated.data.agent.keyId}/prompt`);
-check("查看的指令不含密钥", saved.data.prompt.includes("/chat-agent/ack") && !saved.data.prompt.includes(newKey), saved.data);
+check("查看的指令不含密钥", saved.data.prompt.includes("hxaioa guide --ack") && !saved.data.prompt.includes(newKey), saved.data);
 const removed = await api(DELETE, `${V1}/chats/${enc(GROUP)}/agents/${rotated.data.agent.keyId}`);
 check("移除 Agent 并作废 key", removed.data.ok === true && (await api(POST, `${V1}/messages`, { text: "x" }, newKey)).status === 401);
 const read2 = await api(PATCH, `${V1}/chats/${enc(GROUP)}`, { read: 5 });

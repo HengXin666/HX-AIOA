@@ -69,15 +69,15 @@ const entry = list.data?.plugins?.find((p) => p.id === ID);
 check("市场列表", list.status === 200 && !!entry && !entry.installed && !list.data.error, list.data);
 const detail = await api("GET", `${V1}/plugins/${ID}`);
 check("插件详情带介绍", detail.status === 200 && detail.data.readmeType === "markdown" && detail.data.readme.includes("点子待办"), detail.data);
-check("未安装也能预览任务提示词", typeof detail.data.task === "string" && detail.data.task.includes("plugin-todo") && detail.data.task.includes("待办接口") && !detail.data.task.includes("{{"), detail.data.task);
+check("未安装也能预览任务提示词", typeof detail.data.task === "string" && detail.data.task.includes("plugin-todo") && detail.data.task.includes("### 待办") && !detail.data.task.includes("{{"), detail.data.task);
 check("市场索引与清单版本一致", entry?.version === detail.data.manifest?.version, [entry?.version, detail.data.manifest?.version]);
 const missing = await api("POST", `${V1}/plugins/nope/install`);
 check("市场里没有的插件装不了", missing.status === 404, missing.data);
 
 const inst = await api("POST", `${V1}/plugins/${ID}/install`);
-const key = /密钥: (\S+)/.exec(inst.data?.prompt ?? "")?.[1];
+const key = inst.data?.key;
 check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === `plugin-${ID}` && !!key, inst.data);
-check("接入语一段话: 文档链接, 定时, 任务, 密钥", inst.data?.prompt?.includes("agent-guide.md") && inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes("每条都引用回复") && inst.data.prompt.endsWith(`API 密钥: ${key}`) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
+check("接入语一段话: 命令行, 定时, 任务, 密钥", inst.data?.prompt?.includes(`hxaioa login`) && inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes("插件任务") && inst.data.prompt.includes(key) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
 const after = await api("GET", `${V1}/plugins/${ID}`);
 check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
 const again = await api("POST", `${V1}/plugins/${ID}/install`);
@@ -108,7 +108,7 @@ const chat = chats.data?.chats?.find((c) => c.channel === CHANNEL);
 check("建群并接入 Agent", chat?.title === "点子待办" && chat.agents?.[0]?.plugin === ID, chat);
 
 const guide = await call(key, "GET", `${V1}/chat-agent/guide`);
-check("专属指令带插件任务", guide.status === 200 && guide.data.includes("插件任务: 点子待办") && guide.data.includes("待办接口") && !guide.data.includes("{{"), guide.data);
+check("专属指令带插件任务", guide.status === 200 && guide.data.includes("插件任务: 点子待办") && guide.data.includes("### 待办") && !guide.data.includes("{{"), guide.data);
 
 const said = await api("POST", `${V1}/messages`, { text: "要不要做个插件市场?", channel: CHANNEL });
 const msgs = await call(key, "GET", `${V1}/chats/${CHANNEL}/messages?since=0`);
