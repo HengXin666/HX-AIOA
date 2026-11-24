@@ -29,6 +29,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -50,10 +51,13 @@ import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.ChatAvatar
+import com.hengxin.aioa.ui.chat.NewMessagesChip
+import com.hengxin.aioa.ui.chat.sendIn
 import com.hengxin.aioa.ui.chat.MailView
 import com.hengxin.aioa.ui.chat.digestLabel
 import com.hengxin.aioa.ui.chat.plainPreview
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.TimeZone
 
 internal val PAD = 12.dp
@@ -67,6 +71,8 @@ private const val RUN_GAP_MS = 3 * 60_000L
 // 离最早一条还剩几项时开始翻上一页
 private const val PREFETCH = 15
 private const val HIGHLIGHT_MS = 1600L
+// 离底部几行以内算 "在底部"
+private const val BOTTOM_SLACK = 1
 
 // 列表项; 列表倒序排放 (最新在最下, 但索引 0 是最新), 这样新消息进来不用滚动, 也自带动画
 private sealed interface ChatRow {
@@ -77,11 +83,12 @@ private sealed interface ChatRow {
     }
 
     data class Bubble(val msg: ServerFrame.Msg, val head: Boolean) : ChatRow {
-        override val key get() = "m${msg.seq}"
+        // 自己发的按 cid 作键, 和发送中的那行同一个键, 回执到了原地替换, 不闪
+        override val key get() = if (msg.mine && msg.cid != null) "c${msg.cid}" else "m${msg.seq}"
     }
 
     data class Local(val p: Pending) : ChatRow {
-        override val key get() = "p${p.cid}"
+        override val key get() = "c${p.cid}"
     }
 }
 
@@ -196,7 +203,9 @@ private fun buildRows(messages: List<ServerFrame.Msg>, pending: List<Pending>): 
         val head = newDay || prev!!.src != m.src || m.ts - prev.ts > RUN_GAP_MS
         rows.add(ChatRow.Bubble(m, head))
     }
-    pending.forEach { rows.add(ChatRow.Local(it)) }
+    // 回执和本地那行同时存在的一瞬间只留回执, 免得键重复
+    val sent = messages.mapNotNullTo(HashSet()) { it.cid }
+    pending.forEach { if (it.cid !in sent) rows.add(ChatRow.Local(it)) }
     rows.reverse()
     return rows
 }
@@ -210,10 +219,16 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
     }
     val state = rememberLazyListState()
     val showSender = group != MessageDb.MEMO_GROUP
-    // 停在底部时新消息自动跟上; 用户往上翻着看就不打扰
+    // 停在底部时新消息自动跟上; 用户往上翻着看就不打扰, 只计数并显示 "新消息" 小条
+    val atBottom by remember { derivedStateOf { state.firstVisibleItemIndex <= BOTTOM_SLACK } }
+    var unseen by remember(group) { mutableStateOf(0) }
     LaunchedEffect(rows.firstOrNull()?.key) {
-        if (state.firstVisibleItemIndex <= 1) state.animateScrollToItem(0)
+        if (atBottom) state.animateScrollToItem(0) else if ((rows.firstOrNull() as? ChatRow.Bubble)?.msg?.mine == false) unseen++
     }
+    LaunchedEffect(atBottom) { if (atBottom) unseen = 0 }
+    // 自己发消息: 不管翻到哪都回到底部
+    LaunchedEffect(g.sendTick) { if (g.sendTick > 0) state.animateScrollToItem(0) }
+    val scope = rememberCoroutineScope()
     // 翻到接近最早一条时预取上一页
     val nearTop by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - PREFETCH } }
     LaunchedEffect(nearTop) { if (nearTop) g.loadOlder() }
@@ -230,7 +245,8 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
             highlight = null
         }
     }
-    LazyColumn(modifier.fillMaxWidth(), state, reverseLayout = true, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) {
+    Box(modifier.fillMaxWidth()) {
+    LazyColumn(Modifier.fillMaxSize(), state, reverseLayout = true, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) {
         items(rows.size, key = { rows[it].key }, contentType = { rows[it]::class.hashCode() }) { i ->
             val mod = Modifier.animateItem()
             when (val row = rows[i]) {
@@ -249,7 +265,7 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
                         true,
                         BubbleSpot(head = true, showSender = false, highlight = false),
                         null,
-                        mod,
+                        mod.sendIn(),
                         status = when {
                             p.progress != null -> "上传中 ${(p.progress * PCT_SCALE).toInt()}%"
                             p.failed -> (p.error?.let { "$it, " } ?: "发送失败, ") + "点击重发"
@@ -260,6 +276,13 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
                 }
             }
         }
+    }
+    if (unseen > 0 && !atBottom) {
+        NewMessagesChip(unseen, Modifier.align(Alignment.BottomEnd).padding(12.dp)) {
+            unseen = 0
+            scope.launch { state.animateScrollToItem(0) }
+        }
+    }
     }
 }
 

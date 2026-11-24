@@ -34,8 +34,8 @@ data class ChatMeta(
 /** 群里接入的 Agent; reads 是它能读的群, joined 是最近报到时间, pending 表示指令变了还没重新报到。 */
 data class ChatAgent(val keyId: String, val name: String, val reads: List<String>, val created: Long, val rotated: Long?, val joined: Long?, val pending: Boolean)
 
-/** 收藏: 消息快照。 */
-data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg)
+/** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
+data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg, val gone: Boolean = false)
 
 const val VIEW_MAIL = "mail"
 
@@ -95,6 +95,6 @@ fun parseFavorites(body: JSONObject?): List<Favorite> {
     val arr = body?.optJSONArray("favorites") ?: return emptyList()
     return (0 until arr.length()).mapNotNull { i ->
         val o = arr.optJSONObject(i) ?: return@mapNotNull null
-        runCatching { Favorite(o.getLong("seq"), o.optLong("saved"), V1Decode.envelope(o.getJSONObject("ev")).toMsg()) }.getOrNull()
+        runCatching { Favorite(o.getLong("seq"), o.optLong("saved"), V1Decode.envelope(o.getJSONObject("ev")).toMsg(), o.optBoolean("gone")) }.getOrNull()
     }
 }

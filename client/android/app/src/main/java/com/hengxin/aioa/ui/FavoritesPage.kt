@@ -33,10 +33,14 @@ import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.LetterAvatar
 import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
+import com.hengxin.aioa.ui.chat.HtmlCard
+import com.hengxin.aioa.ui.chat.FileCard
+import com.hengxin.aioa.ui.chat.plainPreview
+import com.hengxin.aioa.data.groupKey
 
 private val CARD = RoundedCornerShape(14.dp)
 
-/** 收藏: 按收藏时间倒序, 存的是快照, 原消息被清理也还在。 */
+/** 收藏: 按收藏时间倒序, 显示原消息的当前版本; 原消息没了只剩一句摘要。 */
 @Composable
 fun FavoritesPage(model: ChatModel, onBack: () -> Unit) {
     val dir = model.groups.directory
@@ -45,6 +49,8 @@ fun FavoritesPage(model: ChatModel, onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     var forwarding by remember { mutableStateOf<ServerFrame.Msg?>(null) }
     val md = MdColors(c.onSurface, c.outline, c.primary, c.onSurface.copy(alpha = 0.08f))
+    // 收藏按引用: 每次打开拉一次, 原消息改了 / 撤回了能看到 (带 ETag, 没变化不传正文)
+    androidx.compose.runtime.LaunchedEffect(Unit) { dir.refreshFavorites() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
@@ -62,8 +68,19 @@ fun FavoritesPage(model: ChatModel, onBack: () -> Unit) {
                         Text(Names.of(f.msg), Modifier.padding(start = 8.dp).weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                         Text(DateUtils.formatDateTime(context, f.msg.ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH), fontSize = 11.sp, color = c.outline)
                     }
-                    MarkdownText(f.msg.text, md, Modifier.padding(top = 6.dp))
+                    // 按引用显示: HTML 卡片, 附件, 转发与引用都和聊天里一致
+                    f.msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = c.outline, modifier = Modifier.padding(top = 6.dp)) }
+                    val html = f.msg.html
+                    when {
+                        f.gone -> Text("原消息已撤回或删除 · ${plainPreview(f.msg.text)}", Modifier.padding(top = 6.dp), fontSize = 13.sp, color = c.outline)
+                        html != null -> HtmlCard(html, Modifier.padding(top = 6.dp))
+                        else -> {
+                            f.msg.file?.let { FileCard(it, c.onSurface, Modifier.padding(top = 6.dp)) }
+                            if (f.msg.file == null || !f.msg.text.startsWith(FILE_TEXT_PREFIX)) MarkdownText(f.msg.text, md, Modifier.padding(top = 6.dp))
+                        }
+                    }
                     Row {
+                        if (!f.gone) TextButton({ model.groups.openAt(f.msg.groupKey(), f.seq); onBack() }) { Text("定位") }
                         TextButton({ clipboard.setText(AnnotatedString(f.msg.text)) }) { Text("复制") }
                         TextButton({ forwarding = f.msg }) { Text("转发") }
                         TextButton({ dir.toggleFavorite(f.msg) }) { Text("取消收藏", color = c.error) }

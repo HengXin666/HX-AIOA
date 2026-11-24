@@ -55,6 +55,15 @@ object NotifyKit {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
+    /** 点消息通知: 打开 App 并进到这个群 (进群即标已读); 每个群一个 PendingIntent。 */
+    fun openGroup(context: Context, key: String): PendingIntent = PendingIntent.getActivity(
+        context,
+        key.hashCode(),
+        Intent().setClassName(context, UI_ACTIVITY).putExtra(Constants.EXTRA_OPEN_GROUP, key)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
     /** 有链接就在内置浏览器打开, 没有或不是网页就回到 App。 */
     fun openUrl(context: Context, url: String?): PendingIntent {
         val uri = url?.let { runCatching { Uri.parse(it) }.getOrNull() }?.takeIf(Browser::isWeb) ?: return openApp(context)

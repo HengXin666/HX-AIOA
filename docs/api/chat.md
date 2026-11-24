@@ -14,7 +14,7 @@
 
 ## 清空聊天记录
 
-`DELETE /api/v1/chats/{channel}/messages?before=` (母号) → `{ deleted, cleared }`。删掉该群 seq < before 的消息 (不填为全部), 群键规则同客户端: 有 channel 用 channel, 本机发的归 `备忘`, 否则按来源名。群资料记下 `cleared` (只前进) 并广播 `chat_sync`, 各端删掉本地 seq <= cleared 的消息。收藏是快照, 不受影响。
+`DELETE /api/v1/chats/{channel}/messages?before=` (母号) → `{ deleted, cleared }`。删掉该群 seq < before 的消息 (不填为全部), 群键规则同客户端: 有 channel 用 channel, 本机发的归 `备忘`, 否则按来源名。群资料记下 `cleared` (只前进) 并广播 `chat_sync`, 各端删掉本地 seq <= cleared 的消息。清空只删消息, 群资料, 成员, Agent 都保留, 群仍在列表里。被清空的消息如果收藏过, 收藏变成 `gone` (只剩摘要)。
 
 ## 群里的 Agent
 
@@ -45,7 +45,7 @@
 
 ## 收藏
 
-- `GET /api/v1/favorites` → `{ favorites: [{ seq, saved, ev }] }`, 带 `ETag`。收藏存的是消息快照。
+- `GET /api/v1/favorites` → `{ favorites: [{ seq, saved, ev, gone? }] }`, 带 `ETag`。收藏按引用存 (原消息 id + 一句摘要), 读取时取原消息的当前版本, HTML, 附件, 转发都和聊天里一致; 原消息被清空等找不到时 `gone: true`, `ev` 只剩摘要。原消息被撤回或删除时收藏一并移除。
 - `PUT /api/v1/favorites/{seq}` / `DELETE /api/v1/favorites/{seq}`; 变化后广播 `{ t: "chat_sync", topic: "favorites" }`。
 
 ## 头像

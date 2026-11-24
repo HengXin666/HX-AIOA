@@ -10,6 +10,8 @@ object Constants {
     const val QUERY_SINCE = "since"
 
     const val DEVICE_PREFIX = "android"
+    // 点通知打开对应的群
+    const val EXTRA_OPEN_GROUP = "open_group"
     // 人发的消息的来源类型 (与 protocol SOURCE_TYPE_USER 一致)
     const val SOURCE_TYPE_USER = "user"
     const val DEVICE_LINK = "link"

@@ -5,8 +5,21 @@ type FavRow = { seq: number; saved: number; body: string };
 type AvatarRow = { mime: string; data: ArrayBuffer };
 
 const MAX_FAVORITES = 2000;
+const STUB_TEXT = 200;
+// 收藏只存引用和一句摘要, 原消息没了时显示
+type FavStub = { id: string; ts: number; src: string; text: string; channel?: string };
 
-// 群资料, 收藏 (存快照, 原消息被清理也还在), 头像 (按内容哈希存, 永不变)
+function stubText(ev: Envelope): string {
+  const d = ev.data as { title?: string; summary?: string };
+  return (d.summary || d.title || "").slice(0, STUB_TEXT);
+}
+
+function stubEnvelope(s: FavStub, seq: number): Envelope {
+  const ev = { id: s.id, seq, ts: s.ts, kind: "event", source: { id: "", name: s.src }, priority: "happening", data: { title: s.text, severity: "normal" } };
+  return (s.channel ? { ...ev, channel: s.channel } : ev) as Envelope;
+}
+
+// 群资料, 收藏 (存引用 + 一句摘要), 头像 (按内容哈希存, 永不变)
 export class ChatStore {
   constructor(private readonly sql: SqlStorage) {
     sql.exec("CREATE TABLE IF NOT EXISTS chat_meta (channel TEXT PRIMARY KEY, body TEXT NOT NULL)");
@@ -40,21 +53,31 @@ export class ChatStore {
     this.sql.exec("INSERT OR REPLACE INTO chat_meta (channel, body) VALUES (?, ?)", meta.channel, JSON.stringify(meta));
   }
 
-  favorites(): Favorite[] {
+  /**
+   * 收藏按引用: 每次读时按 id 取原消息的当前版本 (更新过的显示新内容, HTML / 附件原样);
+   * 原消息被撤回, 删除或清空时 gone=true, 用收藏时留的小摘要兜底。旧数据存的是整条快照, 照样能当兜底。
+   */
+  favorites(resolve: (id: string, seq: number) => Envelope | null): Favorite[] {
     return this.sql
       .exec<FavRow>("SELECT seq, saved, body FROM fav ORDER BY saved DESC LIMIT ?", MAX_FAVORITES)
       .toArray()
-      .map((r) => ({ seq: r.seq, saved: r.saved, ev: JSON.parse(r.body) as Envelope }));
+      .map((r) => {
+        const ref = JSON.parse(r.body) as Envelope | FavStub;
+        const live = resolve(ref.id, r.seq);
+        if (live && !live.deleted) return { seq: r.seq, saved: r.saved, ev: live };
+        return { seq: r.seq, saved: r.saved, ev: "kind" in ref ? ref : stubEnvelope(ref, r.seq), gone: true };
+      });
   }
 
-  // 收藏的版本号: 条数与最后修改时间, 用作 ETag
-  favoritesTag(): string {
+  // 收藏的版本号: 条数, 最后修改时间, 以及消息库的头 (原消息变了也要让缓存失效)
+  favoritesTag(head: number): string {
     const r = this.sql.exec<{ n: number; m: number | null }>("SELECT COUNT(*) AS n, MAX(saved) AS m FROM fav").one();
-    return `${r.n}-${r.m ?? 0}`;
+    return `${r.n}-${r.m ?? 0}-${head}`;
   }
 
   addFavorite(ev: Envelope, now = Date.now()): Favorite {
-    this.sql.exec("INSERT OR REPLACE INTO fav (seq, saved, body) VALUES (?, ?, ?)", ev.seq, now, JSON.stringify(ev));
+    const stub: FavStub = { id: ev.id, ts: ev.ts, src: ev.source.name || ev.source.id, text: stubText(ev), ...(ev.channel ? { channel: ev.channel } : {}) };
+    this.sql.exec("INSERT OR REPLACE INTO fav (seq, saved, body) VALUES (?, ?, ?)", ev.seq, now, JSON.stringify(stub));
     return { seq: ev.seq, saved: now, ev };
   }
 

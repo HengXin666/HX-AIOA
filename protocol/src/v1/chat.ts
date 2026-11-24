@@ -41,7 +41,8 @@ export type ChatAgent = {
 export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest">>;
 export type AgentRequest = { name: string; reads?: string[] };
 export type AgentAck = { version: string };
-export type Favorite = { seq: number; saved: number; ev: Envelope };
+// 收藏按引用: ev 是原消息的当前版本; gone 表示原消息已撤回 / 删除 / 清空, ev 只剩收藏时的摘要
+export type Favorite = { seq: number; saved: number; ev: Envelope; gone?: boolean };
 // 接入 / 重新接入结果, 只给这一次: prompt 一段接入语 (文档链接, 任务, 密钥), key 另给一份方便单独复制
 export type OnboardResult = { agent: ChatAgent; prompt: string; key: string };
 export type ChatMessages = { messages: Envelope[]; head: number };

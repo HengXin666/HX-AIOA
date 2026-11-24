@@ -79,7 +79,7 @@ class Notifier(private val context: Context, private val db: MessageDb) {
             .setContentText(line)
             .setStyle(style)
             .setNumber(history.size)
-            .setContentIntent(NotifyKit.openApp(context))
+            .setContentIntent(NotifyKit.openGroup(context, key))
             .setGroup(Constants.GROUP_MESSAGE)
             .setAutoCancel(true)
             .setWhen(msg.ts)

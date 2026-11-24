@@ -375,7 +375,9 @@ export const CHAT_ROUTES: Route[] = [
   route(GET, PATH_CHAT_AGENT_PROMPT, OWNER, agentPromptOf),
   route(GET, PATH_AGENT_GUIDE, SEND_SCOPE, agentGuideOf),
   route(POST, PATH_AGENT_GUIDE_ACK, SEND_SCOPE, agentAck),
-  route(GET, PATH_FAVORITES, OWNER, (c) => cached(c.req, c.core.chats.favoritesTag(), { favorites: c.core.chats.favorites() })),
+  route(GET, PATH_FAVORITES, OWNER, (c) =>
+    cached(c.req, c.core.chats.favoritesTag(c.core.store.head()), { favorites: c.core.chats.favorites((id, seq) => c.core.store.get(id) ?? c.core.store.bySeq(seq)) }),
+  ),
   route(PUT, PATH_FAVORITE, OWNER, putFavorite),
   route(DELETE, PATH_FAVORITE, OWNER, deleteFavorite),
   route(PUT, PATH_AVATARS, OWNER, putAvatar),

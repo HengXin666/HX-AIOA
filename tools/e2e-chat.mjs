@@ -112,6 +112,12 @@ const etag = favs.res.headers.get("ETag");
 check("收藏列表", favs.data.favorites.some((f) => f.seq === seq) && Boolean(etag), favs.data);
 const again = await fetch(`${server}${V1}/favorites`, { headers: { Authorization: `Bearer ${token}`, "If-None-Match": etag } });
 check("收藏没变返回 304", again.status === 304, again.status);
+check("收藏按引用带原消息全文", JSON.stringify(favs.data.favorites.find((f) => f.seq === seq)?.ev?.data ?? {}).includes("头条") && !favs.data.favorites.find((f) => f.seq === seq).gone, favs.data.favorites[0]);
+const mineSeq = replied?.ev.seq ?? 0;
+await api(PUT, `${V1}/favorites/${mineSeq}`);
+await api(DELETE, `${V1}/events/seq/${mineSeq}?mode=recall`);
+const afterRecall = (await api(GET, `${V1}/favorites`)).data.favorites.find((f) => f.seq === mineSeq);
+check("原消息撤回后收藏随之移除", afterRecall === undefined, afterRecall);
 check("取消收藏", (await api(DELETE, `${V1}/favorites/${seq}`)).data.ok === true);
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, RUN.length]);

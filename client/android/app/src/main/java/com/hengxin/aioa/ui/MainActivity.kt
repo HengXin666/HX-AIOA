@@ -91,6 +91,10 @@ class MainActivity : ComponentActivity() {
 
     // hxaioa://join?server=..&code=..: 已登录就弹加入框, 没配置就预填服务地址和邀请码
     private fun handleLink(intent: Intent?) {
+        intent?.getStringExtra(Constants.EXTRA_OPEN_GROUP)?.let { key ->
+            intent.removeExtra(Constants.EXTRA_OPEN_GROUP)
+            if (chat.configured) chat.groups.openAt(key, 0)
+        }
         val uri = intent?.data ?: return
         if (uri.scheme != Constants.APP_SCHEME || uri.host != Constants.JOIN_HOST) return
         val code = uri.getQueryParameter(Constants.QUERY_CODE)?.ifEmpty { null } ?: return

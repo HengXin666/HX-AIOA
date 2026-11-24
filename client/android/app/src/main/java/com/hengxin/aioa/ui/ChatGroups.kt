@@ -77,6 +77,9 @@ class ChatGroups(
     /** 别的页要求打开某个群时加一, 主界面据此切到消息栏。 */
     var focusTick by mutableStateOf(0)
         private set
+    /** 自己发出一条就加一, 消息列表据此滚到底部。 */
+    var sendTick by mutableStateOf(0)
+        private set
     val messages = mutableStateListOf<ServerFrame.Msg>()
     val pending = mutableStateListOf<Pending>()
     var replyTo by mutableStateOf<ServerFrame.Msg?>(null)
@@ -110,8 +113,9 @@ class ChatGroups(
         val metas = directory.metas
         val fromDb = summaries.map { GroupRowData(it.key, metas[it.key], it.last, it.unread) }
         val known = fromDb.map { it.key }.toSet()
-        // 没消息的群只在建过资料时显示; 只剩已读 / 清空位置的 (比如清空过的测试群) 不占列表
-        val empty = metas.values.filter { it.channel !in known && it.configured }.map { GroupRowData(it.channel, it, null, 0) }
+        // 没消息的群在建过资料或清空过时显示
+        // 清空过的群也留着: 清空只删消息, 不删群
+        val empty = metas.values.filter { it.channel !in known && (it.configured || it.cleared > 0) }.map { GroupRowData(it.channel, it, null, 0) }
         return (fromDb + empty).sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
     }
 
@@ -216,8 +220,9 @@ class ChatGroups(
         if (merged.size != messages.size) {
             messages.clear()
             messages.addAll(merged)
-            list.lastOrNull()?.let { markRead(key, it.seq) }
         }
+        // 进群就算读到最后一条, 不管这次有没有新行
+        merged.lastOrNull()?.let { markRead(key, it.seq) }
         if (first && list.size < Constants.HISTORY_PAGE) loadOlder()
     }
 
@@ -317,6 +322,7 @@ class ChatGroups(
         val ref = reply?.let { MsgRef(it.seq, it.src, plainPreview(it.text).take(REPLY_EXCERPT)) }
         val ok = socketSend(Frames.send(cid, body, channelOf(key), reply?.seq))
         pending.add(Pending(cid, body, System.currentTimeMillis(), ref, failed = !ok))
+        sendTick += 1
         if (ok) replyTo = null
         return ok
     }
@@ -330,6 +336,7 @@ class ChatGroups(
         val p0 = Pending(retryOf?.cid ?: UUID.randomUUID().toString(), text, System.currentTimeMillis(), reply, upload = uri, progress = 0f)
         retryOf?.let { pending.remove(it) }
         pending.add(p0)
+        sendTick += 1
         replyTo = null
         val update = { next: Pending -> pending.indexOfFirst { it.cid == p0.cid }.takeIf { it >= 0 }?.let { pending[it] = next } }
         scope.launch {
@@ -374,8 +381,12 @@ class ChatGroups(
         reload()
     }
 
+    // 写完已读位置再重算群列表, 未读角标立刻消失
     private fun markRead(key: String, seq: Long) {
-        scope.launch(Dispatchers.IO) { db.markGroupRead(key, seq) }
+        scope.launch {
+            withContext(Dispatchers.IO) { db.markGroupRead(key, seq) }
+            reload()
+        }
     }
 
     private fun save(next: List<ChatFolder>) {
