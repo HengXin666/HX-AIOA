@@ -11,6 +11,7 @@ import type { Env } from "./env";
 import type { GithubService } from "./github/service";
 import type { MetricRouter } from "./metrics";
 import type { Pipeline } from "./pipeline";
+import type { Presence } from "./presence";
 import type { Registry } from "./registry";
 import type { Sockets } from "./sockets";
 import type { Spaces } from "./spaces";
@@ -36,6 +37,8 @@ export type Core = {
   spaces: Spaces;
   github: GithubService;
   chats: ChatStore;
+  // 谁在监听 / 输入, 只在内存
+  presence: Presence;
   rooms: RoomStore;
   files: FileStore;
   plugins: PluginStore;

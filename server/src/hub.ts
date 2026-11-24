@@ -80,6 +80,8 @@ import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
 import { EventStore, groupOf } from "./store";
 import { RoomStore } from "./rooms";
 import { joinRoom } from "./api-rooms";
+import { chatBacklog, chatConnected, mayListen, typingFrom } from "./api-presence";
+import { Presence } from "./presence";
 import { memberKey } from "./member";
 import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
@@ -129,7 +131,8 @@ export class Hub extends DurableObject<Env> {
       ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
     };
     const chats = new ChatStore(sql);
-    this.core = { env, store, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    const presence = new Presence(sockets, chats, rooms);
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -275,14 +278,20 @@ export class Hub extends DurableObject<Env> {
 
     const head = this.core.store.head();
     const user = who.owner ? who.user : who.member?.user;
-    const me = { ...(user ? { user, session } : {}), ...(uid ? { uid } : {}) };
+    const listen = role === "chat" ? chatConnected(this.core, server, att, who) : undefined;
+    const me = { ...(user ? { user, session } : {}), ...(uid ? { uid } : {}), ...(listen ? { me: listen } : {}) };
     const since = Number(url.searchParams.get(QUERY_SINCE) ?? Number.NaN);
     const floor = this.core.store.floor();
     // 断线期间有墓碑被清理: 让客户端丢掉 floor 之前的缓存, 补拉改为最近一批
     const resync = Number.isFinite(since) && since > 0 && since < floor;
     if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me, ...(resync ? { resync, floor } : {}) });
     else sendFrame(server, { t: "welcome", head });
+    if (listen) {
+      chatBacklog(this.core, server, who, since);
+      this.core.presence.listenerChanged(listen.reads);
+    }
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
+    this.core.presence.snapshot((f) => sendFrame(server, f));
     if (att.member) {
       if (uid && Number.isFinite(since)) {
         const grps = this.core.rooms.roomsOf(uid).map((m) => m.grp);
@@ -311,6 +320,7 @@ export class Hub extends DurableObject<Env> {
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {
     if (role === "client") return who.owner || !!who.member;
     if (role === "agent") return allowed(who, "agent");
+    if (role === "chat") return mayListen(who);
     if (!allowed(who, "probe") || !device.startsWith(PROBE_DEVICE_PREFIX)) return false;
     return who.owner || !who.key.subject || device === `${PROBE_DEVICE_PREFIX}-${who.key.subject}`;
   }
@@ -381,7 +391,8 @@ export class Hub extends DurableObject<Env> {
 
   private async handleLegacy(ws: WebSocket, att: Attachment, frame: ClientFrame): Promise<void> {
     const metrics = this.core.metrics;
-    if (att.member && frame.t !== "send") return;
+    if (att.member && frame.t !== "send" && frame.t !== "typing") return;
+    if (att.role === "chat" && frame.t !== "typing") return;
     switch (frame.t) {
       case "watch":
         ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
@@ -427,8 +438,11 @@ export class Hub extends DurableObject<Env> {
           : { id: att.device, name: OWNER_NAME, type: SOURCE_TYPE_USER };
         const ev = await this.core.pipeline.fromInput(input, { source, cid: frame.cid, ...(att.uid ? { by: att.uid } : {}) }, route);
         sendFrame(ws, { t: "sent", cid: frame.cid, seq: ev.seq, ts: ev.ts });
+        if (grp) this.core.presence.sent(grp, source.id);
         return;
       }
+      case "typing":
+        return typingFrom(this.core, att, frame.channel);
       case "ack":
         if (att.device.startsWith(ANDROID_DEVICE_PREFIX)) await this.core.pipeline.onAck(frame.seq);
         return;
@@ -460,6 +474,7 @@ export class Hub extends DurableObject<Env> {
     this.core.metrics.rebalance();
     if (att.host) this.core.metrics.broadcastHosts();
     if (att.role === "agent") this.core.agents.broadcastAgents();
+    if (att.role === "chat") this.core.presence.listenerChanged(att.reads ?? [], ws);
   }
 
   override async alarm(): Promise<void> {

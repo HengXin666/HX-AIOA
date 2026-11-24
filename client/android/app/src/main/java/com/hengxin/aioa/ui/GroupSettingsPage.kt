@@ -102,6 +102,11 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 SwitchRow("置顶", meta?.pinned == true) { dir.setPinned(group, it) }
                 SwitchRow("免打扰", meta?.muted == true, "照常收消息, 只是不响铃不弹通知") { dir.setMuted(group, it) }
             }
+            // 实时状态提示: 群主 / 管理员可关, 关了服务端不再推这类帧
+            if (group != MessageDb.MEMO_GROUP && (meta?.canTune ?: true)) Card {
+                SwitchRow("显示 Agent 正在监听", meta?.hideListening != true, "Agent 长连或最近拉过消息时, 群顶显示它在听") { dir.setHideListening(group, !it) }
+                SwitchRow("显示正在输入", meta?.hideTyping != true, "关掉后大家都不再上报和显示 \"正在输入\"") { dir.setHideTyping(group, !it) }
+            }
             if (group != MessageDb.MEMO_GROUP) Card { MembersCard(group, meta, { dir.refreshChats() }, onBack) }
             if (owner) Card {
                 Text("群类型", fontSize = 15.sp)

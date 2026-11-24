@@ -1,0 +1,50 @@
+name: CLI 发版
+
+# Agent 用的命令行 (cli/): 打成单文件 hxaioa.mjs, 发到 Releases
+# 固定地址 releases/download/cli/hxaioa.mjs 总是最新版, 另留 cli-v<版本> 一份
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - ".github/workflows/cli.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cli-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 打包
+        run: |
+          npx esbuild cli/src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=out/hxaioa.mjs
+          node out/hxaioa.mjs version
+          echo "VERSION=$(node -p "require('./cli/package.json').version")" >> "$GITHUB_ENV"
+
+      - name: 发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="HX-AIOA 群 Agent 命令行 $VERSION。用法见 docs/client/cli.md, 需要 Node 22+。"
+          # 版本号没变时只更新滚动版
+          if ! gh release view "cli-v$VERSION" >/dev/null 2>&1; then
+            gh release create "cli-v$VERSION" out/hxaioa.mjs --target "${{ github.sha }}" --title "CLI $VERSION" --notes "$NOTES" --latest=false
+          fi
+          gh release delete cli --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create cli out/hxaioa.mjs --target "${{ github.sha }}" --title "CLI (最新)" --notes "$NOTES" --latest=false

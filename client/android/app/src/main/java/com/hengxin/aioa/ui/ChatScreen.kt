@@ -163,6 +163,8 @@ internal fun BackButton(onBack: () -> Unit) {
     }
 }
 
+private const val PRESENCE_TICK_MS = 1000L
+
 @Composable
 private fun ChatTopBar(model: ChatModel, group: String, onBack: () -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -180,7 +182,16 @@ private fun ChatTopBar(model: ChatModel, group: String, onBack: () -> Unit) {
                         if (meta?.muted == true) "免打扰" else null,
                         meta?.agents?.size?.takeIf { it > 0 }?.let { "$it 个 Agent" },
                     )
-                    Text(tags.joinToString(" · ").ifEmpty { "点这里设置群" }, fontSize = 12.sp, color = if (model.online) c.outline else OFFLINE)
+                    // 有人在输入 / 监听时顶替状态行; 每秒重算一次, 到期自动消失
+                    val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+                        while (true) {
+                            kotlinx.coroutines.delay(PRESENCE_TICK_MS)
+                            value = System.currentTimeMillis()
+                        }
+                    }
+                    val live = if (model.online) model.groups.presence.line(group, now) else null
+                    if (live != null) Text(live, fontSize = 12.sp, color = c.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    else Text(tags.joinToString(" · ").ifEmpty { "点这里设置群" }, fontSize = 12.sp, color = if (model.online) c.outline else OFFLINE)
                 }
             }
         }
@@ -336,7 +347,10 @@ private fun Composer(g: ChatGroups) {
                 if (text.isEmpty()) Text(stringResource(R.string.input_hint), color = c.outline, fontSize = 15.sp)
                 BasicTextField(
                     text,
-                    { text = it },
+                    {
+                        if (it.length > text.length) g.typing()
+                        text = it
+                    },
                     Modifier.fillMaxWidth(),
                     textStyle = TextStyle(color = c.onSurface, fontSize = 15.sp),
                     cursorBrush = SolidColor(c.primary),

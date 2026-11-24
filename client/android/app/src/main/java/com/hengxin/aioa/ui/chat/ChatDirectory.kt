@@ -105,6 +105,11 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
 
     fun setMuted(channel: String, on: Boolean) = patch(channel, JSONObject().put("muted", on)) { it.copy(muted = on) }
 
+    /** 群主 / 管理员: 关掉 "正在监听" 或 "正在输入" 提示, 服务端就不再推, 省额度。 */
+    fun setHideListening(channel: String, on: Boolean) = patch(channel, JSONObject().put("hideListening", on)) { it.copy(hideListening = on) }
+
+    fun setHideTyping(channel: String, on: Boolean) = patch(channel, JSONObject().put("hideTyping", on)) { it.copy(hideTyping = on) }
+
     fun setPinned(channel: String, on: Boolean) = patch(channel, JSONObject().put("pinned", on)) { it.copy(pinned = on) }
 
     fun setDigest(channel: String, kind: String?) = patch(channel, JSONObject().put("digest", kind ?: JSONObject.NULL)) { it.copy(digest = kind) }

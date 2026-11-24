@@ -60,6 +60,8 @@ object Constants {
     val VIBRATE_PATTERN = longArrayOf(0, 250, 150, 250)
 
     const val HISTORY_PAGE = 300
+    // 与 protocol TYPING_THROTTLE_MS 一致: 输入期间最多每 4 秒报一次 "正在输入"
+    const val TYPING_THROTTLE_MS = 4000L
     const val NOTIFY_MAX_LINES = 6
     const val TIME_GAP_MS = 5 * 60_000L
 

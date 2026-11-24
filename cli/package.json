@@ -1,0 +1,12 @@
+{
+  "name": "hxaioa",
+  "version": "0.1.0",
+  "description": "HX-AIOA 群 Agent 命令行: 收发消息, 长连监听",
+  "type": "module",
+  "private": true,
+  "bin": { "hxaioa": "src/main.mjs" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "esbuild src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=dist/hxaioa.mjs"
+  }
+}

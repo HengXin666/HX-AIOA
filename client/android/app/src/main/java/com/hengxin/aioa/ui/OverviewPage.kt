@@ -96,13 +96,19 @@ private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit, sho
 @Composable
 private fun Layer(chat: ChatModel, title: String, hint: String, priority: String, state: CardState, empty: String, limit: Int, show: (String) -> Unit) {
     val list = items(chat.feed, priority).filter { !chat.seen.has(it.id) }
+    // 总览里看过的同一条, 群里也算已读
+    val seqs = chat.feed.layers[priority].orEmpty().associate { it.ev.id to it.ev.seq }
+    val mark = { ids: List<String> ->
+        chat.seen.mark(ids)
+        chat.groups.markSeen(ids.mapNotNull { seqs[it] }.filter { it > 0 })
+    }
     LayerSection(
         title, hint, list, state, empty,
         limit = limit,
-        onDismiss = { chat.seen.mark(listOf(it.id)) },
-        onClear = { chat.seen.mark(list.map { it.id }) },
+        onDismiss = { mark(listOf(it.id)) },
+        onClear = { mark(list.map { it.id }) },
     ) {
-        chat.seen.mark(listOf(it.id))
+        mark(listOf(it.id))
         show(it.id)
     }
 }

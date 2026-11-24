@@ -58,7 +58,8 @@ export const ITEM_TYPES = [
 ] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
-export const STREAM_ROLES = ["client", "agent", "probe"] as const;
+// chat: 群 Agent 用自己的 key 长连收群消息 (CLI 的 watch)
+export const STREAM_ROLES = ["client", "agent", "probe", "chat"] as const;
 export type StreamRole = (typeof STREAM_ROLES)[number];
 
 export const MAX_ID_LENGTH = 128;

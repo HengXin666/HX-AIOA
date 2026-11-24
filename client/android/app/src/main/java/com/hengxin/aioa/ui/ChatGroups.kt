@@ -64,6 +64,8 @@ class ChatGroups(
     private val socketSend: (String) -> Boolean,
 ) {
     val directory = ChatDirectory(context, scope)
+    val presence = com.hengxin.aioa.ui.chat.ChatPresence()
+    private var typedAt = 0L
     var summaries by mutableStateOf<List<GroupSummary>>(emptyList())
         private set
     var folders by mutableStateOf<List<ChatFolder>>(emptyList())
@@ -312,6 +314,14 @@ class ChatGroups(
         messages.lastOrNull()?.let { directory.reportRead(key, it.seq) }
     }
 
+    /** 正在输入: 每 TYPING_THROTTLE_MS 最多报一次; 备忘和关了提示的群不报。 */
+    fun typing() {
+        val key = open ?: return
+        val now = System.currentTimeMillis()
+        if (key == MessageDb.MEMO_GROUP || directory.metas[key]?.hideTyping == true || now - typedAt < Constants.TYPING_THROTTLE_MS) return
+        if (socketSend(Frames.typing(key))) typedAt = now
+    }
+
     /** 发到当前群: 本地先显示, 服务端回来同 cid 的消息后替换。 */
     fun send(text: String): Boolean {
         val key = open ?: return false
@@ -321,6 +331,7 @@ class ChatGroups(
         val reply = replyTo
         val ref = reply?.let { MsgRef(it.seq, it.src, plainPreview(it.text).take(REPLY_EXCERPT)) }
         val ok = socketSend(Frames.send(cid, body, channelOf(key), reply?.seq))
+        typedAt = 0L
         pending.add(Pending(cid, body, System.currentTimeMillis(), ref, failed = !ok))
         sendTick += 1
         if (ok) replyTo = null
@@ -379,6 +390,23 @@ class ChatGroups(
             markRead(key, msg.seq)
         }
         reload()
+    }
+
+    /** 总览里看过或划掉的消息: 逐条标已读不进未读数; 某群因此读完时推进整群已读位置并同步到其它设备。 */
+    fun markSeen(seqs: Collection<Long>) {
+        if (seqs.isEmpty()) return
+        scope.launch {
+            val done = withContext(Dispatchers.IO) {
+                db.markSeen(seqs).mapNotNull { key ->
+                    val (unread, last) = db.groupState(key)
+                    if (unread > 0 || last <= 0) return@mapNotNull null
+                    db.markGroupRead(key, last)
+                    key to last
+                }
+            }
+            done.forEach { (key, last) -> directory.reportRead(key, last) }
+            reload()
+        }
     }
 
     // 写完已读位置再重算群列表, 未读角标立刻消失

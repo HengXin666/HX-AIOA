@@ -1,0 +1,132 @@
+#!/usr/bin/env node
+// hxaioa: HX-AIOA 群 Agent 命令行。配置一次 (login), 之后直接收发消息, 长连监听
+import { readFileSync } from "node:fs";
+import { parseArgs } from "node:util";
+import { configPath, loadConfig, loadState, saveConfig, saveHead } from "./config.mjs";
+import { print } from "./format.mjs";
+import { ApiError, VERSION, call, enc } from "./http.mjs";
+import { watch } from "./watch.mjs";
+
+const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
+
+  hxaioa login <服务地址> <密钥>   保存配置 (${configPath}, 权限 600) 并验证
+  hxaioa me                        我是谁: 名字, 本群, 可读的群
+  hxaioa guide [--ack]             打印专属指令; --ack 顺带报到
+  hxaioa send <文字|->  [-c 群] [--reply seq] [--title 标题] [--html 文件] [--priority need_me|worth_reading]
+  hxaioa read  [-c 群] [--new] [--since seq] [--before seq] [--limit n] [--json]
+  hxaioa watch [-c 群] [--all] [--once] [--timeout 秒] [--exec 命令] [--json] [--mine] [--interval 秒]
+  hxaioa typing [-c 群]            告诉群里 "正在输入"
+  hxaioa recall <seq> | delete <seq>
+  hxaioa report --title 标题 [--summary 摘要] [--file 正文.md] [--dedupe key]
+  hxaioa api <METHOD> <路径> [JSON|-]
+
+  不写 -c 就是本群。文字写 - 表示从标准输入读。环境变量 AIOA_SERVER / AIOA_KEY 可代替 login。
+  watch --once: 等到一条新消息就退出 (退出码 0), --timeout 到了还没有就退出码 2。
+  watch 优先用长连接 (省额度), 连不上自动改为每 --interval 秒 (默认 20) 拉一次。`;
+
+const OPTIONS = {
+  channel: { type: "string", short: "c" },
+  reply: { type: "string" },
+  title: { type: "string" },
+  html: { type: "string" },
+  priority: { type: "string" },
+  new: { type: "boolean" },
+  since: { type: "string" },
+  before: { type: "string" },
+  limit: { type: "string" },
+  json: { type: "boolean" },
+  all: { type: "boolean" },
+  once: { type: "boolean" },
+  timeout: { type: "string" },
+  exec: { type: "string" },
+  mine: { type: "boolean" },
+  interval: { type: "string" },
+  ack: { type: "boolean" },
+  summary: { type: "string" },
+  file: { type: "string" },
+  dedupe: { type: "string" },
+  help: { type: "boolean", short: "h" },
+};
+
+const num = (v) => (v === undefined ? undefined : Number.parseInt(v, 10));
+const stdin = () => readFileSync(0, "utf8");
+const out = (v) => process.stdout.write(`${typeof v === "string" ? v : JSON.stringify(v, null, 2)}\n`);
+
+async function whoami(cfg) {
+  const r = await call(cfg, "GET", "/api/v1/chat-agent/me");
+  saveConfig({ me: r.me });
+  return r.me;
+}
+
+async function channelOf(cfg, v) {
+  if (v.channel) return v.channel;
+  if (cfg.channel) return cfg.channel;
+  return (cfg.me ?? (await whoami(cfg))).channel;
+}
+
+const COMMANDS = {
+  async login(cfg, v, [server, key]) {
+    if (!server || !key) throw new ApiError(0, "用法: hxaioa login <服务地址> <密钥>");
+    const next = { ...cfg, server: server.replace(/\/+$/, ""), key };
+    const me = (await call(next, "GET", "/api/v1/chat-agent/me")).me;
+    saveConfig({ server: next.server, key, me });
+    out(`已登录: ${me.name} (本群 ${me.channel ?? "无"})`);
+  },
+  me: async (cfg) => out(await whoami(cfg)),
+  async guide(cfg, v) {
+    const res = await call(cfg, "GET", "/api/v1/chat-agent/guide", undefined, { raw: true });
+    const version = res.headers.get("X-Aioa-Guide-Version");
+    out(await res.text());
+    if (v.ack) out((await call(cfg, "POST", "/api/v1/chat-agent/ack", { version })).ok ? `已报到 ${version}` : "报到失败");
+  },
+  async send(cfg, v, [text]) {
+    const body = { text: text === "-" || text === undefined ? stdin() : text };
+    if (v.channel) body.channel = v.channel;
+    if (v.reply) body.reply = num(v.reply);
+    if (v.title) body.title = v.title;
+    if (v.priority) body.priority = v.priority;
+    if (v.html) body.html = readFileSync(v.html, "utf8");
+    out(await call(cfg, "POST", "/api/v1/messages", body));
+  },
+  async read(cfg, v) {
+    const ch = await channelOf(cfg, v);
+    const limit = num(v.limit) ?? 50;
+    const q = v.before ? `before=${num(v.before)}` : `since=${v.new ? (loadState().heads[ch] ?? 0) : (num(v.since) ?? 0)}`;
+    const r = await call(cfg, "GET", `/api/v1/chats/${enc(ch)}/messages?${q}&limit=${limit}`);
+    for (const ev of r.messages ?? []) print(ev, v.json);
+    if (v.new && r.head) saveHead(ch, r.head);
+  },
+  async watch(cfg, v) {
+    const me = cfg.me ?? (await whoami(cfg));
+    const channels = v.all ? null : [await channelOf(cfg, v)];
+    return watch(cfg, me, { channels, once: v.once, timeout: num(v.timeout), json: v.json, exec: v.exec, mine: v.mine, interval: num(v.interval) });
+  },
+  async typing(cfg, v) {
+    out(await call(cfg, "POST", `/api/v1/chats/${enc(await channelOf(cfg, v))}/typing`, {}));
+  },
+  recall: (cfg, v, [seq]) => call(cfg, "DELETE", `/api/v1/events/seq/${num(seq)}?mode=recall`).then(out),
+  delete: (cfg, v, [seq]) => call(cfg, "DELETE", `/api/v1/events/seq/${num(seq)}?mode=delete`).then(out),
+  async report(cfg, v) {
+    if (!v.title) throw new ApiError(0, "report 需要 --title");
+    const data = { title: v.title, ...(v.summary ? { summary: v.summary } : {}), ...(v.file ? { markdown: readFileSync(v.file, "utf8") } : {}) };
+    out(await call(cfg, "POST", "/api/v1/events", { kind: "report", data, ...(v.dedupe ? { dedupeKey: v.dedupe } : {}), ...(v.channel ? { channel: v.channel } : {}) }));
+  },
+  async api(cfg, v, [method, path, body]) {
+    if (!method || !path) throw new ApiError(0, "用法: hxaioa api <METHOD> <路径> [JSON|-]");
+    out(await call(cfg, method.toUpperCase(), path, body === "-" ? stdin() : body));
+  },
+  version: async () => out(VERSION),
+};
+
+async function main() {
+  const { values, positionals } = parseArgs({ options: OPTIONS, allowPositionals: true, strict: true });
+  const [cmd, ...rest] = positionals;
+  if (!cmd || values.help || !COMMANDS[cmd]) return out(HELP);
+  const code = await COMMANDS[cmd](loadConfig(), values, rest);
+  if (typeof code === "number") process.exitCode = code;
+}
+
+main().catch((e) => {
+  process.stderr.write(`${e instanceof ApiError || e.code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" ? e.message : e.stack}\n`);
+  process.exitCode = 1;
+});

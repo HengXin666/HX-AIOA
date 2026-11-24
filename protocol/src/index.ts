@@ -18,7 +18,9 @@ export * from "./v1/files";
 export * from "./v1/plugin";
 export * from "./v1/mail";
 export * from "./v1/term";
+export * from "./v1/presence";
 import { parseTermFrame, type TermFrame } from "./v1/term";
+import { parseTyping, type TypingFrame } from "./v1/presence";
 
 export const PING_TEXT = "ping";
 export const PONG_TEXT = "pong";
@@ -67,7 +69,7 @@ export type HostCard = { subject: string; online: boolean; seen: number; info: H
 export const BEAT_SLOTS = 60;
 export const BEAT_SLOT_MS = 24 * 60_000;
 const BEATS_RE = /^[gyrn]{1,96}$/;
-export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame | HostFrame | TermFrame;
+export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame | HostFrame | TermFrame | TypingFrame;
 
 export type WelcomeFrame = { t: "welcome"; head: number };
 export type MsgFrame = {
@@ -127,6 +129,8 @@ export function parseClientFrame(raw: string): ClientFrame | null {
         : null;
     case "host":
       return parseHost(f);
+    case "typing":
+      return parseTyping(f);
     default:
       return parseTermFrame(f);
   }

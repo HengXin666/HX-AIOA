@@ -14,6 +14,7 @@ import {
   type UserActionInput,
 } from "./task";
 import type { UserPublic } from "./api";
+import type { ChatAgentMe } from "./presence";
 
 // v1 流 (/api/v1/stream) 在旧帧之外新增的帧
 export type ActFrame = { t: "act" } & UserActionInput;
@@ -53,7 +54,9 @@ export type StreamWelcome = {
   session?: string;
   // 当前账号 id, 与消息的 by 比较判断是不是自己发的 (用母号 token 连接时是母号 id)
   uid?: string;
-  role: "client" | "agent" | "probe";
+  role: "client" | "agent" | "probe" | "chat";
+  // role=chat: 这把 key 对应的群 Agent
+  me?: ChatAgentMe;
   // 断线太久 (since 早于已清理的墓碑) 时为 true: 本地 seq < floor 的缓存可能漏了删除, 应丢掉后重拉
   resync?: boolean;
   floor?: number;

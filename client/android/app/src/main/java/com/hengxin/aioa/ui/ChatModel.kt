@@ -134,6 +134,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
+        if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
         if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)

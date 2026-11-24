@@ -29,7 +29,7 @@ class MessageDb private constructor(context: Context) :
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT, $C_ID TEXT, $C_MINE INTEGER NOT NULL DEFAULT 0, $C_SID TEXT)")
+        db.execSQL("CREATE TABLE $T_MSG (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, src TEXT NOT NULL, text TEXT NOT NULL, cid TEXT, $C_GRP TEXT, $C_EXTRA TEXT, $C_ID TEXT, $C_MINE INTEGER NOT NULL DEFAULT 0, $C_SID TEXT, $C_SEEN INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE $T_KV (k TEXT PRIMARY KEY, v INTEGER NOT NULL)")
         db.execSQL(GRP_INDEX)
         db.execSQL(ID_INDEX)
@@ -52,6 +52,8 @@ class MessageDb private constructor(context: Context) :
             db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_SID TEXT")
             db.execSQL("UPDATE $T_MSG SET $C_MINE = 1 WHERE $C_SRC LIKE '${Constants.DEVICE_PREFIX}%'")
         }
+        // 在总览里看过的单条消息: 不动群的已读位置, 只是不再算未读
+        if (oldVersion < 6) db.execSQL("ALTER TABLE $T_MSG ADD COLUMN $C_SEEN INTEGER NOT NULL DEFAULT 0")
     }
 
     /** 入库: 同 id 的旧版本和墓碑指向的旧序号先删掉; 删除墓碑本身不留行, 撤回墓碑留一行显示 "已撤回"。 */
@@ -111,7 +113,7 @@ class MessageDb private constructor(context: Context) :
         return lasts.map { m ->
             val key = m.groupKey()
             val unread = longQuery(
-                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $LIVE",
+                "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE",
                 arrayOf(key, groupRead(key).toString()),
             )
             GroupSummary(key, m, unread.toInt())
@@ -130,16 +132,36 @@ class MessageDb private constructor(context: Context) :
 
     // 未读: 序号大于已读位置, 且不是自己发的
     fun unread(limit: Int): List<ServerFrame.Msg> = query(
-        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
+        "SELECT * FROM (SELECT * FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?) ORDER BY $C_SEQ",
         arrayOf(readSeq().toString(), limit.toString()),
     )
 
     fun unreadCount(): Long = longQuery(
-        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $LIVE",
+        "SELECT COUNT(*) FROM $T_MSG WHERE $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE",
         arrayOf(readSeq().toString()),
     )
 
     fun readSeq(): Long = getKv(K_READ_SEQ)
+
+    /** 总览里看过的消息逐条标已读; 返回这些消息所在的群, 供上层判断整群是否已读完。 */
+    fun markSeen(seqs: Collection<Long>): Set<String> {
+        if (seqs.isEmpty()) return emptySet()
+        val marks = seqs.joinToString(",") { "?" }
+        val args = seqs.map { it.toString() }.toTypedArray()
+        writableDatabase.execSQL("UPDATE $T_MSG SET $C_SEEN = 1 WHERE $C_SEQ IN ($marks)", args)
+        return readableDatabase.rawQuery("SELECT DISTINCT $C_GRP FROM $T_MSG WHERE $C_SEQ IN ($marks)", args).use { c ->
+            buildSet { while (c.moveToNext()) c.getString(0)?.let(::add) }
+        }
+    }
+
+    /** 群里还没读的条数与最后一条的序号, 用于总览标完已读后推进整群的已读位置。 */
+    fun groupState(key: String): Pair<Int, Long> {
+        val unread = longQuery(
+            "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE",
+            arrayOf(key, groupRead(key).toString()),
+        )
+        return unread.toInt() to longQuery("SELECT IFNULL(MAX($C_SEQ), 0) FROM $T_MSG WHERE $C_GRP = ?", arrayOf(key))
+    }
 
     fun markRead(seq: Long) {
         if (seq > readSeq()) putKv(K_READ_SEQ, seq)
@@ -188,7 +210,7 @@ class MessageDb private constructor(context: Context) :
     companion object {
         const val MEMO_GROUP = "备忘"
         private const val DB_NAME = "messages.db"
-        private const val DB_VERSION = 5
+        private const val DB_VERSION = 6
         const val DELETE_MODE = "delete"
         const val RECALL_MODE = "recall"
         private const val C_ID = "id"
@@ -223,6 +245,7 @@ class MessageDb private constructor(context: Context) :
         private const val C_GRP = "grp"
         private const val C_MINE = "mine"
         private const val C_SID = "sid"
+        private const val C_SEEN = "seen"
         private const val K_READ_SEQ = "read_seq"
         private const val K_GROUP_READ = "read:"
         private const val GRP_INDEX = "CREATE INDEX IF NOT EXISTS msg_grp ON $T_MSG ($C_GRP, $C_SEQ)"

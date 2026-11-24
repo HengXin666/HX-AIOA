@@ -29,6 +29,7 @@
 | 文档 | 内容 |
 |---|---|
 | [agent-guide.md](agent-guide.md) | Agent 接入说明。地址已写进各 Agent 的长期指令, 不要移动或改名 |
+| [client/cli.md](client/cli.md) | `hxaioa` 命令行: 配置一次就能收发消息, 长连监听 |
 
 ## 部署与运维 `deploy/`
 

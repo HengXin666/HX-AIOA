@@ -37,6 +37,7 @@ import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE,
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { memberView, ownerView, roleIn } from "./room-access";
 import { autoUpgrade } from "./plugins/update";
+import { notePoll } from "./api-presence";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 
 const AGENT_SCOPES: Scope[] = ["messages:send", "events:write"];
@@ -101,7 +102,7 @@ function parsePatch(raw: unknown): ChatPatch | string {
     if (raw.avatar !== null && typeof raw.avatar !== "string") return "avatar 必须是头像 id";
     out.avatar = (raw.avatar as string | null) ?? "";
   }
-  for (const k of ["pinned", "muted"] as const) if (k in raw) out[k] = raw[k] === true;
+  for (const k of ["pinned", "muted", "hideListening", "hideTyping"] as const) if (k in raw) out[k] = raw[k] === true;
   if ("read" in raw) {
     if (typeof raw.read !== "number") return "read 必须是 seq";
     out.read = raw.read;
@@ -121,13 +122,15 @@ async function patchChat(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   const role = roleIn(c.core, c.who, channel);
   if (!role) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  // 子号: 置顶, 免打扰, 已读是自己的; 管理员还能改标题和头像
+  // 子号: 置顶, 免打扰, 已读是自己的; 管理员还能改标题, 头像和监听/输入提示开关
   if (role !== "owner") {
     const uid = c.who.owner ? "" : (c.who.member?.user.id ?? "");
-    const { pinned, muted, read, title, avatar } = p;
+    const { pinned, muted, read, title, avatar, hideListening, hideTyping } = p;
     c.core.rooms.patchPrefs(channel, uid, { ...(pinned !== undefined ? { pinned } : {}), ...(muted !== undefined ? { muted } : {}), ...(read !== undefined ? { read } : {}) });
-    if (role === "admin" && (title !== undefined || avatar !== undefined)) {
-      c.core.chats.patchChat(channel, { ...(title !== undefined ? { title } : {}), ...(avatar !== undefined ? { avatar } : {}) });
+    const shared = { title, avatar, hideListening, hideTyping };
+    const picked = Object.fromEntries(Object.entries(shared).filter(([, v]) => v !== undefined));
+    if (role === "admin" && Object.keys(picked).length) {
+      c.core.chats.patchChat(channel, picked);
       sync(c.core, "chats", channel);
     }
     return json({ chat: memberView(c.core, channel, uid) });
@@ -148,6 +151,7 @@ function chatMessages(c: ReqCtx): Response {
     return json({ messages, head: c.core.store.head() });
   }
   const since = clampInt(c.url.searchParams.get(QUERY_SINCE), 0, Number.MAX_SAFE_INTEGER);
+  notePoll(c.core, c.who, channel);
   const messages = c.core.store.inChannel(channel, since, limit);
   return json({ messages, head: messages.at(-1)?.seq ?? since });
 }

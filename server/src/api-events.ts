@@ -157,7 +157,10 @@ async function postMessage(c: ReqCtx): Promise<Response> {
     if (!r || !grp || !canRead(c.core, c.who, grp)) return fail(400, "reply 必须是可读群里的消息 seq");
     input.reply = refOf(r);
   }
-  return json(await writeEvent(c.core, c.who, input));
+  const out = await writeEvent(c.core, c.who, input);
+  // Agent 发出回复就不再显示 "正在输入"
+  if (!c.who.owner && out.channel) c.core.presence.sent(out.channel, c.who.key.id);
+  return json(out);
 }
 
 function listEvents(c: ReqCtx): Response {

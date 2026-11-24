@@ -21,6 +21,9 @@ export type ChatMeta = {
   cleared?: number;
   // 展示方式, 不写为聊天; 邮件群为 mail
   view?: ChatView;
+  // 群主 / 管理员关掉 "正在监听" 与 "正在输入" 提示 (省额度); 不写为开
+  hideListening?: boolean;
+  hideTyping?: boolean;
   updated: number;
 };
 // 群里接入的 Agent: 一个来源 + 一把 key; 主人只定名字和可读的群, 指令由服务端下发
@@ -38,7 +41,7 @@ export type ChatAgent = {
   // 由插件安装创建时为插件 id, 专属指令里会带上插件的提示词
   plugin?: string;
 };
-export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest">>;
+export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping">>;
 export type AgentRequest = { name: string; reads?: string[] };
 export type AgentAck = { version: string };
 // 收藏按引用: ev 是原消息的当前版本; gone 表示原消息已撤回 / 删除 / 清空, ev 只剩收藏时的摘要

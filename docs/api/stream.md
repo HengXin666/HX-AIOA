@@ -5,15 +5,15 @@ HTTP 接口与数据类型见 [接口总览](v1.md)。本文是 `/api/v1/stream`
 ## 1. 连接
 
 ```
-wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<设备 id>&since=<已收到的最大 seq>
+wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe|chat>&device=<设备 id>&since=<已收到的最大 seq>
 ```
 
 | 参数 | 说明 |
 | --- | --- |
-| `token` | `client` 用访问令牌 `hxa_` (或旧 `AUTH_TOKEN`); `agent` 用带 `agent` scope 的 `hxk_`; `probe` 用带 `probe` scope 的 `hxk_` |
+| `token` | `client` 用访问令牌 `hxa_` (或旧 `AUTH_TOKEN`); `agent` 用带 `agent` scope 的 `hxk_`; `probe` 用带 `probe` scope 的 `hxk_`; `chat` 用群 Agent 带 `events:read` 的 `hxk_` |
 | `role` | 默认 `client` |
 | `device` | 设备 id。以 `android` 开头的视为手机, 参与 ack 与兜底推送判断; 探针必须是 `probe-<subject>` |
-| `since` | 可选, 仅 `client`。服务端先补发 `seq > since` 的事件 (最多 500 条, 更多请用 `GET /api/v1/events` 分页) |
+| `since` | 可选, `client` 与 `chat`。服务端先补发 `seq > since` 的事件 (最多 500 条, 更多请用 `GET /api/v1/events` 分页) |
 
 - 访问令牌过期不会断开已建立的连接; 被踢下线或改密码时服务端用关闭码 `4001` 关闭, 客户端应回到登录页而不是重连。凭证无效时握手返回 HTTP 401。
 - 心跳: 客户端发纯文本 `ping`, 服务端自动回 `pong` (不唤醒服务端, 不计费)。建议 25-30 秒一次。
@@ -77,6 +77,12 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 
 `state`: `delivered` (Agent 在线已推送) / `queued` (Agent 离线, 排队) / `duplicate` (该 aid 已处理过)。
 
+**presence** 群里谁在监听 / 输入, 只在名单变化 (或快到期需要续期) 时推, 不落库。`until` 为到期时间, 客户端到点自己隐藏; 没有 `until` 的是长连着的 Agent。群资料 `hideListening` / `hideTyping` 为 true 时对应名单恒为空。连上时有人的群各补一帧:
+
+```json
+{ "t": "presence", "channel": "plugin-todo", "listening": [ { "id": "k_x1", "name": "点子整理" } ], "typing": [ { "id": "user:u_k3j9", "name": "HengXin", "until": 1763712006000 } ] }
+```
+
 **metric** 实时指标, 只发给 `watch` 了该主体的连接, 不落库:
 
 ```json
@@ -123,6 +129,7 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 | `send` | `{ "t": "send", "cid": "c_1", "body": { "kind": "text", "text": "你好" } }` | 发一条文字到自己的收件箱 (备忘 / 测试), 回 `sent`, 该事件 `route.action` 为 `silent`, 不触发兜底推送 |
 | `act` | `{ "t": "act", "aid": "a_8x1", "taskId": "deploy-42", "kind": "approve", "option": "go", "confirm": true }` | 用户动作, 语义同 `POST /api/v1/tasks/{id}/actions` |
 | `overview` | `{ "t": "overview" }` | 请求总览, 回 `overview` |
+| `typing` | `{ "t": "typing", "channel": "plugin-todo" }` | 正在这个群输入; 输入期间最多每 4 秒一次, 约 6 秒后自动消失, 发出消息立即消失 |
 
 ## 3. Agent (role=agent)
 
@@ -150,6 +157,10 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe>&device=<�
 ```
 
 Agent 处理后回 `act_ack`; 没有 ack 的动作在下次连上时会重发 (24 小时内), 所以 Agent 要按 `aid` 去重。工作台按钮产生的动作 `taskId` 为 `button:<spaceId>:<itemId>`, `text` 为按钮的 `command`。
+
+## 3.5 群 Agent 长连 (role=chat)
+
+`hxaioa watch` 用的就是它。`welcome` 带 `me` (`keyId`, `name`, `channel`, `sourceId`, `reads`), 之后补发 `since` 之后可读群里的事件, 再实时推 `ev` (只推 key 白名单里的群)。可发 `typing` 帧, 其它帧忽略。连着期间这些群的 `presence.listening` 里有它; 断开即移除。
 
 ## 4. 探针 (role=probe)
 

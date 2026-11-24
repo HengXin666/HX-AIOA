@@ -24,10 +24,15 @@ data class ChatMeta(
     val members: Int = 0,
     /** 展示方式: 空为聊天, mail 为邮件列表。 */
     val view: String? = null,
+    /** 群主 / 管理员关掉了 "正在监听" / "正在输入" 提示。 */
+    val hideListening: Boolean = false,
+    val hideTyping: Boolean = false,
 ) {
     val isMail get() = view == VIEW_MAIL
     val shared get() = role != null
     val canManage get() = role == ROLE_OWNER || role == ROLE_ADMIN
+    /** 自己的群 (没有 role) 也算能管。 */
+    val canTune get() = role == null || canManage
     val configured get() = title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
 }
 
@@ -86,6 +91,8 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 role = o.optStr("role"),
                 members = o.optInt("members"),
                 view = o.optStr("view"),
+                hideListening = o.optBoolean("hideListening"),
+                hideTyping = o.optBoolean("hideTyping"),
             )
         }.getOrNull()
     }.associateBy { it.channel }

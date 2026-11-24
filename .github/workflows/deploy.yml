@@ -47,7 +47,10 @@ jobs:
           fi
 
       - name: 复制探针脚本到静态资源
-        run: cp ../tools/probe.mjs ../tools/probe-term.mjs public/
+        run: |
+          cp ../tools/probe.mjs ../tools/probe-term.mjs public/
+          # Agent 命令行也随服务端发一份: <服务地址>/hxaioa.mjs
+          npx esbuild ../cli/src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=public/hxaioa.mjs
 
       # 文件桶 (#45): 没有就建; 部署 token 没有 R2 权限建不了时去掉绑定照常部署, 文件接口返回 503
       - name: 确保 R2 文件桶

@@ -1,4 +1,5 @@
-import type { Envelope, HostCard, StreamRole } from "@hx-aioa/protocol";
+import { type Envelope, type HostCard, type StreamRole, globMatch } from "@hx-aioa/protocol";
+import { groupOf } from "./store";
 import { PROTO_LEGACY, PROTO_V1 } from "./constants";
 import { toMsgFrame } from "./legacy";
 
@@ -18,6 +19,9 @@ export type Attachment = {
   // 人的连接: 账号 id; member 为子号, 只收自己所在群的消息
   uid?: string;
   member?: boolean;
+  // role=chat (CLI 长连): 能读的群 (通配) 与显示名
+  reads?: string[];
+  name?: string;
 };
 
 export function trySend(ws: WebSocket, text: string): boolean {
@@ -60,6 +64,24 @@ export class Sockets {
     return out;
   }
 
+  /** CLI 长连里能读这个群的。 */
+  listeners(channel: string): WebSocket[] {
+    return this.all().filter((ws) => {
+      const a = attOf(ws);
+      return a.role === "chat" && (a.reads ?? []).some((p) => globMatch(p, channel));
+    });
+  }
+
+  /** 发给看得到这个群的人: 主人的连接都收, 子号只在群成员里时收。 */
+  toChannel(members: Set<string>, frame: unknown): void {
+    const text = JSON.stringify(frame);
+    for (const ws of this.clients()) {
+      const a = attOf(ws);
+      if (a.proto !== PROTO_V1 || (a.member && !(a.uid && members.has(a.uid)))) continue;
+      trySend(ws, text);
+    }
+  }
+
   // 新客户端收 ev 帧, 旧客户端收压成一行的 msg 帧
   deliverEv(ev: Envelope): number {
     const v1 = JSON.stringify({ t: "ev", ev });
@@ -74,6 +96,9 @@ export class Sockets {
       }
       if (trySend(ws, a.proto === PROTO_V1 ? v1 : legacy)) n += 1;
     }
+    // CLI 长连: 只给能读这个群的, 不计入送达 (送达只看人的设备)
+    const grp = groupOf(ev);
+    if (grp) for (const ws of this.listeners(grp)) trySend(ws, v1);
     return n;
   }
 
