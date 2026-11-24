@@ -59,7 +59,7 @@ private val BIG_AVATAR = 84.dp
 private sealed interface GsDialog {
     data object Rename : GsDialog
     data class EditAgent(val agent: ChatAgent?) : GsDialog
-    data class Prompt(val title: String, val text: String, val note: String, val key: String? = null, val request: String? = null) : GsDialog
+    data class Prompt(val title: String, val text: String, val note: String, val key: String? = null) : GsDialog
     data class Remove(val agent: ChatAgent) : GsDialog
     data object Clear : GsDialog
 }
@@ -121,7 +121,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                     }
                     AgentAction.ROTATE -> scope.launch {
                         dir.rotate(group, agent.keyId)
-                            .onSuccess { dialog = GsDialog.Prompt("发给 ${agent.name}", it.prompt, "旧密钥已作废。本地 Agent 发这段接入语即可; 云端 Agent 发委托语, 密钥单独给。都只显示这一次。", it.key, it.request) }
+                            .onSuccess { dialog = GsDialog.Prompt("发给 ${agent.name}", it.prompt, "旧密钥已作废。整段发给 Agent 即可, 任务可以先改再发。密钥只显示这一次。", it.key) }
                             .onFailure { dir.error = it.message }
                     }
                     AgentAction.EDIT -> dialog = GsDialog.EditAgent(agent)
@@ -142,7 +142,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
             scope.launch {
                 if (d.agent == null) {
                     dir.addAgent(group, name, reads)
-                        .onSuccess { dialog = GsDialog.Prompt("发给 $name", it.prompt, "把这段发给你的 Agent, 它会自己拉取完整指令, 原样存下并报到。密钥只显示这一次。", it.key) }
+                        .onSuccess { dialog = GsDialog.Prompt("发给 $name", it.prompt, "整段发给你的 Agent, 它会按文档接入并报到, 任务可以先改再发。密钥只显示这一次。", it.key) }
                         .onFailure { dir.error = it.message; dialog = null }
                 } else {
                     dir.editAgent(group, d.agent.keyId, name, reads)?.let { dir.error = it }
@@ -160,8 +160,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                         SelectionContainer { Text(d.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
                     }
                     Row {
-                        d.key?.takeIf { it.isNotEmpty() }?.let { k -> TextButton({ clipboard.setText(AnnotatedString(k)) }) { Text("复制密钥") } }
-                        d.request?.let { r -> TextButton({ clipboard.setText(AnnotatedString(r)) }) { Text("复制云端委托语") } }
+                        d.key?.takeIf { it.isNotEmpty() }?.let { k -> TextButton({ clipboard.setText(AnnotatedString(k)) }) { Text("只复制密钥") } }
                     }
                 }
             },

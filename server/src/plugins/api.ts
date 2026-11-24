@@ -25,7 +25,6 @@ import { CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, E
 import { type Core, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
 import { rank, roleIn } from "../room-access";
-import { cloudRequest } from "./cloud-request";
 import { renderTask } from "./store";
 import { applySpace, autoUpgrade, upgrade } from "./update";
 
@@ -107,11 +106,9 @@ async function install(c: ReqCtx): Promise<Response> {
   const space = await applySpace(c.core, id, m, channel, title);
   const { agent, key } = await createAgent(c.core, channel, m.agent.name, [channel], id);
   const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}) };
-  c.core.plugins.save(rec, m.name, prompt);
-  const base = baseOf(c.url);
-  const schedule = m.agent.schedule ? `\n建议的定时: ${m.agent.schedule}` : "";
-  const request = cloudRequest(base, title, renderTask(m.name, prompt, base, channel, title), m.agent.schedule);
-  return json({ install: rec, prompt: agentBootstrap(base, agent, key) + schedule, request, key } satisfies PluginInstalled);
+  const job = { interval: m.agent.interval, task: m.agent.task };
+  c.core.plugins.save(rec, m.name, prompt, job);
+  return json({ install: rec, prompt: agentBootstrap(baseOf(c.url), title, key, job), key } satisfies PluginInstalled);
 }
 
 // 手动更新: 不看自动开关, 版本一样也重新拉一遍 (市场缓存最多 5 分钟)

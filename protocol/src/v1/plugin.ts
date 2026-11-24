@@ -30,7 +30,8 @@ export type PluginManifest = PluginEntry & {
   readme: string;
   prompt: string;
   group: { title: string };
-  agent: { name: string; schedule?: string };
+  // interval: 建议的定时 (秒); task: 一句话任务, 写进接入语, 详细规则在专属指令里
+  agent: { name: string; schedule?: string; interval?: number; task?: string };
   space?: Space;
 };
 
@@ -55,9 +56,8 @@ export type PluginSettings = { auto: boolean };
 export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall })[]; error?: string };
 // task: 插件的任务提示词 (已代入群和服务地址, 不含密钥), 可单独复制给任何 Agent; 未安装时按默认群预览
 export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; task?: string };
-// 安装结果, 只返回这一次: prompt 是给本地 Agent (Claude Code 等) 的接入语, 含密钥;
-// request 是给云端 Agent (Hark 等) 的委托语, 规则内联, 不含密钥; key 单独给, 存进对方的密钥保管处
-export type PluginInstalled = { install: PluginInstall; prompt: string; request: string; key: string };
+// 安装结果, 只返回这一次: prompt 是一段接入语 (文档链接, 定时任务, 密钥), 整段复制给任何 Agent; key 另给一份方便单独复制
+export type PluginInstalled = { install: PluginInstall; prompt: string; key: string };
 
 // 待办: 挂在群下, 群里的 Agent 写, 主人在 App 里勾选
 export const TODO_STATES = ["open", "doing", "done", "dropped"] as const;

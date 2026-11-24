@@ -150,21 +150,15 @@ private fun TaskPrompt(task: String, installed: Boolean) {
     }
 }
 
-/** 刚装完: 本地 Agent 用接入语; 云端 Agent 用委托语 + 单独的密钥。都只显示这一次。 */
+/** 刚装完: 一段接入语整段复制给任何 Agent, 里面的间隔和任务可以直接改。只显示这一次。 */
 @Composable
 private fun Handoff(p: PluginInstalled) {
-    SettingsGroup("本地 Agent (Claude Code, Codex 等)", "把接入语原样发给它, 它会自己拉指令, 报到, 并建好定时任务。里面有密钥, 只显示这一次。") {
+    SettingsGroup("接入 Agent", "整段发给 Claude Code, Codex 或云端 Agent 都行, 间隔和任务可以先改再发。里面有密钥, 只显示这一次。") {
         NoteRow(p.prompt, mono = true)
         RowDivider(indent = false)
         CopyRow("复制接入语", p.prompt)
-    }
-    if (p.request.isEmpty()) return
-    SettingsGroup("云端 Agent (Hark 等)", "委托语以你的口吻提请求, 规则全写在里面, 不含密钥。密钥另外复制, 让它存进自己的密钥保管处, 不要贴进对话。") {
-        NoteRow(p.request.lineSequence().take(TASK_PREVIEW_LINES).joinToString("\n") + "\n...", mono = true)
         RowDivider(indent = false)
-        CopyRow("复制委托语", p.request)
-        RowDivider(indent = false)
-        CopyRow("复制密钥", p.key)
+        CopyRow("只复制密钥", p.key)
     }
 }
 

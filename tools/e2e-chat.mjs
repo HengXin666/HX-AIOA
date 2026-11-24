@@ -62,7 +62,7 @@ check("资料变化广播", Boolean(await client.next((f) => f.t === "chat_sync"
 await api(PATCH, `${V1}/chats/${enc(DIGEST)}`, { title: "日报", digest: "daily" });
 
 const writer = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "新闻抓取" });
-check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("/chat-agent/guide") && writer.data.prompt.includes("hxk_"), writer.data);
+check("接入写群 Agent", writer.status === 200 && writer.data.prompt.includes("agent-guide.md") && writer.data.prompt.includes(writer.data.key) && writer.data.key.startsWith("hxk_"), writer.data);
 const writerKey = /密钥: (\S+)/.exec(writer.data.prompt)?.[1] ?? "";
 const guideRes = await fetch(`${server}${V1}/chat-agent/guide`, { headers: { Authorization: `Bearer ${writerKey}` } });
 const guideText = await guideRes.text();

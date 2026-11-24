@@ -4,7 +4,7 @@
       "id": "todo",
       "name": "点子待办",
       "summary": "在群里随手丢想法, Agent 定时整理成待办, 并对值得做的点子写可行性分析。",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "icon": "list-checks",
       "tags": ["待办", "点子", "Agent"],
       "author": "HengXin666"

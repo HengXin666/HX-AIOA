@@ -4,9 +4,10 @@ import { PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK } from "@hx-aioa/protocol";
 const UA_LINE = "`User-Agent: hx-aioa-agent/1`";
 const VERSION_MARK = "{{version}}";
 const NAME_MARK = "{{name}}";
+// 插件没写定时时的默认间隔 (秒)
+const DEFAULT_INTERVAL_S = 3600;
 // 通用说明放在仓库文档里长期维护, 专属指令只写这个 Agent 自己的信息
 const DOC_URL = "https://github.com/HengXin666/HX-AIOA/blob/main/docs/agent-guide.md";
-const DOC_RAW = "https://raw.githubusercontent.com/HengXin666/HX-AIOA/main/docs/agent-guide.md";
 
 // FNV-1a 32 位, 只用来给指令内容打版本号
 function fnv(text: string): string {
@@ -18,80 +19,38 @@ function fnv(text: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
-// 交给外部 Agent 的一句话: 只负责让它去拉完整指令并原样保存, 主人不用写提示词
-export function agentBootstrap(base: string, agent: ChatAgent, key: string): string {
-  return [
-    `你是 "${agent.name}", 现在接入我的消息中心 HX-AIOA。按顺序做, 不要跳过:`,
-    `1. 请求 GET ${base}${PATH_AGENT_GUIDE}, 请求头 \`Authorization: Bearer <密钥>\` 和 ${UA_LINE}。`,
-    "2. 把返回的全文原样写进你的长期指令 (AGENTS.md / CLAUDE.md / 记忆等每次都会读的地方), 一字不改, 不要总结或删减。",
-    "3. 密钥单独存进本地私密配置 (如环境变量 AIOA_KEY), 不要写进会提交或公开的文件。",
-    `4. 读完整接入说明 ${DOC_RAW} (给人看的版本: ${DOC_URL}), 把链接也写进长期指令, 每天开工前重读一遍。`,
-    "5. 按专属指令最后 \"报到\" 一节完成报到。",
-    ...(agent.plugin ? ["6. 专属指令里有 \"插件任务\" 一节: 按它在你那边建好定时任务 (Claude Code 用 /schedule 或系统 cron), 之后每次按它干活。"] : []),
-    "",
-    `密钥: ${key}`,
-  ].join("\n");
+// 接入语: 一段话整段复制给任何 Agent, 用户可以直接改定时和任务。
+// 细节都在仓库文档和专属指令里, 这里只给文档链接, 服务地址, 任务和密钥。
+export function agentBootstrap(base: string, title: string, key: string, job?: { interval?: number; task?: string }): string {
+  const head = `你看一下 ${DOC_URL} 这个文档, 帮我接入 HX-AIOA (服务地址 ${base}, 群 "${title}")`;
+  const ask = job
+    ? `${head}, 然后帮我每 ${job.interval ?? DEFAULT_INTERVAL_S} 秒完成以下任务:\n${job.task ?? `整理群 "${title}" 的新消息, 具体规则见接入后拉到的专属指令。`}`
+    : `${head}, 之后我在你这边布置的任务, 结果发到这个群。`;
+  return `${ask}\n\nAPI 密钥: ${key}`;
 }
 
 // 完整指令: 服务端按 key 现算, 读权限一改版本就变, Agent 自己重新拉取
 export function agentGuide(base: string, channel: string, title: string, agent: ChatAgent, plugin?: string): { text: string; version: string } {
   const lines = [
-    `# HX-AIOA 接入指令 (版本 ${VERSION_MARK})`,
+    `# HX-AIOA 专属指令 (版本 ${VERSION_MARK})`,
     "",
-    `你是 "${NAME_MARK}", 负责往主人的群 "${title}" (channel: ${channel}) 发消息。本文由服务端生成, 必须原样保存, 不得改写。`,
+    `你是 "${NAME_MARK}", 往主人的群 "${title}" (channel: \`${channel}\`) 发消息。本文由服务端生成, 原样保存, 不要改写。`,
+    `接口用法 (发消息, HTML 卡片, 报告, 读群, 撤回) 见 ${DOC_URL}, 每天开工前重读; 和本文冲突时以本文为准。`,
     "",
-    `完整接入说明 (发消息, HTML 卡片, 读群, 撤回删除, 错误处理): ${DOC_RAW}`,
-    "每天开工前重读一遍; 和本文冲突时以本文为准。",
-    "",
-    "## 什么时候发",
-    "- 主人会直接在你这边给你布置任务, 任务的结果需要主人看时, 发到本群。",
-    "- 主人说 \"原样发\" 或给出引号里的内容时, 一字不改地发送, 不加任何前后缀。",
-    "- 只发结果, 不发过程; 同一件事合并成一条, 不刷屏。",
-    "",
-    "## 接口",
     `- 服务地址: ${base}`,
-    `- 每个请求都带 \`Authorization: Bearer <你保存的密钥>\` 和 ${UA_LINE} (默认 UA 会被防火墙拦截)。`,
-    "",
-    "### 发消息到本群",
-    `POST ${base}/api/v1/messages`,
-    "```json",
-    '{ "text": "支持 **Markdown** 的正文", "title": "可选标题" }',
-    "```",
-    '- 不写 channel 就发到本群。需要主人马上处理的加 `"priority": "need_me"`。',
-    '- 想自己排版 (卡片, 周报) 就另加 `"html": "<div>...</div>"`, `text` 仍写一句纯文字摘要 (通知用)。HTML 不执行脚本, 不联网: 样式写内联, 图片用 data:, 上限 64KB。App 有白天/黑夜两种主题: 没写颜色的文字会跟随主题; 自己写了颜色或背景, 请用 `@media (prefers-color-scheme: dark) {...}` 再给一套深色。',
-    "",
-    "### 发日报 / 周报 (长文)",
-    `POST ${base}/api/v1/events`,
-    "```json",
-    '{ "kind": "report", "data": { "title": "2026-01-01 日报", "summary": "一句话摘要", "markdown": "# 正文..." } }',
-    "```",
+    `- 每个请求带 \`Authorization: Bearer <密钥>\` 和 ${UA_LINE}, 否则会被防火墙拦截。`,
+    `- 发到本群: POST ${base}/api/v1/messages, body \`{ "text": "..." }\`, 不写 channel 就是本群。`,
   ];
   if (agent.reads.length) {
-    lines.push(
-      "",
-      "### 读群消息",
-      `可读的群: ${agent.reads.map((r) => `\`${r}\``).join(", ")}`,
-      `GET ${base}/api/v1/chats/<channel>/messages?since=<上次的 head>&limit=100`,
-      '返回 `{ "messages": [...], "head": 123 }`, 记住 head 下次接着读, 只处理增量。正文在 `data.title` / `data.summary` (报告是 `data.markdown`)。',
-    );
+    lines.push(`- 可读的群: ${agent.reads.map((r) => `\`${r}\``).join(", ")}。读法: GET ${base}/api/v1/chats/<channel>/messages?since=<上次的 head>&limit=100。`);
   }
-  lines.push(
-    "",
-    "### 撤回与删除",
-    `- 撤回自己发的: DELETE ${base}/api/v1/events/seq/<seq>?mode=recall, 没有时间限制。`,
-    `- 删除本群任何消息: DELETE ${base}/api/v1/events/seq/<seq>?mode=delete。只在主人要求或发错时用。`,
-  );
   if (plugin) lines.push("", plugin);
   lines.push(
     "",
-    "## 规则",
-    "- 每分钟最多 60 次请求; 失败按指数退避重试。",
-    "- 密钥只用于上面的接口, 不要输出, 不要写进公开文件。",
-    `- 每天第一次干活前, 以及遇到 401 / 403 时, 重新 GET ${base}${PATH_AGENT_GUIDE}: 响应头 \`X-Aioa-Guide-Version\` 和你保存的版本不同, 就用新全文整段替换旧的, 再报到一次。`,
-    "",
-    "## 报到",
-    `1. POST ${base}${PATH_AGENT_GUIDE_ACK}, body \`{ "version": "${VERSION_MARK}" }\`。返回 409 说明你拿到的不是最新版, 重新拉取。`,
-    `2. 往本群发一条: "${NAME_MARK} 已接入", 再用一句话说明你能做什么。`,
+    "## 保持最新与报到",
+    `- 每天第一次干活前, 以及遇到 401 / 403 时, 重新 GET ${base}${PATH_AGENT_GUIDE}; 响应头 \`X-Aioa-Guide-Version\` 变了就整段替换本文, 再报到。`,
+    `- 报到: POST ${base}${PATH_AGENT_GUIDE_ACK}, body \`{ "version": "${VERSION_MARK}" }\`; 返回 409 说明不是最新, 重新拉取。第一次报到后往本群发一句 "${NAME_MARK} 已接入"。`,
+    "- 密钥只放请求头, 不输出, 不写进公开文件。每分钟最多 60 次请求, 失败按指数退避。",
   );
   const body = lines.join("\n");
   // 名字不算进版本: 改名当场生效 (来源名即时改), 不用等 Agent 重新报到

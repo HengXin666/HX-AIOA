@@ -77,8 +77,7 @@ check("市场里没有的插件装不了", missing.status === 404, missing.data)
 const inst = await api("POST", `${V1}/plugins/${ID}/install`);
 const key = /密钥: (\S+)/.exec(inst.data?.prompt ?? "")?.[1];
 check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === `plugin-${ID}` && !!key, inst.data);
-check("接入语带定时建议与插件步骤", inst.data?.prompt?.includes("建议的定时") && inst.data.prompt.includes("插件任务"), inst.data?.prompt);
-check("云端委托语规则内联且不含密钥, 密钥单独给", inst.data?.key === key && inst.data.request?.includes("待办接口") && !inst.data.request.includes(key) && !inst.data.request.includes("一字不改"), inst.data.request?.slice(0, 200));
+check("接入语一段话: 文档链接, 定时, 任务, 密钥", inst.data?.prompt?.includes("agent-guide.md") && inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes("每条都引用回复") && inst.data.prompt.endsWith(`API 密钥: ${key}`) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
 const after = await api("GET", `${V1}/plugins/${ID}`);
 check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
 const again = await api("POST", `${V1}/plugins/${ID}/install`);
@@ -139,10 +138,10 @@ const t2 = await call(key, "POST", TODOS, { id: "t-2", title: "临时" });
 const del = await call(key, "DELETE", `${TODOS}/t-2`);
 check("单条写入与删除", t2.status === 200 && del.status === 200, [t2.data, del.data]);
 
-// 重新接入: 不带请求体的 POST, 返回新密钥与云端委托语; 插件记录跟着换 keyId, 卸载仍能清掉
+// 重新接入: 不带请求体的 POST, 返回新密钥和同样格式的接入语; 插件记录跟着换 keyId, 卸载仍能清掉
 const rot = await api("POST", `${V1}/chats/${CHANNEL}/agents/${inst.data.install.keyId}/rotate`);
 const key2 = rot.data?.key;
-check("重新接入给出单独密钥和委托语", rot.status === 200 && !!key2 && key2 !== key && rot.data.prompt.includes(key2) && rot.data.request?.includes("待办接口") && !rot.data.request.includes(key2), rot.data);
+check("重新接入给出新密钥和插件接入语", rot.status === 200 && !!key2 && key2 !== key && rot.data.prompt.includes(key2) && rot.data.prompt.includes("每 1800 秒"), rot.data);
 const oldDead = await call(key, "GET", `${V1}/chat-agent/guide`);
 check("重新接入后旧密钥失效", oldDead.status === 401 || oldDead.status === 403, oldDead.status);
 const off = await api("DELETE", `${V1}/plugins/${ID}`);

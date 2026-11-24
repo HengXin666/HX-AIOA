@@ -42,9 +42,8 @@ export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "
 export type AgentRequest = { name: string; reads?: string[] };
 export type AgentAck = { version: string };
 export type Favorite = { seq: number; saved: number; ev: Envelope };
-// 接入 / 重新接入结果, 只给这一次: prompt 接入语 (含密钥), key 密钥本身 (单独复制);
-// 插件 Agent 另给 request: 云端 Agent 委托语 (规则内联, 不含密钥)
-export type OnboardResult = { agent: ChatAgent; prompt: string; key: string; request?: string };
+// 接入 / 重新接入结果, 只给这一次: prompt 一段接入语 (文档链接, 任务, 密钥), key 另给一份方便单独复制
+export type OnboardResult = { agent: ChatAgent; prompt: string; key: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
 export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取

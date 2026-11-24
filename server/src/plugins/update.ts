@@ -28,7 +28,7 @@ export async function upgrade(core: Core, id: string): Promise<PluginInstall> {
   if (rec.space && !space && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   const { space: _old, ...rest } = rec;
   const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...(space ? { space } : {}) };
-  core.plugins.save(next, m.name, prompt);
+  core.plugins.save(next, m.name, prompt, { interval: m.agent.interval, task: m.agent.task });
   return next;
 }
 

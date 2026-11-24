@@ -2,7 +2,9 @@ import { PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInsta
 import { todoGuide } from "./todo-guide";
 
 type Row = { id: string; body: string };
-type Saved = { install: PluginInstall; prompt: string; name: string };
+// job: 清单里的定时与一句话任务, 重新接入时拼接入语用
+export type PluginJob = { interval?: number; task?: string };
+type Saved = { install: PluginInstall; prompt: string; name: string; job?: PluginJob };
 
 /** 已安装的插件: 一行一个, 带安装时拉到的提示词模板, 生成专属指令时不用再联网。 */
 export class PluginStore {
@@ -25,8 +27,8 @@ export class PluginStore {
     return this.all().get(id)?.install ?? null;
   }
 
-  save(install: PluginInstall, name: string, prompt: string): void {
-    const saved: Saved = { install, prompt, name };
+  save(install: PluginInstall, name: string, prompt: string, job?: PluginJob): void {
+    const saved: Saved = { install, prompt, name, ...(job ? { job } : {}) };
     this.sql.exec("INSERT OR REPLACE INTO plugin (id, body) VALUES (?, ?)", install.id, JSON.stringify(saved));
     this.all().set(install.id, saved);
   }
@@ -34,12 +36,16 @@ export class PluginStore {
   /** 只改安装记录 (如自动更新开关), 提示词模板不动。 */
   setInstall(install: PluginInstall): void {
     const s = this.all().get(install.id);
-    if (s) this.save(install, s.name, s.prompt);
+    if (s) this.save(install, s.name, s.prompt, s.job);
   }
 
   remove(id: string): void {
     this.sql.exec("DELETE FROM plugin WHERE id = ?", id);
     this.all().delete(id);
+  }
+
+  job(id: string): PluginJob | undefined {
+    return this.all().get(id)?.job;
   }
 
   /** 专属指令里的 "插件任务" 一节: 模板替换占位符, 再附上待办接口。 */
