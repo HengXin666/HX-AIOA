@@ -27,6 +27,10 @@ class ChatPresence {
         return if (listening.isEmpty()) null else "${names(listening)} 正在监听"
     }
 
+    /** 这个群里正在监听的 id (Agent 为 keyId)。 */
+    fun listening(channel: String, now: Long): Set<String> =
+        frames[channel]?.listening?.filter { it.until == 0L || it.until > now }?.map { it.id }?.toSet().orEmpty()
+
     private fun names(list: List<String>): String =
         if (list.size <= MAX_NAMES) list.joinToString(", ") else "${list.take(MAX_NAMES).joinToString(", ")} 等 ${list.size} 个"
 }

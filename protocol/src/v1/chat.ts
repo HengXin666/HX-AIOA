@@ -42,9 +42,15 @@ export type ChatAgent = {
   brief?: string;
   // 由插件安装创建时为插件 id, 专属指令里会带上插件的提示词
   plugin?: string;
+  // 最近一次用这把 key 拉消息 / 发消息 / 拉指令的时间, 最多每 10 分钟记一次
+  active?: number;
 };
+// 接入时可选带上定时与任务, 只写进这次的接入语, 不存
+export type AgentJob = { interval?: number; task?: string };
 export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping">>;
-export type AgentRequest = { name: string; reads?: string[] };
+export type AgentRequest = { name: string; reads?: string[] } & AgentJob;
+export const AGENT_ACTIVE_STEP_MS = 600_000;
+export const MAX_AGENT_TASK = 2000;
 export type AgentAck = { version: string };
 // 收藏按引用: ev 是原消息的当前版本; gone 表示原消息已撤回 / 删除 / 清空, ev 只剩收藏时的摘要
 export type Favorite = { seq: number; saved: number; ev: Envelope; gone?: boolean };

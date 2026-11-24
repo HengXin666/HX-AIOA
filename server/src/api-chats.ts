@@ -24,6 +24,8 @@ import {
   QUERY_LIMIT,
   QUERY_SINCE,
   globMatch,
+  type AgentJob,
+  MAX_AGENT_TASK,
   type ChatAgent,
   type ChatCleared,
   type ChatMeta,
@@ -37,7 +39,7 @@ import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE,
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { memberView, ownerView, roleIn } from "./room-access";
 import { autoUpgrade } from "./plugins/update";
-import { notePoll } from "./api-presence";
+import { notePoll, touchAgent } from "./api-presence";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 
 const AGENT_SCOPES: Scope[] = ["messages:send", "events:write"];
@@ -171,7 +173,7 @@ async function clearChat(c: ReqCtx): Promise<Response> {
   return json({ deleted, cleared } satisfies ChatCleared);
 }
 
-type AgentInput = { name: string; reads: string[] };
+type AgentInput = { name: string; reads: string[]; job?: AgentJob };
 const SEND_SCOPE: Scope = "messages:send";
 const MARKDOWN = "text/markdown; charset=utf-8";
 
@@ -184,6 +186,10 @@ function parseAgent(raw: unknown, partial: boolean): Partial<AgentInput> | strin
     if (!Array.isArray(raw.reads) || raw.reads.length > MAX_AGENT_READS || !raw.reads.every((x) => typeof x === "string" && x)) return "reads 必须是群名数组";
     out.reads = [...new Set(raw.reads as string[])];
   }
+  // 接入向导第二步: 定时与任务只进这次的接入语
+  const interval = typeof raw.interval === "number" && raw.interval >= 10 ? Math.round(raw.interval) : undefined;
+  const task = typeof raw.task === "string" && raw.task.trim() ? raw.task.trim().slice(0, MAX_AGENT_TASK) : undefined;
+  if (interval || task) out.job = { ...(interval ? { interval } : {}), ...(task ? { task } : {}) };
   return out;
 }
 
@@ -244,7 +250,7 @@ async function addAgent(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
   const { agent, key } = await createAgent(c.core, channel, p.name!, p.reads ?? []);
-  return json({ agent, prompt: agentBootstrap(baseOf(c.url), titleOf(c.core, channel), key), key } satisfies OnboardResult);
+  return json({ agent, prompt: agentBootstrap(baseOf(c.url), titleOf(c.core, channel), key, p.job), key } satisfies OnboardResult);
 }
 
 // 重新接入: 作废旧 key, 发新 key, 来源与历史消息不变
@@ -314,6 +320,7 @@ function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAg
 
 async function agentGuideOf(c: ReqCtx): Promise<Response> {
   const { channel, agent } = agentByKey(c);
+  touchAgent(c.core, agent.keyId);
   // 插件 Agent 拉指令时顺手做自动更新, 新版提示词当场生效
   if (agent.plugin) await autoUpgrade(c.core, agent.plugin);
   const g = guideFor(c.core, baseOf(c.url), channel, agent);

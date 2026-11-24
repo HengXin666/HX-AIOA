@@ -46,6 +46,7 @@ import { buildGroups, buildOverview } from "./group";
 import { ApiFail, badJson, clampInt, fail, json, readJson } from "./http";
 import { textToEventData } from "./legacy";
 import { canRead } from "./api-chats";
+import { touchAgent } from "./api-presence";
 import { refOf } from "./chat";
 import { groupOf } from "./store";
 
@@ -160,6 +161,7 @@ async function postMessage(c: ReqCtx): Promise<Response> {
   const out = await writeEvent(c.core, c.who, input);
   // Agent 发出回复就不再显示 "正在输入"
   if (!c.who.owner && out.channel) c.core.presence.sent(out.channel, c.who.key.id);
+  if (!c.who.owner) touchAgent(c.core, c.who.key.id);
   return json(out);
 }
 

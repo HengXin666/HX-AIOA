@@ -39,7 +39,19 @@ data class ChatMeta(
 }
 
 /** 群里接入的 Agent; reads 是它能读的群, joined 是最近报到时间, pending 表示指令变了还没重新报到。 */
-data class ChatAgent(val keyId: String, val name: String, val reads: List<String>, val created: Long, val rotated: Long?, val joined: Long?, val pending: Boolean)
+data class ChatAgent(
+    val keyId: String,
+    val name: String,
+    val reads: List<String>,
+    val created: Long,
+    val rotated: Long?,
+    val joined: Long?,
+    val pending: Boolean,
+    val sourceId: String? = null,
+    val plugin: String? = null,
+    /** 最近一次拉消息 / 发消息 / 拉指令的时间, 服务端最多每 10 分钟记一次。 */
+    val active: Long? = null,
+)
 
 /** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
 data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg, val gone: Boolean = false)
@@ -71,6 +83,9 @@ fun parseAgent(o: JSONObject): ChatAgent = ChatAgent(
     rotated = if (o.has("rotated")) o.optLong("rotated") else null,
     joined = if (o.has("joined")) o.optLong("joined") else null,
     pending = o.optBoolean("pending"),
+    sourceId = o.optStr("sourceId"),
+    plugin = o.optStr("plugin"),
+    active = if (o.has("active")) o.optLong("active") else null,
 )
 
 fun parseChats(body: JSONObject?): Map<String, ChatMeta> {

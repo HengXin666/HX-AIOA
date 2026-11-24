@@ -1,4 +1,4 @@
-import { PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type KeyInfo } from "@hx-aioa/protocol";
+import { AGENT_ACTIVE_STEP_MS, PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type KeyInfo } from "@hx-aioa/protocol";
 import { canRead } from "./api-chats";
 import { CODE_FORBIDDEN, ERR_FORBIDDEN, GET, HISTORY_MAX_LIMIT, OWNER_NAME, POST } from "./constants";
 import { type Core, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
@@ -16,10 +16,22 @@ export function agentMe(core: Core, key: KeyInfo): ChatAgentMe {
   return { keyId: key.id, name: key.name, reads: key.channels, ...(key.sourceId ? { sourceId: key.sourceId } : {}) };
 }
 
+/** Agent 有动作 (拉消息, 发消息, 拉指令, 长连): 记最近活跃, 同一个 Agent 最多每 10 分钟写一次库, 不广播。 */
+export function touchAgent(core: Core, keyId: string, now = Date.now()): void {
+  for (const meta of core.chats.chats()) {
+    const a = meta.agents?.find((x) => x.keyId === keyId);
+    if (!a) continue;
+    if (now - (a.active ?? 0) < AGENT_ACTIVE_STEP_MS) return;
+    core.chats.replaceChat({ ...meta, agents: (meta.agents ?? []).map((x) => (x.keyId === keyId ? { ...x, active: now } : x)) });
+    return;
+  }
+}
+
 /** HTTP 拉群消息的是 Agent 时记一次 "在监听"。 */
 export function notePoll(core: Core, who: Principal, channel: string): void {
   if (who.owner || who.member) return;
   core.presence.polled(channel, who.key.id, agentMe(core, who.key).name);
+  touchAgent(core, who.key.id);
 }
 
 /** CLI 长连 (role=chat): 只有带读权限的 key; 主人用访问令牌连时读全部。 */
@@ -30,6 +42,7 @@ export function mayListen(who: Principal): boolean {
 /** CLI 长连接上: 记下能读的群与名字, 返回给 welcome 的身份。 */
 export function chatConnected(core: Core, ws: WebSocket, att: Attachment, who: Principal): ChatAgentMe {
   const me: ChatAgentMe = who.owner ? { keyId: "", name: OWNER_NAME, reads: ["*"] } : agentMe(core, who.key);
+  if (!who.owner) touchAgent(core, who.key.id);
   att.reads = me.reads;
   att.name = me.name;
   ws.serializeAttachment(att);

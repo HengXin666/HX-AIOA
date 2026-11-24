@@ -134,8 +134,14 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    suspend fun addAgent(channel: String, name: String, reads: List<String>): Result<Onboard> =
-        onboard { Api.call(context, POST, listOf(CHATS, channel, AGENTS), agentBody(name, reads)) }
+    /** 接入; interval (秒) 与 task 只写进这次的接入语。 */
+    suspend fun addAgent(channel: String, name: String, reads: List<String>, interval: Int? = null, task: String? = null): Result<Onboard> =
+        onboard {
+            val body = agentBody(name, reads)
+            interval?.let { body.put("interval", it) }
+            task?.trim()?.takeIf { it.isNotEmpty() }?.let { body.put("task", it) }
+            Api.call(context, POST, listOf(CHATS, channel, AGENTS), body)
+        }
 
     suspend fun rotate(channel: String, keyId: String): Result<Onboard> =
         onboard { Api.call(context, POST, listOf(CHATS, channel, AGENTS, keyId, "rotate")) }

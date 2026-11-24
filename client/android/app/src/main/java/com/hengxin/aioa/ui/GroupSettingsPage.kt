@@ -58,9 +58,6 @@ private val BIG_AVATAR = 84.dp
 // 正在显示的对话框
 private sealed interface GsDialog {
     data object Rename : GsDialog
-    data class EditAgent(val agent: ChatAgent?) : GsDialog
-    data class Prompt(val title: String, val text: String, val note: String, val key: String? = null) : GsDialog
-    data class Remove(val agent: ChatAgent) : GsDialog
     data object Clear : GsDialog
     data object Delete : GsDialog
 }
@@ -118,22 +115,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                     }
                 }
             }
-            if (owner && group != MessageDb.MEMO_GROUP) AgentsCard(meta?.agents.orEmpty(), { dialog = GsDialog.EditAgent(null) }) { agent, action ->
-                when (action) {
-                    AgentAction.COPY -> scope.launch {
-                        dir.savedPrompt(group, agent.keyId)
-                            .onSuccess { dialog = GsDialog.Prompt("${agent.name} 的指令", it, "这是服务端下发给它的完整指令 (不含密钥), 它报到时拉的就是这份。改了可读的群后它会自己重新拉取。") }
-                            .onFailure { dir.error = it.message }
-                    }
-                    AgentAction.ROTATE -> scope.launch {
-                        dir.rotate(group, agent.keyId)
-                            .onSuccess { dialog = GsDialog.Prompt("发给 ${agent.name}", it.prompt, "旧密钥已作废。整段发给 Agent 即可, 任务可以先改再发。密钥只显示这一次。", it.key) }
-                            .onFailure { dir.error = it.message }
-                    }
-                    AgentAction.EDIT -> dialog = GsDialog.EditAgent(agent)
-                    AgentAction.REMOVE -> dialog = GsDialog.Remove(agent)
-                }
-            }
+            if (owner && group != MessageDb.MEMO_GROUP) Card { com.hengxin.aioa.ui.agents.AgentsSection(model, group, meta?.agents.orEmpty()) }
             if (owner) Card {
                 Row(Modifier.fillMaxWidth().clickable { dialog = GsDialog.Clear }.padding(vertical = 8.dp)) {
                     Text("清空聊天记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
@@ -148,42 +130,6 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     when (val d = dialog) {
         GsDialog.Rename -> NameDialog("群名称", group, { dialog = null }, meta?.title ?: group) { dir.rename(group, it); true }
         GsDialog.Delete -> DeleteGroupDialog(g, group) { dialog = null }
-        is GsDialog.EditAgent -> AgentDialog(model, group, d.agent, { dialog = null }) { name, reads ->
-            scope.launch {
-                if (d.agent == null) {
-                    dir.addAgent(group, name, reads)
-                        .onSuccess { dialog = GsDialog.Prompt("发给 $name", it.prompt, "整段发给你的 Agent, 它会按文档接入并报到, 任务可以先改再发。密钥只显示这一次。", it.key) }
-                        .onFailure { dir.error = it.message; dialog = null }
-                } else {
-                    dir.editAgent(group, d.agent.keyId, name, reads)?.let { dir.error = it }
-                    dialog = null
-                }
-            }
-        }
-        is GsDialog.Prompt -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text(d.title) },
-            text = {
-                Column {
-                    Text(d.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                    Box(Modifier.padding(top = 8.dp).heightIn(max = 320.dp).background(MaterialTheme.colorScheme.surfaceVariant, CARD).verticalScroll(rememberScrollState()).padding(10.dp)) {
-                        SelectionContainer { Text(d.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
-                    }
-                    Row {
-                        d.key?.takeIf { it.isNotEmpty() }?.let { k -> TextButton({ clipboard.setText(AnnotatedString(k)) }) { Text("只复制密钥") } }
-                    }
-                }
-            },
-            confirmButton = { TextButton({ clipboard.setText(AnnotatedString(d.text)); dialog = null }) { Text("复制接入语") } },
-            dismissButton = { TextButton({ dialog = null }) { Text("关闭") } },
-        )
-        is GsDialog.Remove -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text("移除 ${d.agent.name}?") },
-            text = { Text("它的密钥会立即作废, 已发的消息保留。") },
-            confirmButton = { TextButton({ scope.launch { dir.removeAgent(group, d.agent.keyId)?.let { dir.error = it } }; dialog = null }) { Text("移除") } },
-            dismissButton = { TextButton({ dialog = null }) { Text("取消") } },
-        )
         GsDialog.Clear -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("清空聊天记录?") },
@@ -199,65 +145,6 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
         )
         null -> Unit
     }
-}
-
-private enum class AgentAction { COPY, ROTATE, EDIT, REMOVE }
-
-@Composable
-private fun AgentsCard(agents: List<ChatAgent>, onAdd: () -> Unit, onAction: (ChatAgent, AgentAction) -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Agent", Modifier.weight(1f), fontSize = 15.sp)
-            TextButton(onAdd) { Text("+ 接入 Agent") }
-        }
-        if (agents.isEmpty()) Text("起个名字, 勾上它能读的群, 就会得到一句话。发给你的 Agent, 它会自己拉取规则并报到, 之后你在它那边布置任务, 结果发到这个群。", fontSize = 12.sp, color = c.outline)
-        agents.forEach { a ->
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Text(a.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(joinState(a), fontSize = 12.sp, color = if (a.joined != null && !a.pending) c.primary else c.outline)
-                if (a.reads.isNotEmpty()) Text("可读: ${a.reads.joinToString(", ")}", fontSize = 12.sp, color = c.outline)
-                Row {
-                    TextButton({ onAction(a, AgentAction.COPY) }) { Text("查看指令") }
-                    TextButton({ onAction(a, AgentAction.ROTATE) }) { Text("重新接入") }
-                    TextButton({ onAction(a, AgentAction.EDIT) }) { Text("编辑") }
-                    TextButton({ onAction(a, AgentAction.REMOVE) }) { Text("移除", color = c.error) }
-                }
-            }
-        }
-    }
-}
-
-private fun joinState(a: ChatAgent): String = when {
-    a.joined == null -> "还没报到: 把那句话发给它"
-    a.pending -> "指令已更新, 等它重新拉取后报到"
-    else -> "已接入 · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(a.joined))} 报到"
-}
-
-/** 接入或编辑 Agent: 名字和可读的群, 指令由服务端生成。 */
-@Composable
-private fun AgentDialog(model: ChatModel, group: String, agent: ChatAgent?, close: () -> Unit, ok: (String, List<String>) -> Unit) {
-    var name by remember { mutableStateOf(agent?.name ?: "") }
-    var reads by remember { mutableStateOf(agent?.reads?.toSet() ?: emptySet()) }
-    val groups = remember { model.groups.rows().map { it.key }.filter { it != MessageDb.MEMO_GROUP } }
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text(if (agent == null) "接入 Agent" else "编辑 ${agent.name}") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("名字") }, singleLine = true)
-                Text("允许读这些群的消息", Modifier.padding(top = 10.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                groups.forEach { k ->
-                    Row(Modifier.fillMaxWidth().clickable { reads = if (k in reads) reads - k else reads + k }, verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(k in reads, { reads = if (it) reads + k else reads - k })
-                        Text(if (k == group) "$k (本群)" else model.groups.directory.title(k), fontSize = 14.sp)
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton({ if (name.isNotBlank()) ok(name, reads.toList()) }, enabled = name.isNotBlank()) { Text(if (agent == null) "生成接入语" else "保存") } },
-        dismissButton = { TextButton(close) { Text("取消") } },
-    )
 }
 
 @Composable

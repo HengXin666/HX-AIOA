@@ -102,6 +102,10 @@ class MessageDb private constructor(context: Context) :
         arrayOf(key, before.toString(), limit.toString()),
     )
 
+    /** 某个来源 (Agent) 最近发的几条, 新的在前。 */
+    fun bySource(sid: String, limit: Int): List<ServerFrame.Msg> =
+        query("SELECT * FROM $T_MSG WHERE $C_SID = ? AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?", arrayOf(sid, limit.toString()))
+
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */

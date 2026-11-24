@@ -77,7 +77,7 @@ check("mode 取值校验", badMode.status === 400, badMode.data);
 
 const OTHER = `other-${RUN}`;
 const made = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "撤回测试" });
-const agentKey = /密钥: (\S+)/.exec(made.data?.prompt ?? "")?.[1] ?? "";
+const agentKey = made.data?.key ?? "";
 check("接入 Agent", made.status === 200 && !!agentKey, made.data);
 const own = await api(POST, `${V1}/messages`, { text: "Agent 的消息" }, agentKey);
 const ownEv = (await a.next((f) => f.t === "ev" && f.ev.id === own.data?.id))?.ev;

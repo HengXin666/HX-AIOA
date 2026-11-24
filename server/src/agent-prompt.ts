@@ -2,8 +2,6 @@ import type { ChatAgent } from "@hx-aioa/protocol";
 
 const VERSION_MARK = "{{version}}";
 const NAME_MARK = "{{name}}";
-// 插件没写定时时的默认间隔 (秒)
-const DEFAULT_INTERVAL_S = 3600;
 
 // FNV-1a 32 位, 只用来给指令内容打版本号
 function fnv(text: string): string {
@@ -20,9 +18,14 @@ const install = (base: string) => `mkdir -p ~/.local/bin && curl -fsSLo ~/.local
 
 // 接入语: 一段话整段复制给任何 Agent; 只让它装命令行, 登录, 拉专属指令, 规则都在专属指令里
 export function agentBootstrap(base: string, title: string, key: string, job?: { interval?: number; task?: string }): string {
-  const ask = job
-    ? `然后每 ${job.interval ?? DEFAULT_INTERVAL_S} 秒: ${job.task ?? `按专属指令整理群 "${title}" 的新消息。`}`
-    : "之后我在你这边布置的任务, 结果用 hxaioa send 发到这个群。";
+  const task = job?.task ?? `按专属指令整理群 "${title}" 的新消息。`;
+  // 插件总带定时; 向导里只写了任务没选定时的, 就只交代任务
+  // 带了任务但没定时的, 只交代任务
+  const ask = job?.interval
+    ? `然后每 ${job.interval} 秒: ${task}`
+    : job
+      ? `然后: ${task} 结果用 hxaioa send 发到这个群。`
+      : "之后我在你这边布置的任务, 结果用 hxaioa send 发到这个群。";
   return [
     `帮我接入 HX-AIOA 群 "${title}"。用命令行 hxaioa (需要 Node 22+), 按顺序执行:`,
     "",
