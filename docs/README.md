@@ -59,6 +59,7 @@
 | [multi-account-draft.md](design/multi-account-draft.md) | 多账号早期草案, 已被单库方案取代 |
 | [push-experiment.md](design/push-experiment.md) | 推送延迟与耗电实验手册 |
 | [research-cf-probe-panels.md](design/research-cf-probe-panels.md) | CF 探针面板调研 (#11) |
+| [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿, 待确认 (#66 #70) |
 
 ## 过程记录 `aegis/`
 

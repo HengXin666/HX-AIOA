@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HX-AIOA 邮件与推送 设计稿</title>
+<style>
+:root{--bg:#f2f3f5;--card:#fff;--text:#16181d;--sub:#6b7280;--faint:#9ca3af;--line:#e8e9ec;--accent:#2f6bff;--accent-soft:#e8efff;--ok:#12a150;--ok-soft:#e3f6ea;--warn:#d97706;--warn-soft:#fdf1dc;--bad:#dc2626;--bad-soft:#fde8e8;--chip:#f0f1f3}
+.dark{--bg:#0f1115;--card:#181b21;--text:#eceef2;--sub:#9aa1ad;--faint:#6b7280;--line:#262a31;--accent:#5b8cff;--accent-soft:#1d2740;--ok:#3ccf7a;--ok-soft:#163023;--warn:#f0a43a;--warn-soft:#33270f;--bad:#f26464;--bad-soft:#3a1717;--chip:#22262d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","MiSans",system-ui,sans-serif;background:#dfe2e7;color:var(--text);-webkit-font-smoothing:antialiased}
+body.dark{background:#000}
+.top{position:sticky;top:0;z-index:9;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid #d4d7dd;padding:8px 10px;display:flex;gap:6px;overflow-x:auto;white-space:nowrap}
+.dark .top{background:rgba(20,22,26,.92);border-color:#2a2e35}
+.top button{border:0;background:#eceef1;color:#333;border-radius:16px;padding:6px 12px;font-size:13px}
+.dark .top button{background:#2a2e35;color:#ddd}
+.top button.on{background:#2f6bff;color:#fff}
+.stage{display:flex;flex-wrap:wrap;gap:28px;justify-content:center;padding:24px 12px 60px}
+.phone{width:390px;height:800px;background:var(--bg);border-radius:36px;overflow:hidden;position:relative;box-shadow:0 0 0 10px #1b1d22,0 20px 50px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.cap{width:390px;text-align:center;font-size:13px;color:#555;margin-top:18px}
+.dark .cap{color:#aaa}
+.wrap{display:flex;flex-direction:column;align-items:center}
+@media (max-width:600px){.stage{padding:0;gap:0}.phone{width:100vw;height:calc(100vh - 49px);border-radius:0;box-shadow:none}.cap{display:none}.wrap{display:none}.wrap.show{display:flex}}
+@media (min-width:601px){.wrap{display:flex!important}}
+.status{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:13px;font-weight:600}
+.bar{flex:none;display:flex;align-items:center;gap:10px;padding:6px 14px 10px}
+.bar h1{font-size:20px;font-weight:700;flex:1;display:flex;align-items:center;gap:6px}
+.bar h1 small{font-size:13px;color:var(--sub);font-weight:400}
+.ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--sub);font-size:18px}
+.scroll{flex:1;overflow-y:auto}
+.search{margin:0 14px 8px;background:var(--chip);border-radius:10px;padding:8px 12px;color:var(--faint);font-size:14px}
+.chips{display:flex;gap:8px;padding:2px 14px 10px;overflow-x:auto}
+.chip{flex:none;padding:5px 12px;border-radius:14px;background:var(--chip);font-size:13px;color:var(--sub)}
+.chip.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chip b{font-weight:400;opacity:.7;margin-left:3px}
+.day{padding:12px 16px 6px;font-size:12px;color:var(--faint)}
+.list{background:var(--card)}
+.row{display:flex;gap:12px;padding:12px 16px;position:relative}
+.row+.row::before{content:"";position:absolute;left:72px;right:0;top:0;border-top:1px solid var(--line)}
+.av{width:44px;height:44px;border-radius:50%;flex:none;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;font-weight:700;color:#fff;font-size:18px;position:relative}
+.av img{width:28px;height:28px}
+.av.sq{border-radius:12px}
+.dot{position:absolute;left:5px;top:28px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.body{flex:1;min-width:0}
+.l1{display:flex;align-items:center;gap:6px}
+.l1 .who{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.unread .who,.unread .subj{font-weight:700}
+.l1 .t{font-size:12px;color:var(--faint);flex:none}
+.cnt{font-size:11px;color:var(--sub);background:var(--chip);border-radius:8px;padding:0 6px;flex:none}
+.subj{font-size:14px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum{font-size:13px;color:var(--sub);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4}
+.tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tag{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--chip);color:var(--sub)}
+.tag.code{background:var(--accent-soft);color:var(--accent);font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:12px}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.fab{position:absolute;right:18px;bottom:24px;background:var(--accent);color:#fff;border-radius:22px;padding:10px 16px;font-size:14px;box-shadow:0 6px 18px rgba(47,107,255,.35)}
+.sheet{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end}
+.sheet .pane{background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:8px 0 24px}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
+.pane h3{font-size:13px;color:var(--faint);font-weight:400;padding:4px 18px 8px}
+.acc{display:flex;align-items:center;gap:12px;padding:12px 18px}
+.acc .n{flex:1}.acc .n div:first-child{font-size:15px}.acc .n div+div{font-size:12px;color:var(--faint);margin-top:2px}
+.acc .k{font-size:13px;color:var(--sub)}
+.acc.on .n div:first-child{color:var(--accent);font-weight:600}
+.mav{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700}
+.detail{background:var(--card);padding:16px}
+.detail h2{font-size:20px;line-height:1.35;font-weight:700}
+.from{display:flex;gap:12px;align-items:center;margin-top:16px}
+.from .who{font-size:15px;font-weight:600}
+.from .addr{font-size:12px;color:var(--faint)}
+.tobox{margin-top:10px;background:var(--chip);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--sub);line-height:1.8}
+.tobox b{color:var(--text);font-weight:500}
+.mailhtml{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px;line-height:1.6}
+.btn{display:inline-block;margin-top:10px;background:#1f883d;color:#fff;border-radius:6px;padding:6px 12px;font-size:13px}
+.actions{display:flex;justify-content:space-around;border-top:1px solid var(--line);background:var(--card);padding:10px 0 18px;font-size:12px;color:var(--sub);flex:none}
+.actions span{display:flex;flex-direction:column;align-items:center;gap:2px}
+.actions i{font-style:normal;font-size:18px}
+.chat{padding:8px 12px}
+.today{background:var(--card);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.today .hd{display:flex;align-items:center;gap:8px}
+.today .hd b{font-size:16px;flex:1}
+.today .hd span{font-size:12px;color:var(--faint)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.stat{background:var(--chip);border-radius:10px;padding:8px 0;text-align:center}
+.stat div:first-child{font-size:18px;font-weight:700}
+.stat div+div{font-size:11px;color:var(--sub)}
+.srcs{display:flex;gap:6px;margin-top:10px;font-size:12px;color:var(--sub);align-items:center}
+.srcs img{width:16px;height:16px;border-radius:4px}
+.item{background:var(--card);border-radius:14px;padding:12px;margin-top:8px}
+.ih{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)}
+.ih img{width:16px;height:16px;border-radius:4px}
+.kind{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
+.k-deal{background:var(--warn-soft);color:var(--warn)}.k-oss{background:var(--accent-soft);color:var(--accent)}.k-news{background:var(--chip);color:var(--sub)}
+.st{margin-left:auto;font-size:11px;padding:1px 7px;border-radius:9px}
+.st.ok{background:var(--ok-soft);color:var(--ok)}.st.go{background:var(--accent-soft);color:var(--accent)}.st.q{background:var(--warn-soft);color:var(--warn)}.st.x{background:var(--chip);color:var(--faint);text-decoration:line-through}
+.it{font-size:15px;font-weight:600;margin-top:6px;line-height:1.35}
+.id{font-size:13px;color:var(--sub);margin-top:4px;line-height:1.45}
+.need{font-size:12px;margin-top:6px;background:var(--chip);border-radius:8px;padding:6px 8px;color:var(--sub)}
+.need b{color:var(--text);font-weight:600}
+.if{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:12px;color:var(--accent)}
+.if .heat{color:var(--bad);margin-left:auto}
+.if .m{color:var(--faint)}
+.batch{text-align:center;font-size:11px;color:var(--faint);margin:14px 0 2px}
+.used{opacity:.5}
+.notif{margin:10px 12px;background:var(--card);border-radius:18px;padding:12px 14px;display:flex;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.notif .ap{width:36px;height:36px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800}
+.notif b{font-size:14px}.notif p{font-size:13px;color:var(--sub);margin-top:2px;line-height:1.4}
+.rep{background:var(--card);border-radius:16px;padding:16px;margin-top:8px}
+.rep h2{font-size:18px}.rep .meta{font-size:12px;color:var(--faint);margin-top:4px}
+.rep h4{font-size:14px;margin:14px 0 6px}
+.rep li{font-size:13px;line-height:1.55;margin-left:18px;color:var(--text)}
+.rep li a{color:var(--accent);text-decoration:none;font-size:12px}
+.ref{display:inline-block;font-size:11px;background:var(--chip);color:var(--sub);border-radius:4px;padding:0 5px;margin-left:4px}
+.tabs2{display:flex;gap:20px;padding:0 16px 8px;font-size:15px;color:var(--sub)}
+.tabs2 .on{color:var(--text);font-weight:700;border-bottom:3px solid var(--accent);padding-bottom:4px}
+.note{font-size:12px;color:var(--faint);padding:12px 16px 30px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="top" id="nav"></div>
+<div class="stage" id="stage"></div>
+<script>
+// 设计稿离线可看: 图标内嵌; App 里由服务端按域名代理并缓存
+const FAV = {"nodeloc.com": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAflBMVEULHxgAAABdyJv/nDhezJ4ADAkAHRj/oDli06MJHBVKoHwBEQ0JGxUTLiRgz6AAGBciIxiQZSkAGhf/pjsAABA+iGkAAAaWaioAFRc7gWQOJBxawpbmkDAbIBchSzpSu5L2njZl26kvZ1DllTZTQB8qWUU2dltSsooXaFVRNxRzElpWAAACIElEQVRYhe1W25aqMAwlPS2W3vCGgmjxVtT//8GT4Mxa4+jMAbrOm3mC1SbN3tlNkyRve9v/tzTP0xj/fDqbTfPx/vPzYjJZnOdj/cXy9AfttBTj/KEIewqwDwWMOr86XLcUYHs9VCNyyDaSNTfi4NYwuckGB9At58Vqt17vVgXnrR4cABSTNkvLMs2sZGo4C/cA9DUygK64O3aJ66Pj1XAIxn+eS7l4MzhAAjVzhCGzjtVjhCCQfEoBFJZjlBaBM+eN8Y7xAQlkGkDfAeuWcheI5EMFhtb+oSixqZSqPHQpw4VANPzSJSDA09rmVzRQSc4Yl3UBeKhB+mQLtcWMtCjq+1r1Cx5RHHCHdLiPt5AlOnAmA5jEAAqbMScxxuFnRufLcG0Ka4/KIX8Xa4Rn6OWFthdk0qmjtUVzDcsfOkx+Pu23t1WGPFolGa8hoBuVIuDBTllkMFvdtvvT+WWXS6cLvPyLHTXRDHzdkL9TqgvCaw/Ef7rrNk1fddp8NsG1ybrs/oyAFrNQgDpiTCq4l7Zcd5tmr1L4FgAQxWcALIV4DFD2gMA7/ATBBbj0gPBIIiKXwd/xe6j7kPhcRi08ScIL06+M34VE+glIZNB9hfQs5ZpKITspQx8pP1+mhrrBgMv0fJ0FDLvOD3g49cKhDeULmtiWFttUo9t69MMS/bRFP64IIe55jx4wokec+CErfsyLHzTjR934Yfttb+tpfwFtJzBfVxI78wAAAABJRU5ErkJggg==", "linux.do": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAV1BMVEVHcEz////39/f////////////////9/f3+/v7////////w8PD/sAP///8cHB7x8vQAAAD/qwD3+Pjy5NXS0tL6x3wVFRiIiIj40phubm6fn5/7vlhHcEw04deGAAAAHXRSTlMASgSy5oXM/iCl6f//////////////////////AB9TJfwAAAImSURBVFiF7VfbloIwDKyKViwQSatc9v//cwNSeqFiKZ6zLztP4mGmyUDphDGN4+GcX7KMl6vgWXbJz4cj83E9rRN9nK4uP99GH5Dby9+288sym4u4BvvmCDMwfIdWCKyPIICXQo0QJadLXN51e9c/CkTVd8/7hGfXK6Q/FzeOPlwDdNlURKs0niRVNTIgMTThPT9O9I7uX+B+70jCM+NE74/fPDYh+ljIvUHfiiM7ONcCVfWGPlZRKRQO4cDOTvm8t1oPFtFzp42z/Qyo/WZl+amIxjEiZxe7/u4jnxQ6u4sLywyff17/VQM3CpkRQOyj+KTQIxoB3Q8HFcknBQUzjRkDqlX/bTwrY4MWwIgHYJXQzE1oAWpgE5RwBVBItQlSb6xJQAgBm0AEWwBFAtASgBQBsARS+FMP7LWLksBngSQLJhO+I5Dk4eQiS/fw5eK/wLcEdj/Gv38Td2+m3dt5/wdl9yctqQf/s74R3me9FLLeBOkdLJSNHnURjfoB/tFWCojnFwWYw3U+p6mJ6AKkMMe7CRjQRirULVgBw0QciLSBDLAjjh2yohQcPoUsJ+ZFKAx8J+a5QfOjD9S/FzTdqAsgixWJupDgR10/bK+1MZS/CNvLuA/yUQc06vohIRD3QwMHiLZwNeiqFYvlXwNHcOQhL9qfQu+c4qeVEKDr0S88dJHItMeHX2tD19uxD8cwRnT8MPYlDp43e/rdOfp+Yfg+Jo//v67VxV1srlppAAAAAElFTkSuQmCC", "cloudflare.com": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAM1BMVEVHcEz8Tgn///r90sP/Twn/UAr/+/X3TQj/UAr/UAr2PgD/RgD/6t36ajr+v6j+j2v+qY1HGW3FAAAACnRSTlMA////I////lC5rJfmtgAAAf1JREFUWIXtl+uSgyAMhQ0poiCX93/aDSDKRaXVnZ390eNUW/R8JATpMAykaRbAPxOIeXoNUa/5Q3OSmCJA3PSTAmG67+fCJ/AggBDC64mfz88y+AK+gL8CgAo6XS06AKW4NYjG8TPGJQC4RbZqIcanAKXNyMYkhvqIcAFQdtntnsDsQRbngNrvZdsYTgHAW/846iaGU4AyB36G70RA9aLi29buCU0SLUBaRHSHAfgQegCll1D2w/4J0IxCBVAaz7wrwVUTuwa4az9V0hrjNMAJgPcCWJRPccFtXteATgDM6HBhzHFoAVS9fgYriZkWQK/ucfWzAOQ2SMyoEgDK4ngZAGMoZNZFqOgGACogyx9uNTohBGCaJ3FebwBZjP+CdCwYZaKclgQQ2hlD99gaQgIUU5fWjlKxi+AXEji1uDFMqg1AM7hKdxnDkclob9cm/AhPYQaw9fCxdGE7UwpwMf3QSA07oDMDI0LLsswZQB4tPy1Al4skFoA3JE35G2lAIwCUw74cmLLBqg0ASval6qcUJAARRF8gAMoHc0CfAND69xTeIEBN8P4McG7K3CCqa5aCbyyyjZ8UeWbdb2dvY+qB/lSAb996qlYk8MtcOIVzOni2iK93vRUO1sQ7+gL+CeDxpuvxtm+4u/FdA/iFre/9zffqv7f9p/DnsP3/AdV4VQ/eLldgAAAAAElFTkSuQmCC", "devpost.com": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEOElEQVRYhcWXW0wcVRjHfzsLu9y63FbkVii1YNkYUR94MtMYrZc+WGLGWu0DaaCatCbG+qBNbBM1JsaQGFNrYmICaYw0Oqm9GFPbqHSMaQWjFlMQAWFLWURaQMp9YcaHZYad2VlmdTH+387/O3P+/5z5vu+cA/8zXGtGRWkD8BogANq/WFsDXkeRJ+JNSnFYpBZ48R8KW3EB+CJeUHD4+P0kxR3XcMeNiNJzQP06GMihPDBFsOuyXTB+DojSBJCzDgYApoE8FDlsDdjngCg1GeKCK5JK14ZhMQyuKM+aBm4BPB7wZUFWZiSuxeRrFvAusN8aiN0BUcoCbhnjpSUQBOp3PIA/28eyqhohtyAwPTdPMDRKR3cfN7t7we2GjUUR07FG/CjyTacd+Mg0WghDqpvmQwdwrVW1msapi9/zdssnXPrqO9hYDF4PRBkGWoGHowlzEopSLdBk4paXwS2we7uIP9sX34DLxdZNpTTUPYLgy6Lt1JeQ7TP/MriD8kAbwa6gTljL8Hh8hVX8OfEXnV2/0dk7wMjoWEz8SOPTPL53F/weBCGm0luiB6tRUXoGuDMRA0dPnqPm3h3U1O2j+LF67qpr5OO2S6Y5rYdfILW8BG5NWz/fhCg1mA2IkgC8k4g4QLrXA/k5kJcNaV6u/vIre3Y2cPLbdmNOhtfDtvtrYWzcbokmRMmzagCOAAWJGhBcrki2CwKkpkBZCeTn0dj0Aaq6mvkP3ROI5FAscoA3IwYiZXcoUXFbqCoUFTDRN0BHT79BV5eXQka6tRJ0HESU/ALwOeBJygBEGtZCmKHRGwaV79sAad54uyAAnwlAXtLiOjSN6FPbtfZhD5ArAI+ui/iyCmleNhcXGtTY5BTMzUfyxR47BRQ5BBxLStzthusjlN1dzX1VFQb9Y+8AzM7Z9QKAZhS5X4+8DMwmqqdpGqjaar8fHIKFBY6/Yj5rzrb/HMmBWISBl0AvQ0WeWTGRECZnZiE0DNdDMHqDqupKTp9tZltNwJhz9dowP7VdhgK/3RKH9WuaOU1EKQQUmbi5eUhx033iGFvLSgDoG/6Dnq5e3JnplN2WT6CyAisqntjH4JXuSI8wl+E4UIAiL0PsaVgPnHfagS0lhWwpKbSNTS8u8uTBNxhsvwJVm+1KcK8uDtbDSJEvAIqJUzXQNCpLzRtjxdz8AkdPnKF0+x7OnT4PlRWgxoh3oMhnogm7+8BuIGSMPKkguHj1w1aK8nONC4l+NxibnKKzd4Bvfuhkpqcf/HlQVQFLts3nKSth3ypEqQX9QqpfyYZCEF6Knaup4PVCbjZkZqxwtk+IT1HkXVYy3rtg/4rbNPTDxeEXrCEMsAQ8axewb1HBrjDlAQ140Fk1IbyFIts+TpyeZiOAfbonjnHgdhTZ5v85v4wOJCkO8Hw8cXB+G14E3sNpp9bG10l8+9/jb6mPRrf+LQtIAAAAAElFTkSuQmCC", "qq.com": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAA6lBMVEVHcEz/AFX/AFT/1CC/12b/9/r/AFT7/ff/4GqJ58wt1qr/AFX/0x7/1B4q1qjy/fr/1R5F2K4r1qn/AFT/1zIm1qgn1qkq1qn/AFQq1qn/////0xj/1B//oLz/fJz5//0AUtT/////AFX/1B8r1qkAT9T/AEsAQtIf1acAStPg9/P/0gH/0xLR3/f/99QL1KS0y/Lh6/pDd93/77EJXNf/WYgkatr/4uyvxe9F27O88eH/iKn/pL3/ytn/KW7E1/X/6ZJf37v/vtKDp+j/SXmgu+5nkuORrupkh+D/1OB5mOP/2klejeJHcEy0IsE4AAAATnRSTlMA4GjNCvNF/v79Np4oiY5I7Bb0xHRw3csSqL2sSaGSg////////////////////////////////////////////////////////////wArFDU6AAADpklEQVRYhY1WeX+qMBD0pl6t1dZWfYeAoqCoWBGvaqv2ft//87wEQswmAZ3+4686w+zsbkIiIUem9KvcSl8pqqpkm82/N4XbiB/KUSqnKwP9ZYT4GFZ+WX1oFC5m3+m6Pvh5UkMo437Hx/0lGplyRdeHgyuF8tU84Xc61ca5SjL46frwZ3Siq8orFcAuYiVKacwHj+cFOvWYOsq6jxcVIg8EOp3reP7gieOfQqQKGWn56eD5Ah+3sQMl6hKFTCt4Pu8/8GCtlsBGQ1QInj+U8iU26hH1w/x5iVfGxbWMr+txfITVMkKhpEc0QKxjTBWYiSINGIoFWI5j8SZCgYdTkHfEwIijv31P5/Pp94T9n2LRIO6pgE4MQPpi1jO7CGZvDiQsGsQtNKBDAwuz2yYwuwugEHogOZYqMgMMv93umlCB5FAtgARgC9oMHynMYJJjNgVSwAD85GC2AXpv4GuyoFVmBmAFyrQLBbpT0M7wjCichhBWsOP4SMEGFqx+GGO4xbAHbz1eAMYYFoGGifYATOE/UxB4hwJBJ1AffkmniI8AhwAFiIUCjQAeBPPzAmo/CKElnYJLBHwLDXIS8QIzUWDGC1h+iomKbBN3QhPQKO04AX8W6nKBd6EJqA2f0hroILMCjlgBqmHu8DWMowT4RSA1fPAWfIGKJESZAQQhxiVeJ4mALYnQt2BzAiiEOm0jM0gf0grQqQJXWlVWfdTGljjKn3IBsQ/oXLmmB+IPXSZnaspDMKdcH9BO34fLxKyzPWvvZHNgd2e2IFAI15kV6B1kuzBH3YUCiuUfq8Kt5BzwmSwYQHfDgS8BZYgO5cEQv5bBZXL4A8GciveuYvXxzZAZXaEI+WvV4Y91fgaCLvh3U1MZjUT5BXQwkfDVVfCacSP5yuH3sfcusZAPLpbbrPjVvCdA2ARVyZPbVWbB3k0QdrbjBJ8msgxuwutdYiEGm/Xa8z9k6fuBzEIU9pqBsMYVUAOJxO/nS/nPWgBEaLJvWcnNRXRlbQR8w2UKwMgZ6zNveBieS/iatmULwEgZ2v5MltmNQfmGy/ETiaKmuV4cf3+kdIQ/PB95QPFu9xEa3kZj6VpK5PseDOO4ljRkv94CulaU8bEHXJ2huZvnL8/LInje1/NmaxiQLn++34ukRjS07dF13eNxq/FkTUvmovhBGTRokRpnnzMRidjHE4laDD2yehaPURK13OMlfB+pIldKspi6nE185FLFWhL91YqpXPSz/wME6bKpWVsxXwAAAABJRU5ErkJggg==", "github.com": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAb1BMVEX///8kKS74+PgsMTY+Q0f8/Pzw8PGRk5ZNUVXr6+xDSEzCxMUpLjLV1tYuMzc/Q0i3ubuUl5lbX2NTV1uLjpFKTlKxs7Xh4uOFh4rn5+h3en1vcnZ9gIPc3d6/wcJzd3o3PECmqKpjZ2rOz9CfoaRP5W5KAAABU0lEQVQ4jW1T7aKCIAzdEEUTSUuzLMtuvf8zXtiQVDx/lJ3DvgEIEPU9l1rL/F4LiFEMCQYkj2JDC6VxhaRJl3x2xgin7MePMuYRD7cQftrjrcL7ELk9nNt8yXXtyRm5mquzXADKA6LpzgZRlgBPZ1WO7yn/yrmqyGdGn95Zjav2hbNghZHMV3uNG3DZCigEmhRq+pmyrUAcifj4CO+49xciWqAe6p3pCJrNH1ATp5gH6KghQLrDnoB8GxaYPYFkhpONipjrl+wI61hQ8tB5EvYb4eTL5Ebhd8u/2f4EYfhvvWJpw9ZJ0LQfb5uxbMKi3pp5xVp30miexZHbRriHvUnojrKt7isXqWRBFQQNF2w3aYCPUl8/EREWzxtuE+pVI/wbkSGp0a51Nyg1F+L5/nel56xXgt+zcMgeC0FK27gdTzVoPXtI9DBuO2tRhJj94m3/A1GiDZXoM3d5AAAAAElFTkSuQmCC"};
+const fav = (d) => FAV[d] || `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
+const av = (d, letter, color) => `<div class="av"><img src="${fav(d)}" onerror="this.remove();this.parentNode.style.background='${color}';this.parentNode.textContent='${letter}'"></div>`;
+const status = `<div class="status"><span>00:12</span><span>5G ▮▮▮ 86%</span></div>`;
+
+const mails = [
+  { day: "今天", rows: [
+    { d: "github.com", c: "#24292f", who: "GitHub Actions", subj: "[HengXin666/HXLoLi] [perf] 首页性能优化 (#412)", sum: "github-actions[bot] commented: 预览已部署到 https://hxloli-pr-412.pages.dev , 构建用时 1m 12s。", t: "00:05", n: 26, unread: 1, tags: ["HXLoLi"] },
+    { d: "github.com", c: "#24292f", who: "Heng_Xin", subj: "[HengXin666/HX-UI] Run failed: release - main (a1c9e0f)", sum: "release: All jobs have failed. View workflow run. build-android 失败于 Gradle 步骤。", t: "23:48", n: 11, unread: 1, tags: ["HX-UI", "失败"] },
+    { d: "github.com", c: "#24292f", who: "Heng_Xin", subj: "[HengXin666/HX-CF-Drive] Run failed: deploy - main", sum: "deploy: All jobs have failed. wrangler deploy 返回 10021。", t: "23:41", n: 5, tags: ["HX-CF-Drive", "失败"] },
+  ]},
+  { day: "昨天", rows: [
+    { d: "qq.com", c: "#12b7f5", who: "hxloli@qq.com", subj: "Telegram 每日签到结果", sum: "签到成功 12 个, 失败 1 个: @xxx_bot 超时。下次执行 11-25 08:00。", t: "昨天", tags: [] },
+    { d: "github.com", c: "#24292f", who: "dependabot[bot]", subj: "[HengXin666/github-readme-streak-stats] Bump vite from 6.3.5 to 6.4.1", sum: "Bumps vite from 6.3.5 to 6.4.1. Release notes, Changelog, Commits.", t: "昨天", n: 4, tags: ["streak-stats"] },
+    { d: "devpost.com", c: "#003e54", who: "Devpost", subj: "Meet the Kiroween judges 👻", sum: "The Kiroween hackathon judges are here. Submissions close in 9 days, don't miss your chance to win $100,000 in prizes.", t: "11-23", tags: [] },
+    { d: "cloudflare.com", c: "#f38020", who: "Cloudflare", subj: "您的验证码", sum: "请在 10 分钟内输入以下验证码完成登录。", t: "11-23", tags: ["code:482913"] },
+  ]},
+];
+
+function mailRow(r) {
+  const tags = r.tags.map((x) => x.startsWith("code:") ? `<span class="tag code">${x.slice(5)} 复制</span>` : `<span class="tag${x === "失败" ? " bad" : ""}">${x}</span>`).join("");
+  return `<div class="row ${r.unread ? "unread" : ""}">${r.unread ? '<span class="dot"></span>' : ""}${av(r.d, r.who[0].toUpperCase(), r.c)}
+  <div class="body"><div class="l1"><span class="who">${r.who}</span>${r.n ? `<span class="cnt">${r.n}</span>` : ""}<span class="t">${r.t}</span></div>
+  <div class="subj">${r.subj}</div><div class="sum">${r.sum}</div>${tags ? `<div class="tags">${tags}</div>` : ""}</div></div>`;
+}
+
+function mailList(sheet) {
+  const list = mails.map((g) => `<div class="day">${g.day}</div><div class="list">${g.rows.map(mailRow).join("")}</div>`).join("");
+  const accs = [
+    ["全部收件箱", "所有真实收件地址", 61, "#2f6bff", "全"],
+    ["loli@woa.qzz.io", "GitHub, Devpost, QQ 等发到这里", 61, "#7c3aed", "L"],
+    ["未知收件人", "旧信没有存投递地址, 无法还原", 59, "#9ca3af", "?"],
+  ].map((a, i) => `<div class="acc ${i === 0 ? "on" : ""}"><div class="mav" style="background:${a[3]}">${a[4]}</div><div class="n"><div>${a[0]}</div><div>${a[1]}</div></div><span class="k">${a[2]}</span></div>`).join("");
+  return `${status}<div class="bar"><h1>全部收件箱 <small>▾</small></h1><span class="ic">✓</span><span class="ic">⋯</span></div>
+  <div class="search">🔍 搜索主题, 发件人</div>
+  <div class="chips"><span class="chip on">全部<b>61</b></span><span class="chip">开发<b>58</b></span><span class="chip">验证码<b>1</b></span><span class="chip">社交<b>1</b></span><span class="chip">云服务<b>1</b></span><span class="chip">按厂商</span></div>
+  <div class="scroll">${list}<div class="note">同一主题的信合并成一行, 右侧数字是封数; 蓝点 = 未读; 头像取发件方网站图标, 取不到用首字母。</div></div>
+  ${sheet ? `<div class="sheet"><div class="pane"><div class="grab"></div><h3>切换收件账号 (只列真实收件地址)</h3>${accs}</div></div>` : ""}`;
+}
+
+function mailDetail() {
+  return `${status}<div class="bar"><span class="ic">‹</span><h1 style="font-size:16px;font-weight:600">HX-UI · 11 封</h1><span class="ic">⋯</span></div>
+  <div class="scroll"><div class="detail"><h2>[HengXin666/HX-UI] Run failed: release - main (a1c9e0f)</h2>
+  <div class="tags" style="margin-top:8px"><span class="tag">开发</span><span class="tag bad">失败</span></div>
+  <div class="from">${av("github.com", "H", "#24292f")}<div style="flex:1"><div class="who">Heng_Xin</div><div class="addr">notifications@github.com · 今天 23:48</div></div></div>
+  <div class="tobox">发给 <b>我 · loli@woa.qzz.io</b><br>经 HengXin666/HX-UI &lt;hx-ui@noreply.github.com&gt;<br>来源 Cloudflare 邮件路由 · 校验通过</div>
+  <div class="mailhtml"><b>release</b>: All jobs have failed<br><span style="color:var(--sub)">build-android · Gradle 步骤失败, 用时 3m 41s</span><br><span class="btn">View workflow run</span></div>
+  <div class="day" style="padding:16px 0 6px">同一主题更早 10 封</div>
+  <div class="list" style="border-radius:12px;overflow:hidden;border:1px solid var(--line)">
+   ${["23:30", "22:58", "22:10"].map((t) => `<div class="row" style="padding:10px 12px"><div class="body"><div class="l1"><span class="who" style="font-size:14px">Heng_Xin</span><span class="t">${t}</span></div><div class="sum" style="-webkit-line-clamp:1">release: All jobs have failed</div></div></div>`).join("")}
+  </div></div></div>
+  <div class="actions"><span><i>↩</i>查看原文</span><span><i>☆</i>收藏</span><span><i>✓</i>已读</span><span><i>🗑</i>删除</span></div>`;
+}
+
+const items = [
+  { batch: "LinuxDO 01:10 · 4 条" },
+  { d: "linux.do", k: "oss", t: "Panache 手写生成工具", s: "Markdown / LaTeX 一键转手写稿, 支持自定义信纸, 桌面版带 MCP", h: 53, links: ["帖子", "GitHub"] },
+  { d: "linux.do", k: "deal", st: "q", stt: "存疑", t: "谷歌将移除全部低价 bug 订阅", s: "谷歌员工在 X 上表示会全部移除, 已开的低价 Gemini 订阅可能被退款收回", h: 24, links: ["帖子"] },
+  { batch: "NodeLoc 01:40 · 15 条, 先显示 3 条" },
+  { d: "nodeloc.com", k: "deal", st: "ok", stt: "有效", t: "FreeDns 二级域名永久有效 (pvf.cc / kz.ci / xyz.ci)", s: "三个后缀已进 PSL, 新注册永久有效; 评论 17:21 仍有人注册成功", need: "去 freedns.my 注册, 提交域名后等审核", h: 0, links: ["帖子"] },
+  { d: "nodeloc.com", k: "deal", st: "go", stt: "进行中", t: "混元 hy4f 免费 API 爽用一周", s: "截止 11-30, 楼主 11-22 回复仍可用、未限流", need: "给帖子点赞才能看注册地址", h: 0, links: ["帖子"], used: 1 },
+  { d: "nodeloc.com", k: "deal", st: "x", stt: "失效", t: "Oxylabs 注册送 5 美元静态住宅 IP", s: "多人反馈已不发放", h: 0, links: ["帖子"] },
+];
+const KIND = { deal: ["福利", "k-deal"], oss: ["开源", "k-oss"], news: ["资讯", "k-news"] };
+
+function itemCard(x) {
+  if (x.batch) return `<div class="batch">${x.batch}</div>`;
+  const [kl, kc] = KIND[x.k];
+  return `<div class="item ${x.used ? "used" : ""}"><div class="ih"><img src="${fav(x.d)}"><span>${x.d}</span><span class="kind ${kc}">${kl}</span>${x.st ? `<span class="st ${x.st}">${x.stt}</span>` : ""}</div>
+  <div class="it">${x.t}</div><div class="id">${x.s}</div>${x.need ? `<div class="need"><b>要做:</b> ${x.need}</div>` : ""}
+  <div class="if">${x.links.map((l) => `<span>${l} ↗</span>`).join("")}${x.used ? '<span class="m">已用过</span>' : '<span class="m">☆ 收藏</span>'}${x.h ? `<span class="heat">🔥 ${x.h}</span>` : ""}</div></div>`;
+}
+
+function feed() {
+  return `${status}<div class="bar"><span class="ic">‹</span><h1>福利羊毛 <small>2 个源</small></h1><span class="ic">⋯</span></div>
+  <div class="tabs2"><span class="on">今天</span><span>全部</span><span>收藏</span><span>周报</span></div>
+  <div class="chips"><span class="chip on">全部<b>23</b></span><span class="chip">福利<b>12</b></span><span class="chip">开源<b>5</b></span><span class="chip">资讯<b>6</b></span><span class="chip">只看有效</span></div>
+  <div class="scroll"><div class="chat"><div class="today"><div class="hd"><b>今天 · 11-25</b><span>截至 01:40</span></div>
+  <div class="stats"><div class="stat"><div>12</div><div>福利</div></div><div class="stat"><div>5</div><div>开源</div></div><div class="stat"><div>6</div><div>资讯</div></div><div class="stat"><div style="color:var(--ok)">4</div><div>有效福利</div></div></div>
+  <div class="srcs"><img src="${fav("linux.do")}">LinuxDO 每小时 <img src="${fav("nodeloc.com")}" style="margin-left:8px">NodeLoc 每 3 小时</div></div>
+  ${items.map(itemCard).join("")}<div class="note">每条都是同一种卡片, 由 App 原生画, 跟着深色模式走; 左滑 = 用过了, 右滑 = 失效; 一批推送只发一次通知。</div></div></div>`;
+}
+
+function notif() {
+  return `<div style="background:linear-gradient(160deg,#5b6b8c,#2b3346);height:100%;display:flex;flex-direction:column">${status.replace('class="status"', 'class="status" style="color:#fff"')}
+  <div style="color:#fff;text-align:center;font-size:64px;font-weight:300;margin-top:30px">01:41</div><div style="color:#dde;text-align:center;font-size:14px">11月25日 星期三</div>
+  <div style="margin-top:40px"><div class="notif"><div class="ap">A</div><div style="flex:1"><b>福利羊毛 · 新到 19 条</b><p>福利 10 (有效 2) · 开源 2 · 资讯 3<br>FreeDns 二级域名永久有效, 混元免费 API...</p></div></div>
+  <div class="notif"><div class="ap">A</div><div style="flex:1"><b>邮件 · loli@woa.qzz.io</b><p>GitHub: HX-UI release 失败 (3 封)<br>Cloudflare: 验证码 482913</p></div></div></div></div>`;
+}
+
+function weekly() {
+  return `${status}<div class="bar"><span class="ic">‹</span><h1>福利羊毛 <small>2 个源</small></h1><span class="ic">⋯</span></div>
+  <div class="tabs2"><span>今天</span><span>全部</span><span>收藏</span><span class="on">周报</span></div>
+  <div class="scroll"><div class="chat"><div class="rep"><h2>第 47 周 · 11-17 至 11-23</h2><div class="meta">周报 Agent 生成 · 读了 186 条, 去重后 92 条</div>
+  <h4>🐑 还能用的福利</h4><ul><li>FreeDns 二级域名永久有效 <span class="ref">NodeLoc</span> <a>打开</a></li><li>Google AI Pro 3 个月 (Coursera 渠道), 记得到期前取消 <span class="ref">LinuxDO</span> <a>打开</a></li><li>混元 hy4f 免费 API, 11-30 截止 <span class="ref">NodeLoc</span> <a>打开</a></li></ul>
+  <h4>🛠 值得 star 的开源</h4><ul><li>公司尽调 Skill (78 赞) <a>GitHub</a></li><li>rar-rs 进 Debian testing <a>帖子</a></li><li>Panache 手写生成, 带 MCP <a>GitHub</a></li></ul>
+  <h4>📰 一句话资讯</h4><ul><li>OpenAI 向开源软件开放 ChatGPT OAuth</li><li>字节发布 Axion 1.0 开放模型</li><li>谷歌清理低价 Gemini 订阅</li></ul>
+  <h4>⚠️ 本周失效</h4><ul><li style="color:var(--faint)">Oxylabs 送 5 美元, 苹果渠道一折 Gemini Ultra</li></ul></div>
+  <div class="note">周报只引用条目 id, 点开回到原条目; 历史周报都留在这里。</div></div></div>`;
+}
+
+const screens = [
+  ["邮件列表", () => mailList(false)],
+  ["切换账号", () => mailList(true)],
+  ["邮件详情", mailDetail],
+  ["福利群 今天", feed],
+  ["合并通知", notif],
+  ["周报", weekly],
+];
+const stage = document.getElementById("stage"), nav = document.getElementById("nav");
+stage.innerHTML = screens.map(([n, f], i) => `<div class="wrap ${i === 0 ? "show" : ""}"><div class="phone">${f()}</div><div class="cap">${n}</div></div>`).join("");
+nav.innerHTML = screens.map(([n], i) => `<button class="${i === 0 ? "on" : ""}" data-i="${i}">${n}</button>`).join("") + `<button id="dk">🌙 深色</button>`;
+nav.onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "dk") { document.body.classList.toggle("dark"); document.querySelectorAll(".phone").forEach((p) => p.classList.toggle("dark")); return; }
+  nav.querySelectorAll("button[data-i]").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".wrap").forEach((w, i) => w.classList.toggle("show", i == b.dataset.i));
+  const w = document.querySelectorAll(".wrap")[b.dataset.i]; if (innerWidth > 600) w.scrollIntoView({ behavior: "smooth", inline: "center" });
+};
+</script>
+</body>
+</html>
