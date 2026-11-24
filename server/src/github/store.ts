@@ -19,6 +19,8 @@ export type RepoMeta = {
   openIssues: number;
   defaultBranch?: string;
   lastPush?: GithubPush;
+  // 各分支最近一次推送, 最近的在前; 跟 lastPush 同一行写, 不加写入
+  branches?: GithubPush[];
   updatedAt: number;
 };
 
@@ -123,7 +125,7 @@ export class GithubStore {
   }
 
   summary(meta: RepoMeta): GithubRepoSummary {
-    const { lastPush, description, defaultBranch, ...rest } = meta;
+    const { lastPush, description, defaultBranch, branches: _b, ...rest } = meta;
     const out: GithubRepoSummary = { ...rest, openPrs: this.prCount(meta.repo) };
     if (description) out.description = description;
     if (defaultBranch) out.defaultBranch = defaultBranch;
@@ -135,6 +137,15 @@ export class GithubStore {
 
   detail(meta: RepoMeta): GithubRepoDetail {
     const r = meta.repo;
-    return { repo: this.summary(meta), prs: this.prs(r), issues: this.issues(r), runs: this.runs(r), timeline: this.timeline(r) };
+    const runs = this.runs(r);
+    const out: GithubRepoDetail = { repo: this.summary(meta), prs: this.prs(r), issues: this.issues(r), runs, timeline: this.timeline(r) };
+    // 分支的 CI 从已存的 runs 现算, 不另存
+    if (meta.branches?.length) {
+      out.branches = meta.branches.map((b) => {
+        const run = runs.find((x) => x.branch === b.branch);
+        return run ? { ...b, ci: run.status } : b;
+      });
+    }
+    return out;
   }
 }

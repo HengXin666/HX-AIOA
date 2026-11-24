@@ -1,5 +1,6 @@
 import { PATH_CF_ZONES } from "@hx-aioa/protocol";
-import { GET } from "./constants";
+import { GET, WORKER_DAY_LIMIT } from "./constants";
+import { cfCached } from "./cf-cache";
 import type { Env } from "./env";
 import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
@@ -33,6 +34,8 @@ export type CfZone = {
   series: CfPoint[];
   hosts: CfHost[];
   hostsError?: string;
+  // 近 24 小时落到 Worker 的请求 (按主机名归属汇总), 用来算占每日 Worker 额度的比例; 没有主机名数据时不给
+  workerReq?: number;
 };
 export type CfWorker = { name: string; req: number; err: number; sub: number; cpuP50: number; cpuP99: number; hosts: string[] };
 export type CfZones = {
@@ -43,6 +46,8 @@ export type CfZones = {
   workers?: CfWorker[];
   // 没有 Workers/Pages 读取权限时为空, 域名就不标服务
   servicesError?: string;
+  // 账号每日 Worker 请求额度, 站点占比的分母
+  workerDayLimit?: number;
 };
 
 type Rest<T> = { success: boolean; result?: T; errors?: { message: string }[] };
@@ -129,8 +134,10 @@ function foldZone(z: { id: string; name: string; plan?: { name?: string } }, agg
     if (r.dimensions.edgeResponseStatus >= 500) cur.err += r.count;
     hosts.set(h, cur);
   }
+  const workerReq = hostRows ? [...hosts.values()].reduce((n, h) => n + (h.service?.kind === "worker" ? h.req : 0), 0) : undefined;
   return {
     id: z.id, name: z.name, plan: z.plan?.name, req, cached, bytes, threats, status, series,
+    ...(workerReq !== undefined ? { workerReq } : {}),
     countries: [...countries].sort((a, b) => b[1] - a[1]).slice(0, COUNTRIES).map(([name, n]) => ({ name, req: n })),
     hosts: [...hosts.values()].sort((a, b) => b.req - a.req).slice(0, HOSTS),
   };
@@ -138,12 +145,12 @@ function foldZone(z: { id: string; name: string; plan?: { name?: string } }, agg
 
 const chunks = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
-const cache = new Map<CfRange, { at: number; body: CfZones }>();
-
 export async function cfZones(env: Env, range: CfRange, now = Date.now()): Promise<CfZones> {
   if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) return { configured: false };
-  const hit = cache.get(range);
-  if (hit && now - hit.at < CACHE_MS) return hit.body;
+  return cfCached(`zones:${range}`, CACHE_MS, now, () => loadZones(env, range, now));
+}
+
+async function loadZones(env: Env, range: CfRange, now: number): Promise<CfZones> {
   const days = RANGES[range];
   const end = new Date(Math.floor(now / HOUR_MS) * HOUR_MS + HOUR_MS);
   const start = new Date(end.getTime() - days * DAY_MS);
@@ -169,9 +176,7 @@ export async function cfZones(env: Env, range: CfRange, now = Date.now()): Promi
     .map((z) => ({ ...foldZone(z, aggBy.get(z.id) ?? [], hostsBy.get(z.id), rules), hostsError }))
     .sort((a, b) => b.req - a.req);
   const workers = await cfWorkers(env, vars.s, vars.e, rules).catch(() => [] as CfWorker[]);
-  const body: CfZones = { configured: true, at: now, range, zones, workers, servicesError };
-  cache.set(range, { at: now, body });
-  return body;
+  return { configured: true, at: now, range, zones, workers, servicesError, workerDayLimit: WORKER_DAY_LIMIT };
 }
 
 type WorkerRow = { sum: { requests: number; errors: number; subrequests: number }; quantiles: { cpuTimeP50: number; cpuTimeP99: number }; dimensions: { scriptName: string } };

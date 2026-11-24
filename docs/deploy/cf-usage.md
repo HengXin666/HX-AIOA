@@ -1,6 +1,6 @@
 # CF 额度页
 
-App "我的 → 系统 → CF 额度" (仅主账号)。服务端 `GET /api/v1/cf/usage` 查 CF GraphQL 分析接口, 结果在内存缓存 10 分钟。
+App "我的 → 系统 → CF 额度" (仅主账号)。服务端 `GET /api/v1/cf/usage` 查 CF GraphQL 分析接口, 结果缓存 10 分钟: 内存一层, Cache API 一层 (isolate 回收后还在, 不占 DO 写入)。App 端把上次的结果存在本机, 打开立刻显示, 后台刷新后替换。
 
 | 项 | 免费额度 / 天 | 数据来源 |
 |---|---|---|
@@ -28,7 +28,7 @@ cron 每 30 分钟检查一次, 任一项用到 80% 时在 "CF 额度" 群发一
 
 ## CF 总览 (根域名 → 服务)
 
-`GET /api/v1/cf/zones?range=1d|7d` (owner), 服务端内存缓存 5 分钟, CF GraphQL 限额是每用户 5 分钟 300 次。
+`GET /api/v1/cf/zones?range=1d|7d` (owner), 服务端缓存 5 分钟 (同上两层), CF GraphQL 限额是每用户 5 分钟 300 次。每个根域名另给 `workerReq` (近 24 小时按主机名归到 Worker 的请求) 和整体的 `workerDayLimit`, App 显示该站点占每日 Worker 额度的比例。
 
 - 根域名列表: REST `/zones` (token 需 区域 · Analytics · 读取, 资源选全部区域)。
 - 每个根域名: 请求, 流量, 缓存命中, 拦截威胁, 状态码分布, 来源国家; 1d 按小时 (httpRequests1hGroups), 7d 按天 (httpRequests1dGroups)。

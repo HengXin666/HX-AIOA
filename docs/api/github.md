@@ -6,7 +6,7 @@
 
 - `GET /api/v1/github/repos` (owner 或 `events:read`) -> `GithubReposResult`
   - `{ repos: GithubRepoSummary[], synced: boolean }`, 按 `updatedAt` 倒序。
-  - 摘要: `{ repo, url, description?, stars, openPrs, openIssues, defaultBranch?, lastPush?: { at, by, branch, commits }, ci?: { status, workflow, branch, url, at }, updatedAt }`。
+  - 摘要: `{ repo, url, description?, stars, openPrs, openIssues, defaultBranch?, lastPush?: { at, by, branch, commits, sha? }, ci?: { status, workflow, branch, url, at }, updatedAt }`。
   - `ci.status`: `success` | `failure` | `running` | `cancelled` | `unknown`, 取最近一次 workflow run。
   - `synced`: 服务端配了 `GITHUB_TOKEN` 且至少成功回填过一次。为 false 时数据只来自 webhook, PR / Issue 列表可能不全。
 - `GET /api/v1/github/repos/{owner}/{name}` (owner 或 `events:read`) -> `GithubRepoDetail`
@@ -22,5 +22,5 @@
 
 - 仓库 = 所有 `type=github` 数据源的 subject (`github:owner/repo` 或 `owner/repo`) + 收到过 webhook 的仓库。只有数据源没有 webhook 的仓库, 摘要全为 0。
 - webhook 入库时同步更新: `ping` 登记仓库并取 stars, 描述, 默认分支, `open_issues_count` (减去已知 PR) 作为 Issue 数初值; 每个事件都会刷新 stars, 描述, 默认分支。
-- `push` 更新 `lastPush` (只认分支, 忽略 tag 与空推送); `pull_request` opened / reopened / ready_for_review / converted_to_draft / edited 写入, closed (含合并) 删除; `issues` opened / reopened / edited 写入, closed 删除, 带 `pull_request` 的忽略; `workflow_run` 按 run id 覆盖; `release` published, `star` created, `issue_comment` created 进 timeline。
+- `push` 更新 `lastPush` 和活跃分支列表 (只认分支, 忽略 tag 与空推送; `deleted: true` 的推送把该分支从列表拿掉), 详情带 `branches: [{ branch, at, by, commits, sha?, ci? }]`, 最近的在前, 最多 8 个, `ci` 从已存的 runs 现算; `pull_request` opened / reopened / ready_for_review / converted_to_draft / edited 写入, closed (含合并) 删除; `issues` opened / reopened / edited 写入, closed 删除, 带 `pull_request` 的忽略; `workflow_run` 按 run id 覆盖; `release` published, `star` created, `issue_comment` created 进 timeline。
 - 有 `GITHUB_TOKEN` 时 Worker 的 cron 每 30 分钟自动回填一次。

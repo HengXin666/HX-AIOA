@@ -24,6 +24,7 @@ private const val STALE_MS = 60_000L
 private const val CACHE_REPOS = "gh-repos"
 private const val POST = "POST"
 private const val F_URL = "url"
+private const val F_STATUS_CI = "ci"
 private const val F_AT = "at"
 private const val F_TITLE = "title"
 private const val F_AUTHOR = "author"
@@ -69,7 +70,13 @@ data class GhRun(val workflow: String, val branch: String, val status: CiStatus,
 
 data class GhActivity(val ts: Long, val kind: String, val title: String, val url: String?, val repo: String)
 
-data class GhDetail(val repo: GhRepo, val prs: List<GhPr>, val issues: List<GhIssue>, val runs: List<GhRun>, val timeline: List<GhActivity>)
+/** 活跃分支: 最近一次推送与该分支最近的 CI 结果。 */
+data class GhBranch(val name: String, val at: Long, val by: String, val commits: Int, val sha: String?, val ci: CiStatus?)
+
+data class GhDetail(
+    val repo: GhRepo, val prs: List<GhPr>, val issues: List<GhIssue>, val runs: List<GhRun>, val timeline: List<GhActivity>,
+    val branches: List<GhBranch> = emptyList(),
+)
 
 /** GitHub 页的状态: 仓库列表, 详情缓存, 同步; 页面可见时收到 github 事件就刷新。 */
 class GithubState(private val context: Context, private val scope: CoroutineScope) {
@@ -222,6 +229,9 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
             },
             arr(o, "runs").map { GhRun(it.optString(F_WORKFLOW), it.optString(F_BRANCH), ci(it.optString(F_STATUS)), it.optString(F_URL), it.optLong(F_AT)) },
             arr(o, "timeline").map { GhActivity(it.optLong("ts"), it.optString("kind"), it.optString(F_TITLE), opt(it, F_URL), name) },
+            arr(o, "branches").map {
+                GhBranch(it.optString(F_BRANCH), it.optLong(F_AT), it.optString("by"), it.optInt("commits"), opt(it, "sha"), opt(it, F_STATUS_CI)?.let(::ci))
+            },
         )
     }
 

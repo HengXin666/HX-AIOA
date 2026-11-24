@@ -5,7 +5,9 @@ export type GithubCiStatus = (typeof GITHUB_CI_STATUSES)[number];
 export const GITHUB_TIMELINE_KINDS = ["push", "pr", "issue", "ci", "release", "star", "comment"] as const;
 export type GithubTimelineKind = (typeof GITHUB_TIMELINE_KINDS)[number];
 
-export type GithubPush = { at: number; by: string; branch: string; commits: number };
+export type GithubPush = { at: number; by: string; branch: string; commits: number; sha?: string };
+// 仓库详情里的活跃分支: 按最近推送倒序, ci 是该分支最近一次 CI 的结果
+export type GithubBranch = GithubPush & { ci?: GithubCiStatus };
 export type GithubCi = { status: GithubCiStatus; workflow: string; branch: string; url: string; at: number };
 
 export type GithubRepoSummary = {
@@ -32,6 +34,8 @@ export type GithubRepoDetail = {
   issues: GithubIssue[];
   runs: GithubRun[];
   timeline: GithubTimelineItem[];
+  // webhook 收到过推送的分支, 最近的在前, 最多 GITHUB_BRANCHES 个
+  branches?: GithubBranch[];
 };
 
 export type GithubReposResult = { repos: GithubRepoSummary[]; synced: boolean };

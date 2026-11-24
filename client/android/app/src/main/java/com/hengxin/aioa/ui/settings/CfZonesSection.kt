@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,9 @@ private const val RANGE_WEEK = "7d"
 private const val HOSTS_SHOWN = 12
 private const val US_PER_MS = 1000.0
 private const val ORIGIN = "源站"
+private const val PCT_SCALE = 100f
+// 单个站点占到每日额度的这个比例就标红
+private const val QUOTA_WARN = 0.5f
 private val STATUS_ORDER = listOf("2xx", "3xx", "4xx", "5xx")
 private val BAR_SHAPE = RoundedCornerShape(3.dp)
 
@@ -54,6 +58,8 @@ private class Host(val host: String, val req: Long, val err: Long, val bytes: Lo
 private class Zone(
     val name: String, val req: Long, val cached: Long, val bytes: Long, val threats: Long,
     val status: Map<String, Long>, val countries: List<Pair<String, Long>>, val series: List<Point>, val hosts: List<Host>,
+    // 近 24 小时落到 Worker 的请求; 服务端没有主机名数据时为 null
+    val workerReq: Long?,
 )
 private class Worker(val name: String, val req: Long, val err: Long, val cpuP50: Double, val cpuP99: Double, val hosts: List<String>)
 
@@ -74,6 +80,7 @@ private fun zone(o: JSONObject) = Zone(
     o.optJSONArray("countries").objs().map { it.optString("name") to it.optLong("req") },
     o.optJSONArray("series").objs().map { Point(it.optLong("req"), it.optLong("cached"), it.optLong("threats")) },
     hosts(o.optJSONArray("hosts")),
+    if (o.has("workerReq")) o.optLong("workerReq") else null,
 )
 
 private fun worker(o: JSONObject) = Worker(
@@ -112,16 +119,11 @@ private fun statusColor(k: String): Color {
 /** CF 页里的总览部分: 时间切换, 全账号四个数, 各根域名卡片, Worker 列表。 */
 @Composable
 fun CfZonesSection() {
-    val context = LocalContext.current
-    var range by remember { mutableStateOf(RANGE_DAY) }
-    var body by remember { mutableStateOf<JSONObject?>(null) }
-    var error by remember { mutableStateOf("") }
-    LaunchedEffect(range) {
-        body = null
-        val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(PATH), query = mapOf("range" to range)) }
-        body = r.body
-        error = r.error.orEmpty()
-    }
+    var range by rememberSaveable { mutableStateOf(RANGE_DAY) }
+    // 每个时间范围各存一份: 切换时直接显示上次的, 不闪 "加载中"
+    val data = rememberCached("cf-zones-$range", PATH, mapOf("range" to range))
+    val body = data.body
+    val error = if (body == null) data.error else ""
     val c = Aioa.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Chip("24 小时", range == RANGE_DAY) { range = RANGE_DAY }
@@ -135,8 +137,10 @@ fun CfZonesSection() {
         else -> {
             val zones = b.optJSONArray("zones").objs().map(::zone)
             val workers = b.optJSONArray("workers").objs().map(::worker)
+            if (data.stale) SettingsGroup { NoteRow("刷新失败, 显示的是上次的数据: ${data.error}", c.warning) }
             Totals(zones)
-            zones.filter { it.req > 0 }.forEach { ZoneCard(it, range) }
+            val limit = b.optLong("workerDayLimit")
+            zones.filter { it.req > 0 }.forEach { ZoneCard(it, range, limit) }
             val idle = zones.filter { it.req == 0L }.joinToString(", ") { it.name }
             if (idle.isNotEmpty()) SettingsGroup { NoteRow("没有流量: $idle") }
             if (workers.isNotEmpty()) WorkerGroup(workers)
@@ -170,7 +174,7 @@ private fun Totals(zones: List<Zone>) {
 }
 
 @Composable
-private fun ZoneCard(z: Zone, range: String) {
+private fun ZoneCard(z: Zone, range: String, workerLimit: Long) {
     val c = Aioa.colors
     var open by remember { mutableStateOf(false) }
     SettingsGroup(z.name) {
@@ -178,6 +182,10 @@ private fun ZoneCard(z: Zone, range: String) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(count(z.req), c.text, 20, weight = FontWeight.SemiBold)
                 Text("  请求 · ${size(z.bytes)} · 缓存 ${pct(z.cached, z.req)} · 威胁 ${count(z.threats)}", c.textSecondary, 12)
+            }
+            if (z.workerReq != null && z.workerReq > 0 && workerLimit > 0) {
+                val share = z.workerReq.toFloat() / workerLimit
+                Text("Worker 请求占每日额度 ${String.format(Locale.US, "%.1f", share * PCT_SCALE)}% (近 24 小时 ${count(z.workerReq)} 次)", if (share >= QUOTA_WARN) c.danger else c.textSecondary, 12)
             }
             TrafficChart(z.series)
             Text(if (range == RANGE_DAY) "每小时请求, 浅色为缓存命中" else "每天请求, 浅色为缓存命中", c.textSecondary, 11)

@@ -1,5 +1,6 @@
 import { PATH_CF_STORAGE } from "@hx-aioa/protocol";
 import { GET } from "./constants";
+import { cfCached } from "./cf-cache";
 import type { Env } from "./env";
 import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
@@ -79,12 +80,13 @@ function latest<T, K extends string>(rows: T[] | undefined, key: (r: T) => K): M
 
 const sumBy = <T>(rows: T[] | undefined, pick: (r: T) => number, pred: (r: T) => boolean = () => true) => (rows ?? []).filter(pred).reduce((n, r) => n + pick(r), 0);
 
-let cache: { at: number; body: CfStorage } | null = null;
-
 export async function cfStorage(env: Env, now = Date.now()): Promise<CfStorage> {
   if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) return { configured: false };
-  if (cache && now - cache.at < CACHE_MS) return cache.body;
-  const a = env.CF_ACCOUNT_ID;
+  return cfCached("storage", CACHE_MS, now, () => loadStorage(env, now));
+}
+
+async function loadStorage(env: Env, now: number): Promise<CfStorage> {
+  const a = env.CF_ACCOUNT_ID!;
   const d = new Date(now);
   const e = d.toISOString();
   const s = new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString();
@@ -147,9 +149,7 @@ export async function cfStorage(env: Env, now = Date.now()): Promise<CfStorage> 
     );
   }
   stores.sort((x, y) => y.bytes - x.bytes);
-  const body: CfStorage = { configured: true, at: now, quotas, stores, errors: errors.length ? errors : undefined };
-  cache = { at: now, body };
-  return body;
+  return { configured: true, at: now, quotas, stores, errors: errors.length ? errors : undefined };
 }
 
 export const CF_STORAGE_ROUTES: Route[] = [

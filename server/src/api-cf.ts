@@ -1,5 +1,6 @@
 import { PATH_CF_USAGE } from "@hx-aioa/protocol";
-import { GET } from "./constants";
+import { GET, WORKER_DAY_LIMIT } from "./constants";
+import { cfCached } from "./cf-cache";
 import type { Env } from "./env";
 import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
@@ -11,7 +12,7 @@ const ROWS = 100;
 
 // 免费计划每日额度 (UTC 0 点重置), 见 docs/deploy/cf-usage.md
 export const CF_LIMITS = [
-  { key: "workerRequests", label: "Worker 请求", limit: 100_000, unit: "次" },
+  { key: "workerRequests", label: "Worker 请求", limit: WORKER_DAY_LIMIT, unit: "次" },
   { key: "doRequests", label: "DO 请求 (原始计数, 偏保守)", limit: 100_000, unit: "次" },
   { key: "doDuration", label: "DO 时长", limit: 13_000, unit: "GB-s" },
   { key: "rowsWritten", label: "行写入", limit: 100_000, unit: "行" },
@@ -44,8 +45,7 @@ type Sum = Record<string, number | undefined>;
 type Groups = { sum: Sum }[] | undefined;
 const total = (g: Groups, k: string) => (g ?? []).reduce((n, r) => n + (r.sum[k] ?? 0), 0);
 
-// 结果只缓存在内存: 10 分钟内重复打开不再请求 CF
-let cache: { at: number; body: CfUsage } | null = null;
+const CACHE_KEY = "usage";
 
 export async function gql<T>(env: Env, query: string, variables: Record<string, string | string[]>): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
@@ -77,10 +77,13 @@ async function storedBytes(env: Env, now: number): Promise<{ storedBytes?: numbe
 export async function cfUsage(env: Env, now = Date.now(), hubBytes?: number): Promise<CfUsage> {
   if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) return { configured: false };
   const live = (b: CfUsage): CfUsage => ({ ...b, storage: { limit: CF_STORAGE_LIMIT, ...b.storage, hubBytes } });
-  if (cache && now - cache.at < CACHE_MS) return live(cache.body);
+  return live(await cfCached(CACHE_KEY, CACHE_MS, now, () => loadUsage(env, now)));
+}
+
+async function loadUsage(env: Env, now: number): Promise<CfUsage> {
   const start = new Date(Math.floor(now / DAY_MS) * DAY_MS);
   const [data, stored] = await Promise.all([
-    gql<{ viewer?: { accounts?: Record<string, Groups>[] } }>(env, QUERY, { a: env.CF_ACCOUNT_ID, s: start.toISOString(), e: new Date(now).toISOString() }),
+    gql<{ viewer?: { accounts?: Record<string, Groups>[] } }>(env, QUERY, { a: env.CF_ACCOUNT_ID!, s: start.toISOString(), e: new Date(now).toISOString() }),
     storedBytes(env, now),
   ]);
   const acc = data.viewer?.accounts?.[0] ?? {};
@@ -92,9 +95,7 @@ export async function cfUsage(env: Env, now = Date.now(), hubBytes?: number): Pr
     rowsRead: total(acc.durableObjectsPeriodicGroups, "rowsRead"),
   };
   const items = CF_LIMITS.map((l) => ({ ...l, used: used[l.key] ?? 0 }));
-  const out: CfUsage = { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, ...stored } };
-  cache = { at: now, body: out };
-  return live(out);
+  return { configured: true, at: now, day: start.toISOString().slice(0, 10), items, storage: { limit: CF_STORAGE_LIMIT, ...stored } };
 }
 
 export const CF_ROUTES: Route[] = [

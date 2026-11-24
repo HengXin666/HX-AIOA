@@ -2,9 +2,12 @@ import type { GithubTimelineKind } from "@hx-aioa/protocol";
 import { s } from "../adapters/types";
 import { type GithubStore, type RepoMeta, emptyMeta } from "./store";
 import { type Obj, issueOf, num, obj, prOf, runOf } from "./map";
+import { GITHUB_BRANCHES } from "../constants";
 
 type Ctx = { store: GithubStore; repo: string; meta: RepoMeta; body: Obj; action: string; now: number };
 
+const HEADS = "refs/heads/";
+const SHA_SHORT = 7;
 const CLOSED = "closed";
 const OPENED = "opened";
 const REOPENED = "reopened";
@@ -20,10 +23,20 @@ function note(c: Ctx, kind: GithubTimelineKind, title: string, url: string): voi
 function push(c: Ctx): void {
   const commits = Array.isArray(c.body.commits) ? c.body.commits.length : 0;
   const ref = s(c.body.ref);
-  if (!commits || !ref.startsWith("refs/heads/")) return;
-  const branch = ref.slice("refs/heads/".length);
+  if (!ref.startsWith(HEADS)) return;
+  const branch = ref.slice(HEADS.length);
+  const others = (c.meta.branches ?? []).filter((b) => b.branch !== branch);
+  // 删分支: 从活跃列表拿掉, 免得留下死分支
+  if (c.body.deleted === true) {
+    c.meta.branches = others;
+    note(c, "push", `删除分支 ${branch}`, s(obj(c.body.repository).html_url));
+    return;
+  }
+  if (!commits) return;
   const by = s(obj(c.body.pusher).name) || s(obj(c.body.sender).login);
-  c.meta.lastPush = { at: c.now, by, branch, commits };
+  const sha = s(c.body.after).slice(0, SHA_SHORT);
+  c.meta.lastPush = { at: c.now, by, branch, commits, ...(sha ? { sha } : {}) };
+  c.meta.branches = [c.meta.lastPush, ...others].slice(0, GITHUB_BRANCHES);
   note(c, "push", `${by} 推送 ${commits} 个提交到 ${branch}`, s(c.body.compare));
 }
 

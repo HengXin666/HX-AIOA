@@ -107,3 +107,8 @@ export const DEVICE_PREFIX = "android";
 export { USER_SOURCE_PREFIX } from "@hx-aioa/protocol";
 // 没有账号 (旧的 AUTH_TOKEN 连接) 时人发消息的显示名
 export const OWNER_NAME = "主人";
+
+// 免费计划每日 Worker 请求额度 (CF 额度卡与站点占比共用)
+export const WORKER_DAY_LIMIT = 100_000;
+// 仓库详情里最多留几个活跃分支
+export const GITHUB_BRANCHES = 8;

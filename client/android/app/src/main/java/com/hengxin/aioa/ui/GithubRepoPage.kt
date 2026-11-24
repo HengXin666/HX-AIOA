@@ -26,7 +26,7 @@ import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.StateBody
 import com.hengxin.aioa.kit.Text
 
-private enum class RepoTab(val label: String) { TIMELINE("动态"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
+private enum class RepoTab(val label: String) { TIMELINE("动态"), BRANCHES("分支"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
 
 /** 仓库详情: 分段看动态, PR, Issue, CI; 每条点开浏览器, 返回键回列表。 */
 @Composable
@@ -91,6 +91,18 @@ private fun TabBody(d: GhDetail, tab: RepoTab, open: (String?) -> Unit) {
             GhRow(ICON_ISSUE, i.title, meta) { open(i.url) }
         }
         RepoTab.CI -> AnimatedItems(d.runs, { it.url }) { r -> RunRow(r) { open(r.url) } }
+        RepoTab.BRANCHES -> AnimatedItems(d.branches, { it.name }) { b -> BranchRow(b) { open("${d.repo.url}/tree/${b.name}") } }
+    }
+}
+
+/** 一行一个分支: 名字, 谁多久前推了几个提交, 前面的点是该分支最近 CI 的颜色 (没有 CI 记录为灰)。 */
+@Composable
+private fun BranchRow(b: GhBranch, onClick: () -> Unit) {
+    val c = Aioa.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Dot(ciColor(b.ci))
+        val meta = metaOf(b.by, "${b.commits} 个提交", b.sha.orEmpty(), b.ci?.let(::ciLabel).orEmpty(), ago(b.at))
+        GhRow(ICON_GITHUB, b.name, meta, c.textSecondary, onClick)
     }
 }
 
@@ -109,6 +121,7 @@ private fun rows(d: GhDetail, tab: RepoTab): Int = when (tab) {
     RepoTab.PRS -> d.prs.size
     RepoTab.ISSUES -> d.issues.size
     RepoTab.CI -> d.runs.size
+    RepoTab.BRANCHES -> d.branches.size
 }
 
 private fun count(d: GhDetail?, tab: RepoTab): String = if (d == null || tab == RepoTab.TIMELINE) "" else " ${rows(d, tab)}"
@@ -118,4 +131,5 @@ private fun emptyText(tab: RepoTab): String = when (tab) {
     RepoTab.PRS -> "没有开放的 PR"
     RepoTab.ISSUES -> "没有开放的 Issue"
     RepoTab.CI -> "还没有 CI 记录"
+    RepoTab.BRANCHES -> "还没有收到推送; 配好 Webhook 后, 推送过的分支会按时间列在这里"
 }

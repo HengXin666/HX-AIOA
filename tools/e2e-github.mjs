@@ -53,6 +53,13 @@ async function githubPage() {
   const kinds = (d?.timeline ?? []).map((x) => x.kind);
   check("详情: timeline 含 push/pr/issue/ci", ["push", "pr", "issue", "ci"].every((k) => kinds.includes(k)), JSON.stringify(kinds));
   check("详情: 时间字段为毫秒", typeof d?.repo?.updatedAt === "number" && d.repo.updatedAt > 1e12, String(d?.repo?.updatedAt));
+  check("详情: 活跃分支带 CI", d?.branches?.[0]?.branch === "main" && d.branches[0].ci === "failure" && d.branches[0].commits === 2, JSON.stringify(d?.branches));
+  await deliver(url, "push", { ...push, ref: "refs/heads/feat-x", after: "abcdef1234" }, secret);
+  const withFeat = (await api("GET", `${V1}/github/repos/${REPO}`)).data;
+  check("新分支推送排到最前", withFeat?.branches?.[0]?.branch === "feat-x" && withFeat.branches[0].sha === "abcdef1" && withFeat.branches.length === 2, JSON.stringify(withFeat?.branches));
+  await deliver(url, "push", { ref: "refs/heads/feat-x", deleted: true, commits: [], pusher: { name: "HengXin666" }, repository }, secret);
+  const noFeat = (await api("GET", `${V1}/github/repos/${REPO}`)).data;
+  check("删分支后从列表移除", noFeat?.branches?.length === 1 && noFeat.branches[0].branch === "main", JSON.stringify(noFeat?.branches));
 
   const closed = await deliver(url, "pull_request", prPayload("closed", { merged: true }), secret);
   check("PR closed 签名通过", closed.status === 200, JSON.stringify(closed));

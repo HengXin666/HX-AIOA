@@ -49,17 +49,13 @@ private fun periodText(p: String) = when (p) {
     else -> "当前"
 }
 
+private const val CACHE_NAME = "cf-storage"
+
 @Composable
 fun CfStorageSection() {
-    val context = LocalContext.current
-    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
-    var error by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(PATH)) }
-        r.body?.let { com.hengxin.aioa.ui.PageCache.put(PATH, it) }
-        body = r.body ?: body
-        error = r.error.orEmpty()
-    }
+    val data = rememberCached(CACHE_NAME, PATH)
+    val body = data.body
+    val error = if (body == null) data.error else ""
     val c = Aioa.colors
     val b = body
     when {

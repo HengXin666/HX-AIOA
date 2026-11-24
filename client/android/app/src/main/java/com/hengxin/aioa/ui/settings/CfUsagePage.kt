@@ -50,11 +50,7 @@ private fun parse(o: JSONObject): List<Usage> {
 private fun num(v: Long) = String.format(Locale.US, "%,d", v)
 
 /** 只能在协程里调用: 返回 (内容, 错误)。 */
-private suspend fun loadUsage(context: android.content.Context): Pair<JSONObject?, String> {
-    val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(PATH)) }
-    r.body?.let { com.hengxin.aioa.ui.PageCache.put(PATH, it) }
-    return r.body to r.error.orEmpty()
-}
+private const val CACHE_NAME = "cf-usage"
 
 private fun bytes(v: Long): String {
     var x = v.toDouble()
@@ -72,11 +68,9 @@ private const val KIB = 1024.0
 /** 资源页 / 服务器看板上的小卡片: 今天用得最多的一项; 点开是完整的额度与存储。非主账号看不到。 */
 @Composable
 fun CfUsageCard() {
-    val context = LocalContext.current
-    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
     var open by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { loadUsage(context).let { (b, e) -> if (e.isEmpty()) body = b } }
-    val b = body ?: return
+    // 重启 App 后也先显示上次的, 卡片不会晚一拍才冒出来
+    val b = rememberCached(CACHE_NAME, PATH).body ?: return
     val c = Aioa.colors
     if (open) {
         Dialog({ open = false }, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -103,15 +97,10 @@ fun CfUsageCard() {
 /** CF 额度: 今天 (UTC 0 点重置) 的免费额度用量, 服务端缓存 10 分钟; 任一项到 80% 会在 "CF 额度" 群提醒一次。 */
 @Composable
 fun CfUsagePage(onBack: (() -> Unit)?) {
-    val context = LocalContext.current
     var reload by remember { mutableIntStateOf(0) }
-    var body by remember { mutableStateOf(com.hengxin.aioa.ui.PageCache.get<JSONObject>(PATH)) }
-    var error by remember { mutableStateOf("") }
-    LaunchedEffect(reload) {
-        val (b, e) = loadUsage(context)
-        body = b ?: body
-        error = e
-    }
+    val data = rememberCached(CACHE_NAME, PATH, reload = reload)
+    val body = data.body
+    val error = if (body == null) data.error else ""
     val c = Aioa.colors
     SettingsPageFrame(SettingsPage.CF_USAGE.title, onBack) {
         val b = body
