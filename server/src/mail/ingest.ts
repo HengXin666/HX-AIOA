@@ -45,6 +45,8 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const category = categoryOf(from);
   const mail: MailInfo = { from, to, vendor, category, via };
   if (input.name) mail.name = input.name.trim();
+  if (input.rcpt && clean(input.rcpt) !== to) mail.rcpt = clean(input.rcpt);
+  if (input.list) mail.list = clean(input.list);
   if (code) mail.code = code;
   if (input.spoof) mail.spoof = true;
   const data: EventData = { title: subject, severity: input.spoof ? "warning" : code ? "normal" : "info", mail };

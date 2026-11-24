@@ -18,15 +18,21 @@ data class MailItem(
     val body: String?,
     val from: String,
     val name: String?,
+    // 收件账号; 空串 = 未知收件人 (旧信只存了中转地址)
     val account: String,
+    // 信头 To 里的中转地址, 显示为 "经 ..."; CF 实际投递的地址
+    val list: String?,
+    val rcpt: String?,
+    val via: String,
     val vendor: String,
+    val category: String?,
     val code: String?,
     // 发件域名校验失败, 可能是冒充
     val spoof: Boolean,
 )
 
 /** 筛选项: 厂商或账号, 封数与最新一封的时间。 */
-data class MailFacet(val key: String, val count: Int, val last: Long)
+data class MailFacet(val key: String, val count: Int, val last: Long, val from: String? = null)
 
 data class MailPage(val items: List<MailItem>, val more: Boolean)
 
@@ -36,7 +42,6 @@ data class MailFacets(val categories: List<MailFacet>, val vendors: List<MailFac
 /** 列表筛选条件, 都是可选的。 */
 data class MailFilter(val category: String? = null, val vendor: String? = null, val account: String? = null) {
     val active get() = category != null || vendor != null || account != null
-    val label get() = category ?: vendor ?: account
 }
 
 /** 邮件接口: 列表按时间倒序, 可按厂商 / 账号过滤; 统计给分组用。 */
@@ -68,14 +73,20 @@ class MailApi(private val context: Context) {
         r.body?.optString("html")?.ifEmpty { null } ?: error(r.error ?: FAILED)
     }
 
+    /** 删掉一封信 (群里的消息一起删)。 */
+    suspend fun remove(seq: Long): Result<Unit> = io { ChatHistory(context).remove(seq, DELETE_MODE).getOrThrow(); Unit }
+
     private fun facets(a: JSONArray?) = (0 until (a?.length() ?: 0)).mapNotNull { i ->
-        a?.optJSONObject(i)?.let { MailFacet(it.optString("key"), it.optInt("count"), it.optLong("last")) }
+        a?.optJSONObject(i)?.let { MailFacet(it.optString("key"), it.optInt("count"), it.optLong("last"), it.optString("from").ifEmpty { null }) }
     }
 
     private fun item(o: JSONObject): MailItem? {
         val data = o.optJSONObject("data") ?: return null
         val m = data.optJSONObject("mail") ?: return null
         fun JSONObject.s(k: String) = optString(k).ifEmpty { null }
+        val to = m.optString("to")
+        // 旧信把中转地址当了账号: 归为未知, 中转地址挪到 list
+        val relay = MailAddr.isRelay(to)
         return MailItem(
             id = o.optString("id"),
             seq = o.optLong("seq"),
@@ -85,8 +96,12 @@ class MailApi(private val context: Context) {
             body = m.s("body"),
             from = m.optString("from"),
             name = m.s("name"),
-            account = m.optString("to"),
+            account = if (relay) "" else to,
+            list = m.s("list") ?: to.takeIf { relay },
+            rcpt = m.s("rcpt"),
+            via = m.optString("via"),
             vendor = m.optString("vendor"),
+            category = m.s("category"),
             code = m.s("code"),
             spoof = m.optBoolean("spoof"),
         )
@@ -98,5 +113,29 @@ class MailApi(private val context: Context) {
         private const val PATH = "api/v1/mail"
         private const val GET = "GET"
         private const val FAILED = "加载失败"
+        private const val DELETE_MODE = "delete"
+    }
+}
+
+/** 地址工具, 与 protocol 的 isRelayAddress / siteOf 一致。 */
+object MailAddr {
+    private val RELAY_LOCAL = Regex("^(no-?reply|do-?not-?reply|notifications?|reply(\\+.*)?|bounces?)$")
+    private val RELAY_DOMAIN = Regex("(^|\\.)(noreply|no-reply|reply|bounces?)\\.")
+    private val SECOND_LEVEL = setOf("com", "net", "org", "gov", "edu", "ac", "co")
+
+    fun domain(addr: String): String = addr.substringAfterLast('@').trim().lowercase()
+
+    fun isRelay(addr: String): Boolean {
+        val a = addr.trim().lowercase()
+        if ('@' !in a) return false
+        return RELAY_LOCAL.matches(a.substringBeforeLast('@')) || RELAY_DOMAIN.containsMatchIn(domain(a) + ".")
+    }
+
+    /** 主域名: a.b.example.com -> example.com; x.com.cn 保留三段。 */
+    fun site(addr: String): String {
+        val p = domain(addr).split('.').filter { it.isNotEmpty() }
+        if (p.size <= 2) return p.joinToString(".")
+        val n = if (p.last().length == 2 && p[p.size - 2] in SECOND_LEVEL) 3 else 2
+        return p.takeLast(n).joinToString(".")
     }
 }

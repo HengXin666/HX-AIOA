@@ -1,10 +1,14 @@
-import { MAX_MAIL_HTML, MAX_MAIL_TEXT, type MailInput } from "@hx-aioa/protocol";
+import { isRelayAddress, MAX_MAIL_HTML, MAX_MAIL_TEXT, type MailInput } from "@hx-aioa/protocol";
 import PostalMime, { type Address, type Email } from "postal-mime";
 
 // 超过这个大小直接拒收, 退信给发件人
 const MAX_RAW_BYTES = 10 * 1024 * 1024;
 const ERR_TOO_BIG = "邮件过大";
 const FWD_HEADER = "x-forwarded-for";
+// 中转信箱 (aioa@...) 收到的信, 原收件人记在这些头里
+const ORIG_HEADERS = ["x-original-to", "delivered-to"];
+// AIOA 自己的收信入口, 它不是用户的账号; 见 docs/features/mail.md
+const ENTRY_LOCAL = "aioa";
 // 收信方 (Gmail 转发时还有 Gmail 的一跳) 写下的校验结论
 const AUTH_HEADERS = ["arc-authentication-results", "authentication-results"];
 const CF_AUTHSERV = "mx.cloudflare.net";
@@ -12,17 +16,33 @@ const CF_AUTHSERV = "mx.cloudflare.net";
 const addrs = (list?: Address[]): string[] => (list ?? []).flatMap((a) => (a.address ? [a.address] : (a.group ?? []).map((g) => g.address)));
 const header = (mail: Email, key: string) => mail.headers.find((h) => h.key === key)?.value.trim();
 
+const lower = (a: string) => a.trim().toLowerCase();
+const isEntry = (a: string) => a.startsWith(`${ENTRY_LOCAL}@`);
+const headers = (mail: Email, key: string) => mail.headers.filter((h) => h.key === key).map((h) => lower(h.value.replace(/^.*<|>.*$/g, "")));
+
+export type Recipient = { account: string; rcpt: string; list?: string };
+
 /**
- * 收件账号: 被转发时是原收件地址, 不然是 CF 投递的地址。
- * Gmail 转发带 X-Forwarded-For: 原地址 目标地址; Outlook 等保留原 To 头。
+ * 收件账号, 依次取:
+ * 1. Gmail 转发的 X-Forwarded-For 第一个地址 (原收件地址);
+ * 2. CF 投递的地址 (路由规则直接匹配的就是用户自己的地址);
+ * 3. 投递到 AIOA 入口时, 看 X-Original-To / Delivered-To, 再看 To / Cc 里非中转的地址。
+ * 信头 To 里的 noreply / 仓库地址只记为 list ("经 ..."), 不当账号。
  */
-export function accountOf(mail: Email, envelopeTo: string): string {
+export function recipientOf(mail: Email, envelopeTo: string): Recipient {
+  const rcpt = lower(envelopeTo);
+  const heads = [...addrs(mail.to), ...addrs(mail.cc)].map(lower);
+  const list = addrs(mail.to).map(lower).find(isRelayAddress);
   const fwd = header(mail, FWD_HEADER)?.split(/[\s,]+/)[0];
-  if (fwd?.includes("@")) return fwd;
-  const to = addrs(mail.to).map((a) => a.toLowerCase());
-  const target = envelopeTo.toLowerCase();
-  if (to.length === 0 || to.includes(target)) return target;
-  return to[0] ?? target;
+  let account = rcpt;
+  if (fwd?.includes("@")) account = lower(fwd);
+  else if (isEntry(rcpt)) {
+    const ok = (a: string) => a.includes("@") && !isEntry(a) && !isRelayAddress(a);
+    account = ORIG_HEADERS.flatMap((k) => headers(mail, k)).find(ok) ?? heads.find(ok) ?? rcpt;
+  }
+  const out: Recipient = { account, rcpt };
+  if (list && list !== account) out.list = list;
+  return out;
 }
 
 /**
@@ -43,7 +63,9 @@ export function spoofOf(mail: Email): boolean {
 export async function parseRaw(raw: ReadableStream | ArrayBuffer, envelopeFrom: string, envelopeTo: string): Promise<MailInput> {
   const mail = await PostalMime.parse(raw);
   const from = mail.from?.address || envelopeFrom;
-  const input: MailInput = { from, to: accountOf(mail, envelopeTo) };
+  const r = recipientOf(mail, envelopeTo);
+  const input: MailInput = { from, to: r.account, rcpt: r.rcpt };
+  if (r.list) input.list = r.list;
   if (mail.from?.name) input.name = mail.from.name;
   if (mail.subject) input.subject = mail.subject;
   if (mail.text) input.text = mail.text.slice(0, MAX_MAIL_TEXT);

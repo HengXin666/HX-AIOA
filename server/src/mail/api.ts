@@ -7,6 +7,7 @@ import {
   PATH_MAIL_BODY,
   PATH_MAIL_FACETS,
   PATH_MAIL_HX_EMAIL,
+  PATH_MAIL_ICON,
   QUERY_ACCOUNT,
   QUERY_BEFORE,
   QUERY_CATEGORY,
@@ -23,6 +24,7 @@ import { CODE_NOT_FOUND, GET, POST } from "../constants";
 import { OWNER, type ReqCtx, type Route, route } from "../core";
 import { badJson, clampInt, fail, json, readJson } from "../http";
 import { mailIn } from "./ingest";
+import { mailIcon } from "./icon";
 
 const WRITE = "events:write";
 const HX_EMAIL_EVENT = "new_mail";
@@ -44,7 +46,8 @@ function list(c: ReqCtx): Response {
   const ids = c.core.mail.list({
     limit,
     vendor: q.get(QUERY_VENDOR) || undefined,
-    account: q.get(QUERY_ACCOUNT) || undefined,
+    // 空串 = 未知收件人, 也是一个可筛的账号
+    account: q.has(QUERY_ACCOUNT) ? (q.get(QUERY_ACCOUNT) ?? "") : undefined,
     category: q.get(QUERY_CATEGORY) || undefined,
     before: clampInt(q.get(QUERY_BEFORE), 0, Number.MAX_SAFE_INTEGER) || undefined,
     q: q.get(QUERY_MAIL_SEARCH)?.trim().slice(0, MAIL_SEARCH_MAX) || undefined,
@@ -96,6 +99,7 @@ export const MAIL_ROUTES: Route[] = [
   route(GET, PATH_MAIL, OWNER, list),
   route(GET, PATH_MAIL_FACETS, OWNER, (c) => json(c.core.mail.facets())),
   route(GET, PATH_MAIL_BODY, OWNER, body),
+  route(GET, PATH_MAIL_ICON, OWNER, (c) => mailIcon(decodeURIComponent(c.params[0] ?? ""))),
   route(POST, PATH_MAIL, WRITE, push),
   route(POST, PATH_MAIL_HX_EMAIL, WRITE, hxEmail),
 ];

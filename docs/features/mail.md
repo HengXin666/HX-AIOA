@@ -18,8 +18,12 @@ Worker 导出了 `email()`, 收到的信在 Worker 里解析 (postal-mime), 再�
 收件账号的判断:
 
 - Gmail 自动转发带 `X-Forwarded-For: 原地址 目标地址`, 账号取原地址
-- Outlook 等保留原 `To`, 账号取 `To` 的第一个地址
-- 直接发到这个地址的信, 账号就是这个地址
+- CF 路由规则直接投给 Worker 的地址 (如 `loli@woa.qzz.io`), 账号就是这个投递地址
+- 投到 AIOA 入口 `aioa@...` 时, 取 `X-Original-To` / `Delivered-To`, 再取 `To` / `Cc` 里非中转的地址
+- 信头 `To` 里的中转地址 (GitHub 的 `repo@noreply.github.com`, 各家 noreply / notifications / reply+xxx) 不当账号, 存为 `mail.list`, 详情里显示 "经 ..."; 实际投递地址存为 `mail.rcpt`
+- 旧版本把中转地址当成了账号, 升级时这些信归为 "未知收件人" (账号为空串, `?account=` 可筛)
+
+发件方头像: `GET /api/v1/mail/icon/{domain}` 按主域名取网站图标 (Google 图标服务), Cache API 缓存 7 天, 没有图标回 404 (缓存 1 天), 客户端用首字母。统计 `facets` 每组带 `from` (最新一封的发件地址) 供头像使用。
 
 Gmail 开转发时会先往目标地址发一封确认信, 它会出现在邮件群里, 点开里面的链接即可。
 

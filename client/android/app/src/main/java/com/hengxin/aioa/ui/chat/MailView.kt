@@ -1,212 +1,143 @@
 package com.hengxin.aioa.ui.chat
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.text.format.DateUtils
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.Icon
+import com.hengxin.aioa.kit.pressable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class MailTab(val label: String) { LATEST("最新"), CATEGORY("按分类"), VENDOR("按厂商"), ACCOUNT("按账号") }
-
-private const val PREFETCH = 8
-private const val AVATAR = 36
-private const val BODY_HTML = "html"
-private const val PAD = 12
+const val MAIL_PAD = 16
 // 停止输入这么久才搜, 避免每个字都请求
 private const val SEARCH_DEBOUNCE_MS = 400L
+private const val SLIDE_MS = 260
+private val PILL = RoundedCornerShape(50)
 
-/** 邮件群的状态: 当前分段, 筛选, 已加载的列表与统计。离开再回来不重拉。 */
-private class MailState(val api: MailApi) {
-    var tab by mutableStateOf(MailTab.LATEST)
-    var filter by mutableStateOf(MailFilter())
-    // 输入框内容, 与防抖后真正去搜的词
-    var search by mutableStateOf("")
-    var query by mutableStateOf<String?>(null)
-    val items = mutableStateListOf<MailItem>()
-    var more by mutableStateOf(false)
-    var loading by mutableStateOf(false)
-    var error by mutableStateOf<String?>(null)
-    var facets by mutableStateOf(MailFacets(emptyList(), emptyList(), emptyList()))
-    var open by mutableStateOf<Long?>(null)
-
-    val showList get() = tab == MailTab.LATEST || filter.active
-
-    suspend fun reload() {
-        loading = true
-        api.list(filter, query, null).onSuccess { items.clear(); items.addAll(it.items); more = it.more; error = null }.onFailure { error = it.message }
-        api.facets().onSuccess { facets = it }
-        loading = false
-    }
-
-    suspend fun older() {
-        if (loading || !more) return
-        loading = true
-        api.list(filter, query, items.lastOrNull()?.ts).onSuccess { p -> items.addAll(p.items.filter { n -> items.none { it.seq == n.seq } }); more = p.more }.onFailure { error = it.message }
-        loading = false
-    }
-}
-
-/** 邮件视图: 最新 / 按厂商 / 按账号, 点分组进筛选列表, 点信展开, 验证码点一下复制。 */
+/** 邮件视图 (仿 QQ 邮箱手机版): 账号切换, 搜索, 分类, 按日期分段的会话列表, 点开进详情。 */
 @Composable
 fun MailView(head: Long?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val s = remember { MailState(MailApi(context.applicationContext)) }
+    val s = remember { MailState(MailApi(context.applicationContext), MailSeen(context.applicationContext)) }
     val scope = rememberCoroutineScope()
-    // 群里来了新信 (head 变了) 就刷新第一页
-    LaunchedEffect(head, s.filter, s.query) { s.reload() }
+    // 群里来了新信 (head 变了) 或筛选变了就刷新第一页
+    LaunchedEffect(head, s.account, s.category, s.vendor, s.query) { s.reload() }
     LaunchedEffect(s.search) { delay(SEARCH_DEBOUNCE_MS); s.query = s.search.trim().ifEmpty { null } }
-    if (s.filter.active) BackHandler { s.filter = MailFilter() }
-    Column(modifier) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = PAD.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MailTab.values().forEach { t -> FilterChip(s.tab == t, { s.tab = t; s.filter = MailFilter() }, { Text(t.label) }) }
+    BackHandler(s.open == null && (s.vendors || s.vendor != null || s.category != null)) { s.vendors = false; s.vendor = null; s.category = null }
+    val c = Aioa.colors
+    Box(modifier.background(c.background)) {
+        Column(Modifier.fillMaxSize()) {
+            AccountBar(s)
+            SearchPill(s)
+            FilterChips(s)
+            s.error?.let { Text(it, Modifier.padding(horizontal = MAIL_PAD.dp, vertical = 4.dp), fontSize = 12.sp, color = c.danger) }
+            if (s.vendors && s.vendor == null) VendorList(s.facets.vendors) { s.vendor = it; s.vendors = false }
+            else MailList(s, { scope.launch { s.refreshing = true; s.reload() } }) { scope.launch { s.older() } }
         }
-        s.filter.label?.let { label ->
-            InputChip(true, { s.filter = MailFilter() }, { Text("$label  ×", maxLines = 1, overflow = TextOverflow.Ellipsis) }, Modifier.padding(horizontal = PAD.dp))
+        AnimatedVisibility(
+            s.open != null,
+            enter = slideInHorizontally(tween(SLIDE_MS)) { it } + fadeIn(tween(SLIDE_MS)),
+            exit = slideOutHorizontally(tween(SLIDE_MS)) { it } + fadeOut(tween(SLIDE_MS)),
+        ) {
+            val t = remember(s.open, s.items.size) { s.threads.firstOrNull { it.key == s.open } }
+            if (t != null) MailDetail(t, s) { s.open = null }
         }
-        if (s.showList) {
-            OutlinedTextField(
-                s.search, { s.search = it }, Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 4.dp),
-                singleLine = true, placeholder = { Text("搜主题或发件人") },
-                trailingIcon = { if (s.search.isNotEmpty()) Text("×", Modifier.clickable { s.search = "" }.padding(8.dp)) },
-            )
+    }
+    if (s.sheet) AccountSheet(s) { s.sheet = false }
+}
+
+@Composable
+private fun AccountBar(s: MailState) {
+    val c = Aioa.colors
+    Row(Modifier.fillMaxWidth().padding(start = MAIL_PAD.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clip(PILL).pressable { s.sheet = true }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.title, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(4.dp))
+            Icon("chevron-down", c.textSecondary, 18.dp)
         }
-        s.error?.let { Text(it, Modifier.padding(horizontal = PAD.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
-        when {
-            s.showList -> MailList(s, context) { scope.launch { s.older() } }
-            s.tab == MailTab.CATEGORY -> FacetList(s.facets.categories) { s.filter = MailFilter(category = it) }
-            s.tab == MailTab.VENDOR -> FacetList(s.facets.vendors) { s.filter = MailFilter(vendor = it) }
-            else -> FacetList(s.facets.accounts) { s.filter = MailFilter(account = it) }
-        }
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.size(40.dp).clip(PILL).pressable { s.seen.allRead() }, contentAlignment = Alignment.Center) { Icon("check-check", c.textSecondary, 20.dp) }
     }
 }
 
 @Composable
-private fun MailList(s: MailState, context: Context, loadMore: () -> Unit) {
-    val state = rememberLazyListState()
-    val nearEnd by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - PREFETCH } }
-    LaunchedEffect(nearEnd, s.items.size) { if (nearEnd) loadMore() }
-    if (s.items.isEmpty() && !s.loading) {
-        val empty = if (s.query != null) "没有匹配的邮件。" else "还没有邮件。把信转发到邮件路由地址, 或在 HX-Email 里配置 Webhook。"
-        Text(empty, Modifier.padding(PAD.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    LazyColumn(Modifier.fillMaxWidth(), state, contentPadding = PaddingValues(bottom = 16.dp)) {
-        items(s.items, key = { it.seq }) { m ->
-            MailRow(m, s.open == m.seq, context, s.api) { s.open = if (s.open == m.seq) null else m.seq }
-            HorizontalDivider(Modifier.padding(start = (PAD * 2 + AVATAR).dp))
+private fun SearchPill(s: MailState) {
+    val c = Aioa.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = MAIL_PAD.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.surfaceAlt).padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon("search", c.textSecondary, 16.dp)
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f)) {
+            if (s.search.isEmpty()) Text("搜索主题, 发件人", color = c.textSecondary, fontSize = 14.sp)
+            BasicTextField(s.search, { s.search = it }, Modifier.fillMaxWidth(), singleLine = true, textStyle = TextStyle(color = c.text, fontSize = 14.sp), cursorBrush = SolidColor(c.accent))
         }
+        if (s.search.isNotEmpty()) Box(Modifier.clip(PILL).pressable { s.search = "" }.padding(2.dp)) { Icon("x", c.textSecondary, 16.dp) }
     }
 }
 
 @Composable
-private fun MailRow(m: MailItem, expanded: Boolean, context: Context, api: MailApi, toggle: () -> Unit) {
-    var full by remember { mutableStateOf<String?>(null) }
-    var fetching by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth().clickable(onClick = toggle).padding(horizontal = PAD.dp, vertical = 10.dp)) {
-        Box(Modifier.size(AVATAR.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-            Text(m.vendor.take(1).uppercase(), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-        }
-        Column(Modifier.padding(start = PAD.dp).weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(m.name ?: m.vendor, Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(timeOf(context, m.ts), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (m.spoof) Text("可疑: 发件域名校验失败, 可能是冒充", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-            Text(m.subject, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
-            m.code?.let { code ->
-                Text(
-                    code,
-                    Modifier.padding(top = 4.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)).clickable { copy(context, code) }.padding(horizontal = 8.dp, vertical = 2.dp),
-                    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            if (!expanded) {
-                if (m.summary.isNotEmpty()) Text(m.summary, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                return@Column
-            }
-            Text("${m.from} → ${m.account}", Modifier.padding(top = 4.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SelectionContainer { Text(m.summary, Modifier.padding(top = 6.dp), fontSize = 13.sp) }
-            if (m.body != null) {
-                TextButton({
-                    if (fetching) return@TextButton
-                    fetching = true
-                    scope.launch {
-                        api.body(m.id).onSuccess { full = it }.onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
-                        fetching = false
-                    }
-                }) { Text(if (fetching) "加载中..." else if (m.body == BODY_HTML) "查看原文" else "查看全文") }
-            }
-        }
+private fun FilterChips(s: MailState) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = MAIL_PAD.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val counts = s.facets.categories
+        MailChip("全部", s.total.takeIf { it > 0 }, s.category == null && s.vendor == null && !s.vendors) { s.category = null; s.vendor = null; s.vendors = false }
+        counts.forEach { f -> MailChip(f.key, f.count, s.category == f.key) { s.category = if (s.category == f.key) null else f.key; s.vendors = false } }
+        val v = s.vendor
+        if (v != null) MailChip(v, null, true, close = true) { s.vendor = null }
+        else MailChip("按厂商", null, s.vendors, icon = "layout-dashboard") { s.vendors = !s.vendors }
     }
-    full?.let { HtmlViewer(it, m.subject) { full = null } }
 }
 
 @Composable
-private fun FacetList(list: List<MailFacet>, pick: (String) -> Unit) {
-    val context = LocalContext.current
-    LazyColumn(Modifier.fillMaxWidth()) {
-        items(list, key = { it.key }) { f ->
-            Row(Modifier.fillMaxWidth().clickable { pick(f.key) }.padding(horizontal = PAD.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(f.key, Modifier.weight(1f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${f.count} 封 · ${timeOf(context, f.last)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            HorizontalDivider()
-        }
+private fun MailChip(label: String, count: Int?, on: Boolean, icon: String? = null, close: Boolean = false, onClick: () -> Unit) {
+    val c = Aioa.colors
+    val fg = if (on) c.accent else c.textSecondary
+    Row(
+        Modifier.clip(PILL).background(if (on) c.accent.copy(alpha = CHIP_ALPHA) else c.surfaceAlt).pressable(onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        icon?.let { Icon(it, fg, 14.dp) }
+        Text(label, color = fg, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
+        count?.let { Text("$it", color = fg.copy(alpha = COUNT_ALPHA), fontSize = 12.sp) }
+        if (close) Icon("x", fg, 14.dp)
     }
 }
 
-private fun timeOf(context: Context, ts: Long): String =
-    if (DateUtils.isToday(ts)) DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_TIME)
-    else DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH)
-
-private fun copy(context: Context, code: String) {
-    val cm = context.getSystemService(ClipboardManager::class.java) ?: return
-    cm.setPrimaryClip(ClipData.newPlainText("验证码", code))
-    Toast.makeText(context, "已复制 $code", Toast.LENGTH_SHORT).show()
-}
+private const val CHIP_ALPHA = 0.12f
+private const val COUNT_ALPHA = 0.7f

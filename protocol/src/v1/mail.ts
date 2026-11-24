@@ -13,26 +13,32 @@ export const CHAT_VIEWS = ["chat", "mail"] as const;
 export type ChatView = (typeof CHAT_VIEWS)[number];
 
 /**
- * 随事件保存的邮件信息。to 为收件账号 (转发时是原收件地址)。
+ * 随事件保存的邮件信息。to 为收件账号: 真正收信的地址 (转发时是原收件地址), 旧信认不出时为空串。
+ * rcpt: CF 实际投递的地址; list: 信头 To 里的中转地址 (如 repo@noreply.github.com), 显示为 "经 ..."。
  * body: 有完整正文可取 (GET /mail/{id}/body), html 为原版网页, text 为长纯文本。
  * spoof: 发件域名的 DMARC 校验失败, 可能是冒充。
  */
-export type MailInfo = { from: string; name?: string; to: string; vendor: string; category?: MailCategory; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
+export type MailInfo = { from: string; name?: string; to: string; rcpt?: string; list?: string; vendor: string; category?: MailCategory; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
 export type MailBodyKind = "html" | "text";
 /** GET /mail/{id}/body: 统一给 HTML (纯文本已转成可显示的 HTML)。 */
 export type MailBody = { html: string };
 
 /** 外部推送一封信 (POST /mail)。text 与 html 至少一个。 */
-export type MailInput = { from: string; name?: string; to: string; subject?: string; text?: string; html?: string; code?: string; messageId?: string; ts?: number; spoof?: boolean };
+export type MailInput = { from: string; name?: string; to: string; rcpt?: string; list?: string; subject?: string; text?: string; html?: string; code?: string; messageId?: string; ts?: number; spoof?: boolean };
 
 export type MailList = { messages: Envelope[]; more: boolean };
-export type MailFacet = { key: string; count: number; last: number };
+/** from: 该组最新一封的发件地址, 客户端据此取头像。 */
+export type MailFacet = { key: string; count: number; last: number; from?: string };
 export type MailFacets = { vendors: MailFacet[]; accounts: MailFacet[]; categories: MailFacet[] };
 
 export const PATH_MAIL = `${API_V1}/mail`;
 export const PATH_MAIL_FACETS = `${API_V1}/mail/facets`;
 export const PATH_MAIL_HX_EMAIL = `${API_V1}/mail/hx-email`;
 export const PATH_MAIL_BODY = `${API_V1}/mail/{id}/body`;
+/** 发件方网站图标 (按主域名代理并缓存), 404 表示没有, 客户端用首字母。 */
+export const PATH_MAIL_ICON = `${API_V1}/mail/icon/{domain}`;
+/** 认不出收件账号 (旧信没存投递地址) 时的账号值。 */
+export const MAIL_ACCOUNT_UNKNOWN = "";
 export const QUERY_VENDOR = "vendor";
 export const QUERY_ACCOUNT = "account";
 export const QUERY_CATEGORY = "category";
@@ -135,6 +141,28 @@ const known = (domain: string): [string, MailCategory] | undefined => {
   return undefined;
 };
 
+// 中转 / 不回信地址: 不是真实收件人, 不能当账号
+const RELAY_LOCAL = /^(no-?reply|do-?not-?reply|notifications?|reply(\+.*)?|bounces?)$/;
+const RELAY_DOMAIN = /(^|\.)(noreply|no-reply|reply|bounces?)\./;
+
+/** 中转地址: GitHub 的 repo@noreply.github.com, 各家 noreply / notifications / reply+xxx 之类。 */
+export function isRelayAddress(addr: string): boolean {
+  const a = addr.trim().toLowerCase();
+  const at = a.lastIndexOf("@");
+  if (at < 0) return false;
+  return RELAY_LOCAL.test(a.slice(0, at)) || RELAY_DOMAIN.test(`${a.slice(at + 1)}.`);
+}
+
+/** 主域名: a.b.example.com -> example.com, 两段式国家后缀保留三段 (x.com.cn)。 */
+export function siteOf(addr: string): string {
+  const parts = domainOf(addr).split(".").filter(Boolean);
+  if (parts.length <= 2) return parts.join(".");
+  const sld = parts[parts.length - 2] ?? "";
+  const n = parts[parts.length - 1]!.length === 2 && SECOND_LEVEL.has(sld) ? 3 : 2;
+  return parts.slice(-n).join(".");
+}
+const SECOND_LEVEL = new Set(["com", "net", "org", "gov", "edu", "ac", "co"]);
+
 /** 认识的厂商给名字, 不认识的用主域名 (a.b.example.com -> example.com)。 */
 export function vendorOf(addr: string): string {
   const d = domainOf(addr);
@@ -170,6 +198,8 @@ export function parseMailInput(raw: unknown): { ok: true; value: MailInput } | {
   if (!isStr(r.to, MAX_ADDR)) return { ok: false, error: "需要 to (收件账号)" };
   const out: MailInput = { from: r.from, to: r.to };
   if (isStr(r.name, MAX_ADDR)) out.name = r.name;
+  if (isStr(r.rcpt, MAX_ADDR)) out.rcpt = r.rcpt;
+  if (isStr(r.list, MAX_ADDR)) out.list = r.list;
   if (isStr(r.subject, MAX_SUBJECT)) out.subject = r.subject;
   if (isStr(r.text, MAX_MAIL_TEXT)) out.text = r.text;
   if (isStr(r.html, MAX_MAIL_TEXT)) out.html = r.html;

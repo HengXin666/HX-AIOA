@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { categoryOf, extractCode, parseMailInput, vendorOf } from "@hx-aioa/protocol";
+import { categoryOf, extractCode, isRelayAddress, parseMailInput, siteOf, vendorOf } from "@hx-aioa/protocol";
 import { parseRaw } from "../src/mail/email";
 
 const INBOX = "aioa@example.org";
@@ -37,6 +37,26 @@ test("解析原始邮件: 直投用投递地址, Gmail 转发用原收件地址"
   assert.equal(fwd.to, "me@gmail.com");
   const outlook = await parseRaw(raw(`From: a@b.com\r\nTo: me@outlook.com\r\nSubject: s`, "t"), "x@outlook.com", INBOX);
   assert.equal(outlook.to, "me@outlook.com");
+});
+
+test("收件账号: 路由直投用投递地址, 仓库 noreply 只记为经由", async () => {
+  const gh = `From: Heng_Xin <notifications@github.com>\r\nTo: HengXin666/HX-UI <HX-UI@noreply.github.com>\r\nCc: Heng_Xin <me@woa.qzz.io>, Author <author@noreply.github.com>\r\nSubject: Run failed`;
+  const routed = await parseRaw(raw(gh, "t"), "bounce@github.com", "me@woa.qzz.io");
+  assert.equal(routed.to, "me@woa.qzz.io");
+  assert.equal(routed.list, "hx-ui@noreply.github.com");
+  // 投到 AIOA 入口: 不用 To 里的 noreply, 用 Cc 里的真实地址
+  const viaEntry = await parseRaw(raw(gh, "t"), "bounce@github.com", INBOX);
+  assert.equal(viaEntry.to, "me@woa.qzz.io");
+  assert.equal(viaEntry.rcpt, INBOX);
+  const orig = await parseRaw(raw(`From: a@b.com\r\nX-Original-To: you@woa.qzz.io\r\nTo: list@noreply.example.com\r\nSubject: s`, "t"), "x@b.com", INBOX);
+  assert.equal(orig.to, "you@woa.qzz.io");
+});
+
+test("中转地址与主域名", () => {
+  for (const a of ["hx-ui@noreply.github.com", "noreply@github.com", "notifications@github.com", "reply+abc@reply.github.com", "do-not-reply@x.com"]) assert.ok(isRelayAddress(a), a);
+  for (const a of ["me@woa.qzz.io", "loli@qq.com", "support@devpost.com"]) assert.ok(!isRelayAddress(a), a);
+  assert.equal(siteOf("noreply@mail.notion.so"), "notion.so");
+  assert.equal(siteOf("a@service.taobao.com.cn"), "taobao.com.cn");
 });
 
 test("冒充判断: 只信 CF 最上面那条, 经可信转发看上一跳", async () => {
