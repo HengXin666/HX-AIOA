@@ -5,6 +5,7 @@ import type { Env } from "./env";
 import { OWNER, type Route, route } from "./core";
 import { fail, json } from "./http";
 import { gql } from "./api-cf";
+import { ownerKey, Split, storeOwners } from "./cf-owners";
 
 // CF 存储总览: R2 桶 / KV 命名空间 / D1 数据库的大小与本期用量, 对照免费额度; 见 docs/deploy/cf-usage.md
 const REST = "https://api.cloudflare.com/client/v4";
@@ -32,8 +33,8 @@ const R2_CLASS_A = new Set(["ListBuckets", "PutBucket", "ListObjects", "PutObjec
 const R2_FREE = new Set(["DeleteObject", "DeleteObjects", "DeleteBucket", "AbortMultipartUpload"]);
 const KV_WRITES = new Set(["write", "delete", "list"]);
 
-export type CfQuota = { key: string; label: string; used: number; limit: number; unit: "B" | "次" | "行"; period: "月" | "日" | "总" };
-export type CfStore = { kind: "r2" | "kv" | "d1"; id: string; name: string; bytes: number; objects?: number; ops?: number };
+export type CfQuota = { key: string; label: string; used: number; limit: number; unit: "B" | "次" | "行"; period: "月" | "日" | "总"; by?: { name: string; used: number }[] };
+export type CfStore = { kind: "r2" | "kv" | "d1"; id: string; name: string; bytes: number; objects?: number; ops?: number; worker?: string };
 export type CfStorage = { configured: boolean; at?: number; quotas?: CfQuota[]; stores?: CfStore[]; errors?: string[] };
 
 type Rest<T> = { success: boolean; result?: T; errors?: { message: string }[] };
@@ -97,13 +98,15 @@ async function loadStorage(env: Env, now: number): Promise<CfStorage> {
   const stores: CfStore[] = [];
   const L = STORAGE_LIMITS;
 
-  const [r2, kv, d1, kvNames, d1List] = await Promise.all([
+  const [r2, kv, d1, kvNames, d1List, owners] = await Promise.all([
     gql<Acc<R2Data>>(env, R2_QUERY, { a, s, e, ms }).then(first).catch((x) => void errors.push(`R2: ${errText(x)}`)),
     gql<Acc<KvData>>(env, KV_QUERY, { a, s, e, ds }).then(first).catch((x) => void errors.push(`KV: ${errText(x)}`)),
     gql<Acc<D1Data>>(env, D1_QUERY, { a, ds, e }).then(first).catch((x) => void errors.push(`D1: ${errText(x)}`)),
     rest<{ id: string; title: string }[]>(env, `/accounts/${a}/storage/kv/namespaces?per_page=100`).catch(() => []),
     rest<{ uuid: string; name: string; file_size?: number }[]>(env, `/accounts/${a}/d1/database?per_page=100`).catch((x) => (errors.push(`D1 列表: ${errText(x)}`), [])),
+    storeOwners(env),
   ]);
+  const sp = new Split(owners);
 
   if (r2) {
     const size = latest(r2.size, (r) => r.dimensions.bucketName);
@@ -111,7 +114,12 @@ async function loadStorage(env: Env, now: number): Promise<CfStorage> {
     for (const [name, r] of size) {
       const b = r.max.payloadSize + r.max.metadataSize;
       bytes += b;
-      stores.push({ kind: "r2", id: name, name, bytes: b, objects: r.max.objectCount, ops: sumBy(r2.ops, (o) => o.sum.requests, (o) => o.dimensions.bucketName === name) });
+      sp.add("r2Bytes", ownerKey("r2", name), b);
+      stores.push({ worker: sp.owner(ownerKey("r2", name)), kind: "r2", id: name, name, bytes: b, objects: r.max.objectCount, ops: sumBy(r2.ops, (o) => o.sum.requests, (o) => o.dimensions.bucketName === name) });
+    }
+    for (const o of r2.ops ?? []) {
+      if (R2_FREE.has(o.dimensions.actionType)) continue;
+      sp.add(R2_CLASS_A.has(o.dimensions.actionType) ? "r2ClassA" : "r2ClassB", ownerKey("r2", o.dimensions.bucketName), o.sum.requests);
     }
     const classA = sumBy(r2.ops, (o) => o.sum.requests, (o) => R2_CLASS_A.has(o.dimensions.actionType));
     const classB = sumBy(r2.ops, (o) => o.sum.requests, (o) => !R2_CLASS_A.has(o.dimensions.actionType) && !R2_FREE.has(o.dimensions.actionType));
@@ -127,7 +135,12 @@ async function loadStorage(env: Env, now: number): Promise<CfStorage> {
     let bytes = 0;
     for (const [id, r] of size) {
       bytes += r.max.byteCount;
-      stores.push({ kind: "kv", id, name: names.get(id) ?? id, bytes: r.max.byteCount, objects: r.max.keyCount, ops: sumBy(kv.ops, (o) => o.sum.requests, (o) => o.dimensions.namespaceId === id) });
+      sp.add("kvBytes", ownerKey("kv", id), r.max.byteCount);
+      stores.push({ worker: sp.owner(ownerKey("kv", id)), kind: "kv", id, name: names.get(id) ?? id, bytes: r.max.byteCount, objects: r.max.keyCount, ops: sumBy(kv.ops, (o) => o.sum.requests, (o) => o.dimensions.namespaceId === id) });
+    }
+    for (const o of kv.ops ?? []) {
+      const k = o.dimensions.actionType === "read" ? "kvReads" : KV_WRITES.has(o.dimensions.actionType) ? "kvWrites" : "";
+      if (k) sp.add(k, ownerKey("kv", o.dimensions.namespaceId), o.sum.requests);
     }
     quotas.push(
       { key: "kvBytes", label: "KV 存储", used: bytes, limit: L.kvBytes, unit: "B", period: "总" },
@@ -139,14 +152,23 @@ async function loadStorage(env: Env, now: number): Promise<CfStorage> {
     let bytes = 0;
     for (const db of d1List) {
       bytes += db.file_size ?? 0;
+      sp.add("d1Bytes", ownerKey("d1", db.uuid), db.file_size ?? 0);
       const ops = (d1?.ops ?? []).filter((o) => o.dimensions.databaseId === db.uuid);
-      stores.push({ kind: "d1", id: db.uuid, name: db.name, bytes: db.file_size ?? 0, ops: sumBy(ops, (o) => o.sum.readQueries + o.sum.writeQueries) });
+      for (const o of ops) {
+        sp.add("d1RowsRead", ownerKey("d1", db.uuid), o.sum.rowsRead);
+        sp.add("d1RowsWritten", ownerKey("d1", db.uuid), o.sum.rowsWritten);
+      }
+      stores.push({ worker: sp.owner(ownerKey("d1", db.uuid)), kind: "d1", id: db.uuid, name: db.name, bytes: db.file_size ?? 0, ops: sumBy(ops, (o) => o.sum.readQueries + o.sum.writeQueries) });
     }
     quotas.push(
       { key: "d1Bytes", label: "D1 存储", used: bytes, limit: L.d1Bytes, unit: "B", period: "总" },
       { key: "d1RowsRead", label: "D1 行读取", used: sumBy(d1?.ops, (o) => o.sum.rowsRead), limit: L.d1RowsRead, unit: "行", period: "日" },
       { key: "d1RowsWritten", label: "D1 行写入", used: sumBy(d1?.ops, (o) => o.sum.rowsWritten), limit: L.d1RowsWritten, unit: "行", period: "日" },
     );
+  }
+  for (const q of quotas) {
+    const by = sp.by(q.key);
+    if (by) q.by = by;
   }
   stores.sort((x, y) => y.bytes - x.bytes);
   return { configured: true, at: now, quotas, stores, errors: errors.length ? errors : undefined };

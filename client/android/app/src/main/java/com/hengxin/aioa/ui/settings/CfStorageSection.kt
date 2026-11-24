@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -63,10 +65,14 @@ fun CfStorageSection() {
         b == null -> SettingsGroup("R2 / KV / D1") { NoteRow("加载中...") }
         !b.optBoolean("configured") -> Unit
         else -> {
-            SettingsGroup("R2 / KV / D1 额度", footer = "R2 操作按月 (UTC) 计, KV 与 D1 按天; 存储量不重置。") {
-                b.optJSONArray("quotas").objs().forEachIndexed { i, q ->
-                    if (i > 0) RowDivider()
-                    QuotaRow(q)
+            val quotas = b.optJSONArray("quotas").objs()
+            val workers = topWorkers(quotas.map { partsOf(it) to it.optLong("limit") })
+            val colorOf = workerColors(workers)
+            SettingsGroup("R2 / KV / D1 额度", footer = "R2 操作按月 (UTC) 计, KV 与 D1 按天; 存储量不重置。按绑定它的 worker 分色, 点一项看明细。") {
+                if (workers.isNotEmpty()) Legend(workers, colorOf)
+                quotas.forEachIndexed { i, q ->
+                    if (i > 0 || workers.isNotEmpty()) RowDivider()
+                    QuotaRow(q, colorOf)
                 }
                 b.optJSONArray("errors").let { e -> (0 until (e?.length() ?: 0)).forEach { NoteRow(e!!.optString(it), c.danger) } }
             }
@@ -82,19 +88,23 @@ fun CfStorageSection() {
 }
 
 @Composable
-private fun QuotaRow(q: JSONObject) {
+private fun QuotaRow(q: JSONObject, colorOf: (String) -> Color) {
     val c = Aioa.colors
+    val by = partsOf(q)
+    var open by remember { mutableStateOf(false) }
     val used = q.optLong("used")
     val limit = q.optLong("limit")
     val unit = q.optString("unit")
     val ratio = if (limit > 0) used.toFloat() / limit else 0f
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val mod = if (by.isNotEmpty()) Modifier.clickable { open = !open } else Modifier
+    Column(mod.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth()) {
             Text(q.optString("label"), c.text, 14, Modifier.weight(1f))
             Text(String.format(Locale.US, "%.1f%%", ratio * 100), if (ratio >= WARN) c.danger else c.textSecondary, 13)
         }
-        ProgressBar(ratio.coerceIn(0f, 1f))
+        if (by.isNotEmpty()) SegBar(by, limit, colorOf) else ProgressBar(ratio.coerceIn(0f, 1f))
         Text("${periodText(q.optString("period"))} ${amount(used, unit)} / ${amount(limit, unit)}", c.textSecondary, 12)
+        if (open) PartList(by, colorOf) { amount(it, unit) }
     }
 }
 
@@ -103,6 +113,7 @@ private fun StoreRow(s: JSONObject) {
     val c = Aioa.colors
     val kind = KIND_LABEL[s.optString("kind")] ?: s.optString("kind")
     val detail = buildList {
+        s.optString("worker").ifEmpty { null }?.let { add(it) }
         if (s.has("objects")) add("${s.optLong("objects")} 个对象")
         add("近期 ${s.optLong("ops")} 次操作")
     }.joinToString(" · ")
