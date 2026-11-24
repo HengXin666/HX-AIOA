@@ -34,7 +34,8 @@ import {
   type OnboardResult,
   type Scope,
 } from "@hx-aioa/protocol";
-import { agentBootstrap, agentGuide } from "./agent-prompt";
+import { agentBootstrap } from "./agent-prompt";
+import { acked, guideFor } from "./agent-sync";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { memberView, ownerView, roleIn } from "./room-access";
@@ -205,7 +206,7 @@ function agentOf(meta: ChatMeta | null, keyId: string): ChatAgent {
   return a;
 }
 
-function saveAgents(core: Core, channel: string, agents: ChatAgent[]): ChatMeta {
+export function saveAgents(core: Core, channel: string, agents: ChatAgent[]): ChatMeta {
   const meta = core.chats.patchChat(channel, {});
   const next = { ...meta, agents };
   core.chats.replaceChat(next);
@@ -242,12 +243,6 @@ export function dropAgent(core: Core, channel: string, keyId: string): void {
   core.registry.deleteSource(old.sourceId);
   core.registry.deleteKey(old.keyId);
   saveAgents(core, channel, (meta?.agents ?? []).filter((x) => x.keyId !== old.keyId));
-}
-
-// 专属指令: 插件装的 Agent 额外带上插件提示词
-function guideFor(core: Core, base: string, channel: string, agent: ChatAgent) {
-  const title = titleOf(core, channel);
-  return agentGuide(base, channel, title, agent, agent.plugin ? core.plugins.promptFor(agent.plugin, base, channel, title) : undefined);
 }
 
 async function addAgent(c: ReqCtx): Promise<Response> {
@@ -338,8 +333,7 @@ async function agentAck(c: ReqCtx): Promise<Response> {
   const raw = await readJson(c.req);
   const g = guideFor(c.core, baseOf(c.url), channel, agent);
   if (!isObj(raw) || raw.version !== g.version) return fail(409, `指令已更新到 ${g.version}, 请重新 GET ${PATH_AGENT_GUIDE}`);
-  const next: ChatAgent = { ...agent, joined: Date.now(), pending: false };
-  saveAgents(c.core, channel, (meta.agents ?? []).map((x) => (x.keyId === agent.keyId ? next : x)));
+  await acked(c.core, c.req, meta, agent, g.version);
   return json({ ok: true, version: g.version });
 }
 

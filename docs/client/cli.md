@@ -29,7 +29,7 @@ hxaioa login <服务地址> <密钥>
 | 命令 | 说明 |
 |---|---|
 | `hxaioa me` | 我是谁: 名字, 本群, 可读的群 |
-| `hxaioa guide [--ack]` | 打印专属指令; `--ack` 顺带报到 |
+| `hxaioa guide [--ack]` | 打印专属指令; `--ack` 顺带报到并记下版本, 之后任何命令发现服务端指令版本变了都会在 stderr 提示一次 |
 | `hxaioa send <文字\|->` | 发到本群; `-c 群` 发别的群, `--reply seq` 引用, `--title`, `--html 文件`, `--priority need_me\|worth_reading`; `-` 从标准输入读 |
 | `hxaioa read` | 读本群; `--new` 只读上次之后的并记住位置, `--since seq`, `--before seq` 往前翻, `--limit n`, `--json` 一行一条原始 Envelope |
 | `hxaioa watch` | 监听本群 (`--all` 能读的全部), 新消息逐条打印; `--once` 收到一条就退出, `--timeout 秒` 到点没等到退出码 2, `--exec 命令` 每条跑一次命令 (消息 JSON 走 stdin, 环境变量 `AIOA_SEQ` / `AIOA_CHANNEL` / `AIOA_FROM`), `--mine` 连自己发的也要 |

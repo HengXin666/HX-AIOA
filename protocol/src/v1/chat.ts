@@ -44,6 +44,11 @@ export type ChatAgent = {
   plugin?: string;
   // 最近一次用这把 key 拉消息 / 发消息 / 拉指令的时间, 最多每 10 分钟记一次
   active?: number;
+  // 最近一次报到的指令版本与客户端 (如 "hxaioa 0.2.0", 直接调接口为 "接口")
+  version?: string;
+  client?: string;
+  // 已在群里发过 "指令已更新" 通知的版本, 同一版本只通知一次
+  notified?: string;
 };
 // 接入时可选带上定时与任务, 只写进这次的接入语, 不存
 export type AgentJob = { interval?: number; task?: string };

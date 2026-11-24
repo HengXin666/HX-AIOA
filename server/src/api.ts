@@ -36,6 +36,7 @@ import {
   SRC_API_DEFAULT,
 } from "./constants";
 import { type Core, type Principal, type Route, allowed } from "./core";
+import { stampGuide } from "./agent-sync";
 import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
@@ -91,7 +92,7 @@ export async function handleHttp(core: Core, req: Request, pre?: Principal): Pro
       const m = r.re.exec(url.pathname);
       if (!m) continue;
       if (!allowed(who, r.need)) return await early(req, fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN));
-      return await r.handler({ req, url, params: m.slice(1), who, core });
+      return await stampGuide(core, req, url, who, await r.handler({ req, url, params: m.slice(1), who, core }));
     }
     return fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
   } catch (e) {

@@ -28,7 +28,7 @@ export function loadConfig() {
   const f = readJson(CONFIG);
   const server = (process.env.AIOA_SERVER || f.server || "").replace(/\/+$/, "");
   const key = process.env.AIOA_KEY || f.key || "";
-  return { server, key, channel: process.env.AIOA_CHANNEL || f.channel || "", me: f.me };
+  return { server, key, channel: process.env.AIOA_CHANNEL || f.channel || "", me: f.me, guide: f.guide };
 }
 
 export function saveConfig(cfg) {

@@ -64,6 +64,23 @@ check("CLI login", login.includes("小助手") && login.includes(GROUP), login);
 const me = JSON.parse(await cli("me"));
 check("CLI me", me.channel === GROUP && me.name === "小助手", me);
 
+// 指令更新: 报到记版本与客户端; 改成信息流后服务端在群里通知, CLI 提示, 再报到后自动记一笔
+check("guide --ack", (await cli("guide", "--ack")).includes("已报到"));
+const agentOf = async () => (await api("GET", `${V1}/chats`)).data.chats.find((m) => m.channel === GROUP)?.agents?.[0];
+const a1 = await agentOf();
+check("报到记下版本与客户端", !!a1?.version && a1.client?.startsWith("hxaioa ") && !a1.pending, a1);
+await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { view: "feed" });
+const warn = await run("node", [CLI, "me"], { env, timeout: 20000 }).then((r) => r.stderr, (e) => String(e.stderr));
+check("CLI 提示指令已更新", warn.includes("专属指令已更新"), warn);
+const texts = async () => ((await api("GET", `${V1}/chats/${enc(GROUP)}/messages?since=0`)).data?.messages ?? []).map((m) => JSON.stringify(m.data)).join("\n");
+check("群里自动通知指令更新", (await texts()).includes("小助手 的专属指令已更新到"));
+check("待更新", (await agentOf())?.pending === true);
+check("信息流群的指令带 feed 格式", (await cli("guide", "--ack")).includes("推送格式: 信息流"));
+const a2 = await agentOf();
+check("报到后自动记一笔", (await texts()).includes("小助手 已更新到专属指令") && a2?.version !== a1.version && !a2.pending, a2);
+await run("node", [CLI, "me"], { env, timeout: 20000 }).then((r) => check("报到后不再提示", !r.stderr.includes("专属指令已更新"), r.stderr), (e) => check("报到后不再提示", false, String(e)));
+await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { view: "chat" });
+
 const sent = JSON.parse(await cli("send", "CLI 你好"));
 check("CLI send 到本群", sent.channel === GROUP, sent);
 await api("POST", `${V1}/messages`, { text: "主人说话", channel: GROUP });

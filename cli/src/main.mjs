@@ -77,7 +77,10 @@ const COMMANDS = {
     const res = await call(cfg, "GET", "/api/v1/chat-agent/guide", undefined, { raw: true });
     const version = res.headers.get("X-Aioa-Guide-Version");
     out(await res.text());
-    if (v.ack) out((await call(cfg, "POST", "/api/v1/chat-agent/ack", { version })).ok ? `已报到 ${version}` : "报到失败");
+    if (!v.ack) return;
+    const ok = (await call(cfg, "POST", "/api/v1/chat-agent/ack", { version })).ok;
+    if (ok) saveConfig({ guide: version });
+    out(ok ? `已报到 ${version}` : "报到失败");
   },
   async send(cfg, v, [text]) {
     const body = { text: text === "-" || text === undefined ? stdin() : text };
