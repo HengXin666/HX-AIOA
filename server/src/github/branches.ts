@@ -11,6 +11,8 @@ export const BRANCH_MAX_REPOS = 40;
 const DAY_MS = 86_400_000;
 const MERGED = "MERGED";
 const OPEN = "OPEN";
+// 发布用的孤儿分支, 跟主线没有共同历史, 不算未合入
+const IGNORE = new Set(["gh-pages"]);
 
 const q = (v: string) => JSON.stringify(v);
 
@@ -49,7 +51,7 @@ export function openBranches(repo: string, raw: Obj, since: number, ci: (branch:
     const at = Date.parse(s(t.committedDate)) || 0;
     const pr = list(obj(n.associatedPullRequests).nodes)[0];
     // 默认分支, 没有独有提交, PR 已合入 (squash 后提交数对不上) 的都算已合入
-    if (!name || name === base || ahead <= 0 || at < since || s(pr?.state) === MERGED) continue;
+    if (!name || name === base || IGNORE.has(name) || ahead <= 0 || at < since || s(pr?.state) === MERGED) continue;
     const author = obj(t.author);
     const by = s(obj(author.user).login) || s(author.name);
     const b: GithubOpenBranch = { name, at, ahead, behind: Number(cmp.aheadBy ?? 0), url: `${url}/tree/${name}` };
