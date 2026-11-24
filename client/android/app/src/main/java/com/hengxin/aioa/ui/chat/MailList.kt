@@ -1,6 +1,5 @@
 package com.hengxin.aioa.ui.chat
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,11 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -51,7 +47,7 @@ import kotlinx.coroutines.launch
 private const val PREFETCH = 8
 private const val AVATAR = 44
 
-/** 会话列表: 下拉刷新, 按日期分段 (吸顶), 左滑删除, 右滑切换已读。 */
+/** 会话列表: 下拉刷新, 按日期分段 (吸顶), 左滑露出删除按钮, 右滑切换已读。 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MailList(s: MailState, refresh: () -> Unit, loadMore: () -> Unit) {
@@ -87,30 +83,19 @@ private fun EmptyMail(text: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeRow(s: MailState, t: MailThread) {
     val c = Aioa.colors
     val scope = rememberCoroutineScope()
     val unread = t.items.any(s.seen::unread)
-    val box = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
-        when (v) {
-            SwipeToDismissBoxValue.StartToEnd -> { s.seen.set(t.items, unread); false }
-            SwipeToDismissBoxValue.EndToStart -> { scope.launch { s.remove(t) }; true }
-            else -> false
-        }
-    })
-    SwipeToDismissBox(box, backgroundContent = {
-        val dir = box.dismissDirection
-        val bg by animateColorAsState(when (dir) { SwipeToDismissBoxValue.StartToEnd -> c.accent; SwipeToDismissBoxValue.EndToStart -> c.danger; else -> Color.Transparent }, label = "swipe")
-        Row(Modifier.fillMaxSize().background(bg).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (dir == SwipeToDismissBoxValue.StartToEnd) Icon(if (unread) "mail-open" else "mail", Color.White, 22.dp)
-            Spacer(Modifier.weight(1f))
-            if (dir == SwipeToDismissBoxValue.EndToStart) Icon("trash-2", Color.White, 22.dp)
-        }
-    }) {
+    val open = s.swiped == t.key
+    val del = RevealAction("trash-2", "删除", c.danger) { scope.launch { s.remove(t) } }
+    val read = SwipeQuick(if (unread) "mail-open" else "mail", c.accent) { s.seen.set(t.items, unread) }
+    SwipeReveal(open, { s.swiped = if (it) t.key else if (open) null else s.swiped }, listOf(del), read) {
         Column(Modifier.background(c.surface)) {
-            ThreadRow(t, unread) { s.open = t.key; s.seen.set(t.items, true) }
+            ThreadRow(t, unread) {
+                if (s.swiped != null) s.swiped = null else { s.open = t.key; s.seen.set(t.items, true) }
+            }
             HorizontalDivider(Modifier.padding(start = (MAIL_PAD * 2 + AVATAR - 4).dp), color = c.border, thickness = 0.5.dp)
         }
     }

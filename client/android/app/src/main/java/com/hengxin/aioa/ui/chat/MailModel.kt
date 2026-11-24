@@ -46,6 +46,9 @@ fun mailTime(context: Context, ts: Long): String = when {
 }
 
 const val UNKNOWN_ACCOUNT = "未知收件人"
+
+// 服务端 "资源不存在": 这封信已经被删过
+private const val GONE = "资源不存在"
 fun accountLabel(key: String) = key.ifEmpty { UNKNOWN_ACCOUNT }
 
 /** 邮件群的状态: 账号, 分类, 厂商, 搜索, 已加载的信与统计。离开再回来不重拉。 */
@@ -65,6 +68,9 @@ class MailState(val api: MailApi, val seen: MailSeen) {
     var facets by mutableStateOf(MailFacets(emptyList(), emptyList(), emptyList()))
     var open by mutableStateOf<String?>(null)
     var sheet by mutableStateOf(false)
+    // 左滑展开删除按钮的那一行; 同一时间只展开一行
+    var swiped by mutableStateOf<String?>(null)
+    private val removing = mutableSetOf<Long>()
 
     val filter get() = MailFilter(category, vendor, account)
     val threads get() = threadsOf(items)
@@ -87,7 +93,14 @@ class MailState(val api: MailApi, val seen: MailSeen) {
     }
 
     suspend fun remove(t: MailThread) {
-        for (m in t.items) api.remove(m.seq).onSuccess { items.removeAll { it.seq == m.seq } }.onFailure { error = it.message }
+        // 已在删除中的不重复发; 已经不在服务端的 (别处删过) 也当作删掉了
+        for (m in t.items) {
+            if (!removing.add(m.seq)) continue
+            val r = api.remove(m.seq)
+            val err = r.exceptionOrNull()?.message
+            if (r.isSuccess || err == GONE) items.removeAll { it.seq == m.seq } else error = err
+            removing.remove(m.seq)
+        }
         if (open == t.key) open = null
     }
 }

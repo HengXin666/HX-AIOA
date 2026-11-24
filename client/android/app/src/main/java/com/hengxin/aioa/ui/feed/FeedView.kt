@@ -1,7 +1,6 @@
 package com.hengxin.aioa.ui.feed
 
 import android.text.format.DateFormat
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,11 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +36,9 @@ import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.pressable
 import com.hengxin.aioa.proto.ServerFrame
+import com.hengxin.aioa.ui.chat.RevealAction
+import com.hengxin.aioa.ui.chat.SwipeQuick
+import com.hengxin.aioa.ui.chat.SwipeReveal
 import java.util.Calendar
 
 private const val PAD = 16
@@ -60,6 +58,7 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
     var tab by rememberSaveable { mutableStateOf(TAB_TODAY) }
     var kind by rememberSaveable { mutableStateOf<String?>(null) }
     var live by rememberSaveable { mutableStateOf(false) }
+    var swiped by remember { mutableStateOf<String?>(null) }
     val all = remember(messages.size, messages.lastOrNull()?.seq) { feedItems(messages) }
     val today = remember(all) { startOfDay() }
     @Suppress("UNUSED_VARIABLE") val v = marks.version
@@ -92,7 +91,7 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = PAD.dp, end = PAD.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (tab == TAB_TODAY) item(key = "today") { TodayCard(inTab, marks) }
             if (shown.isEmpty()) item(key = "empty") { Empty(if (tab == TAB_STAR) "还没有收藏, 点条目右上角的星标收藏" else "这里还没有内容") }
-            items(shown, key = { it.key }) { SwipeItem(it, marks) }
+            items(shown, key = { it.key }) { SwipeItem(it, marks, swiped) { k -> swiped = k } }
         }
     }
 }
@@ -151,27 +150,15 @@ private fun Empty(text: String) {
     }
 }
 
-/** 右滑: 用过了 (再滑取消); 左滑: 标成失效 (再滑取消)。都不移走, 只改标记。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/** 右滑: 用过了 (再滑取消); 左滑露出 "失效" 按钮, 点了才标记。都不移走, 只改标记。 */
 @Composable
-private fun SwipeItem(it: FeedItem, marks: FeedMarks) {
+private fun SwipeItem(it: FeedItem, marks: FeedMarks, swiped: String?, onSwiped: (String?) -> Unit) {
     val c = Aioa.colors
-    val shape = RoundedCornerShape(14.dp)
-    val box = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
-        when (v) {
-            SwipeToDismissBoxValue.StartToEnd -> marks.toggle(FeedMarks.USED, it.key)
-            SwipeToDismissBoxValue.EndToStart -> marks.toggle(FeedMarks.DEAD, it.key)
-            else -> Unit
-        }
-        false
-    })
-    SwipeToDismissBox(box, modifier = Modifier.clip(shape), backgroundContent = {
-        val dir = box.dismissDirection
-        val bg by animateColorAsState(when (dir) { SwipeToDismissBoxValue.StartToEnd -> c.success; SwipeToDismissBoxValue.EndToStart -> c.textSecondary; else -> Color.Transparent }, label = "swipe")
-        Row(Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (dir == SwipeToDismissBoxValue.StartToEnd) { Icon("square-check", Color.White, 20.dp); Text(" 用过了", color = Color.White, fontSize = 13.sp) }
-            Spacer(Modifier.weight(1f))
-            if (dir == SwipeToDismissBoxValue.EndToStart) { Icon("ban", Color.White, 20.dp); Text(" 失效", color = Color.White, fontSize = 13.sp) }
-        }
-    }) { FeedItemCard(it, marks) }
+    val open = swiped == it.key
+    val dead = marks.has(FeedMarks.DEAD, it.key)
+    val mark = RevealAction(if (dead) "circle-check" else "ban", if (dead) "恢复" else "失效", c.textSecondary) { marks.toggle(FeedMarks.DEAD, it.key) }
+    val used = SwipeQuick("square-check", c.success) { marks.toggle(FeedMarks.USED, it.key) }
+    Box(Modifier.clip(RoundedCornerShape(14.dp))) {
+        SwipeReveal(open, { o -> onSwiped(if (o) it.key else if (open) null else swiped) }, listOf(mark), used) { FeedItemCard(it, marks) }
+    }
 }
