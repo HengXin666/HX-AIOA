@@ -77,7 +77,7 @@ Content-Type: application/json
 ] } }
 ```
 
-- `title` 必填 (200 字内), 其余可选。`kind`: `deal` 福利 / `oss` 开源 / `news` 资讯 / `other`。`status`: `ok` 有效 / `go` 进行中 / `doubt` 存疑 / `dead` 失效。
+- `title` 必填 (200 字内), 其余可选。`kind`: 只能用本群标签表里的 id (专属指令里列出, 默认 `deal` 福利 / `oss` 开源 / `news` 资讯 / `other`), 一条一个, 拿不准取靠前的; 未声明的会被拒收。`status`: `ok` 有效 / `go` 进行中 / `doubt` 存疑 / `dead` 失效。
 - `summary` 400 字内, 写结论和关键时间; `todo` 写 "要做什么才能拿到"; `until` 截止日期; `heat` 热度 (回复数); `links` 最多 4 个。
 - `id` 写帖子 id 之类的稳定值 (不写用 `url`), 同一条再次推送时 App 只保留最新的。`site` 不写取 `url` 的域名, 用来显示网站图标。
 - 一次最多 50 条, 一批只发一条消息 (一条通知)。`text` 可以不写, 服务端按条目生成 "新到 N 条: 福利 x (有效 y) · ..." 作为通知摘要。

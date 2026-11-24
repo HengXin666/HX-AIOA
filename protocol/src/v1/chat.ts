@@ -1,5 +1,6 @@
 import { API_V1 } from "./constants";
 import type { Envelope } from "./event";
+import type { FeedTag } from "./feed-tags";
 import type { ChatView } from "./mail";
 import type { RoomRole } from "./room";
 
@@ -21,6 +22,9 @@ export type ChatMeta = {
   cleared?: number;
   // 展示方式, 不写为聊天; 邮件群为 mail
   view?: ChatView;
+  // 信息流标签表与版本 (见 feed-tags.ts); 不写用默认四类, rev 0
+  feedTags?: FeedTag[];
+  feedRev?: number;
   // 群主 / 管理员关掉 "正在监听" 与 "正在输入" 提示 (省额度); 不写为开
   hideListening?: boolean;
   hideTyping?: boolean;
@@ -52,7 +56,7 @@ export type ChatAgent = {
 };
 // 接入时可选带上定时与任务, 只写进这次的接入语, 不存
 export type AgentJob = { interval?: number; task?: string };
-export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view">>;
+export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view" | "feedTags">>;
 export type AgentRequest = { name: string; reads?: string[] } & AgentJob;
 export const AGENT_ACTIVE_STEP_MS = 600_000;
 export const MAX_AGENT_TASK = 2000;

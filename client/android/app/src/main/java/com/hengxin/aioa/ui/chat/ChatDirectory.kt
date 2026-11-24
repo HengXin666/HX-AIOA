@@ -111,6 +111,10 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     fun setHideTyping(channel: String, on: Boolean) = patch(channel, JSONObject().put("hideTyping", on)) { it.copy(hideTyping = on) }
     fun setFeed(channel: String, on: Boolean) = (if (on) VIEW_FEED else VIEW_CHAT).let { v -> patch(channel, JSONObject().put("view", v)) { it.copy(view = v) } }
 
+    /** 群主改信息流标签表; null 恢复默认。改了 Agent 的专属指令会跟着更新。 */
+    fun setFeedTags(channel: String, tags: List<com.hengxin.aioa.ui.feed.FeedTag>?) =
+        patch(channel, JSONObject().put("feedTags", tags?.let { t -> org.json.JSONArray(t.map { it.json() }) } ?: JSONObject.NULL)) { it.copy(feedTags = tags.orEmpty()) }
+
     fun setPinned(channel: String, on: Boolean) = patch(channel, JSONObject().put("pinned", on)) { it.copy(pinned = on) }
 
     fun setDigest(channel: String, kind: String?) = patch(channel, JSONObject().put("digest", kind ?: JSONObject.NULL)) { it.copy(digest = kind) }

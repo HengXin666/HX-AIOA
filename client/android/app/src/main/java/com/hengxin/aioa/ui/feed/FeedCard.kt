@@ -47,11 +47,6 @@ private val CARD = RoundedCornerShape(14.dp)
 private val TAG = RoundedCornerShape(5.dp)
 
 @Composable
-fun kindColor(kind: String): Color = Aioa.colors.let { c ->
-    when (kind) { KIND_DEAL -> c.warning; KIND_OSS -> c.accent; KIND_NEWS -> c.success; else -> c.textSecondary }
-}
-
-@Composable
 fun statusColor(st: String): Color = Aioa.colors.let { c ->
     when (st) { ST_OK -> c.success; ST_GO -> c.accent; ST_DOUBT -> c.warning; else -> c.textSecondary }
 }
@@ -78,7 +73,7 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
             val site = it.site
             if (site != null) MailAvatar(site, site, 18.dp)
             Text(site ?: it.source, Modifier.weight(1f, fill = false), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (it.kind != KIND_OTHER) SoftTag(KIND_LABEL.getValue(it.kind), kindColor(it.kind))
+            if (it.kind != TAG_OTHER) SoftTag(LocalFeedTags.current.labelOf(it.kind), kindColor(it.kind))
             st?.let { s -> SoftTag(STATUS_LABEL.getValue(s), statusColor(s)) }
             if (used) SoftTag("用过了", c.textSecondary)
             Spacer(Modifier.weight(1f))
@@ -136,7 +131,8 @@ fun FeedBubble(m: ServerFrame.Msg, footer: @Composable () -> Unit) {
     Column(Modifier.padding(top = 2.dp).animateContentSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("${items.first().source} · ${items.size} 条", color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            items.groupingBy { it.kind }.eachCount().filterKeys { it != KIND_OTHER }.forEach { (k, n) -> SoftTag("${KIND_LABEL.getValue(k)} $n", kindColor(k)) }
+            val tags = LocalFeedTags.current
+            items.groupingBy { it.kind }.eachCount().filterKeys { it != TAG_OTHER }.forEach { (k, n) -> SoftTag("${tags.labelOf(k)} $n", kindColor(k)) }
         }
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             (if (all) items else items.take(COLLAPSED)).forEach { FeedItemCard(it, marks, Modifier.fillMaxWidth()) }

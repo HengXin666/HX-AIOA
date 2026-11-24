@@ -49,6 +49,8 @@ private const val TAB_TODAY = 0
 private const val TAB_STAR = 2
 private const val TAB_USED = 3
 private const val CHIP_ALPHA = 0.12f
+// 今天卡片一行最多几格, 多了挤
+private const val MAX_STATS = 4
 
 /** 信息流: 群里所有推送按条目平铺; 今天 / 全部 / 收藏 / 用过, 类别筛选, 右滑用过了, 左滑标失效。 */
 @Composable
@@ -71,6 +73,9 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
             else -> true
         }
     }
+    val tags = LocalFeedTags.current
+    // 标签按群里的顺序, 旧消息里出现但表里没有的排在后面
+    val kinds = remember(all, tags) { tags.map { it.id } + all.map { it.kind }.distinct().filter { k -> tags.none { it.id == k } } }
     val shown = inTab.filter { (kind == null || it.kind == kind) && (!live || marks.status(it).let { s -> s == ST_OK || s == ST_GO }) }
     Column(modifier.background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -84,14 +89,14 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = PAD.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("全部", inTab.size, kind == null) { kind = null }
-            listOf(KIND_DEAL, KIND_OSS, KIND_NEWS, KIND_OTHER).forEach { k ->
+            kinds.forEach { k ->
                 val n = inTab.count { it.kind == k }
-                if (n > 0) Chip(KIND_LABEL.getValue(k), n, kind == k) { kind = if (kind == k) null else k }
+                if (n > 0) Chip(tags.labelOf(k), n, kind == k) { kind = if (kind == k) null else k }
             }
             if (all.any { it.status != null }) Chip("只看有效", null, live, icon = "circle-check") { live = !live }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = PAD.dp, end = PAD.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (tab == TAB_TODAY && inTab.isNotEmpty()) item(key = "today") { TodayCard(inTab, marks) }
+            if (tab == TAB_TODAY && inTab.isNotEmpty()) item(key = "today") { TodayCard(inTab, kinds, marks) }
             if (shown.isEmpty()) item(key = "empty") { Empty(if (tab == TAB_STAR) "还没有收藏, 点条目右上角的星标收藏" else "这里还没有内容") }
             items(shown, key = { it.key }) { SwipeItem(it, marks, swiped) { k -> swiped = k } }
         }
@@ -113,12 +118,14 @@ private fun Chip(label: String, count: Int?, on: Boolean, icon: String? = null, 
 
 /** 今天概览: 只列实际出现的类别; 有状态的福利才显示 "有效"; 全是普通消息时提示还没用信息流格式。 */
 @Composable
-private fun TodayCard(items: List<FeedItem>, marks: FeedMarks) {
+private fun TodayCard(items: List<FeedItem>, order: List<String>, marks: FeedMarks) {
     val context = LocalContext.current
     val c = Aioa.colors
     val now = System.currentTimeMillis()
-    val kinds = listOf(KIND_DEAL, KIND_OSS, KIND_NEWS, KIND_OTHER).map { k -> k to items.count { it.kind == k } }.filter { it.second > 0 }
-    val rated = items.filter { it.kind == KIND_DEAL && it.status != null }
+    val tags = LocalFeedTags.current
+    val kinds = order.map { k -> k to items.count { it.kind == k } }.filter { it.second > 0 }.take(MAX_STATS)
+    // "有效" 统计所有带状态的条目, 不再只认某一个标签
+    val rated = items.filter { it.status != null }
     val ok = rated.count { marks.status(it).let { s -> s == ST_OK || s == ST_GO } }
     val shape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).padding(14.dp)) {
@@ -127,13 +134,13 @@ private fun TodayCard(items: List<FeedItem>, marks: FeedMarks) {
             Spacer(Modifier.weight(1f))
             Text("截至 ${DateFormat.getTimeFormat(context).format(now)}", color = c.textSecondary, fontSize = 12.sp)
         }
-        if (kinds.all { it.first == KIND_OTHER }) {
+        if (kinds.all { it.first == TAG_OTHER }) {
             Text("今天 ${items.size} 条都是普通消息, 推送方切到信息流格式后会按类别统计", Modifier.padding(top = 8.dp), color = c.textSecondary, fontSize = 12.sp, lineHeight = 17.sp)
             return@Column
         }
         Row(Modifier.padding(top = 12.dp).fillMaxWidth()) {
-            kinds.forEach { (k, n) -> Stat(KIND_LABEL.getValue(k), n, c.text) }
-            if (rated.isNotEmpty()) Stat("有效福利", ok, c.success)
+            kinds.forEach { (k, n) -> Stat(tags.labelOf(k), n, kindColor(k)) }
+            if (rated.isNotEmpty()) Stat("仍有效", ok, c.success)
         }
     }
 }

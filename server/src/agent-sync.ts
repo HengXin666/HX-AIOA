@@ -1,4 +1,4 @@
-import { HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, type ChatAgent, type ChatMeta, type RouteInfo } from "@hx-aioa/protocol";
+import { feedTagsOf, HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type RouteInfo } from "@hx-aioa/protocol";
 import { agentGuide } from "./agent-prompt";
 import { baseOf, saveAgents } from "./api-chats";
 import { messageInput } from "./api-events";
@@ -11,14 +11,14 @@ const CLI_UA = /hxaioa-cli\/([\w.-]+)/;
 const API_CLIENT = "接口";
 const SWITCHING = 101;
 // 拉指令 / 报到本身不触发 "请更新" 通知
-const QUIET_PATHS = [PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK];
+const QUIET_PATHS = [PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS];
 
 /** 专属指令: 插件 Agent 带插件提示词, 信息流群带 feed 格式。 */
 export function guideFor(core: Core, base: string, channel: string, agent: ChatAgent) {
   const meta = core.chats.chat(channel);
   const title = meta?.title || channel;
   const plugin = agent.plugin ? core.plugins.promptFor(agent.plugin, base, channel, title) : undefined;
-  return agentGuide(base, channel, title, agent, plugin, meta?.view);
+  return agentGuide(base, channel, title, agent, plugin, meta?.view, feedTagsOf(meta).tags);
 }
 
 /** 这把 key 对应的群 Agent。 */

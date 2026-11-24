@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -125,7 +126,7 @@ fun ChatScreen(model: ChatModel) {
         onJump = g::jumpTo,
         onRemove = g::remove,
     )
-    Column(Modifier.fillMaxSize().imePadding()) {
+    CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (dir.metas[open]?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(model, open) { g.close() }
         val err = g.error ?: dir.error
         if (err != null) Text(err, Modifier.fillMaxWidth().clickable { g.clearError() }.padding(horizontal = PAD, vertical = 4.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
@@ -138,7 +139,7 @@ fun ChatScreen(model: ChatModel) {
             KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
             Composer(g)
         }
-    }
+    } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
 }
 

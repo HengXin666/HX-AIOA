@@ -29,7 +29,10 @@ data class ChatMeta(
     val hideTyping: Boolean = false,
     /** 群被删除的时间: 墓碑, 本地删记录并隐藏; 之后有新消息会重新出现。 */
     val deleted: Long = 0,
+    /** 信息流标签表; 空为默认四类。 */
+    val feedTags: List<com.hengxin.aioa.ui.feed.FeedTag> = emptyList(),
 ) {
+    val tags get() = feedTags.ifEmpty { com.hengxin.aioa.ui.feed.DEFAULT_TAGS }
     val isMail get() = view == VIEW_MAIL
     val isFeed get() = view == VIEW_FEED
     val shared get() = role != null
@@ -114,6 +117,7 @@ fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
                 hideListening = o.optBoolean("hideListening"),
                 hideTyping = o.optBoolean("hideTyping"),
                 deleted = o.optLong("deleted"),
+                feedTags = com.hengxin.aioa.ui.feed.parseFeedTags(o.optJSONArray("feedTags")),
             )
         }.getOrNull()
     }.associateBy { it.channel }

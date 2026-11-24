@@ -25,11 +25,6 @@ data class FeedItem(
     val seq: Long,
 )
 
-const val KIND_DEAL = "deal"
-const val KIND_OSS = "oss"
-const val KIND_NEWS = "news"
-const val KIND_OTHER = "other"
-val KIND_LABEL = mapOf(KIND_DEAL to "福利", KIND_OSS to "开源", KIND_NEWS to "资讯", KIND_OTHER to "其他")
 const val ST_OK = "ok"
 const val ST_GO = "go"
 const val ST_DOUBT = "doubt"
@@ -45,7 +40,7 @@ fun feedOf(m: ServerFrame.Msg): List<FeedItem> {
         if (m.deleted != null || m.text.isBlank()) return emptyList()
         val lines = m.text.trim().lines()
         val title = lines.first().trimStart('#', ' ', '*').trimEnd('*').take(TITLE_MAX)
-        return listOf(FeedItem("m:${m.id ?: m.seq}", title, null, null, KIND_OTHER, null, lines.drop(1).joinToString("\n").trim().ifEmpty { null }, null, null, null, emptyList(), m.src, m.ts, m.seq))
+        return listOf(FeedItem("m:${m.id ?: m.seq}", title, null, null, TAG_OTHER, null, lines.drop(1).joinToString("\n").trim().ifEmpty { null }, null, null, null, emptyList(), m.src, m.ts, m.seq))
     }
     val source = raw.s("source") ?: m.src
     val arr = raw.optJSONArray("items") ?: return emptyList()
@@ -57,7 +52,7 @@ fun feedOf(m: ServerFrame.Msg): List<FeedItem> {
         FeedItem(
             key = o.s("id") ?: url ?: "$source:$title",
             title = title, url = url, site = o.s("site"),
-            kind = o.s("kind")?.takeIf { it in KIND_LABEL } ?: KIND_OTHER,
+            kind = o.s("kind") ?: TAG_OTHER,
             status = o.s("status")?.takeIf { it in STATUS_LABEL },
             summary = o.s("summary"), todo = o.s("todo"), until = o.s("until"),
             heat = if (o.has("heat")) o.optDouble("heat").toInt() else null,

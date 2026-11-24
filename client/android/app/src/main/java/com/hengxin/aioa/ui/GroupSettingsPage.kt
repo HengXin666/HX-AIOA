@@ -60,6 +60,7 @@ private sealed interface GsDialog {
     data object Rename : GsDialog
     data object Clear : GsDialog
     data object Delete : GsDialog
+    data object Tags : GsDialog
 }
 
 /** 群设置: 头像, 名称, 置顶, 免打扰, 日报 / 周报, 以及接入的 Agent。 */
@@ -101,6 +102,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 SwitchRow("免打扰", meta?.muted == true, "照常收消息, 只是不响铃不弹通知") { dir.setMuted(group, it) }
                 if (owner && meta?.isMail != true && group != MessageDb.MEMO_GROUP) {
                     SwitchRow("信息流展示", meta?.isFeed == true, "推送卡片按条目平铺, 有今天 / 全部 / 收藏, 适合福利, 资讯类群") { dir.setFeed(group, it) }
+                    if (meta?.isFeed == true) ValueRow("信息流标签", "${meta.tags.size} 个" + if (meta.feedTags.isEmpty()) " (默认)  ›" else "  ›") { dialog = GsDialog.Tags }
                 }
             }
             // 实时状态提示: 群主 / 管理员可关, 关了服务端不再推这类帧
@@ -133,6 +135,7 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     when (val d = dialog) {
         GsDialog.Rename -> NameDialog("群名称", group, { dialog = null }, meta?.title ?: group) { dir.rename(group, it); true }
         GsDialog.Delete -> DeleteGroupDialog(g, group) { dialog = null }
+        GsDialog.Tags -> com.hengxin.aioa.ui.feed.FeedTagsDialog(meta?.tags.orEmpty(), { dialog = null }) { dir.setFeedTags(group, it) }
         GsDialog.Clear -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("清空聊天记录?") },

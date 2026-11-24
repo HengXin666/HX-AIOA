@@ -1,20 +1,29 @@
-import type { ChatAgent, ChatView } from "@hx-aioa/protocol";
+import { PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatView, type FeedTag } from "@hx-aioa/protocol";
 
 const VERSION_MARK = "{{version}}";
-// 群按信息流展示时追加: 条目类推送只发 feed
-const FEED_SECTION = [
-  "## 推送格式: 信息流",
-  "本群按信息流展示。推送一批条目 (福利, 开源项目, 资讯) 只发 feed 消息, 不要再发 HTML 或长文, 一批只发一条:",
-  "",
-  "```",
-  `hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id":"<帖子 id>","title":"标题","url":"https://...","kind":"deal","status":"ok","summary":"结论和关键时间","todo":"怎么拿到","until":"2026-11-30","heat":12}]}}'`,
-  "```",
-  "",
-  "- `title` 必填 (200 字内), 其余可选; 一次 1-50 条, `text` 可以不写 (服务端生成通知摘要)。",
-  "- `kind`: deal 福利 / oss 开源 / news 资讯 / other; `status`: ok 有效 / go 进行中 / doubt 存疑 / dead 失效。",
-  "- `summary` 400 字内; `todo` 写要做什么才能拿到; `until` 截止日期; `heat` 热度 (回复数); `links` 最多 4 个 `{label,url}`。",
-  "- `id` 写帖子 id 等稳定值: 同一条再推时只保留最新, 已失效的可以带 `status: dead` 再推一次。",
-];
+// 群按信息流展示时追加: 条目类推送只发 feed, kind 只能用本群标签表里的
+function feedSection(tags: FeedTag[]): string[] {
+  const first = tags[0]?.id ?? "other";
+  return [
+    "## 推送格式: 信息流",
+    "本群按信息流展示。推送一批条目只发 feed 消息, 不要再发 HTML 或长文, 一批只发一条:",
+    "",
+    "```",
+    `hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id":"<帖子 id>","title":"标题","url":"https://...","kind":"${first}","status":"ok","summary":"结论和关键时间","todo":"怎么拿到","until":"2026-11-30","heat":12}]}}'`,
+    "```",
+    "",
+    "- `title` 必填 (200 字内), 其余可选; 一次 1-50 条, `text` 可以不写 (服务端生成通知摘要)。",
+    "- `status`: ok 有效 / go 进行中 / doubt 存疑 / dead 失效。`summary` 400 字内; `todo` 写要做什么才能拿到; `until` 截止日期; `heat` 热度 (回复数); `links` 最多 4 个 `{label,url}`。",
+    "- `id` 写帖子 id 等稳定值: 同一条再推时只保留最新, 已失效的可以带 `status: dead` 再推一次。",
+    "",
+    "### 标签 (kind)",
+    "本群只认下面这些标签, 按内容判定, 不看发帖版块。一条只打一个; 好几个都说得通时取排在前面的那个, 同一个东西每次都要落进同一个标签。用了表里没有的会被拒收。",
+    "",
+    ...tags.map((t, i) => `${i + 1}. \`${t.id}\` ${t.label}: ${t.desc}`),
+    "",
+    `确实长期出现一类东西, 表里没有一个合适 (不是一次两次), 才追加: 先 \`hxaioa api GET ${PATH_AGENT_FEED_TAGS}\` 看当前全表和 rev, 再 \`hxaioa api POST ${PATH_AGENT_FEED_TAGS} '{"rev":<rev>,"tag":{"id":"小写英文","label":"8 字内","desc":"什么东西归这一类, 与已有标签怎么区分"}}'\`。rev 对不上说明别人刚改过, 重新拉表再判断。不要改名或删除已有标签, 那是主人的事。`,
+  ];
+}
 const NAME_MARK = "{{name}}";
 
 // FNV-1a 32 位, 只用来给指令内容打版本号
@@ -54,7 +63,7 @@ export function agentBootstrap(base: string, title: string, key: string, job?: {
 }
 
 // 专属指令: 服务端按 key 现算, 读权限一改版本就变, Agent 自己重新拉取
-export function agentGuide(base: string, channel: string, title: string, agent: ChatAgent, plugin?: string, view?: ChatView): { text: string; version: string } {
+export function agentGuide(base: string, channel: string, title: string, agent: ChatAgent, plugin?: string, view?: ChatView, tags: FeedTag[] = []): { text: string; version: string } {
   const lines = [
     `# HX-AIOA 专属指令 (版本 ${VERSION_MARK})`,
     "",
@@ -69,7 +78,7 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
   ];
   const others = agent.reads.filter((r) => r !== channel);
   if (others.length) lines.push(`- 还能读: ${others.map((r) => `\`${r}\``).join(", ")}, 用 \`-c <群>\``);
-  if (view === "feed") lines.push("", ...FEED_SECTION);
+  if (view === "feed") lines.push("", ...feedSection(tags));
   if (plugin) lines.push("", plugin);
   lines.push(
     "",

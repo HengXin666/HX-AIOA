@@ -1,4 +1,5 @@
 import {
+  parseFeedTags,
   DIGEST_KINDS,
   MAX_AGENT_READS,
   MAX_AVATAR_BYTES,
@@ -115,6 +116,12 @@ function parsePatch(raw: unknown): ChatPatch | string {
     if (raw.view !== "chat" && raw.view !== "feed") return "view 只能是 chat 或 feed";
     out.view = raw.view;
   }
+  if ("feedTags" in raw) {
+    // null 表示恢复默认四类
+    const t = raw.feedTags === null ? null : parseFeedTags(raw.feedTags);
+    if (typeof t === "string") return t;
+    (out as Record<string, unknown>).feedTags = t;
+  }
   if ("digest" in raw) {
     if (raw.digest !== null && !(DIGEST_KINDS as readonly unknown[]).includes(raw.digest)) return "digest 只能是 daily 或 weekly";
     // null 表示取消, 由 patchChat 删除该字段
@@ -144,7 +151,9 @@ async function patchChat(c: ReqCtx): Promise<Response> {
     return json({ chat: memberView(c.core, channel, uid) });
   }
   if (p.view && c.core.chats.chat(channel)?.view === "mail") return fail(400, "邮件群不能切换展示方式");
-  const meta = c.core.chats.patchChat(channel, p);
+  // 改标签表时 rev 加一, Agent 的专属指令跟着变, 会收到更新通知
+  const rev = "feedTags" in p ? { feedRev: (c.core.chats.chat(channel)?.feedRev ?? 0) + 1 } : {};
+  const meta = c.core.chats.patchChat(channel, { ...p, ...rev } as ChatPatch);
   sync(c.core, "chats", channel);
   return json({ chat: meta });
 }
@@ -310,7 +319,7 @@ function agentPromptOf(c: ReqCtx): Response {
 }
 
 // 按 key 找到它所在的群和 Agent 资料
-function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAgent } {
+export function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAgent } {
   const keyId = c.who.owner ? null : c.who.key.id;
   for (const meta of keyId ? c.core.chats.chats() : []) {
     const agent = meta.agents?.find((a) => a.keyId === keyId);
