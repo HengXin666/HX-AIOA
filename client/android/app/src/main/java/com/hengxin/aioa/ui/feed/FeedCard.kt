@@ -139,7 +139,7 @@ fun FeedBubble(m: ServerFrame.Msg, footer: @Composable () -> Unit) {
             items.groupingBy { it.kind }.eachCount().filterKeys { it != KIND_OTHER }.forEach { (k, n) -> SoftTag("${KIND_LABEL.getValue(k)} $n", kindColor(k)) }
         }
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            (if (all) items else items.take(COLLAPSED)).forEach { FeedItemCard(it, marks) }
+            (if (all) items else items.take(COLLAPSED)).forEach { FeedItemCard(it, marks, Modifier.fillMaxWidth()) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (items.size > COLLAPSED) {

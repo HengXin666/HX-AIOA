@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -72,11 +73,12 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
     }
     val shown = inTab.filter { (kind == null || it.kind == kind) && (!live || marks.status(it).let { s -> s == ST_OK || s == ST_GO }) }
     Column(modifier.background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             TABS.forEachIndexed { i, t ->
+                // 指示条固定宽度; 用 fillMaxWidth 会让第一个标签吃掉整行, 后面的被挤成竖排
                 Column(Modifier.pressable { tab = i }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(t, color = if (tab == i) c.text else c.textSecondary, fontSize = 16.sp, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal)
-                    Box(Modifier.padding(top = 4.dp).height(3.dp).fillMaxWidth(0.6f).clip(PILL).background(if (tab == i) c.accent else Color.Transparent))
+                    Text(t, color = if (tab == i) c.text else c.textSecondary, fontSize = 15.sp, fontWeight = if (tab == i) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, softWrap = false)
+                    Box(Modifier.padding(top = 4.dp).height(3.dp).width(16.dp).clip(PILL).background(if (tab == i) c.accent else Color.Transparent))
                 }
             }
         }
@@ -86,10 +88,10 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
                 val n = inTab.count { it.kind == k }
                 if (n > 0) Chip(KIND_LABEL.getValue(k), n, kind == k) { kind = if (kind == k) null else k }
             }
-            Chip("只看有效", null, live, icon = "circle-check") { live = !live }
+            if (all.any { it.status != null }) Chip("只看有效", null, live, icon = "circle-check") { live = !live }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = PAD.dp, end = PAD.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (tab == TAB_TODAY) item(key = "today") { TodayCard(inTab, marks) }
+            if (tab == TAB_TODAY && inTab.isNotEmpty()) item(key = "today") { TodayCard(inTab, marks) }
             if (shown.isEmpty()) item(key = "empty") { Empty(if (tab == TAB_STAR) "还没有收藏, 点条目右上角的星标收藏" else "这里还没有内容") }
             items(shown, key = { it.key }) { SwipeItem(it, marks, swiped) { k -> swiped = k } }
         }
@@ -109,25 +111,29 @@ private fun Chip(label: String, count: Int?, on: Boolean, icon: String? = null, 
     }
 }
 
-/** 今天概览: 各类条数和还有效的福利数。 */
+/** 今天概览: 只列实际出现的类别; 有状态的福利才显示 "有效"; 全是普通消息时提示还没用信息流格式。 */
 @Composable
 private fun TodayCard(items: List<FeedItem>, marks: FeedMarks) {
     val context = LocalContext.current
     val c = Aioa.colors
     val now = System.currentTimeMillis()
-    val ok = items.count { it.kind == KIND_DEAL && marks.status(it).let { s -> s == ST_OK || s == ST_GO } }
+    val kinds = listOf(KIND_DEAL, KIND_OSS, KIND_NEWS, KIND_OTHER).map { k -> k to items.count { it.kind == k } }.filter { it.second > 0 }
+    val rated = items.filter { it.kind == KIND_DEAL && it.status != null }
+    val ok = rated.count { marks.status(it).let { s -> s == ST_OK || s == ST_GO } }
     val shape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("今天 · ${DateFormat.format("M-d", now)}", color = c.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("今天 · ${DateFormat.format("M-d", now)}", color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             Text("截至 ${DateFormat.getTimeFormat(context).format(now)}", color = c.textSecondary, fontSize = 12.sp)
         }
+        if (kinds.all { it.first == KIND_OTHER }) {
+            Text("今天 ${items.size} 条都是普通消息, 推送方切到信息流格式后会按类别统计", Modifier.padding(top = 8.dp), color = c.textSecondary, fontSize = 12.sp, lineHeight = 17.sp)
+            return@Column
+        }
         Row(Modifier.padding(top = 12.dp).fillMaxWidth()) {
-            Stat("福利", items.count { it.kind == KIND_DEAL }, c.text)
-            Stat("开源", items.count { it.kind == KIND_OSS }, c.text)
-            Stat("资讯", items.count { it.kind == KIND_NEWS }, c.text)
-            Stat("有效福利", ok, c.success)
+            kinds.forEach { (k, n) -> Stat(KIND_LABEL.getValue(k), n, c.text) }
+            if (rated.isNotEmpty()) Stat("有效福利", ok, c.success)
         }
     }
 }
@@ -158,7 +164,7 @@ private fun SwipeItem(it: FeedItem, marks: FeedMarks, swiped: String?, onSwiped:
     val dead = marks.has(FeedMarks.DEAD, it.key)
     val mark = RevealAction(if (dead) "circle-check" else "ban", if (dead) "恢复" else "失效", c.textSecondary) { marks.toggle(FeedMarks.DEAD, it.key) }
     val used = SwipeQuick("square-check", c.success) { marks.toggle(FeedMarks.USED, it.key) }
-    Box(Modifier.clip(RoundedCornerShape(14.dp))) {
-        SwipeReveal(open, { o -> onSwiped(if (o) it.key else if (open) null else swiped) }, listOf(mark), used) { FeedItemCard(it, marks) }
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))) {
+        SwipeReveal(open, { o -> onSwiped(if (o) it.key else if (open) null else swiped) }, listOf(mark), used) { FeedItemCard(it, marks, Modifier.fillMaxWidth()) }
     }
 }
