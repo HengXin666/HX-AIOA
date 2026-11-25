@@ -79,7 +79,7 @@ fun TranslateLine(m: MailItem, tr: MailTr, lang: String, run: () -> Unit, cancel
         val p = MailTrPrefs.of(context)
         if (tr.phase == PHASE_DONE && !p.hinted && tr.page != null) {
             p.hinted = true
-            Toast.makeText(context, "按住某一段可看原文", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "点一下某一段可对照原文, 再点收起", Toast.LENGTH_SHORT).show()
         }
     }
     val tap: () -> Unit = when (tr.phase) {

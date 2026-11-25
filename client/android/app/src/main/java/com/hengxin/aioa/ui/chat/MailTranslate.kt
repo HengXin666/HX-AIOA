@@ -117,14 +117,15 @@ fun trLangOf(text: String): String? {
     }
 }
 
-/** 把译文填回原位; withOrig 时每段后面藏一份原文, 按住那一段才显示。 */
+/** 把译文填回原位; withOrig 时每段后面藏一份原文, 点一下那段展开, 再点收起。 */
 fun trApply(html: String, segs: List<TrSeg>, tr: Map<Int, String>, withOrig: Boolean): String {
     val sb = StringBuilder(html.length * 2)
     var last = 0
     segs.forEachIndexed { i, s ->
         val t = tr[i] ?: return@forEachIndexed
         sb.append(html, last, s.start)
-        if (withOrig) sb.append("<span class=\"hx-t\">").append(t).append("<span class=\"hx-o\">").append(s.raw).append("</span></span>")
+        if (withOrig) sb.append("<label class=\"hx-t\"><input type=\"checkbox\" class=\"hx-c\"><span class=\"hx-r\">").append(t)
+            .append("</span><span class=\"hx-o\">").append(s.raw).append("</span></label>")
         else sb.append(t)
         last = s.end
     }
@@ -132,9 +133,10 @@ fun trApply(html: String, segs: List<TrSeg>, tr: Map<Int, String>, withOrig: Boo
     return sb.toString()
 }
 
-/** 按住某段显示原文, 松手收起; 页面不跑脚本, 只靠 CSS。 */
-const val TR_CSS = ".hx-o{display:none}.hx-t:active .hx-o,.hx-t:hover .hx-o{display:block;margin:4px 0;padding:6px 8px;" +
-    "border-left:3px solid #2f6bff;background:#f4f7ff;color:#555;font-size:.9em;border-radius:0 6px 6px 0}"
+/** 点一段切换原文: label 包住隐藏的 checkbox, 页面不跑脚本也能开关; 点到段里的链接不会切换。 */
+const val TR_CSS = ".hx-t{cursor:pointer}.hx-c,.hx-o{display:none}.hx-c:checked~.hx-r{background:rgba(47,107,255,.08)}" +
+    ".hx-c:checked~.hx-o{display:block;margin:4px 0;padding:6px 8px;border-left:3px solid #2f6bff;background:#f4f7ff;" +
+    "color:#555;font-size:.9em;border-radius:0 6px 6px 0}"
 
 /** 一封信的翻译状态; 译完缓存在进程里, 切回原文再切回译文不重新请求。 */
 class MailTr(val id: String) {
