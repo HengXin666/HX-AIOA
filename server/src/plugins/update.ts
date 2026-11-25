@@ -1,5 +1,5 @@
 import { PLUGIN_SPACE_PREFIX, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
-import { CODE_BAD_REQUEST, CODE_NOT_FOUND } from "../constants";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
 import { pushPlugin } from "./notify";
@@ -33,6 +33,11 @@ export async function upgrade(core: Core, id: string): Promise<PluginInstall> {
   const { manifest: m, prompt } = allowed(core, id);
   const title = core.chats.chat(rec.channel)?.title || m.group.title;
   const space = await applySpace(core, id, m, rec.channel, title);
+  // 等待期间被撤销: 撤销已经拆掉了安装, 不要把记录写回去
+  if (core.kernel.get(id)?.meta.version !== m.version || !core.plugins.get(id)) {
+    if (space && !core.plugins.get(id) && (await core.spaces.remove(space))) core.sockets.toV1Clients({ t: "space_update", id: space, deleted: true });
+    throw new ApiFail(409, CODE_CONFLICT, `插件 ${id} 在更新期间被撤销或换了版本`);
+  }
   if (rec.space && !space && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   const { space: _old, ...rest } = rec;
   const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...(space ? { space } : {}) };

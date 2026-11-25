@@ -53,8 +53,7 @@ class PluginApi(private val context: Context) {
         val b = r.body ?: error(r.error ?: FAILED)
         val m = b.getJSONObject("manifest")
         m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL).put(KEY_ALLOWED, b.optJSONObject(KEY_ALLOWED) ?: JSONObject.NULL)
-        val admin = Api.call(context, GET, listOf(PATH_ALLOW)).body?.optBoolean("admin") ?: false
-        PluginDetail(entry(m), b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, admin)
+        PluginDetail(entry(m), b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, b.optBoolean("admin"))
     }
 
     /** 管理员放行市场当前版本 (已放行的就是换成新版); 有冲突时服务端返回原因。 */

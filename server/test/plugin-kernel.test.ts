@@ -114,4 +114,42 @@ test("升级迁移: 白名单为空时把已装插件放进去并为主人启用
   assert.ok(k.isEnabled(OWNER, "todo"));
   new PluginKernel(new AllowStore(sql), seed).list();
   assert.equal(calls, 1);
+  k.revoke("todo");
+  assert.equal(new PluginKernel(new AllowStore(sql), seed).list().length, 0, "白名单清空后不再重新播种");
+  assert.equal(calls, 1);
+});
+
+test("换版本不丢进程内监听, 撤销才清", () => {
+  const { k } = fresh();
+  k.put(row("a.x", { listens: ["b.y.ev"] }));
+  k.put(row("b.y", { emits: ["b.y.ev"] }));
+  k.setEnabled(OWNER, "a.x", true);
+  k.setEnabled(OWNER, "b.y", true);
+  k.on("a.x", "b.y.ev", () => undefined);
+  k.put(row("a.x", { listens: ["b.y.ev"], version: "1.0.1" }));
+  assert.equal(k.emit(OWNER, "b.y", "b.y.ev", 1), 1);
+  k.revoke("a.x");
+  assert.equal(k.emit(OWNER, "b.y", "b.y.ev", 1), 0);
+});
+
+test("撤销前检查: 去掉默认提供者或被依赖的服务会冲突", () => {
+  const { k } = fresh();
+  const th = (id: string, d?: string[]) => row(id, { permissions: ["core.replace"], contributes: { "core.theme.base": [{ id: `${id}.t` }] } }, d);
+  k.put(th("a.x", ["core.theme.base"]));
+  k.put(th("b.y"));
+  k.put(th("c.z"));
+  assert.ok(k.check(undefined, "a.x").conflicts.some((c) => c.kind === "single"));
+  k.put(row("s.v", { provides: { "service:x": "1.0.0" } }));
+  k.put(row("q.w", { requires: { "service:x": "^1" } }));
+  assert.ok(k.check(undefined, "s.v").conflicts.some((c) => c.kind === "requires"));
+});
+
+test("pipeline 在全集上排序: 中间的没启用也保住先后", () => {
+  const { k } = fresh();
+  k.put(row("a.x", { contributes: { "push.route": [{ id: "a.x.r", before: ["b.y.r"] }] } }));
+  k.put(row("b.y", { contributes: { "push.route": [{ id: "b.y.r", before: ["c.z.r"] }] } }));
+  k.put(row("c.z", { contributes: { "push.route": [{ id: "c.z.r" }] } }));
+  k.setEnabled(OWNER, "c.z", true);
+  k.setEnabled(OWNER, "a.x", true);
+  assert.deepEqual(k.contributions(OWNER, "push.route").map((e) => e.c.id), ["a.x.r", "c.z.r"]);
 });

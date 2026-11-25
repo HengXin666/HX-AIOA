@@ -3,6 +3,7 @@ import type { PluginAllow, PluginManifest } from "@hx-aioa/protocol";
 // 放行时的快照: 清单与提示词模板都存下, 安装与更新只用快照, 不再看市场当前版本
 export type AllowRow = { meta: PluginAllow; manifest: PluginManifest; prompt: string };
 type Body = { body: string };
+const SEEDED = "seeded";
 type Enable = { uid: string; id: string };
 type Choice = { uid: string; point: string; plugin: string };
 
@@ -12,6 +13,16 @@ export class AllowStore {
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_allow (id TEXT PRIMARY KEY, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_enable (uid TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (uid, id))");
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_choice (uid TEXT NOT NULL, point TEXT NOT NULL, plugin TEXT NOT NULL, PRIMARY KEY (uid, point))");
+    sql.exec("CREATE TABLE IF NOT EXISTS plugin_flag (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+  }
+
+  /** 升级迁移是否做过; 白名单后来被清空也不再重做。 */
+  seeded(): boolean {
+    return this.sql.exec<{ v: string }>("SELECT v FROM plugin_flag WHERE k = ?", SEEDED).toArray().length > 0;
+  }
+
+  markSeeded(): void {
+    this.sql.exec("INSERT OR REPLACE INTO plugin_flag (k, v) VALUES (?, ?)", SEEDED, "1");
   }
 
   allows(): AllowRow[] {

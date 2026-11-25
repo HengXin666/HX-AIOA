@@ -191,6 +191,12 @@ if (inst.data?.key) {
   rmSync(home, { recursive: true, force: true });
 }
 
+// 撤销默认提供者 B: 剩下 A 一个提供者不需要默认, 撤销前的检查应放行
+const stillOver = await api("PUT", `${V1}/plugin-allow/${GREEDY}`, {});
+check("预算冲突的插件仍放不进", stillOver.status === 409, stillOver.data);
+const svcUser = await api("DELETE", `${V1}/plugin-allow/${B}`);
+check("撤掉默认提供者后只剩一个提供者时允许", svcUser.status === 200, svcUser.data);
+
 // 撤销
 for (const id of ALL) await api("DELETE", `${V1}/plugin-allow/${id}`);
 const end = await api("GET", `${V1}/plugin-allow`);

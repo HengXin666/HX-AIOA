@@ -4,6 +4,7 @@ import {
   PATH_PLUGIN_CHOICE,
   PATH_PLUGIN_ENABLED,
   PLUGIN_DAILY_BUDGET,
+  SERVICE_PREFIX,
   cardOf,
   isExtPoint,
   isPluginId,
@@ -24,7 +25,11 @@ const CODE_PLUGIN_CONFLICT = "plugin_conflict";
 const QUERY_PURGE = "purge";
 
 function param(c: ReqCtx, i: number): string {
-  return decodeURIComponent(c.params[i] ?? "");
+  try {
+    return decodeURIComponent(c.params[i] ?? "");
+  } catch {
+    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
+  }
 }
 
 function pluginParam(c: ReqCtx): string {
@@ -56,7 +61,7 @@ function getAllow(c: ReqCtx): Response {
 
 // 默认提供者只能是这个插件自己提供的单选扩展点或服务
 function badDefault(m: PluginManifest, d: string): boolean {
-  if (d.startsWith("service:")) return !Object.hasOwn(m.provides ?? {}, d);
+  if (d.startsWith(SERVICE_PREFIX)) return !Object.hasOwn(m.provides ?? {}, d);
   return !(isExtPoint(d) && cardOf(d) === "single" && (m.contributes?.[d] ?? []).length > 0);
 }
 
@@ -67,10 +72,12 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   // 放行是管理员主动操作, 绕过市场缓存
   const manifest = await c.core.market.manifest(id, true);
   if (body.version && body.version !== manifest.version) return fail(409, `市场当前是 ${manifest.version}, 只能放行这个版本`, CODE_CONFLICT);
+  const prompt = await c.core.market.file(id, manifest.prompt, true);
+  // 两次拉取之间市场可能换了版本, 再核对一次, 免得存下 "旧清单配新提示词"
+  if ((await c.core.market.manifest(id, true)).version !== manifest.version) return fail(409, "市场正在更新, 稍后再放行", CODE_CONFLICT);
   const defaults = Array.isArray(body.defaults) ? body.defaults.filter((d): d is string => typeof d === "string") : (c.core.kernel.get(id)?.meta.defaults ?? []);
   const bad = defaults.find((d) => badDefault(manifest, d));
   if (bad) return fail(400, `${id} 不提供单选扩展点或服务 ${bad}`);
-  const prompt = await c.core.market.file(id, manifest.prompt, true);
   const row: AllowRow = { meta: { id, version: manifest.version, name: manifest.name, by, at: Date.now(), ...(defaults.length ? { defaults } : {}) }, manifest, prompt };
   const result = c.core.kernel.check(row);
   if (result.conflicts.length) return fail(409, `${id} 与白名单冲突, 没有放行`, CODE_PLUGIN_CONFLICT, { conflicts: result.conflicts, requests: result.requests, total: result.total });
@@ -85,6 +92,9 @@ async function deleteAllow(c: ReqCtx): Promise<Response> {
   admin(c);
   const id = pluginParam(c);
   if (!c.core.kernel.get(id)) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+  // 去掉它之后白名单也要能共存: 比如它是某单选扩展点的默认, 或别的插件依赖它提供的服务
+  const after = c.core.kernel.check(undefined, id);
+  if (after.conflicts.length) return fail(409, `撤销 ${id} 后白名单会冲突, 先给其它提供者指定默认或撤销依赖它的插件`, CODE_PLUGIN_CONFLICT, { conflicts: after.conflicts });
   c.core.kernel.revoke(id);
   await teardown(c.core, id);
   pushPlugin(c.core, id, "revoked");

@@ -6,6 +6,9 @@ export const PLUGIN_API = "2";
 export const PLUGIN_APIS = [PLUGIN_API_LEGACY, PLUGIN_API] as const;
 // Agent 定时拉取的最小间隔 (秒); 0 表示用长连, 不拉
 export const MIN_AGENT_POLL_S = 60;
+// Agent 每轮至少: 建长连或拉消息 1 次, 发结果 1 次, 读写数据 1 次
+export const AGENT_ROUND_REQUESTS = 3;
+export const SERVICE_PREFIX = "service:";
 // 白名单全部插件估算的每天请求上限: 免费额度 10 万的一半
 export const PLUGIN_DAILY_BUDGET = 50_000;
 export const DAY_S = 86_400;
@@ -61,7 +64,7 @@ export const PERM_DATA_OWN = "data:own";
 export const PERM_PUSH = "push:send";
 export const PERM_WEBVIEW = "ui.webview";
 export const PERM_REPLACE = "core.replace";
-const PERM_READ_PREFIX = "data:read:";
+export const PERM_READ_PREFIX = "data:read:";
 const PERM_NET_PREFIX = "net:";
 const FIXED_PERMS = [PERM_DATA_OWN, PERM_PUSH, PERM_WEBVIEW, PERM_REPLACE];
 export const isPermission = (p: unknown): p is string =>
@@ -88,11 +91,26 @@ export type PluginExtras = {
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const strList = (v: unknown, re: RegExp) => Array.isArray(v) && v.length <= MAX_LIST && v.every((x) => typeof x === "string" && re.test(x));
-const SERVICE_RE = /^service:[a-z][\w.-]{0,63}$/;
+const SERVICE_RE = new RegExp(`^${SERVICE_PREFIX}[a-z][\\w.-]{0,63}$`);
 const EVENT_RE = /^[\w.-]+\.[\w.-]+$/;
 const SHORT_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const CRON_FIELD = /^(\*|\*\/\d+|\d+(-\d+)?(,\d+(-\d+)?)*)$/;
-export const isCron = (s: unknown): s is string => typeof s === "string" && s.trim().split(/\s+/).length === 5 && s.trim().split(/\s+/).every((f) => CRON_FIELD.test(f));
+// 分 0-59, 时 0-23, 日 1-31, 月 1-12, 周 0-7; 区间必须从小到大
+const CRON_MAX = [59, 23, 31, 12, 7];
+function cronField(f: string, max: number): boolean {
+  if (!CRON_FIELD.test(f)) return false;
+  if (f === "*") return true;
+  if (f.startsWith("*/")) return Number(f.slice(2)) >= 1;
+  return f.split(",").every((part) => {
+    const [a, b] = part.split("-").map(Number);
+    return a! <= max && (b === undefined || (a! <= b && b <= max));
+  });
+}
+export const isCron = (s: unknown): s is string => {
+  if (typeof s !== "string") return false;
+  const fs = s.trim().split(/\s+/);
+  return fs.length === 5 && fs.every((f, i) => cronField(f, CRON_MAX[i]!));
+};
 
 function rangeMap(v: unknown, key: string, keyRe: RegExp): string | null {
   if (v === undefined) return null;

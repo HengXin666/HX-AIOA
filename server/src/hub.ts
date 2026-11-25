@@ -3,12 +3,8 @@ import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
 import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
-import { PluginStore } from "./plugins/store";
 import { TodoStore } from "./plugins/todos";
-import { legacySeed } from "./plugins/seed";
-import { AllowStore } from "./plugins/allow-store";
-import { PluginKernel } from "./plugins/kernel";
-import { PDataStore } from "./plugins/pdata";
+import { pluginParts } from "./plugins/seed";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -137,9 +133,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    const plugins = new PluginStore(sql);
-    const kernel = new PluginKernel(new AllowStore(sql), () => legacySeed(plugins, users.ownerId()));
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins, kernel, pdata: new PDataStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

@@ -1,6 +1,7 @@
 import {
   PLUGIN_DAILY_BUDGET,
   PROTOCOL_VERSION,
+  SERVICE_PREFIX,
   cardOf,
   checkPlugins,
   isExtPoint,
@@ -42,13 +43,16 @@ export class PluginKernel {
     if (this.loaded) return;
     this.loaded = true;
     let rows = this.store.allows();
-    if (!rows.length && this.seed) {
-      const s = this.seed();
-      for (const row of s.rows) {
-        this.store.putAllow(row);
-        this.store.setEnabled(s.uid, row.meta.id, true);
+    if (this.seed && !this.store.seeded()) {
+      if (!rows.length) {
+        const s = this.seed();
+        for (const row of s.rows) {
+          this.store.putAllow(row);
+          this.store.setEnabled(s.uid, row.meta.id, true);
+        }
+        rows = s.rows;
       }
-      rows = s.rows;
+      this.store.markSeeded();
     }
     for (const row of rows) this.register(row);
     for (const e of this.store.enables()) if (this.allow.has(e.id)) this.setOf(e.uid).add(e.id);
@@ -102,11 +106,12 @@ export class PluginKernel {
     return this.allow.get(id);
   }
 
-  /** 把 next 换进白名单后整体能否共存 (不写入)。 */
-  check(next?: AllowRow): CheckResult {
+  /** 把 next 换进白名单 (或去掉 drop) 后整体能否共存 (不写入)。 */
+  check(next?: AllowRow, drop?: string): CheckResult {
     this.load();
     const rows = new Map(this.allow);
     if (next) rows.set(next.meta.id, next);
+    if (drop) rows.delete(drop);
     const defaults: Record<string, string> = {};
     for (const r of rows.values()) for (const d of r.meta.defaults ?? []) defaults[d] = r.meta.id;
     return checkPlugins(
@@ -190,7 +195,7 @@ export class PluginKernel {
   }
 
   private candidates(point: string): string[] | null {
-    if (point.startsWith("service:")) return (this.services.get(point) ?? []).map((x) => x.plugin);
+    if (point.startsWith(SERVICE_PREFIX)) return (this.services.get(point) ?? []).map((x) => x.plugin);
     if (!isExtPoint(point) || cardOf(point) !== "single") return null;
     return [...new Set((this.points.get(point) ?? []).map((e) => e.plugin))];
   }
@@ -206,13 +211,14 @@ export class PluginKernel {
   /** 这个账号在某扩展点上实际生效的贡献: single 裁决出一个, pipeline 按 before/after 排好。 */
   contributions(uid: string, point: ExtPoint): Entry[] {
     this.load();
-    const list = (this.points.get(point) ?? []).filter((e) => this.isEnabled(uid, e.plugin));
+    const all = this.points.get(point) ?? [];
     const card = cardOf(point);
     if (card === "single") {
       const p = this.pick(uid, point);
-      return list.filter((e) => e.plugin === p);
+      return all.filter((e) => e.plugin === p);
     }
-    return card === "pipeline" ? ordered(list) : list;
+    // pipeline 先在白名单全集上排序再过滤, 中间某个没启用也不丢传递的先后
+    return (card === "pipeline" ? ordered(all) : all).filter((e) => this.isEnabled(uid, e.plugin));
   }
 
   /** 这个账号上某服务由哪个插件提供。 */
@@ -227,9 +233,8 @@ export class PluginKernel {
     if (!this.allow.get(plugin)?.manifest.listens?.includes(event)) return null;
     const entry = { plugin, fn };
     this.listeners.set(event, [...(this.listeners.get(event) ?? []), entry]);
-    const off = () => this.listeners.set(event, (this.listeners.get(event) ?? []).filter((l) => l !== entry));
-    this.track(plugin, off);
-    return off;
+    // 不挂进 undo: 换版本时监听保留, 只在撤销放行时清掉
+    return () => this.listeners.set(event, (this.listeners.get(event) ?? []).filter((l) => l !== entry));
   }
 
   /** 只在内存分发, 至多一次, 不落库; 只发给该账号启用了的监听者。返回送达个数, 没声明 emits 返回 -1。 */

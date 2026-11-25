@@ -26,6 +26,9 @@ test("semver 范围", () => {
   assert.ok(satisfies("1.5.0", ">=1.2 <2"));
   assert.ok(satisfies("9.9.9", "*"));
   assert.ok(!isRange("^x"));
+  assert.ok(!isRange(""));
+  assert.ok(!satisfies("1.0.0-beta", ">=1.0.0"));
+  assert.ok(satisfies("1.0.0-beta.2", ">=1.0.0-beta.1"));
 });
 
 test("插件 id: 旧格式与命名空间格式都认", () => {
@@ -59,7 +62,11 @@ test("请求估算", () => {
   assert.equal(cronPerDay("0 * * * *"), 24);
   assert.equal(cronPerDay("*/15 9-17 * * *"), 36);
   const m = parseManifest(base({ budget: { cron: "0 * * * *", agentPoll: 60, requestsPerDay: 10 } }));
-  assert.equal(typeof m === "object" && dailyRequests(m), 24 + 1440 + 10);
+  assert.equal(typeof m === "object" && dailyRequests(m), 24 + 1440 * 3 + 10);
+  const sneaky = parseManifest(base({ agent: { name: "a", interval: 120 }, budget: { agentPoll: 0 } }));
+  assert.equal(typeof sneaky === "object" && dailyRequests(sneaky), 720 * 3, "agentPoll: 0 盖不掉 interval");
+  assert.match(String(parseManifest(base({ budget: { cron: "0 23-1 * * *" } }))), /cron/);
+  assert.match(String(parseManifest(base({ budget: { cron: "99 * * * *" } }))), /cron/);
 });
 
 const P = (id: string, over: Record<string, unknown> = {}) => {
@@ -102,6 +109,6 @@ test("冲突: single 需要默认, 撞名, pipeline 成环与无序同写", () =
 
 test("冲突: 每日请求预算", () => {
   const r = checkPlugins([P("a.x", { budget: { agentPoll: 60 } }), P("b.y", { budget: { agentPoll: 60 } })], { engine: "2.0.0", budget: 2000 });
-  assert.equal(r.total, 2880);
+  assert.equal(r.total, 2880 * 3);
   assert.deepEqual(kinds(r), ["budget"]);
 });

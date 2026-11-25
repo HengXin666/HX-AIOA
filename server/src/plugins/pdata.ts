@@ -20,7 +20,7 @@ export function checkBody(coll: Contribution, body: unknown): string | null {
   if (text.length > MAX_PDATA_BODY) return `body 超过 ${MAX_PDATA_BODY} 字`;
   if (!coll.fields) return null;
   for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-    const want = coll.fields[k];
+    const want = Object.hasOwn(coll.fields, k) ? coll.fields[k] : undefined;
     if (!want) return `集合 ${coll.id} 没有声明字段 ${k}`;
     if (v !== null && typeOf(v) !== want) return `字段 ${k} 应为 ${want}`;
   }
@@ -36,7 +36,9 @@ export class PDataStore {
     sql.exec(
       "CREATE TABLE IF NOT EXISTS pdata (acct TEXT NOT NULL, plugin TEXT NOT NULL, coll TEXT NOT NULL, id TEXT NOT NULL, ver INTEGER NOT NULL, rev INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, body TEXT, PRIMARY KEY (acct, plugin, coll, id))",
     );
-    sql.exec("CREATE INDEX IF NOT EXISTS pdata_rev ON pdata (acct, plugin, rev)");
+    sql.exec("CREATE INDEX IF NOT EXISTS pdata_coll_rev ON pdata (acct, plugin, coll, rev)");
+    // rev 单独计数, 只增不减: 清除数据后重新写入也不会落到旧 rev 下面, 增量同步不漏
+    sql.exec("CREATE TABLE IF NOT EXISTS pdata_seq (acct TEXT NOT NULL, plugin TEXT NOT NULL, rev INTEGER NOT NULL, PRIMARY KEY (acct, plugin))");
   }
 
   private row(acct: string, plugin: string, coll: string, id: string): Row | undefined {
@@ -44,8 +46,12 @@ export class PDataStore {
   }
 
   private nextRev(acct: string, plugin: string): number {
-    const r = this.sql.exec<{ m: number | null }>("SELECT MAX(rev) AS m FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).one();
-    return (r.m ?? 0) + 1;
+    // 计数行还没有时从已有数据的最大 rev 接上
+    const cur =
+      this.sql.exec<{ rev: number }>("SELECT rev FROM pdata_seq WHERE acct = ? AND plugin = ?", acct, plugin).toArray()[0]?.rev ??
+      (this.sql.exec<{ m: number | null }>("SELECT MAX(rev) AS m FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).one().m ?? 0);
+    this.sql.exec("INSERT OR REPLACE INTO pdata_seq (acct, plugin, rev) VALUES (?, ?, ?)", acct, plugin, cur + 1);
+    return cur + 1;
   }
 
   list(acct: string, plugin: string, coll: string, since = 0, limit = MAX_PDATA_PAGE): PDataList {
@@ -63,8 +69,9 @@ export class PDataStore {
     return r ? toItem(r) : null;
   }
 
+  // 墓碑也占配额, 否则反复建了再删能把库撑大
   private count(acct: string, plugin: string): number {
-    return this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM pdata WHERE acct = ? AND plugin = ? AND deleted = 0", acct, plugin).one().n;
+    return this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).one().n;
   }
 
   /** 写一行: ver 必须等于当前 ver (不存在为 0); 内容没变不写库。 */
@@ -73,9 +80,10 @@ export class PDataStore {
     if ((cur?.ver ?? 0) !== ver) return { conflict: cur ? toItem(cur) : null };
     const text = JSON.stringify(body);
     if (cur && !cur.deleted && cur.body === text) return { ok: toItem(cur) };
-    if ((!cur || cur.deleted) && this.count(acct, plugin) >= MAX_PDATA_ROWS) return { error: `每个插件最多 ${MAX_PDATA_ROWS} 行数据` };
+    if (!cur && this.count(acct, plugin) >= MAX_PDATA_ROWS) return { error: `每个插件最多 ${MAX_PDATA_ROWS} 行数据 (含已删除的墓碑)` };
     const next: Row = { id, ver: ver + 1, rev: this.nextRev(acct, plugin), updated: now, deleted: 0, body: text };
-    this.sql.exec("INSERT OR REPLACE INTO pdata (acct, plugin, coll, id, ver, rev, updated, deleted, body) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)", acct, plugin, coll, id, next.ver, next.rev, now, text);
+    if (cur) this.sql.exec("UPDATE pdata SET ver = ?, rev = ?, updated = ?, deleted = 0, body = ? WHERE acct = ? AND plugin = ? AND coll = ? AND id = ?", next.ver, next.rev, now, text, acct, plugin, coll, id);
+    else this.sql.exec("INSERT INTO pdata (acct, plugin, coll, id, ver, rev, updated, deleted, body) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)", acct, plugin, coll, id, next.ver, next.rev, now, text);
     return { ok: toItem(next) };
   }
 
@@ -89,7 +97,7 @@ export class PDataStore {
     return { ok: toItem(next) };
   }
 
-  /** 卸载时选择彻底清除。 */
+  /** 卸载时选择彻底清除; rev 计数保留, 客户端看到数据消失靠 plugin_update (disabled) 全量重拉。 */
   purge(acct: string, plugin: string): number {
     return this.sql.exec("DELETE FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).rowsWritten;
   }

@@ -52,9 +52,23 @@ test("配额与字段校验", () => {
   const s = new PDataStore(memSql());
   for (let i = 0; i < MAX_PDATA_ROWS; i++) s.put(A, P, C, `i${i}`, 0, {});
   assert.ok("error" in s.put(A, P, C, "over", 0, {}));
+  s.remove(A, P, C, "i0", 1);
+  assert.ok("error" in s.put(A, P, C, "over2", 0, {}), "墓碑也占配额");
+  assert.ok("ok" in s.put(A, P, C, "i0", 2, {}), "复活自己的墓碑不受配额影响");
   const coll = { id: C, fields: { title: "string" as const, done: "boolean" as const } };
   assert.equal(checkBody(coll, { title: "x", done: false }), null);
   assert.match(String(checkBody(coll, { title: 1 })), /string/);
   assert.match(String(checkBody(coll, { other: 1 })), /没有声明/);
   assert.match(String(checkBody(coll, [])), /对象/);
+  assert.match(String(checkBody(coll, JSON.parse('{"constructor":null}'))), /没有声明/);
+});
+
+test("清除后 rev 继续增长, 增量同步不漏新写入", () => {
+  const s = new PDataStore(memSql());
+  s.put(A, P, C, "i1", 0, {});
+  s.put(A, P, C, "i2", 0, {});
+  const seen = s.list(A, P, C, 0).rev;
+  s.purge(A, P);
+  s.put(A, P, C, "i3", 0, {});
+  assert.deepEqual(s.list(A, P, C, seen).items.map((i) => i.id), ["i3"]);
 });

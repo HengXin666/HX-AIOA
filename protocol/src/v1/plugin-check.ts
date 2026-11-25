@@ -1,5 +1,5 @@
 import type { PluginManifest } from "./plugin";
-import { DAY_S, EXT_POINTS, cardOf, isExtPoint, type Contribution, type ExtPoint } from "./plugin-v2";
+import { AGENT_ROUND_REQUESTS, DAY_S, EXT_POINTS, cardOf, isExtPoint, type Contribution, type ExtPoint } from "./plugin-v2";
 import { satisfies } from "./semver";
 
 // 静态冲突检测: 清单里能算出来的全部在这里算, 市场 CI 与服务端放行时共用
@@ -28,11 +28,15 @@ export function cronPerDay(cron: string): number {
   return fieldCount(m!, MINUTES) * fieldCount(h!, HOURS);
 }
 
-/** 一个插件每天估算的请求数: cron + Agent 定时拉取 + 自报的其他请求。 */
+/**
+ * 一个插件每天估算的请求数: cron + Agent 轮次 x 每轮请求 + 自报的其他请求。
+ * Agent 周期取 agentPoll 与 agent.interval 里较短的正数, 写 agentPoll: 0 也盖不掉 interval。
+ */
 export function dailyRequests(m: PluginManifest): number {
   const b = m.budget ?? {};
-  const poll = b.agentPoll ?? m.agent.interval ?? 0;
-  return (b.cron ? cronPerDay(b.cron) : 0) + (poll > 0 ? Math.ceil(DAY_S / poll) : 0) + (b.requestsPerDay ?? 0);
+  const periods = [b.agentPoll ?? 0, m.agent.interval ?? 0].filter((x) => x > 0);
+  const rounds = periods.length ? Math.ceil(DAY_S / Math.min(...periods)) : 0;
+  return (b.cron ? cronPerDay(b.cron) : 0) + rounds * AGENT_ROUND_REQUESTS + (b.requestsPerDay ?? 0);
 }
 
 type Entry = { plugin: string; c: Contribution };

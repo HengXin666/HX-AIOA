@@ -21,7 +21,7 @@ import {
 } from "@hx-aioa/protocol";
 import { agentBootstrap } from "../agent-prompt";
 import { baseOf, canRead, createAgent, dropAgent } from "../api-chats";
-import { CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
 import { type Core, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
 import { rank, roleIn } from "../room-access";
@@ -32,13 +32,19 @@ import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
 // 现有的待办插件 (旧 id), 待办接口只在主人启用了它时可用
 export const TODO_PLUGIN = "todo";
 
-const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
+function param(c: ReqCtx, i: number): string {
+  try {
+    return decodeURIComponent(c.params[i] ?? "");
+  } catch {
+    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
+  }
+}
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const ADMIN_RANK = rank("admin");
 
 function pluginId(c: ReqCtx): string {
   const id = param(c, 0);
-  if (!isPluginId(id)) throw new ApiFail(400, "bad_request", "插件 id 不合法");
+  if (!isPluginId(id)) throw new ApiFail(400, CODE_BAD_REQUEST, "插件 id 不合法");
   return id;
 }
 
@@ -95,6 +101,7 @@ async function detail(c: ReqCtx): Promise<Response> {
     ...(installed ? { installed } : {}),
     ...(allow ? { allowed: allow } : {}),
     ...(task ? { task } : {}),
+    admin: true,
   };
   return json(body);
 }
@@ -112,6 +119,12 @@ async function install(c: ReqCtx): Promise<Response> {
   const title = c.core.chats.chat(channel)?.title || m.group.title;
   const space = await applySpace(c.core, id, m, channel, title);
   const { agent, key } = await createAgent(c.core, channel, m.agent.name, [channel], id);
+  // 等待期间可能被撤销放行或换了版本: 撤销就回滚刚建的 Agent 与工作台
+  if (c.core.kernel.get(id)?.meta.version !== m.version) {
+    dropAgent(c.core, channel, agent.keyId);
+    if (space && (await c.core.spaces.remove(space))) c.core.sockets.toV1Clients({ t: "space_update", id: space, deleted: true });
+    return fail(409, `插件 ${id} 在安装期间被撤销或换了版本, 请重试`, CODE_CONFLICT);
+  }
   const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}) };
   const job = { interval: m.agent.interval, task: m.agent.task };
   c.core.plugins.save(rec, m.name, prompt, job);

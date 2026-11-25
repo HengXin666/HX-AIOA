@@ -1,4 +1,5 @@
-// 最小 semver: 只认 x.y.z (可带 -预发布), 范围支持 *, x, ^, ~, >=, <, 精确值, 以及空格连接的 "且"
+// 最小 semver: 只认 x.y.z (可带 -预发布), 范围支持 *, ^, ~, >=, <, 精确值 (可省略次版本和修订号), 以及空格连接的 "且"
+// 预发布版低于同号正式版, 且只在范围下界本身是同号预发布时才算满足
 export type Ver = [number, number, number];
 
 const VER_RE = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-[\w.]+)?$/;
@@ -7,6 +8,8 @@ export function parseVer(s: string): Ver | null {
   const m = VER_RE.exec(s.trim());
   return m ? [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)] : null;
 }
+
+const preOf = (s: string) => s.trim().split("-").slice(1).join("-");
 
 export const isVersion = (s: unknown): s is string => typeof s === "string" && /^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(s);
 
@@ -42,17 +45,21 @@ function bounds(term: string): [Ver, Ver | null] | null {
   }
 }
 
-export const isRange = (s: unknown): s is string => typeof s === "string" && s.length <= 64 && s.split(/\s+/).every((t) => bounds(t) !== null);
+export const isRange = (s: unknown): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= 64 && s.trim().split(/\s+/).every((t) => bounds(t) !== null);
 
 /** version 是否落在 range 里; 任一方写错都算不满足。 */
 export function satisfies(version: string, range: string): boolean {
   const v = parseVer(version);
-  if (!v) return false;
-  return range
-    .trim()
-    .split(/\s+/)
-    .every((t) => {
-      const b = bounds(t);
-      return !!b && cmpVer(v, b[0]) >= 0 && (b[1] === null || cmpVer(v, b[1]) < 0);
-    });
+  if (!v || !isRange(range)) return false;
+  const terms = range.trim().split(/\s+/);
+  const pre = preOf(version);
+  // 预发布版: 只有某个下界正好是同号预发布才考虑, 且按预发布串比较
+  if (pre && !terms.some((t) => preOf(t.replace(/^(\^|~|>=|<|=)/, "")) && cmpVer(parseVer(t.replace(/^(\^|~|>=|<|=)/, ""))!, v) === 0)) return false;
+  return terms.every((t) => {
+    const b = bounds(t)!;
+    const lo = cmpVer(v, b[0]);
+    const lowPre = preOf(t.replace(/^(\^|~|>=|<|=)/, ""));
+    const geLow = lo > 0 || (lo === 0 && (!pre || (lowPre !== "" && pre >= lowPre)));
+    return geLow && (b[1] === null || cmpVer(v, b[1]) < 0);
+  });
 }

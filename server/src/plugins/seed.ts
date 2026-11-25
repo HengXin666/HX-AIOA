@@ -1,6 +1,8 @@
 import type { PluginManifest } from "@hx-aioa/protocol";
-import type { AllowRow } from "./allow-store";
-import type { PluginStore } from "./store";
+import { AllowStore, type AllowRow } from "./allow-store";
+import { PluginKernel } from "./kernel";
+import { PDataStore } from "./pdata";
+import { PluginStore } from "./store";
 
 const LEGACY_README = "README.md";
 const LEGACY_PROMPT = "prompt.md";
@@ -23,4 +25,11 @@ export function legacySeed(store: PluginStore, uid: string): { rows: AllowRow[];
     return { meta: { id: i.id, version: i.version, name: s.name, by: SEED_BY, at: i.installed }, manifest, prompt: s.prompt };
   });
   return { rows, uid };
+}
+
+/** Hub 装配插件相关的三件: 安装记录, 内核 (带升级迁移种子), 插件数据。 */
+export function pluginParts(sql: SqlStorage, ownerId: () => string): { plugins: PluginStore; kernel: PluginKernel; pdata: PDataStore } {
+  const plugins = new PluginStore(sql);
+  const kernel = new PluginKernel(new AllowStore(sql), () => legacySeed(plugins, ownerId()));
+  return { plugins, kernel, pdata: new PDataStore(sql) };
 }

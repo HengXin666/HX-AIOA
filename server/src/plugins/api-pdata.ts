@@ -1,4 +1,4 @@
-import { PATH_PDATA_COLL, PATH_PDATA_ITEM, PDATA_ID_RE, PERM_DATA_OWN, type Contribution, type PDataPut } from "@hx-aioa/protocol";
+import { PATH_PDATA_COLL, PATH_PDATA_ITEM, PDATA_ID_RE, PERM_DATA_OWN, PERM_READ_PREFIX, type Contribution, type PDataPut } from "@hx-aioa/protocol";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
@@ -6,10 +6,15 @@ import { pushPData } from "./notify";
 import { checkBody } from "./pdata";
 import { acctOf, pluginOfKey } from "./who";
 
-const READ_PREFIX = "data:read:";
 type Target = { acct: string; plugin: string; coll: Contribution };
 
-const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
+function param(c: ReqCtx, i: number): string {
+  try {
+    return decodeURIComponent(c.params[i] ?? "");
+  } catch {
+    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
+  }
+}
 const deny = (text = ERR_FORBIDDEN) => new ApiFail(403, CODE_FORBIDDEN, text);
 
 /**
@@ -30,7 +35,7 @@ function target(c: ReqCtx, write: boolean): Target {
   const caller = pluginOfKey(c.core, c.who);
   if (caller && caller !== plugin) {
     const perms = k.get(caller)?.manifest.permissions ?? [];
-    if (write || !perms.includes(`${READ_PREFIX}${plugin}.${name}`)) throw deny(`插件 ${caller} 不能${write ? "写" : "读"} ${plugin}.${name}`);
+    if (write || !perms.includes(`${PERM_READ_PREFIX}${plugin}.${name}`)) throw deny(`插件 ${caller} 不能${write ? "写" : "读"} ${plugin}.${name}`);
   }
   return { acct, plugin, coll };
 }
