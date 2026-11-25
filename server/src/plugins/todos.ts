@@ -1,33 +1,45 @@
-import { MAX_TODOS, type TodoInput, type TodoItem } from "@hx-aioa/protocol";
+import { MAX_TODOS, PDATA_ID_RE, TODO_COLL, TODO_PLUGIN, todoOf, todoRowId, type TodoBody, type TodoInput, type TodoItem } from "@hx-aioa/protocol";
+import { PDataStore } from "./pdata";
+import { migrateTodo, type Tx } from "./todo-migrate";
 
-type Row = { body: string };
 const DEFAULT_PRIO = 2;
+// 写入结果: 改了的条目与最后一次的 rev (0 表示没写库), 用来推 pdata_sync
+export type TodoWrite = { todos: TodoItem[]; rev: number };
 
-/** 群下的待办: 一行一条, 改一条只写一行; 整群读一次就是全部 (上限 500)。 */
+/**
+ * 旧待办接口 (/chats/{群}/todos) 的转发层: 数据在 pdata (主人账号, hengxin666.todo, items),
+ * 行 id 是 <群>:<待办 id>; 保留一个大版本, 之后删除。
+ */
 export class TodoStore {
-  constructor(private readonly sql: SqlStorage) {
-    sql.exec("CREATE TABLE IF NOT EXISTS todo (grp TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (grp, id))");
+  private readonly pdata: PDataStore;
+
+  constructor(sql: SqlStorage, private readonly owner: () => string, tx: Tx) {
+    this.pdata = new PDataStore(sql);
+    migrateTodo(sql, this.pdata, owner, tx);
+  }
+
+  private rows(grp: string) {
+    return this.pdata.withPrefix(this.owner(), TODO_PLUGIN, TODO_COLL, `${grp}:`);
   }
 
   list(grp: string): TodoItem[] {
-    return this.sql.exec<Row>("SELECT body FROM todo WHERE grp = ?", grp).toArray().map((r) => JSON.parse(r.body) as TodoItem);
-  }
-
-  get(grp: string, id: string): TodoItem | null {
-    const r = this.sql.exec<Row>("SELECT body FROM todo WHERE grp = ? AND id = ?", grp, id).toArray()[0];
-    return r ? (JSON.parse(r.body) as TodoItem) : null;
+    return this.rows(grp).flatMap((it) => todoOf(it, grp) ?? []);
   }
 
   /** 按 id 合并; 返回错误文字或改后的条目, 内容没变的不写库。 */
-  upsert(grp: string, inputs: TodoInput[], now = Date.now()): TodoItem[] | string {
-    const count = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM todo WHERE grp = ?", grp).one().n;
-    const fresh = inputs.filter((i) => !this.get(grp, i.id));
-    if (count + fresh.length > MAX_TODOS) return `每个群最多 ${MAX_TODOS} 条待办, 先删掉一些已完成的`;
+  upsert(grp: string, inputs: TodoInput[], now = Date.now()): TodoWrite | string {
+    const acct = this.owner();
+    const live = new Set(this.list(grp).map((t) => t.id));
+    const fresh = inputs.filter((i) => !live.has(i.id));
+    if (live.size + fresh.length > MAX_TODOS) return `每个群最多 ${MAX_TODOS} 条待办, 先删掉一些已完成的`;
     if (fresh.some((i) => !i.title)) return "新增待办需要 title";
-    const out: TodoItem[] = [];
+    if (fresh.some((i) => !PDATA_ID_RE.test(todoRowId(grp, i.id)))) return "群名加待办 id 超过 64 字, 换个短一点的 id";
+    const out: TodoWrite = { todos: [], rev: 0 };
     for (const i of inputs) {
-      const cur = this.get(grp, i.id);
-      const next: TodoItem = { ...(cur ?? { id: i.id, title: i.title!, state: "open", prio: DEFAULT_PRIO, created: now, updated: now }) };
+      const rid = todoRowId(grp, i.id);
+      const cur = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, rid);
+      const old = cur && !cur.deleted ? (cur.body as TodoBody) : null;
+      const next: TodoBody = { ...(old ?? { channel: grp, title: i.title!, state: "open", prio: DEFAULT_PRIO, created: now }) };
       if (i.title !== undefined) next.title = i.title;
       if (i.state !== undefined) next.state = i.state;
       if (i.prio !== undefined) next.prio = i.prio;
@@ -35,15 +47,23 @@ export class TodoStore {
       else if (i.note !== undefined) next.note = i.note;
       if (i.src === null) delete next.src;
       else if (i.src !== undefined) next.src = i.src;
-      if (cur && JSON.stringify({ ...cur, updated: 0 }) === JSON.stringify({ ...next, updated: 0 })) continue;
-      next.updated = now;
-      this.sql.exec("INSERT OR REPLACE INTO todo (grp, id, body) VALUES (?, ?, ?)", grp, i.id, JSON.stringify(next));
-      out.push(next);
+      if (old && JSON.stringify(old) === JSON.stringify(next)) continue;
+      const r = this.pdata.put(acct, TODO_PLUGIN, TODO_COLL, rid, cur?.ver ?? 0, next, now);
+      if ("error" in r) return r.error;
+      if (!("ok" in r)) return "待办正被别处修改, 请重试";
+      out.todos.push(todoOf(r.ok)!);
+      out.rev = r.ok.rev;
     }
     return out;
   }
 
-  remove(grp: string, id: string): boolean {
-    return this.sql.exec("DELETE FROM todo WHERE grp = ? AND id = ?", grp, id).rowsWritten > 0;
+  /** 删除写墓碑, 新客户端按增量同步删掉本地副本; 返回 rev, 没有这条返回 0。 */
+  remove(grp: string, id: string): number {
+    const acct = this.owner();
+    const rid = todoRowId(grp, id);
+    const cur = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, rid);
+    if (!cur || cur.deleted) return 0;
+    const r = this.pdata.remove(acct, TODO_PLUGIN, TODO_COLL, rid, cur.ver);
+    return "ok" in r ? r.ok.rev : 0;
   }
 }

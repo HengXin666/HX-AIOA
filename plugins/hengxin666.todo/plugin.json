@@ -1,8 +1,10 @@
 {
-  "id": "todo",
+  "id": "hengxin666.todo",
   "name": "点子待办",
   "summary": "在群里随手丢想法, Agent 定时整理成待办, 并对值得做的点子写可行性分析。",
-  "version": "1.4.0",
+  "version": "2.0.0",
+  "api": "2",
+  "engines": { "aioa": "^2" },
   "icon": "list-checks",
   "tags": ["待办", "点子", "Agent"],
   "author": "HengXin666",
@@ -11,10 +13,17 @@
   "group": { "title": "点子待办" },
   "agent": {
     "name": "整理员",
-    "schedule": "每 30 分钟一次, 外加主人说 \"整理一下\" 时立即跑一次",
+    "schedule": "长连等新消息 (hxaioa watch), 每 30 分钟兜底一次, 外加主人说 \"整理一下\" 时立即跑一次",
     "interval": 1800,
     "task": "按专属指令里的插件任务整理这个群的新消息。"
   },
+  "permissions": ["data:own"],
+  "contributes": {
+    "collections": [
+      { "id": "items", "fields": { "channel": "string", "title": "string", "note": "string", "state": "string", "prio": "number", "src": "number", "created": "number" } }
+    ]
+  },
+  "budget": { "agentPoll": 0 },
   "space": {
     "id": "todo",
     "title": "点子待办",

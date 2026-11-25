@@ -11,6 +11,8 @@ export const PATH_PDATA_ITEM = `${API_V1}/pdata/{plugin}/{coll}/{id}`;
 export const MAX_PDATA_BODY = 16_000;
 export const MAX_PDATA_ROWS = 2_000;
 export const MAX_PDATA_PAGE = 200;
+// 批量写一次最多几行: Agent 一轮整理多条只用一次请求
+export const MAX_PDATA_BATCH = 50;
 export const PDATA_ID_RE = /^[\w.:-]{1,64}$/;
 
 // 白名单里的一项: 每个插件只放一个版本; defaults 为它被指定为默认提供者的扩展点或服务
@@ -35,5 +37,8 @@ export type PluginUpdateFrame = { t: "plugin_update"; id: string; change: Plugin
 export type PDataItem = { id: string; ver: number; rev: number; updated: number; deleted?: true; body?: unknown };
 export type PDataList = { items: PDataItem[]; rev: number; more: boolean };
 export type PDataPut = { ver: number; body: unknown };
+// 批量写: 每行独立生效, deleted 为 true 时写墓碑; 结果按顺序给出新行, 冲突时的当前行或错误
+export type PDataBatch = { items: { id: string; ver: number; body?: unknown; deleted?: true }[] };
+export type PDataBatchResult = { items: { id: string; item?: PDataItem; conflict?: PDataItem | null; error?: string }[]; rev: number };
 // 插件数据有变: 只推给该账号的界面连接, 客户端按 rev 增量拉
 export type PDataSyncFrame = { t: "pdata_sync"; plugin: string; coll: string; rev: number };

@@ -44,11 +44,20 @@
 | GET | `/api/v1/pdata/{plugin}/{coll}/{id}` | 单行 |
 | PUT | `/api/v1/pdata/{plugin}/{coll}/{id}` | `{ "ver": 读到的版本 (新建为 0), "body": {...} }`; 版本不对返回 409 与 `current` |
 | DELETE | `/api/v1/pdata/{plugin}/{coll}/{id}?ver=3` | 写墓碑 |
+| POST | `/api/v1/pdata/{plugin}/{coll}` | 批量写 `{ "items": [{ "id", "ver", "body" }, { "id", "ver", "deleted": true }] }`, 一次最多 50 行, 每行独立生效; 返回 `{ items: [{ id, item? , conflict?, error? }], rev }`, 只推一次 `pdata_sync`。Agent 一轮整理多条只用一次请求 |
 
 - 谁能用: 主人与子号用自己账号下启用了的插件; 插件 Agent 的密钥落在主人账号, 能读写本插件的集合, 读别的插件要清单里有 `data:read:<插件>.<集合>`, 不能写别人的。
 - 校验: 声明了 `fields` 的集合只收声明过的字段且类型要对; 每行 16000 字以内; 每个 (账号, 插件) 最多 2000 行。
-- 内容没变不写库; 每次真正写入算 1 行写入, 计入每天 10 万行写入额度。
+- 内容没变不写库也不推送; 新建一行约 3 行写入 (数据行, 主键, rev 索引), 改一行约 2 行, 计入每天 10 万行写入额度。rev 取 (账号, 插件) 当前最大 rev 加 1, 只在清除数据时把下限记进 `pdata_seq`。
 - 写入后推 `pdata_sync` 给该账号的界面连接 (见 `stream.md`)。
+
+## 待办插件 (#101)
+
+- id `hengxin666.todo` (旧 id `todo` 在 `/plugins/{id}`, `/plugins/{id}/enabled`, `/plugin-allow/{id}` 路径里作别名); 群与工作台沿用 `plugin-todo`。
+- 数据: 主人账号下集合 `items`, 一行一条, id = `<群>:<待办 id>`, body `{ channel, title, note?, state, prio, src?, created }`, 更新时间用行的 `updated`。除了集合声明的类型, 服务端还校验 state / prio 取值与 id 前缀 (`checkTodoBody`)。
+- 升级: Hub 唤醒时一次性把旧 `todo` 表搬进 pdata, 并把白名单, 启用, 单选, 安装记录, 群里 Agent 的 `plugin` 字段中的 `todo` 改成新 id; 白名单快照补上 v2 数据声明, 版本号不变, 管理员放行 2.0.0 后整份换掉。Agent 密钥照用, 专属指令的待办说明换成 pdata 接口 (版本变化会提示 Agent 重拉)。
+- 旧接口 `/api/v1/chats/{channel}/todos` 转发到 pdata (主人账号), 保留一个大版本后删除; 启用判断看调用者自己的账号 (子号要自己启用), 普通 Agent 的 key 算主人账号。写入同时推 `pdata_sync` 与旧客户端认的 `chat_sync` (`topic: todos`); 经 pdata 改主人的待办也会推 `chat_sync`。
+- 回滚: 迁移不可逆 (旧表已删), 回滚旧版服务端会看到空的待办表; 需要回滚时先用 `GET /api/v1/pdata/hengxin666.todo/items` 导出。
 
 ## 事件与扩展点
 
@@ -59,5 +68,5 @@
 ## 验证
 
 - 单元: `npm test` (清单, 冲突检测, 内核, pdata)。
-- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。
+- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。
 - 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`)。

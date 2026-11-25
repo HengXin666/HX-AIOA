@@ -37,7 +37,7 @@ export class PDataStore {
       "CREATE TABLE IF NOT EXISTS pdata (acct TEXT NOT NULL, plugin TEXT NOT NULL, coll TEXT NOT NULL, id TEXT NOT NULL, ver INTEGER NOT NULL, rev INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, body TEXT, PRIMARY KEY (acct, plugin, coll, id))",
     );
     sql.exec("CREATE INDEX IF NOT EXISTS pdata_coll_rev ON pdata (acct, plugin, coll, rev)");
-    // rev 单独计数, 只增不减: 清除数据后重新写入也不会落到旧 rev 下面, 增量同步不漏
+    // rev 只增不减: 清除数据时把当时的最大 rev 记成下限, 之后重新写入也不会落到旧 rev 下面, 增量同步不漏
     sql.exec("CREATE TABLE IF NOT EXISTS pdata_seq (acct TEXT NOT NULL, plugin TEXT NOT NULL, rev INTEGER NOT NULL, PRIMARY KEY (acct, plugin))");
   }
 
@@ -45,13 +45,14 @@ export class PDataStore {
     return this.sql.exec<Row>("SELECT id, ver, rev, updated, deleted, body FROM pdata WHERE acct = ? AND plugin = ? AND coll = ? AND id = ?", acct, plugin, coll, id).toArray()[0];
   }
 
+  // 当前最大 rev: 墓碑保留 rev, 所以只有清除会让它变小, 清除时记下的下限补上; 每次写入不再多写计数行 (省行写入)
+  private maxRev(acct: string, plugin: string): number {
+    const floor = this.sql.exec<{ rev: number }>("SELECT rev FROM pdata_seq WHERE acct = ? AND plugin = ?", acct, plugin).toArray()[0]?.rev ?? 0;
+    return Math.max(floor, this.sql.exec<{ m: number | null }>("SELECT MAX(rev) AS m FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).one().m ?? 0);
+  }
+
   private nextRev(acct: string, plugin: string): number {
-    // 计数行还没有时从已有数据的最大 rev 接上
-    const cur =
-      this.sql.exec<{ rev: number }>("SELECT rev FROM pdata_seq WHERE acct = ? AND plugin = ?", acct, plugin).toArray()[0]?.rev ??
-      (this.sql.exec<{ m: number | null }>("SELECT MAX(rev) AS m FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).one().m ?? 0);
-    this.sql.exec("INSERT OR REPLACE INTO pdata_seq (acct, plugin, rev) VALUES (?, ?, ?)", acct, plugin, cur + 1);
-    return cur + 1;
+    return this.maxRev(acct, plugin) + 1;
   }
 
   list(acct: string, plugin: string, coll: string, since = 0, limit = MAX_PDATA_PAGE): PDataList {
@@ -97,8 +98,24 @@ export class PDataStore {
     return { ok: toItem(next) };
   }
 
+  /** id 以 prefix 开头且没删的行 (待办按群读); 用 substr 比较, 群名里的 _ % 不会被当通配符。 */
+  withPrefix(acct: string, plugin: string, coll: string, prefix: string): PDataItem[] {
+    return this.sql
+      .exec<Row>("SELECT id, ver, rev, updated, deleted, body FROM pdata WHERE acct = ? AND plugin = ? AND coll = ? AND deleted = 0 AND substr(id, 1, ?) = ?", acct, plugin, coll, prefix.length, prefix)
+      .toArray()
+      .map(toItem);
+  }
+
+  /** 一次性迁移导入: 已有同 id 的行就跳过 (重复跑不重复写), 保留原 updated; 不受配额限制, 旧数据一条不丢。 */
+  importRow(acct: string, plugin: string, coll: string, id: string, body: unknown, updated: number): boolean {
+    if (this.row(acct, plugin, coll, id)) return false;
+    this.sql.exec("INSERT INTO pdata (acct, plugin, coll, id, ver, rev, updated, deleted, body) VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?)", acct, plugin, coll, id, this.nextRev(acct, plugin), updated, JSON.stringify(body));
+    return true;
+  }
+
   /** 卸载时选择彻底清除; rev 计数保留, 客户端看到数据消失靠 plugin_update (disabled) 全量重拉。 */
   purge(acct: string, plugin: string): number {
+    this.sql.exec("INSERT OR REPLACE INTO pdata_seq (acct, plugin, rev) VALUES (?, ?, ?)", acct, plugin, this.maxRev(acct, plugin));
     return this.sql.exec("DELETE FROM pdata WHERE acct = ? AND plugin = ?", acct, plugin).rowsWritten;
   }
 }

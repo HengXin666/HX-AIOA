@@ -1,4 +1,4 @@
-import { PLUGIN_SPACE_PREFIX, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
+import { PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, pluginSpaceId, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
@@ -10,7 +10,7 @@ export const CODE_NOT_ALLOWED = "plugin_not_allowed";
 export async function applySpace(core: Core, id: string, m: PluginManifest, channel: string, title: string): Promise<string | undefined> {
   if (!m.space) return undefined;
   const raw = JSON.parse(JSON.stringify(m.space).replaceAll(PLUGIN_VAR_CHANNEL, channel).replaceAll(PLUGIN_VAR_TITLE, title));
-  const r = await core.spaces.put({ ...raw, id: `${PLUGIN_SPACE_PREFIX}${id}` }, `plugin:${id}`);
+  const r = await core.spaces.put({ ...raw, id: pluginSpaceId(id) }, `plugin:${id}`);
   if ("errors" in r) throw new ApiFail(400, CODE_BAD_REQUEST, `插件布局有误: ${r.errors.join("; ")}`);
   core.sockets.toV1Clients({ t: "space_update", id: r.space.id, space: r.space });
   return r.space.id;

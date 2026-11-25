@@ -133,7 +133,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

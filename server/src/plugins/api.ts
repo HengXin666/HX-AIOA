@@ -1,36 +1,27 @@
 import {
   MAX_CHAT_AGENTS,
   MAX_PLUGINS,
-  MAX_TODO_BATCH,
   PATH_PLUGIN,
   PATH_PLUGIN_INSTALL,
   PATH_PLUGIN_UPDATE,
   PATH_PLUGINS,
-  PATH_TODO,
-  PATH_TODOS,
-  PLUGIN_CHANNEL_PREFIX,
-  TODO_SYNC_TOPIC,
   isPluginId,
-  parseTodoInput,
-  type ChatSyncFrame,
+  pluginChannel,
+  resolvePluginId,
   type PluginDetail,
   type PluginInstall,
   type PluginInstalled,
   type PluginList,
-  type TodoInput,
 } from "@hx-aioa/protocol";
 import { agentBootstrap } from "../agent-prompt";
-import { baseOf, canRead, createAgent, dropAgent } from "../api-chats";
-import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
-import { type Core, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
+import { baseOf, createAgent, dropAgent } from "../api-chats";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
+import { type Core, OWNER, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
-import { rank, roleIn } from "../room-access";
+import { TODO_ROUTES } from "./api-todos";
 import { renderTask } from "./store";
 import { pushPlugin } from "./notify";
 import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
-
-// 现有的待办插件 (旧 id), 待办接口只在主人启用了它时可用
-export const TODO_PLUGIN = "todo";
 
 function param(c: ReqCtx, i: number): string {
   try {
@@ -40,25 +31,12 @@ function param(c: ReqCtx, i: number): string {
   }
 }
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
-const ADMIN_RANK = rank("admin");
 
+// 改过 id 的插件 (todo -> hengxin666.todo) 旧路径照常能用
 function pluginId(c: ReqCtx): string {
-  const id = param(c, 0);
+  const id = resolvePluginId(param(c, 0));
   if (!isPluginId(id)) throw new ApiFail(400, CODE_BAD_REQUEST, "插件 id 不合法");
   return id;
-}
-
-// 群里接入的 Agent: key 白名单第一项就是它所在的群
-const homeAgent = (who: Principal, channel: string) => !who.owner && !who.member && who.key.channels[0] === channel;
-// 主人, 群管理员, 本群 Agent 能改待办
-function canWriteTodos(core: Core, who: Principal, channel: string): boolean {
-  if (homeAgent(who, channel)) return true;
-  const role = roleIn(core, who, channel);
-  return role !== null && rank(role) >= ADMIN_RANK;
-}
-
-function syncTodos(core: Core, channel: string): void {
-  core.sockets.toAllClients({ t: "chat_sync", topic: TODO_SYNC_TOPIC, channel } satisfies ChatSyncFrame);
 }
 
 async function list(c: ReqCtx): Promise<Response> {
@@ -89,7 +67,7 @@ async function detail(c: ReqCtx): Promise<Response> {
   const installed = c.core.plugins.get(id);
   const allow = c.core.kernel.get(id)?.meta;
   const base = baseOf(c.url);
-  const channel = installed?.channel ?? `${PLUGIN_CHANNEL_PREFIX}${id}`;
+  const channel = installed?.channel ?? pluginChannel(id);
   const title = c.core.chats.chat(channel)?.title || manifest.group.title;
   const task = installed
     ? c.core.plugins.promptFor(id, base, channel, title)
@@ -112,7 +90,7 @@ async function install(c: ReqCtx): Promise<Response> {
   if (c.core.plugins.list().length >= MAX_PLUGINS) return fail(400, `最多安装 ${MAX_PLUGINS} 个插件`);
   // 只装白名单里的快照版本, 不看市场当前版本
   const { manifest: m, prompt } = allowed(c.core, id);
-  const channel = `${PLUGIN_CHANNEL_PREFIX}${id}`;
+  const channel = pluginChannel(id);
   const meta = c.core.chats.chat(channel);
   if ((meta?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `群 ${channel} 的 Agent 已满`);
   if (!meta?.title) c.core.chats.patchChat(channel, { title: m.group.title });
@@ -168,45 +146,6 @@ async function uninstall(c: ReqCtx): Promise<Response> {
   return json({ ok: true });
 }
 
-// 主人停用了待办插件, 待办接口就当不存在
-const todoOff = (core: Core) => !core.kernel.isEnabled(core.users.ownerId(), TODO_PLUGIN);
-
-function getTodos(c: ReqCtx): Response {
-  if (todoOff(c.core)) return notFound();
-  const channel = param(c, 0);
-  if (!canRead(c.core, c.who, channel) && !homeAgent(c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  return json({ todos: c.core.todos.list(channel) });
-}
-
-async function postTodos(c: ReqCtx): Promise<Response> {
-  if (todoOff(c.core)) return notFound();
-  const channel = param(c, 0);
-  if (!canWriteTodos(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  const body = (await readJson(c.req)) as { todos?: unknown } | undefined;
-  const raw = Array.isArray(body?.todos) ? body.todos : [body];
-  if (!raw.length || raw.length > MAX_TODO_BATCH) return fail(400, `一次 1 到 ${MAX_TODO_BATCH} 条`);
-  const inputs: TodoInput[] = [];
-  for (const [i, r] of raw.entries()) {
-    const p = parseTodoInput(r);
-    if (typeof p === "string") return fail(400, `第 ${i + 1} 条: ${p}`);
-    inputs.push(p);
-  }
-  const out = c.core.todos.upsert(channel, inputs);
-  if (typeof out === "string") return fail(400, out);
-  if (out.length) syncTodos(c.core, channel);
-  return json({ todos: out });
-}
-
-function deleteTodo(c: ReqCtx): Response {
-  if (todoOff(c.core)) return notFound();
-  const channel = param(c, 0);
-  if (!canWriteTodos(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  const ok = c.core.todos.remove(channel, param(c, 1));
-  if (!ok) return notFound();
-  syncTodos(c.core, channel);
-  return json({ ok });
-}
-
 export const PLUGIN_ROUTES: Route[] = [
   route(GET, PATH_PLUGINS, OWNER, list),
   route(GET, PATH_PLUGIN, OWNER, detail),
@@ -214,7 +153,5 @@ export const PLUGIN_ROUTES: Route[] = [
   route(POST, PATH_PLUGIN_INSTALL, OWNER, install),
   route(POST, PATH_PLUGIN_UPDATE, OWNER, update),
   route(PATCH, PATH_PLUGIN, OWNER, settings),
-  route(GET, PATH_TODOS, ROOM, getTodos),
-  route(POST, PATH_TODOS, ROOM, postTodos),
-  route(DELETE, PATH_TODO, ROOM, deleteTodo),
+  ...TODO_ROUTES,
 ];

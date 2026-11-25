@@ -1,7 +1,22 @@
-import { PATH_PDATA_COLL, PATH_PDATA_ITEM, PDATA_ID_RE, PERM_DATA_OWN, PERM_READ_PREFIX, type Contribution, type PDataPut } from "@hx-aioa/protocol";
-import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, PUT } from "../constants";
+import {
+  MAX_PDATA_BATCH,
+  PATH_PDATA_COLL,
+  PATH_PDATA_ITEM,
+  PDATA_ID_RE,
+  PERM_DATA_OWN,
+  PERM_READ_PREFIX,
+  TODO_PLUGIN,
+  checkTodoBody,
+  type Contribution,
+  type PDataBatch,
+  type PDataBatchResult,
+  type PDataPut,
+  type TodoBody,
+} from "@hx-aioa/protocol";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, POST, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
+import { legacyTodoSync } from "./api-todos";
 import { pushPData } from "./notify";
 import { checkBody } from "./pdata";
 import { acctOf, pluginOfKey } from "./who";
@@ -16,6 +31,7 @@ function param(c: ReqCtx, i: number): string {
   }
 }
 const deny = (text = ERR_FORBIDDEN) => new ApiFail(403, CODE_FORBIDDEN, text);
+const ID_ERR = "id 只能包含字母数字和 _ . : -, 最多 64 字";
 
 /**
  * 谁能碰 (账号, 插件, 集合): 主人与子号能读写自己账号下启用了的插件;
@@ -42,9 +58,23 @@ function target(c: ReqCtx, write: boolean): Target {
 
 function itemId(c: ReqCtx): string {
   const id = param(c, 2);
-  if (!PDATA_ID_RE.test(id)) throw new ApiFail(400, CODE_BAD_REQUEST, "id 只能包含字母数字和 _ . : -, 最多 64 字");
+  if (!PDATA_ID_RE.test(id)) throw new ApiFail(400, CODE_BAD_REQUEST, ID_ERR);
   return id;
 }
+
+// 集合声明之外, 待办插件再校验取值, 旧接口读出来的才是合法的 TodoItem
+function bodyError(t: Target, id: string, body: unknown): string | null {
+  return checkBody(t.coll, body) ?? (t.plugin === TODO_PLUGIN ? checkTodoBody(id, body) : null);
+}
+
+// 主人账号的待办经 pdata 改了, 旧客户端也要刷新; channels 是改动涉及的群
+function touched(c: ReqCtx, t: Target, rev: number, channels: (string | undefined)[]): void {
+  if (!rev) return;
+  pushPData(c.core, t.acct, t.plugin, t.coll.id, rev);
+  if (t.plugin !== TODO_PLUGIN || t.acct !== c.core.users.ownerId()) return;
+  for (const ch of new Set(channels)) if (ch) legacyTodoSync(c.core, ch);
+}
+const channelOf = (body: unknown) => (body as Partial<TodoBody> | null | undefined)?.channel;
 
 function list(c: ReqCtx): Response {
   const t = target(c, false);
@@ -64,12 +94,13 @@ async function put(c: ReqCtx): Promise<Response> {
   const t = target(c, true);
   const id = itemId(c);
   if (!body || !Number.isInteger(body.ver) || (body.ver as number) < 0) return fail(400, "需要 { \"ver\": 读到的版本 (新建为 0), \"body\": {...} }");
-  const err = checkBody(t.coll, body.body);
+  const err = bodyError(t, id, body.body);
   if (err) return fail(400, err);
   const r = c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, body.ver as number, body.body);
   if ("error" in r) return fail(400, r.error);
   if ("conflict" in r) return fail(409, "版本不对, 先重新读再改", CODE_CONFLICT, { current: r.conflict });
-  pushPData(c.core, t.acct, t.plugin, t.coll.id, r.ok.rev);
+  // 内容没变时 ver 不动, 不推送
+  if (r.ok.ver === (body.ver as number) + 1) touched(c, t, r.ok.rev, [channelOf(body.body)]);
   return json({ item: r.ok });
 }
 
@@ -77,14 +108,48 @@ function remove(c: ReqCtx): Response {
   const t = target(c, true);
   const ver = Number(c.url.searchParams.get("ver"));
   if (!Number.isInteger(ver) || ver < 1) return fail(400, "删除需要 ?ver=读到的版本");
-  const r = c.core.pdata.remove(t.acct, t.plugin, t.coll.id, itemId(c), ver);
+  const id = itemId(c);
+  const was = channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body);
+  const r = c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver);
   if ("conflict" in r) return fail(409, "版本不对, 先重新读再删", CODE_CONFLICT, { current: r.conflict });
-  if ("ok" in r) pushPData(c.core, t.acct, t.plugin, t.coll.id, r.ok.rev);
+  if ("ok" in r && r.ok.ver === ver + 1) touched(c, t, r.ok.rev, [was]);
   return json({ item: "ok" in r ? r.ok : null });
+}
+
+// 批量写: 每行独立生效 (不是事务), 一次请求只推一次 pdata_sync
+async function batch(c: ReqCtx): Promise<Response> {
+  const body = (await readJson(c.req)) as Partial<PDataBatch> | undefined;
+  const t = target(c, true);
+  const rows = body?.items;
+  if (!Array.isArray(rows) || !rows.length || rows.length > MAX_PDATA_BATCH) return fail(400, `需要 { "items": [{ "id", "ver", "body" 或 "deleted": true }] }, 一次 1 到 ${MAX_PDATA_BATCH} 行`);
+  const out: PDataBatchResult = { items: [], rev: 0 };
+  const channels: (string | undefined)[] = [];
+  for (const row of rows) {
+    const id = typeof row?.id === "string" ? row.id : "";
+    const ver = row?.ver as number;
+    const err = !PDATA_ID_RE.test(id) ? ID_ERR : !Number.isInteger(ver) || ver < 0 ? "ver 必须是读到的版本 (新建为 0)" : row.deleted === true ? null : bodyError(t, id, row.body);
+    if (err) {
+      out.items.push({ id, error: err });
+      continue;
+    }
+    if (row.deleted === true) channels.push(channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body));
+    const r = row.deleted === true ? c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver) : c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, ver, row.body);
+    if ("error" in r) out.items.push({ id, error: r.error });
+    else if ("conflict" in r) out.items.push({ id, conflict: r.conflict });
+    else {
+      out.items.push({ id, item: r.ok });
+      if (r.ok.ver !== ver + 1) continue;
+      out.rev = Math.max(out.rev, r.ok.rev);
+      if (row.deleted !== true) channels.push(channelOf(row.body));
+    }
+  }
+  touched(c, t, out.rev, channels);
+  return json(out);
 }
 
 export const PDATA_ROUTES: Route[] = [
   route(GET, PATH_PDATA_COLL, ROOM, list),
+  route(POST, PATH_PDATA_COLL, ROOM, batch),
   route(GET, PATH_PDATA_ITEM, ROOM, getOne),
   route(PUT, PATH_PDATA_ITEM, ROOM, put),
   route(DELETE, PATH_PDATA_ITEM, ROOM, remove),

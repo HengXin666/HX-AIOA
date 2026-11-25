@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 插件冒烟测试: 本机起一个静态服务充当市场 (仓库 plugins/ 目录), 服务端用 --var PLUGIN_MARKET 指过来
-// 列表 -> 详情 -> 未放行装不了 -> 管理员放行 -> 安装 (群, Agent, 工作台) -> 放行新版才更新 -> Agent 拉指令, 写待办 -> 卸载 -> 撤销放行
+// 列表 -> 详情 -> 未放行装不了 -> 管理员放行 -> 安装 (群, Agent, 工作台) -> 放行新版才更新 -> Agent 拉指令, 写待办 (旧接口与 pdata) -> 卸载 -> 撤销放行
 // 环境变量: AIOA_SERVER, AIOA_TOKEN, AIOA_MARKET_PORT (默认 8797)
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -16,9 +16,13 @@ if (!server || !token) {
 const PORT = Number(process.env.AIOA_MARKET_PORT ?? 8797);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "plugins");
 const V1 = "/api/v1";
-const ID = "todo";
-const CHANNEL = `plugin-${ID}`;
+const ID = "hengxin666.todo";
+const OLD_ID = "todo";
+// 待办插件改了 id, 群与工作台沿用旧 id
+const CHANNEL = `plugin-${OLD_ID}`;
+const SPACE = CHANNEL;
 const TODOS = `${V1}/chats/${CHANNEL}/todos`;
+const ITEMS = `${V1}/pdata/${ID}/items`;
 const UA = "hx-aioa-agent/1";
 // 每次跑用新的待办 id, 卸载会保留数据, 重跑不受上次影响
 const T1 = `t-${Date.now().toString(36)}`;
@@ -89,7 +93,7 @@ check("只能放行市场当前版本", wrongVer.status === 409, wrongVer.data);
 
 const inst = await api("POST", `${V1}/plugins/${ID}/install`);
 const key = inst.data?.key;
-check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === `plugin-${ID}` && !!key, inst.data);
+check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === SPACE && !!key, inst.data);
 check("接入语一段话: 命令行, 定时, 任务, 密钥", inst.data?.prompt?.includes(`hxaioa login`) && inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes("插件任务") && inst.data.prompt.includes(key) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
 const after = await api("GET", `${V1}/plugins/${ID}`);
 check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
@@ -118,14 +122,16 @@ bumped = null;
 await api("PATCH", `${V1}/plugins/${ID}`, { auto: true });
 
 const spaces = await api("GET", `${V1}/spaces`);
-const space = spaces.data?.spaces?.find((s) => s.id === `plugin-${ID}`);
+const space = spaces.data?.spaces?.find((s) => s.id === SPACE);
 check("工作台已下发且占位符已替换", space?.panels?.[0]?.items?.[0]?.bind?.[0]?.subject === CHANNEL, space);
 const chats = await api("GET", `${V1}/chats`);
 const chat = chats.data?.chats?.find((c) => c.channel === CHANNEL);
 check("建群并接入 Agent", chat?.title === "点子待办" && chat.agents?.[0]?.plugin === ID, chat);
 
 const guide = await call(key, "GET", `${V1}/chat-agent/guide`);
-check("专属指令带插件任务", guide.status === 200 && guide.data.includes("插件任务: 点子待办") && guide.data.includes("### 待办") && !guide.data.includes("{{"), guide.data);
+check("专属指令带插件任务, 待办说明指向 pdata", guide.status === 200 && guide.data.includes("插件任务: 点子待办") && guide.data.includes("### 待办") && guide.data.includes(ITEMS) && !guide.data.includes("{{"), guide.data);
+const alias = await api("GET", `${V1}/plugins/${OLD_ID}`);
+check("旧 id 路径照常能用", alias.status === 200 && alias.data.manifest?.id === ID && alias.data.installed?.id === ID, alias.data?.installed);
 
 const said = await api("POST", `${V1}/messages`, { text: "要不要做个插件市场?", channel: CHANNEL });
 const msgs = await call(key, "GET", `${V1}/chats/${CHANNEL}/messages?since=0`);
@@ -144,6 +150,31 @@ const read = await api("GET", TODOS);
 check("主人读待办", read.data?.todos?.find((t) => t.id === T1)?.note === "先做官方市场", read.data);
 const other = await call(key, "POST", `${V1}/chats/other-${Date.now()}/todos`, { todos: [{ id: "x", title: "x" }] });
 check("Agent 写不了别的群的待办", other.status === 403, other.data);
+
+// pdata: 旧接口写的待办在 pdata 里, Agent 批量写带 ver, 版本不对给 conflict, 取值不合法给 error
+const rid = `${CHANNEL}:${T1}`;
+const pl = await call(key, "GET", `${ITEMS}?since=0`);
+const row = pl.data?.items?.find((i) => i.id === rid);
+check("旧接口写的待办在 pdata 里", pl.status === 200 && row?.body?.state === "done" && row.body.channel === CHANNEL && row.body.src === src?.seq, pl.data);
+const stale = await call(key, "POST", ITEMS, { items: [{ id: rid, ver: 1, body: { ...row?.body, prio: 1 } }] });
+check("批量写版本不对给 conflict", stale.status === 200 && stale.data.items[0]?.conflict?.ver === row?.ver && stale.data.rev === 0, stale.data);
+const T3 = `${T1}-3`;
+const good = await call(key, "POST", ITEMS, {
+  items: [
+    { id: rid, ver: row?.ver, body: { ...row?.body, prio: 1 } },
+    { id: `${CHANNEL}:${T3}`, ver: 0, body: { channel: CHANNEL, title: "批量新建", state: "open", prio: 2, created: Date.now() } },
+    { id: `${CHANNEL}:${T1}-bad`, ver: 0, body: { channel: CHANNEL, title: "坏的", state: "x", prio: 2, created: 1 } },
+    { id: `other:${T1}`, ver: 0, body: { channel: CHANNEL, title: "前缀不对", state: "open", prio: 2, created: 1 } },
+  ],
+});
+check("批量写一次多行, 坏行单独报错", good.status === 200 && good.data.items[0]?.item?.ver === row?.ver + 1 && !!good.data.items[1]?.item && /state/.test(good.data.items[2]?.error) && /<群>/.test(good.data.items[3]?.error) && good.data.rev > 0, good.data);
+const viaOld = await api("GET", TODOS);
+check("pdata 写的旧接口读得到", viaOld.data?.todos?.find((t) => t.id === T1)?.prio === 1 && viaOld.data.todos.some((t) => t.id === T3 && t.title === "批量新建"), viaOld.data);
+const ownerPut = await api("PUT", `${ITEMS}/${encodeURIComponent(`${CHANNEL}:${T3}`)}`, { ver: 0, body: { channel: CHANNEL, title: "抢先", state: "open", prio: 2, created: 1 } });
+check("主人单行写版本不对 409", ownerPut.status === 409 && ownerPut.data.current?.ver === 1, ownerPut.data);
+const tomb = await call(key, "POST", ITEMS, { items: [{ id: `${CHANNEL}:${T3}`, ver: 1, deleted: true }] });
+const afterTomb = await api("GET", TODOS);
+check("批量删除写墓碑, 旧接口看不到", tomb.data?.items?.[0]?.item?.deleted === true && !afterTomb.data?.todos?.some((t) => t.id === T3), tomb.data);
 
 const reply = await call(key, "POST", `${V1}/messages`, { text: "**结论**: 值得做", reply: src?.seq });
 const back = await call(key, "GET", `${V1}/chats/${CHANNEL}/messages?since=${src?.seq ?? 0}`);
@@ -164,7 +195,7 @@ check("重新接入后旧密钥失效", oldDead.status === 401 || oldDead.status
 const off = await api("DELETE", `${V1}/plugins/${ID}`);
 check("卸载", off.status === 200, off.data);
 const gone = await api("GET", `${V1}/spaces`);
-check("卸载后工作台移除", !gone.data?.spaces?.some((s) => s.id === `plugin-${ID}`), gone.data);
+check("卸载后工作台移除", !gone.data?.spaces?.some((s) => s.id === SPACE), gone.data);
 const dead = await call(key2 ?? key, "GET", `${V1}/chat-agent/guide`);
 check("卸载后密钥失效", dead.status === 401 || dead.status === 403, dead.status);
 const closed = await api("GET", TODOS);
@@ -174,8 +205,8 @@ check("卸载后显示未安装, 仍在白名单", relist.data?.plugins?.some((p
 const back2 = await api("POST", `${V1}/plugins/${ID}/install`);
 const kept = await api("GET", TODOS);
 check("重新安装后待办还在", back2.status === 200 && kept.data?.todos?.some((t) => t.id === T1), kept.data);
-const noData = await api("GET", `${V1}/pdata/${ID}/items`);
-check("没申请 data:own 的插件用不了通用数据层", noData.status === 403, noData.data);
+const data = await api("GET", `${ITEMS}?since=0`);
+check("重新安装后主人用通用数据层读得到待办", data.status === 200 && data.data.items.some((i) => i.id === rid && !i.deleted), data.data);
 const revoke = await api("DELETE", ALLOW);
 const afterRevoke = await api("GET", `${V1}/plugins`);
 check("撤销放行: 已装的一并卸掉", revoke.status === 200 && afterRevoke.data?.plugins?.some((p) => p.id === ID && !p.installed && !p.allowed), afterRevoke.data);

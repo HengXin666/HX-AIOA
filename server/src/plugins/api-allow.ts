@@ -8,6 +8,7 @@ import {
   cardOf,
   isExtPoint,
   isPluginId,
+  resolvePluginId,
   type PluginAllowInput,
   type PluginAllowView,
   type PluginManifest,
@@ -33,7 +34,7 @@ function param(c: ReqCtx, i: number): string {
 }
 
 function pluginParam(c: ReqCtx): string {
-  const id = param(c, 0);
+  const id = resolvePluginId(param(c, 0));
   if (!isPluginId(id)) throw new ApiFail(400, CODE_BAD_REQUEST, "插件 id 不合法");
   return id;
 }

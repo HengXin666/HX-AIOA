@@ -22,11 +22,11 @@ plugins/
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` | 新插件用 `<GitHub 登录名>.<名字>` (小写, 例 `hengxin666.notes`), 与目录名一致; 市场 CI 要求命名空间等于 PR 作者。旧插件 (如 `todo`) 保留不带点的 id |
+| `id` | 新插件用 `<GitHub 登录名>.<名字>` (小写, 例 `hengxin666.notes`), 与目录名一致; 市场 CI 要求命名空间等于 PR 作者。待办插件已从旧 id `todo` 迁为 `hengxin666.todo`, 旧 id 只作路径别名 |
 | `name`, `summary`, `version`, `icon`, `tags`, `author` | 市场展示用; `icon` 是 Lucide 图标名 |
 | `readme` | 介绍文件名, `.md` 或 `.html` |
 | `prompt` | 提示词模板文件名, `.md` |
-| `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` |
+| `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` (改过 id 的插件沿用旧 id, 如待办是 `plugin-todo`) |
 | `agent.name` | 接入 Agent 的名字; `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
 
@@ -49,7 +49,7 @@ api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa w
 
 ## 安装后的专属指令
 
-Agent 拉取的专属指令 = 通用接入部分 + "插件任务: <name>" 一节 (提示词模板替换占位符后) + 服务端生成的待办接口说明。
+Agent 拉取的专属指令 = 通用接入部分 + "插件任务: <name>" 一节 (提示词模板替换占位符后) + 服务端生成的待办接口说明 (pdata, 见 `docs/api/plugins.md`)。
 安装后给一段接入语, 整段复制给任何 Agent (本地或云端都行), 用户可以直接改里面的间隔和任务:
 
 ```

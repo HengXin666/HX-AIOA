@@ -3,6 +3,7 @@ import { AllowStore, type AllowRow } from "./allow-store";
 import { PluginKernel } from "./kernel";
 import { PDataStore } from "./pdata";
 import { PluginStore } from "./store";
+import { asTodoV2 } from "./todo-migrate";
 
 const LEGACY_README = "README.md";
 const LEGACY_PROMPT = "prompt.md";
@@ -22,7 +23,7 @@ export function legacySeed(store: PluginStore, uid: string): { rows: AllowRow[];
       group: { title: s.name },
       agent: { name: s.name, ...(s.job?.interval ? { interval: s.job.interval } : {}), ...(s.job?.task ? { task: s.job.task } : {}) },
     };
-    return { meta: { id: i.id, version: i.version, name: s.name, by: SEED_BY, at: i.installed }, manifest, prompt: s.prompt };
+    return { meta: { id: i.id, version: i.version, name: s.name, by: SEED_BY, at: i.installed }, manifest: asTodoV2(manifest), prompt: s.prompt };
   });
   return { rows, uid };
 }
