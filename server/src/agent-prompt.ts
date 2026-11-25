@@ -9,11 +9,11 @@ function feedSection(tags: FeedTag[]): string[] {
     "本群按信息流展示。推送一批条目只发 feed 消息, 一批只发一条; 带 HTML 卡片的消息会被拒收 (422 feed_required), 以前存的 HTML 模板作废:",
     "",
     "```",
-    `hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id":"<帖子 id>","title":"标题","url":"https://...","kind":"${first}","status":"ok","summary":"结论和关键时间","todo":"怎么拿到","until":"2026-11-30","heat":12}]}}'`,
+    `hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id":"<帖子 id>","title":"标题","url":"https://...","kind":"${first}","status":"ok","summary":"结论和关键时间","todo":"怎么拿到","until":"2026-11-30","heat":12,"at":"2026-11-25T09:30:00+08:00"}]}}'`,
     "```",
     "",
     "- `title` 必填 (200 字内), 其余可选; 一次 1-50 条, `text` 可以不写 (服务端生成通知摘要)。",
-    "- `status`: ok 有效 / go 进行中 / doubt 存疑 / dead 失效。`summary` 400 字内; `todo` 写要做什么才能拿到; `until` 截止日期; `heat` 热度 (回复数); `links` 最多 4 个 `{label,url}`。",
+    "- `status`: ok 有效 / go 进行中 / doubt 存疑 / dead 失效。`summary` 400 字内; `todo` 写要做什么才能拿到; `until` 截止日期; `heat` 热度 (回复数); `at` 原帖发布时间 (ISO 或毫秒, 不写就用推送时间); `links` 最多 4 个 `{label,url}`。",
     "- `id` 写帖子 id 等稳定值: 同一条再推时只保留最新, 已失效的可以带 `status: dead` 再推一次。",
     "",
     "### 标签 (kind)",
@@ -37,8 +37,8 @@ function fnv(text: string): string {
 }
 
 // 装命令行的一行, 从服务端拿, 版本总和服务端一致
-// 专属指令要求的最低命令行版本 (0.2.0 起会提示指令更新)
-const CLI_MIN = "0.2.0";
+// 专属指令要求的最低命令行版本 (0.3.0 起 watch 只等人, 带 --window, 有 memory)
+const CLI_MIN = "0.3.0";
 const install = (base: string) => `mkdir -p ~/.local/bin && curl -fsSLo ~/.local/bin/hxaioa ${base}/hxaioa.mjs && chmod +x ~/.local/bin/hxaioa`;
 
 // 接入语: 一段话整段复制给任何 Agent; 只让它装命令行, 登录, 拉专属指令, 规则都在专属指令里
@@ -70,8 +70,9 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     `你是 "${NAME_MARK}", 在主人的群 "${title}" (\`${channel}\`)。一切操作用已登录的 hxaioa:`,
     "",
     "- 发到本群: `hxaioa send \"文字\"`, 引用某条加 `--reply <seq>`",
-    "- 读新消息: `hxaioa read --new` (自动记住读到哪)",
-    "- 等主人回话: `hxaioa watch --once --timeout 300` (长连, 等到一条就退出, 超时退出码 2)",
+    "- 读新消息: `hxaioa read --new` (自动记住读到哪); 要上下文: `hxaioa read --before <seq> --limit 30`",
+    "- 等主人回话: `hxaioa watch --once --window 300 --timeout 100` (长连, 只等人发的消息)。退出码: 0 来了一条, 回到干活; 4 本次到点但 5 分钟还没满, 立刻原样再跑一次; 2 满 5 分钟没人说话, 结束; 3 专属指令刚更新, 先 `hxaioa guide --ack` 再接着等。`--timeout` 设得比你执行命令的时长上限小 (上限 2 分钟就用 100), 别让外层把它掐断。",
+    "- 长期记忆 (存服务端, 换环境也在): 每次开始先 `hxaioa memory`; 主人说过的背景, 偏好, 定下的结论随时 `hxaioa memory --add \"一句话\"` 记下, 最多 4000 字, 满了用 `hxaioa memory --set -` 合并重写。群里聊过的事不能忘, 拿不准就翻群记录。",
     "- 其它接口: `hxaioa api <METHOD> <路径> [JSON]`",
     "",
     `还没装 hxaioa (以前直接调接口的), 或 \`hxaioa --help\` 第一行版本低于 ${CLI_MIN}: \`${install(base)}\`; 没登录过再 \`hxaioa login ${base} <你的密钥>\`。以后一律用 hxaioa, 不再手写 HTTP 请求。`,

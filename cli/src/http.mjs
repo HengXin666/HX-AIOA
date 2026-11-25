@@ -1,5 +1,5 @@
 // HTTP: 统一带密钥与 UA (默认 UA 会被防火墙拦), 429 / 5xx 指数退避
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 export const USER_AGENT = `hx-aioa-agent/1 hxaioa-cli/${VERSION}`;
 const RETRIES = 5;
 const BASE_DELAY_MS = 1000;
@@ -13,11 +13,16 @@ export class ApiError extends Error {
 
 const GUIDE_HEADER = "X-Aioa-Guide-Version";
 let warned = false;
+// 见到的新指令版本 (和配置里报到的不同), watch 据此退出码 3
+let newer = "";
+export const guideChanged = () => newer;
 
 // 服务端每个响应都带当前指令版本; 和上次报到的不同就提示一次 (stderr, 不影响输出)
 function checkGuide(cfg, res, path) {
   const v = res.headers.get(GUIDE_HEADER);
-  if (!v || v === cfg.guide || warned || /^\/api\/v1\/chat-agent\/(guide|ack)/.test(path)) return;
+  if (!v || v === cfg.guide || /^\/api\/v1\/chat-agent\/(guide|ack)/.test(path)) return;
+  newer = v;
+  if (warned) return;
   warned = true;
   process.stderr.write(`专属指令已更新到 ${v}: 先运行 hxaioa guide --ack, 用新全文替换旧指令再继续。\n`);
 }

@@ -20,8 +20,11 @@ hxaioa login <服务地址> <密钥>      # 密钥存进 ~/.hxaioa/config.json (
 hxaioa guide --ack                  # 拉专属指令并报到 (第 1 节第 2-4 步)
 hxaioa send "<你的名字> 已接入"     # 发到本群
 hxaioa read --new                   # 读本群上次之后的新消息
-hxaioa watch --once --timeout 300   # 长连等下一条新消息, 5 分钟没有就退出 (退出码 2)
+hxaioa watch --once --window 300 --timeout 100   # 长连等主人的下一条; 退出码见下
+hxaioa memory                       # 读长期记忆 (存服务端); --add "一句话" 记一条
 ```
+
+`watch` 退出码: 0 来了一条人发的消息; 4 本次到点但 5 分钟窗口没满, 立刻再跑同一条命令; 2 满 5 分钟没人说话; 3 专属指令刚更新, 先 `hxaioa guide --ack`。`--timeout` 要比你执行命令的时长上限小 (很多 Agent 环境单条命令最多 2 分钟), 不然外层会把它掐断, 看起来就像 "没听几十秒就停了"。
 
 要等主人回话时用 `watch` 而不是反复 `read`: 长连推送几乎不耗额度, 群里还会显示你 "正在监听"。准备回复前可以 `hxaioa typing`。全部命令见 [cli.md](client/cli.md)。下载不了时也可以从 `<服务地址>/hxaioa.mjs` 拿同一个文件。
 

@@ -13,7 +13,8 @@ export const FEED_STATUS_LABEL: Record<FeedStatus, string> = { ok: "有效", go:
 export type FeedLink = { label: string; url: string };
 /**
  * 一条: title 必填; id 用于跨批次去重 (不写用 url); site 为来源站点域名 (不写取 url 的域名, 用来显示网站图标);
- * todo 是 "要做什么才能拿到"; until 是截止日期 (如 2026-11-30); heat 是热度 (回复数之类)。
+ * todo 是 "要做什么才能拿到"; until 是截止日期 (如 2026-11-30); heat 是热度 (回复数之类);
+ * at 是原帖发布时间 (毫秒, 也收 ISO 字符串), 不写时各端用消息时间。
  */
 export type FeedItem = {
   title: string;
@@ -26,6 +27,7 @@ export type FeedItem = {
   todo?: string;
   until?: string;
   heat?: number;
+  at?: number;
   links?: FeedLink[];
 };
 // source: 推送源名字 (LinuxDO, NodeLoc), 不写用发送方来源名
@@ -39,6 +41,7 @@ const MAX_FEED_SHORT = 80;
 const MAX_FEED_URL = 2000;
 const MAX_FEED_LINKS = 4;
 const URL_RE = /^https?:\/\//i;
+const SECONDS_LIMIT = 1e11;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const optStr = (v: unknown, max: number) => v === undefined || (typeof v === "string" && v.length <= max);
@@ -54,11 +57,14 @@ function parseItem(r: unknown, i: number): FeedItem | string {
   if (!optStr(r.summary, MAX_FEED_SUMMARY) || !optStr(r.todo, MAX_FEED_TODO)) return `${at} summary / todo 过长`;
   if (!optStr(r.id, MAX_FEED_SHORT) || !optStr(r.site, MAX_FEED_SHORT) || !optStr(r.until, MAX_FEED_SHORT)) return `${at} id / site / until 过长`;
   if (r.heat !== undefined && (typeof r.heat !== "number" || !Number.isFinite(r.heat))) return `${at}.heat 需要数字`;
+  const posted = timeOf(r.at);
+  if (posted === null) return `${at}.at 需要毫秒时间戳或 ISO 时间`;
   const out: FeedItem = { title: r.title.trim() };
   for (const k of ["id", "url", "summary", "todo", "until"] as const) if (typeof r[k] === "string" && r[k]) out[k] = r[k] as string;
   if (r.kind) out.kind = r.kind as string;
   if (r.status) out.status = r.status as FeedStatus;
   if (typeof r.heat === "number") out.heat = r.heat;
+  if (posted) out.at = posted;
   const site = typeof r.site === "string" && r.site ? r.site : out.url ? hostOf(out.url) : "";
   if (site) out.site = site.toLowerCase();
   if (r.links !== undefined) {
@@ -71,6 +77,15 @@ function parseItem(r: unknown, i: number): FeedItem | string {
     if (links.length) out.links = links;
   }
   return out;
+}
+
+// 发布时间: 不写给 0, 写错给 null
+function timeOf(v: unknown): number | null {
+  if (v === undefined) return 0;
+  const n = typeof v === "number" ? v : typeof v === "string" && v.length <= MAX_FEED_SHORT ? Date.parse(v) : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  // 秒级时间戳按秒算
+  return Math.round(n < SECONDS_LIMIT ? n * 1000 : n);
 }
 
 function hostOf(url: string): string {

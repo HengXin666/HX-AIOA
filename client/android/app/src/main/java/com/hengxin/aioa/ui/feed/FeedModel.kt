@@ -25,7 +25,12 @@ data class FeedItem(
     val seq: Long,
     // 旧格式推送的原 HTML 卡片, 没有链接时点开看它
     val html: String? = null,
-)
+    // 原帖发布时间, 0 = 推送方没给
+    val at: Long = 0,
+) {
+    /** 显示用的时间: 发布时间, 没有就用消息的服务端时间。 */
+    val time: Long get() = if (at > 0) at else ts
+}
 
 const val ST_OK = "ok"
 const val ST_GO = "go"
@@ -52,7 +57,7 @@ fun feedOf(m: ServerFrame.Msg, tags: List<FeedTag> = DEFAULT_TAGS): List<FeedIte
             status = o.s("status")?.takeIf { it in STATUS_LABEL },
             summary = o.s("summary"), todo = o.s("todo"), until = o.s("until"),
             heat = if (o.has("heat")) o.optDouble("heat").toInt() else null,
-            links = links, source = source, ts = m.ts, seq = m.seq,
+            links = links, source = source, ts = m.ts, seq = m.seq, at = o.optLong("at"),
         )
     }
 }

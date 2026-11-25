@@ -1,8 +1,10 @@
-import { feedTagsOf, HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type RouteInfo } from "@hx-aioa/protocol";
+import { API_V1, feedTagsOf, HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type GuideFrame, type RouteInfo } from "@hx-aioa/protocol";
 import { agentGuide } from "./agent-prompt";
 import { baseOf, saveAgents } from "./api-chats";
 import { messageInput } from "./api-events";
+import { GET } from "./constants";
 import type { Core, Principal } from "./core";
+import { sendFrame } from "./sockets";
 
 // 指令更新通知: 服务端以 "系统" 身份发到 Agent 所在的群, 不响铃
 const NOTICE_SOURCE = { id: "system:guide", name: "系统", icon: "refresh-cw" };
@@ -12,6 +14,8 @@ const API_CLIENT = "接口";
 const SWITCHING = 101;
 // 拉指令 / 报到本身不触发 "请更新" 通知
 const QUIET_PATHS = [PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS];
+// 这些接口改的东西会进专属指令 (群资料, Agent, 插件, GitHub 授权)
+const GUIDE_INPUTS = [`${API_V1}/chats/`, `${API_V1}/plugins`, `${API_V1}/gh/`];
 
 /** 专属指令: 插件 Agent 带插件提示词, 信息流群带 feed 格式。 */
 export function guideFor(core: Core, base: string, channel: string, agent: ChatAgent) {
@@ -47,23 +51,43 @@ async function notice(core: Core, channel: string, text: string): Promise<void> 
   await core.pipeline.fromInput(input, { source: NOTICE_SOURCE }, NOTICE_ROUTE);
 }
 
+// 指令变旧: 标待更新, 群里记一笔, 在线的长连立刻收到 guide 帧 (hxaioa watch 退出码 3)
+async function markStale(core: Core, meta: ChatMeta, agent: ChatAgent, version: string): Promise<void> {
+  replace(core, meta, { ...agent, notified: version, pending: true });
+  for (const ws of core.sockets.chatSockets(agent.keyId)) sendFrame(ws, { t: "guide", channel: meta.channel, version } satisfies GuideFrame);
+  await notice(core, meta.channel, `${agent.name} 的专属指令已更新到 ${version}: 下次干活前先运行 hxaioa guide --ack (直接调接口的: GET ${PATH_AGENT_GUIDE} 再 POST ${PATH_AGENT_GUIDE_ACK}), 用新全文替换旧指令和自己存的模板。`);
+}
+
+const isStale = (agent: ChatAgent, version: string) => !!agent.joined && agent.version !== version && agent.notified !== version;
+
+/** 主人改完设置后马上查一遍所有已报到的 Agent, 不等它下次来请求。 */
+export async function refreshGuides(core: Core, base: string): Promise<void> {
+  for (const meta of core.chats.chats()) {
+    for (const agent of meta.agents ?? []) {
+      const g = guideFor(core, base, meta.channel, agent);
+      if (isStale(agent, g.version)) await markStale(core, core.chats.chat(meta.channel) ?? meta, agent, g.version);
+    }
+  }
+}
+
 /**
  * Agent 的每个请求: 响应头带上当前指令版本 (hxaioa 据此提示更新);
  * 已报到过的 Agent 指令版本变了, 在群里发一次通知, 标成待更新。
+ * 主人 (或群管理) 的写请求成功后, 立刻检查全部 Agent 的指令。
  */
 export async function stampGuide(core: Core, req: Request, url: URL, who: Principal, res: Response): Promise<Response> {
-  if (who.owner || who.member || res.status === SWITCHING) return res;
+  if (res.status === SWITCHING) return res;
+  if (who.owner || who.member) {
+    if (req.method !== GET && res.ok && GUIDE_INPUTS.some((p) => url.pathname.startsWith(p))) await refreshGuides(core, baseOf(url));
+    return res;
+  }
   const hit = agentOfKey(core, who.key.id);
   if (!hit) return res;
   const { meta, agent } = hit;
   const g = guideFor(core, baseOf(url), meta.channel, agent);
   const out = new Response(res.body, res);
   out.headers.set(HEADER_GUIDE_VERSION, g.version);
-  const stale = agent.joined && agent.version !== g.version && agent.notified !== g.version;
-  if (stale && !QUIET_PATHS.includes(url.pathname)) {
-    replace(core, meta, { ...agent, notified: g.version, pending: true });
-    await notice(core, meta.channel, `${agent.name} 的专属指令已更新到 ${g.version}: 下次干活前先运行 hxaioa guide --ack (直接调接口的: GET ${PATH_AGENT_GUIDE} 再 POST ${PATH_AGENT_GUIDE_ACK}), 用新全文替换旧指令和自己存的模板。`);
-  }
+  if (isStale(agent, g.version) && !QUIET_PATHS.includes(url.pathname)) await markStale(core, meta, agent, g.version);
   return out;
 }
 

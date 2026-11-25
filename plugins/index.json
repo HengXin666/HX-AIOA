@@ -4,7 +4,7 @@
       "id": "todo",
       "name": "点子待办",
       "summary": "在群里随手丢想法, Agent 定时整理成待办; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "icon": "list-checks",
       "tags": [
         "待办",
