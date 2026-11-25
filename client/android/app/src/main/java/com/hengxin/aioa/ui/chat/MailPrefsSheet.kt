@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,8 @@ fun MailPrefsSheet(s: MailState, close: () -> Unit) {
     val c = Aioa.colors
     val scope = rememberCoroutineScope()
     val p = s.prefs
+    val tp = MailTrPrefs.of(LocalContext.current)
+    @Suppress("UNUSED_VARIABLE") val tv = tp.version
     ModalBottomSheet(close, containerColor = c.surface) {
         Column(Modifier.navigationBarsPadding().heightIn(max = 680.dp).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             Head("远程图片")
@@ -48,6 +51,11 @@ fun MailPrefsSheet(s: MailState, close: () -> Unit) {
             p.senders.toSortedMap().forEach { (k, v) ->
                 val desc = listOfNotNull(v.images?.let { if (it == SHOW) "显示图片" else "拦截图片" }, v.style?.let { STYLE_LABEL[it] }).joinToString(" · ")
                 Line(k, desc) { scope.launch { s.savePrefs(p.withSender(k, MailSenderPref())) } }
+            }
+            if (tp.auto.isNotEmpty() || tp.muted.isNotEmpty()) {
+                Head("翻译")
+                tp.auto.sorted().forEach { lang -> Line("${lang}邮件", "总是自动翻译") { tp.setAuto(lang, false) } }
+                tp.muted.sorted().forEach { site -> Line(site, "不提示翻译") { tp.setMuted(site, false) } }
             }
             Head("自动转发 (${s.rules.size})")
             if (s.rules.isEmpty()) Empty("在邮件详情里 \"转进群\" / \"交给 Agent\" 时打开 \"以后自动转\" 即可添加")

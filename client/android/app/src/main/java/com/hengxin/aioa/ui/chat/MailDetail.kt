@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.pressable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 private val VIA_LABEL = mapOf("cf" to "Cloudflare 邮件路由", "hx-email" to "HX-Email", "api" to "接口推送")
@@ -58,6 +60,19 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
     var link by remember { mutableStateOf<String?>(null) }
     var forward by remember { mutableStateOf<Boolean?>(null) }
     var settings by remember { mutableStateOf(false) }
+    val tr = remember(m.id) { MailTr.of(m.id) }
+    val trPrefs = MailTrPrefs.of(context)
+    @Suppress("UNUSED_VARIABLE") val tv = trPrefs.version
+    val lang = remember(m.id) { trLangOf(m.subject + "\n" + m.summary) }
+    val trOn = lang != null && MailAddr.site(m.from) !in trPrefs.muted
+    var trJob by remember(m.id) { mutableStateOf<Job?>(null) }
+    fun runTr() {
+        trJob = scope.launch {
+            val html = s.bodies[m.id] ?: if (m.body != null) s.api.body(m.id).getOrNull()?.also { s.bodies[m.id] = it } else null
+            tr.run(context, m, html)
+        }
+    }
+    LaunchedEffect(m.id) { if (trOn && lang != null && lang in trPrefs.auto && tr.phase == PHASE_IDLE) runTr() }
     BackHandler(onBack = back)
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -67,12 +82,15 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().background(c.surface).padding(MAIL_PAD.dp)) {
-                SelectionContainer { Text(m.subject, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 27.sp) }
+                val sub = tr.subject.takeIf { tr.showing }
+                SelectionContainer { Text(sub ?: m.subject, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 27.sp) }
+                if (sub != null) Text(m.subject, Modifier.padding(top = 2.dp), color = c.textSecondary, fontSize = 12.sp, lineHeight = 17.sp)
                 Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     m.category?.let { Tag(it, c.textSecondary) }
                     if (m.spoof) Tag("可疑: 发件域名校验失败", c.danger)
                 }
                 Sender(m)
+                if (trOn && lang != null) TranslateLine(m, tr, lang, { runTr() }) { trJob?.cancel() }
                 Recipient(m)
                 m.code?.let { code ->
                     Row(Modifier.padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = SOFT)).clickable { copyCode(context, code) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -84,7 +102,7 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
                     }
                 }
             }
-            MailBody(m, s) { link = it }
+            MailBody(m, s, tr) { link = it }
             if (t.items.size > 1) Others(t, m.id) { cur = it; s.seen.set(t.items.filter { x -> x.id == it }, true) }
             Spacer(Modifier.height(24.dp))
         }
