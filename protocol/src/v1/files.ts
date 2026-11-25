@@ -81,8 +81,6 @@ export type FileUsage = {
 export const FILE_ID_PREFIX = "f_";
 // Worker 免费计划单次请求体上限 100MB, 留出余量; 超过的只能分片传到 Drive
 export const FILE_MAX_BYTES = 95 * 1024 * 1024;
-// 分片上传 (只走 Drive) 的单文件上限; Drive 一片约 19 MB, 4 GB 约 216 片, 一次提交就能带全部回执
-export const FILE_CHUNKED_MAX_BYTES = 4 * 1024 * 1024 * 1024;
 // 分片上传的票据给 24 小时 (与 Drive 的上传票据一致), 慢网络也传得完
 export const FILE_CHUNK_TTL_MS = 24 * 3600_000;
 // R2 免费 10GB, 留 2GB 余量给别的桶

@@ -41,6 +41,10 @@ private const val OFF = "off"
 private const val LABEL_SP = 14
 private const val MB = 1024L * 1024
 private val THRESHOLDS = listOf(5L, 10L, 20L, 50L, 95L)
+private const val THRESHOLD_MAX_MB = 95L
+private const val MODE_ALL_CFD = "all-cfd"
+private const val MODE_SPLIT = "split"
+private const val MODE_ALL_R2 = "all-r2"
 private val STORE_LABELS = listOf(STORE_R2 to "R2", STORE_CFD to "Drive")
 private const val MIGRATE_API = "api/v1/files/migrate"
 private const val MIGRATE_POLL_MS = 3000L
@@ -138,26 +142,69 @@ private fun UsageGroup(body: JSONObject) {
     }
 }
 
-/** 路由: 小文件, 大文件各选一个后端, 阈值, R2 满了怎么办。没绑定的后端不可选, 由服务端最终校验。 */
+/**
+ * 路由: 先选方式 (全部走 Drive / 按大小分 / 全部 R2), 按大小分时再定分界, 预设之外可以自己填。
+ * 没绑定的后端不出现在选项里, 由服务端最终校验; 老配置对不上三种方式时显示原来的逐项选择, 方便改回来。
+ */
 @Composable
 private fun RouteGroup(body: JSONObject, save: (JSONObject) -> Unit) {
     val s = body.optJSONObject(KEY_STORAGE) ?: JSONObject()
     val ready = body.optJSONObject("ready")
     val can = { k: String -> ready?.optBoolean(k) == true }
     val threshold = s.optLong("threshold") / MB
+    val mode = modeOf(s.optString("small"), s.optString("large"))
+    var custom by remember { mutableStateOf("") }
+    val customMb = custom.toLongOrNull()?.takeIf { it in 1..THRESHOLD_MAX_MB }
+    val modes = buildList {
+        if (can(STORE_CFD)) add(MODE_ALL_CFD to "全部走 Drive")
+        if (can(STORE_CFD) && can(STORE_R2)) add(MODE_SPLIT to "按大小分")
+        if (can(STORE_R2)) add(MODE_ALL_R2 to "全部 R2")
+    }
     SettingsGroup("存储路由", "只影响之后上传的文件; 已有文件留在原后端, 已发的消息照常能下载。") {
-        OptionRow("${threshold} MB 以内", STORE_LABELS.filter { can(it.first) }, s.optString("small")) { save(JSONObject().put("small", it)) }
+        OptionRow("方式", modes, mode) { save(routeOf(it)) }
         RowDivider(false)
-        OptionRow("超过 ${threshold} MB", STORE_LABELS.filter { can(it.first) } + (OFF to "不收"), s.optString("large")) { save(JSONObject().put("large", it)) }
-        RowDivider(false)
-        OptionRow("分界", THRESHOLDS.map { "${it * MB}" to "$it MB" }, "${s.optLong("threshold")}") { save(JSONObject().put("threshold", it.toLong())) }
-        if (can(STORE_CFD)) {
+        when (mode) {
+            MODE_ALL_CFD -> NoteRow("所有文件都存到 TG, 不占 R2, 单个文件不限大小 (超过 95 MB 自动分片)。小文件上传比 R2 慢 2 到 3 秒, 邮件附件与正文也只有 TG 一份。")
+            MODE_ALL_R2 -> NoteRow("单个文件最大 95 MB, 更大的拒收; R2 总量 8 GB。")
+            MODE_SPLIT -> {
+                OptionRow("超过多少走 Drive (现在 $threshold MB)", THRESHOLDS.map { "${it * MB}" to "$it MB" }, "${s.optLong("threshold")}") {
+                    save(JSONObject().put("threshold", it.toLong()))
+                }
+                RowDivider(false)
+                InputRow("自定义分界 (MB)", custom, "1 到 $THRESHOLD_MAX_MB 的整数") { v -> custom = v.filter { it.isDigit() }.take(2) }
+                RowDivider(false)
+                ActionRow("保存分界", "check", enabled = customMb != null) {
+                    save(JSONObject().put("threshold", (customMb ?: return@ActionRow) * MB))
+                    custom = ""
+                }
+            }
+            else -> {
+                OptionRow("$threshold MB 以内", STORE_LABELS.filter { can(it.first) }, s.optString("small")) { save(JSONObject().put("small", it)) }
+                RowDivider(false)
+                OptionRow("超过 $threshold MB", STORE_LABELS.filter { can(it.first) } + (OFF to "不收"), s.optString("large")) { save(JSONObject().put("large", it)) }
+            }
+        }
+        if (can(STORE_CFD) && mode != MODE_ALL_CFD) {
             RowDivider(false)
             SwitchRow("R2 满了改走 Drive", s.optString("onFull") == STORE_CFD, "关闭时 R2 满了拒收新文件") {
                 save(JSONObject().put("onFull", if (it) STORE_CFD else "reject"))
             }
         }
     }
+}
+
+/** 现有配置对应哪种方式; 对不上 (例如小文件走 Drive, 大文件走 R2) 返回空串。 */
+private fun modeOf(small: String, large: String): String = when {
+    small == STORE_CFD && large == STORE_CFD -> MODE_ALL_CFD
+    small == STORE_R2 && large == STORE_CFD -> MODE_SPLIT
+    small == STORE_R2 && large == STORE_R2 -> MODE_ALL_R2
+    else -> ""
+}
+
+private fun routeOf(mode: String): JSONObject = when (mode) {
+    MODE_ALL_CFD -> JSONObject().put("small", STORE_CFD).put("large", STORE_CFD)
+    MODE_SPLIT -> JSONObject().put("small", STORE_R2).put("large", STORE_CFD)
+    else -> JSONObject().put("small", STORE_R2).put("large", STORE_R2)
 }
 
 /**

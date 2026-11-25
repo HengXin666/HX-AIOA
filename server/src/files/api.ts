@@ -2,7 +2,6 @@ import {
   FILE_DEFAULT_MIME,
   FILE_LINK_TTL_MS,
   FILE_CHUNK_TTL_MS,
-  FILE_CHUNKED_MAX_BYTES,
   FILE_MAX_BYTES,
   FILE_NAME_MAX,
   FILE_QUERY_DIRECT,
@@ -70,7 +69,8 @@ async function create(c: ReqCtx): Promise<Response> {
   const size = typeof b?.size === "number" ? Math.floor(b.size) : -1;
   const mime = typeof b?.mime === "string" && MIME_RE.test(b.mime) ? b.mime.toLowerCase() : FILE_DEFAULT_MIME;
   if (!name || name.includes("/")) return fail(400, "需要文件名 (不含 /)", CODE_BAD_REQUEST);
-  if (size < 0 || size > FILE_CHUNKED_MAX_BYTES) return fail(413, `单个文件上限 ${FILE_CHUNKED_MAX_BYTES / 1024 / 1024 / 1024} GB`, CODE_BAD_REQUEST);
+  // 走 Drive 不设单文件上限 (主人要求); 走 R2 的 95 MB 上限由 pick() 判断
+  if (size < 0 || !Number.isSafeInteger(size)) return fail(400, "需要文件大小", CODE_BAD_REQUEST);
   const grp = uploadGroup(c.core, c.who, typeof b?.channel === "string" ? b.channel : undefined);
   const store = c.core.files.pick(size, storageOf(await c.core.config.settings()));
   if (Array.isArray(store)) {
