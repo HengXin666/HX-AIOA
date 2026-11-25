@@ -61,7 +61,7 @@ fun mailPlain(html: String): String =
 
 /** 正文: 有原文就内嵌显示 (远程图片按偏好拦截, 深色适配), 没有就显示摘要; 点链接交给 onLink。 */
 @Composable
-fun MailBody(m: MailItem, s: MailState, onLink: (String) -> Unit) {
+fun MailBody(m: MailItem, s: MailState, tr: MailTr, onLink: (String) -> Unit) {
     val c = Aioa.colors
     val scope = rememberCoroutineScope()
     var html by remember(m.id) { mutableStateOf(s.bodies[m.id]) }
@@ -73,7 +73,7 @@ fun MailBody(m: MailItem, s: MailState, onLink: (String) -> Unit) {
     val page = html
     if (page == null) {
         Column(Modifier.fillMaxWidth().background(c.surface).padding(MAIL_PAD.dp)) {
-            SelectionContainer { Text(m.summary.ifEmpty { "(没有正文)" }, color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
+            SelectionContainer { Text((tr.summary.takeIf { tr.showing } ?: m.summary).ifEmpty { "(没有正文)" }, color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
             if (m.body != null) Text(err ?: "正在加载原文...", Modifier.padding(top = 10.dp), color = if (err != null) c.danger else c.textSecondary, fontSize = 12.sp)
         }
         return
@@ -101,11 +101,12 @@ fun MailBody(m: MailItem, s: MailState, onLink: (String) -> Unit) {
             }
         }
         if (style == STYLE_TEXT) {
-            val text = remember(page) { mailPlain(page) }
+            val src = if (tr.showing) tr.bare ?: page else page
+            val text = remember(src) { mailPlain(src) }
             SelectionContainer { Text(text, Modifier.padding(MAIL_PAD.dp), color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
         } else {
             val dark = cardTheme().dark
-            MailWeb(page, show, dark && style == STYLE_ADAPT, onLink)
+            MailWeb(if (tr.showing) tr.page ?: page else page, show, dark && style == STYLE_ADAPT, onLink)
         }
     }
 }
@@ -113,7 +114,8 @@ fun MailBody(m: MailItem, s: MailState, onLink: (String) -> Unit) {
 @SuppressLint("ClickableViewAccessibility")
 @Composable
 private fun MailWeb(html: String, images: Boolean, invert: Boolean, onLink: (String) -> Unit) {
-    var height by remember(html) { mutableIntStateOf(BODY_MIN) }
+    // 译文逐批换上时不跳回最小高度
+    var height by remember { mutableIntStateOf(BODY_MIN) }
     val key = "$images/$invert/${html.hashCode()}"
     AndroidView(
         factory = { ctx -> mailWebView(ctx, onLink) { h -> height = maxOf(h, BODY_MIN) } },
@@ -130,7 +132,7 @@ private fun MailWeb(html: String, images: Boolean, invert: Boolean, onLink: (Str
 
 private fun mailPage(body: String, invert: Boolean) =
     "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-        "<style>$FIT${if (invert) INVERT else ""}</style></head><body>${body.replace(VIEWPORT, "")}</body></html>"
+        "<style>$FIT$TR_CSS${if (invert) INVERT else ""}</style></head><body>${body.replace(VIEWPORT, "")}</body></html>"
 
 /** 邮件原文 WebView: 不跑脚本, 不读文件, 远程资源按偏好放行; 拖动交给外层滚动, 点链接交给外面处理。 */
 @SuppressLint("ClickableViewAccessibility")
