@@ -9,6 +9,7 @@ import { Market } from "./plugins/market";
 import { TodoStore } from "./plugins/todos";
 import { TranslateStore } from "./translate/store";
 import { GhService } from "./gh/service";
+import { HxoaService } from "./hxoa/service";
 import { pluginParts } from "./plugins/seed";
 import { DurableObject } from "cloudflare:workers";
 import {
@@ -133,7 +134,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

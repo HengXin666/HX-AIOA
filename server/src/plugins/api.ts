@@ -20,6 +20,7 @@ import { type Core, OWNER, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { TODO_ROUTES } from "./api-todos";
 import { usesGh } from "../gh/gate";
+import { acctOf } from "./who";
 import { renderTask } from "./store";
 import { pushPlugin } from "./notify";
 import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
@@ -38,7 +39,9 @@ async function list(c: ReqCtx): Promise<Response> {
   for (const p of c.core.plugins.list()) await autoUpgrade(c.core, p.id);
   const installed = new Map(c.core.plugins.list().map((p) => [p.id, p]));
   const allow = new Map(c.core.kernel.list().map((a) => [a.id, a]));
-  const extra = (id: string) => ({ ...(installed.has(id) ? { installed: installed.get(id)! } : {}), ...(allow.has(id) ? { allowed: allow.get(id)! } : {}) });
+  const uid = acctOf(c.core, c.who);
+  const on = (id: string) => !!uid && allow.has(id) && c.core.kernel.isEnabled(uid, id);
+  const extra = (id: string) => ({ ...(installed.has(id) ? { installed: installed.get(id)! } : {}), ...(allow.has(id) ? { allowed: allow.get(id)! } : {}), ...(on(id) ? { enabled: true as const } : {}) });
   try {
     const index = await c.core.market.index();
     return json({ plugins: index.map((p) => ({ ...p, ...extra(p.id) })) } satisfies PluginList);

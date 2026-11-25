@@ -23,6 +23,7 @@ export * from "./v1/plugin-v2";
 export * from "./v1/plugin-check";
 export * from "./v1/plugin-api";
 export * from "./v1/plugin-todo";
+export * from "./v1/plugin-hxoa";
 export * from "./v1/semver";
 export * from "./v1/mail";
 export * from "./v1/mail-rules";

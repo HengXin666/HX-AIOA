@@ -25,7 +25,11 @@ data class PluginEntry(
     val author: String,
     val installed: PluginInstall?,
     val allowed: PluginAllowed?,
+    // 本账号启用了; 无 Agent 的插件没有安装记录, 靠这个算 "已安装"
+    val enabled: Boolean = false,
 ) {
+    val mine get() = installed != null || enabled
+
     /** 管理员放行了比已装更新的版本 (市场出新版不算, 要等放行)。 */
     val outdated get() = installed != null && allowed != null && installed.version != allowed.version
 
@@ -115,6 +119,7 @@ class PluginApi(private val context: Context) {
             tags = (0 until (tags?.length() ?: 0)).mapNotNull { tags?.optString(it)?.ifEmpty { null } },
             author = o.optString("author"),
             installed = o.optJSONObject(KEY_INSTALLED)?.let(::install),
+            enabled = o.optBoolean(KEY_ENABLED),
             allowed = o.optJSONObject(KEY_ALLOWED)?.let { a ->
                 val risky = a.optJSONArray("risky")
                 PluginAllowed(a.optString("version"), (0 until (risky?.length() ?: 0)).mapNotNull { risky?.optString(it) })

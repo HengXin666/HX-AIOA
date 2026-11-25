@@ -1,4 +1,4 @@
-import { GH_PLUGIN_ID, GITHUB_PLUGIN } from "@hx-aioa/protocol";
+import { GH_PLUGIN_ID, GITHUB_PLUGIN, HXOA_PLUGIN } from "@hx-aioa/protocol";
 import { CODE_NOT_FOUND, ERR_NOT_FOUND } from "../constants";
 import type { Core, Handler } from "../core";
 import { fail } from "../http";
@@ -14,9 +14,10 @@ export async function githubOff(req: Request): Promise<Response> {
 
 export const gated = (h: Handler): Handler => (c) => (githubOn(c.core) ? h(c) : githubOff(c.req));
 
-/** 停用并清除数据: 只有主人停用内置插件时才清 (数据属于部署); GitHub 授权清掉令牌与规则。 */
+/** 停用并清除数据: 只有主人停用内置插件时才清 (数据属于部署); GitHub 授权清掉令牌与规则, hxoa 接入清掉全部接入与令牌。 */
 export async function purgeBuiltin(core: Core, uid: string, id: string): Promise<number> {
   if (uid !== core.users.ownerId()) return 0;
   if (id === GITHUB_PLUGIN) return core.github.purge();
+  if (id === HXOA_PLUGIN) return core.hxoa.purge();
   return id === GH_PLUGIN_ID ? core.gh.purge() : 0;
 }

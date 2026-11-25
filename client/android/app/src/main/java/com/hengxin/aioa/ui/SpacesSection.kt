@@ -29,6 +29,7 @@ import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.kit.TodoRow
 import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.OverviewItem
+import com.hengxin.aioa.ui.todo.TodoCompact
 
 /** 组件取数: 指标来自 watch 推送 + /data 首屏值, 事件与任务来自 v1 流, 对话按需拉历史。 */
 private class AppSpaceSource(private val chat: ChatModel) : SpaceSource {
@@ -61,6 +62,9 @@ private class AppSpaceSource(private val chat: ChatModel) : SpaceSource {
     override fun clock(ts: Long): String = com.hengxin.aioa.ui.clock(ts)
 
     override fun todos(subject: String): List<TodoRow>? = chat.spaces.todos(subject)
+
+    // 与群里的待办看板同款; 详情里 "去原消息" 进群定位
+    override val todoView: @Composable (String, Int) -> Unit = { subject, limit -> TodoCompact(chat.spaces, subject, limit) { seq -> chat.groups.openAt(subject, seq) } }
 }
 
 /** 资源页顶部的工作台: 与 Web 渲染同一份 schema; 危险按钮与危险选项先二次确认。 */

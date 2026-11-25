@@ -1,0 +1,23 @@
+{
+  "id": "hengxin666.hxoa",
+  "name": "hxoa 接入",
+  "summary": "接入一台或多台 hxoa 服务端 (远程工作区): 在 App 的服务器页看在线状态与 worker 分支, 浏览文件, 跑命令。令牌只存在服务端。",
+  "version": "1.0.0",
+  "icon": "terminal",
+  "tags": ["hxoa", "服务器", "开发"],
+  "author": "HengXin666",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "group": { "title": "hxoa" },
+  "api": "2",
+  "engines": { "aioa": "^2" },
+  "permissions": ["net:*"],
+  "contributes": {
+    "widgets": [
+      { "id": "hengxin666.hxoa.panel", "title": "hxoa 面板" }
+    ]
+  },
+  "budget": {
+    "requestsPerDay": 500
+  }
+}

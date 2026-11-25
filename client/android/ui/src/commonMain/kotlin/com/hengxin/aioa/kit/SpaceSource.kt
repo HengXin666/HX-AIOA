@@ -1,5 +1,7 @@
 package com.hengxin.aioa.kit
 
+import androidx.compose.runtime.Composable
+
 /** 一个指标点。 */
 data class MetricSample(val ts: Long, val value: Float)
 
@@ -25,6 +27,8 @@ interface SpaceSource {
     fun clock(ts: Long): String
     /** 群下的待办; null 表示还在加载。 */
     fun todos(subject: String): List<TodoRow>? = emptyList()
+    /** 待办组件的渲染 (群, 最多几条); App 给看板同款 (父子树, 状态, issue), 没给时用 kit 里的简版。 */
+    val todoView: (@Composable (subject: String, limit: Int) -> Unit)? get() = null
 }
 
 /** 组件上的用户操作; 危险按钮的二次确认由实现方负责。 */

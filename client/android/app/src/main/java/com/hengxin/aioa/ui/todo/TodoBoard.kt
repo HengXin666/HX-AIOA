@@ -105,7 +105,7 @@ private fun LazyListScope.section(s: TodoSection, closed: Set<String>, toggle: (
                     Text("${g.count}", color = c.textSecondary, fontSize = 12.sp)
                     Icon(if (shut) "chevron-right" else "chevron-down", c.textSecondary, 16.dp, Modifier.padding(start = 6.dp))
                 }
-                if (!shut) g.nodes.forEach { NodeRows(it, 0, closed, toggle, open, tick) }
+                if (!shut) g.nodes.forEach { NodeRows(it, 0, closed, toggle, open, tick = tick) }
             }
         }
     }
@@ -125,7 +125,7 @@ private fun SectionHeader(s: TodoSection) {
 }
 
 @Composable
-private fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (String) -> Unit, open: (TodoRow) -> Unit, tick: (TodoRow) -> Unit) {
+internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (String) -> Unit, open: (TodoRow) -> Unit, showRepo: Boolean = false, tick: (TodoRow) -> Unit) {
     val c = Aioa.colors
     val r = n.row
     val key = "n:${r.id}"
@@ -149,17 +149,22 @@ private fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (Stri
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            MetaLine(r)
+            MetaLine(r, showRepo)
         }
         if (parent) Text("${n.done}/${n.total}", Modifier.padding(start = 6.dp).clip(PILL).background(c.surfaceAlt).padding(horizontal = 6.dp, vertical = 1.dp), color = c.textSecondary, fontSize = 11.sp)
     }
-    if (parent && !shut) n.kids.forEach { NodeRows(it, depth + 1, closed, toggle, open, tick) }
+    if (parent && !shut) n.kids.forEach { NodeRows(it, depth + 1, closed, toggle, open, showRepo, tick) }
 }
 
 @Composable
-private fun MetaLine(r: TodoRow) {
+private fun MetaLine(r: TodoRow, showRepo: Boolean = false) {
     val c = Aioa.colors
     Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 总览的待办组件不按仓库分组, 每条标出仓库
+        if (showRepo) r.repo?.let { repo ->
+            Box(Modifier.size(7.dp).clip(RoundedCornerShape(2.dp)).background(repoColor(repo)))
+            Text(repoName(repo), color = c.textSecondary, fontSize = 11.sp)
+        }
         if (!r.finished) Text("P${r.prio}", color = if (r.prio == PRIO_URGENT) c.danger else c.textSecondary, fontSize = 11.sp)
         stateColor(r.state)?.let { Pill(stateLabel(r.state), it) }
         r.issue?.let { n -> Pill("#$n", if (r.ghOpen == false) DONE_PURPLE else c.success, if (r.ghOpen == false) "circle-check" else "circle-dot") }

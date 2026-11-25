@@ -2,6 +2,7 @@ import type { Migrator } from "./files/migrate";
 import type { TranslateStore } from "./translate/store";
 import type { FileStore } from "./files/store";
 import type { GhService } from "./gh/service";
+import type { HxoaService } from "./hxoa/service";
 import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
 import type { PluginStore } from "./plugins/store";
@@ -56,6 +57,8 @@ export type Core = {
   tr: TranslateStore;
   todos: TodoStore;
   gh: GhService;
+  // hxoa 接入 (#97): 远程工作区的令牌与转发
+  hxoa: HxoaService;
   market: Market;
   users: Users;
   terms: Terminals;

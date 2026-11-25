@@ -62,7 +62,7 @@ fun PluginsPage(onBack: (() -> Unit)?, openGroup: (String) -> Unit) {
             items == null && error == null -> Paragraph("加载中...", c.textSecondary, BODY_SP)
             items.isNullOrEmpty() -> if (error == null) Paragraph("市场里还没有插件", c.textSecondary, BODY_SP)
             else -> {
-                val (mine, rest) = items.partition { it.installed != null }
+                val (mine, rest) = items.partition { it.mine }
                 if (mine.isNotEmpty()) SettingsGroup("已安装") { mine.forEachIndexed { i, p -> if (i > 0) RowDivider(); PluginTile(p) { openId = p.id } } }
                 if (rest.isNotEmpty()) SettingsGroup("官方市场") { rest.forEachIndexed { i, p -> if (i > 0) RowDivider(); PluginTile(p) { openId = p.id } } }
             }
@@ -93,6 +93,7 @@ private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
                 Text("v${p.installed?.version ?: p.version}", c.textSecondary, SMALL_SP)
                 if (p.outdated) Text("可更新到 v${p.allowed?.version}", c.accent, SMALL_SP)
                 else if (p.installed != null) Text("已安装", c.success, SMALL_SP)
+                else if (p.enabled) Text("已启用", c.success, SMALL_SP)
                 else if (p.allowed == null) Text("待放行", c.textSecondary, SMALL_SP)
             }
             if (p.summary.isNotEmpty()) Paragraph(p.summary, c.textSecondary, BODY_SP, maxLines = 2)

@@ -55,6 +55,7 @@ private const val PRIO_LATER = 3
 fun TodoView(item: SpaceItem, source: SpaceSource, handler: SpaceHandler) {
     val c = Aioa.colors
     val subject = item.binds.firstOrNull()?.subject ?: return Text("待办组件需要 bind 指向群", c.danger, 12)
+    source.todoView?.let { return it(subject, item.num("limit")?.toInt() ?: DEFAULT_TODO_LIMIT) }
     val rows = source.todos(subject)
     if (rows == null) return StateBody(CardState.Loading) {}
     val open = rows.filter { !it.finished }.sortedWith(compareBy<TodoRow> { it.prio }.thenByDescending { it.updated })

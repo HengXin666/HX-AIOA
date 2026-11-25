@@ -79,6 +79,7 @@ fun ServerBoard(chat: ChatModel, open: (Tab) -> Unit) {
         }
     }
     CfUsageCard()
+    com.hengxin.aioa.ui.hxoa.HxoaCard()
 }
 
 @Composable
