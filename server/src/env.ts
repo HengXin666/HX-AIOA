@@ -22,4 +22,8 @@ export interface Env {
   FILES?: R2Bucket;
   // 可选, 插件市场根地址 (本地测试指向本机目录服务); 不配就用仓库 main 分支的 plugins/
   PLUGIN_MARKET?: string;
+  // 可选, 微软翻译 (F0 免费层): 密钥, 区域资源的区域 (全局资源不填), 每月自动停止线 (字符, 默认 180 万)
+  AZURE_TRANSLATOR_KEY?: string;
+  AZURE_TRANSLATOR_REGION?: string;
+  TRANSLATE_MONTH_LIMIT?: string;
 }

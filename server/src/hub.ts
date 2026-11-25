@@ -5,6 +5,7 @@ import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
 import { PluginStore } from "./plugins/store";
 import { TodoStore } from "./plugins/todos";
+import { TranslateStore } from "./translate/store";
 import { GhService, syncTodoIssues } from "./gh/service";
 import { DurableObject } from "cloudflare:workers";
 import {
@@ -88,7 +89,6 @@ import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
 import { Timers } from "./timers";
-
 const TERM_SOURCE = "终端";
 const CF_SOURCE = "CF 额度";
 const KEY_CF_ALERT = "cf_alert_day";
@@ -133,7 +133,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), tr: new TranslateStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

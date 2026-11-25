@@ -116,6 +116,19 @@ jobs:
           fi
           printf '%s' "$AIOA_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN
 
+      # 可选: 配置了 AZURE_TRANSLATOR_KEY secret 时同步微软翻译密钥 (区域资源另配 AZURE_TRANSLATOR_REGION)
+      - name: 同步翻译密钥
+        env:
+          AIOA_TR_KEY: ${{ secrets.AZURE_TRANSLATOR_KEY }}
+          AIOA_TR_REGION: ${{ secrets.AZURE_TRANSLATOR_REGION }}
+        run: |
+          if [ -z "$AIOA_TR_KEY" ]; then
+            echo "未配置 AZURE_TRANSLATOR_KEY secret, 跳过, 翻译接口返回 503"
+            exit 0
+          fi
+          printf '%s' "$AIOA_TR_KEY" | npx wrangler secret put AZURE_TRANSLATOR_KEY
+          if [ -n "$AIOA_TR_REGION" ]; then printf '%s' "$AIOA_TR_REGION" | npx wrangler secret put AZURE_TRANSLATOR_REGION; fi
+
       # 可选: 配置了 SETUP_CODE secret 时同步到 Worker, 首次 POST /api/v1/setup 建母号要用
       - name: 同步母号初始化口令
         env:

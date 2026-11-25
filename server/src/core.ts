@@ -1,3 +1,4 @@
+import type { TranslateStore } from "./translate/store";
 import type { FileStore } from "./files/store";
 import type { GhService } from "./gh/service";
 import type { MailStore } from "./mail/store";
@@ -44,6 +45,8 @@ export type Core = {
   files: FileStore;
   plugins: PluginStore;
   mail: MailStore;
+  // 译文缓存与每月计费字符
+  tr: TranslateStore;
   todos: TodoStore;
   gh: GhService;
   market: Market;
