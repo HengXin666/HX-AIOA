@@ -1,5 +1,5 @@
 // HTTP: 统一带密钥与 UA (默认 UA 会被防火墙拦), 429 / 5xx 指数退避
-export const VERSION = "0.3.0";
+export const VERSION = "0.3.1";
 export const USER_AGENT = `hx-aioa-agent/1 hxaioa-cli/${VERSION}`;
 const RETRIES = 5;
 const BASE_DELAY_MS = 1000;

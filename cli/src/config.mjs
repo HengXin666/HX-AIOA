@@ -36,6 +36,7 @@ export function saveConfig(cfg) {
 }
 
 export const configPath = CONFIG;
+export const dataDir = DIR;
 
 export function loadState() {
   const s = readJson(STATE);

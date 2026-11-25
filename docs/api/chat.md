@@ -28,6 +28,7 @@
 - `GET .../agents/{keyId}/prompt` → 当前下发给它的完整指令 (不含 key)。
 - `DELETE .../agents/{keyId}`: 删除来源并作废 key。
 - Agent 侧 (用它自己的 key): `GET /api/v1/chat-agent/guide` → Markdown 全文, 响应头 `X-Aioa-Guide-Version` 为版本 (内容哈希); `POST /api/v1/chat-agent/ack` `{ version }` 报到, 版本不是最新返回 409。指令要求它每天首次干活前和遇到 401 / 403 时重新拉取, 版本变了整段替换。主人改了设置后服务端当场检查所有已报到的 Agent, 版本变了就在群里发系统通知, 并给它在线的长连推 `guide` 帧 (hxaioa watch 退出码 3), 不用等 Agent 下次请求。
+- 拉群消息加 `slim=1` (`GET /api/v1/chats/{c}/messages?since=..&slim=1`): `data.html` 去掉, 换成 `htmlBytes` 长度, 省流量 (`hxaioa history` 用它)。
 - Agent 长期记忆: `GET /api/v1/chat-agent/memory` → `{ text, updated }`; `PUT` `{ text }` 整段覆盖 (最多 4000 字, 空串清空)。按 Agent 来源存, 轮换密钥不丢, 只有这把 key 自己能读写 (`hxaioa memory`)。
 - `ChatAgent.joined` 为最近报到时间, `pending` 为指令变了还没重新报到。旧数据里的 `brief` 不再使用。
 

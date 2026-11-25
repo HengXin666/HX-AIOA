@@ -2,7 +2,7 @@
 // CLI 与群状态冒烟测试: 接入 Agent, CLI login/send/read/watch --once, 长连监听名单, 输入提示与开关。
 // 环境变量: AIOA_SERVER, AIOA_TOKEN (AUTH_TOKEN)
 import { execFile } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -125,6 +125,19 @@ check("记忆读回", (await cli("memory")).includes("主人喜欢短回复"));
 const big = await cli("memory", "--set", "x".repeat(4001));
 check("记忆超长被拒", big.startsWith("ERR 1") && big.includes("4000"), big);
 check("记忆清空", JSON.parse(await cli("memory", "--set", "")).text === "");
+
+// 历史存本地文件: 第一次往前翻, 第二次只拉新的; 撤回 / 删除的去掉; slim 不带 HTML
+await api("POST", `${V1}/messages`, { text: "带卡片", html: "<b>很长的卡片</b>", channel: GROUP });
+const h1 = JSON.parse(await cli("history", "--json"));
+const txt = readFileSync(h1.file, "utf8");
+check("history 写本地文件", h1.count >= 3 && txt.includes("叫一下小助手") && txt.startsWith("#"), h1);
+check("history 不下载 HTML", !readFileSync(h1.json, "utf8").includes("很长的卡片"));
+const tmp = await api("POST", `${V1}/messages`, { text: "马上删掉", channel: GROUP });
+const tmpSeq = (await api("GET", `${V1}/chats/${enc(GROUP)}/messages?since=0&limit=500`)).data.messages.find((m) => m.id === tmp.data.id)?.seq;
+await api("DELETE", `${V1}/events/seq/${tmpSeq}?mode=delete`);
+const h2 = JSON.parse(await cli("history", "--json"));
+check("history 增量", h2.fetched >= 1 && h2.fetched <= 3, h2);
+check("history 去掉删除的", !readFileSync(h2.file, "utf8").includes("马上删掉"));
 
 // 待办: 一行一条, --all 含已完成
 await api("POST", `${V1}/chats/${enc(GROUP)}/todos`, { todos: [{ id: "t-1", title: "写测试", state: "doing" }, { id: "t-2", title: "早做完了", state: "done" }] });

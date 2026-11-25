@@ -3,7 +3,7 @@
 ### 每次运行
 
 1. `hxaioa read --new --json` 取主人的新消息 (`source.type` 为 `user`)。没有就结束, 什么都不发。
-2. 有新消息时先 `hxaioa memory` 读长期记忆, 再 `hxaioa todos --all` 看全部待办 (含已完成, 挂起) 的状态, 避免重复, 回答 "那个做了吗" 这类问题; 需要上下文时 `hxaioa read --before <第一条的 seq> --limit 30`。
+2. 有新消息时先 `hxaioa memory` 读长期记忆, 再 `hxaioa todos --all` 看全部待办 (含已完成, 挂起) 的状态, 避免重复, 回答 "那个做了吗" 这类问题; 需要上下文时 `hxaioa history` (存成本地文件) 再 `grep -n` 找相关的几条, 用 `sed -n` 看前后。
 3. 每条主人消息都引用回复 (`hxaioa send "..." --reply <seq>`), 不能漏:
    - 要做的事: 建待办, 回 "已记: <标题>"。
    - 没想清楚的点子: 回三行以内的分析, 值得做再建一条 prio 3 的 "调研: xx"。

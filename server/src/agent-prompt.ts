@@ -37,8 +37,8 @@ function fnv(text: string): string {
 }
 
 // 装命令行的一行, 从服务端拿, 版本总和服务端一致
-// 专属指令要求的最低命令行版本 (0.3.0 起 watch 只等人, 带 --window, 有 memory)
-const CLI_MIN = "0.3.0";
+// 专属指令要求的最低命令行版本 (0.3.1: watch 只等人, --window, memory, history)
+const CLI_MIN = "0.3.1";
 const install = (base: string) => `mkdir -p ~/.local/bin && curl -fsSLo ~/.local/bin/hxaioa ${base}/hxaioa.mjs && chmod +x ~/.local/bin/hxaioa`;
 
 // 接入语: 一段话整段复制给任何 Agent; 只让它装命令行, 登录, 拉专属指令, 规则都在专属指令里
@@ -70,7 +70,7 @@ export function agentGuide(base: string, channel: string, title: string, agent: 
     `你是 "${NAME_MARK}", 在主人的群 "${title}" (\`${channel}\`)。一切操作用已登录的 hxaioa:`,
     "",
     "- 发到本群: `hxaioa send \"文字\"`, 引用某条加 `--reply <seq>`",
-    "- 读新消息: `hxaioa read --new` (自动记住读到哪); 要上下文: `hxaioa read --before <seq> --limit 30`",
+    "- 读新消息: `hxaioa read --new` (自动记住读到哪); 翻历史: `hxaioa history` 把本群记录增量存到本地文件并打印路径, 再用 grep / sed 节选, 别把整段历史读进上下文",
     "- 等主人回话: `hxaioa watch --once --window 300 --timeout 100` (长连, 只等人发的消息)。退出码: 0 来了一条, 回到干活; 4 本次到点但 5 分钟还没满, 立刻原样再跑一次; 2 满 5 分钟没人说话, 结束; 3 专属指令刚更新, 先 `hxaioa guide --ack` 再接着等。`--timeout` 设得比你执行命令的时长上限小 (上限 2 分钟就用 100), 别让外层把它掐断。",
     "- 长期记忆 (存服务端, 换环境也在): 每次开始先 `hxaioa memory`; 主人说过的背景, 偏好, 定下的结论随时 `hxaioa memory --add \"一句话\"` 记下, 最多 4000 字, 满了用 `hxaioa memory --set -` 合并重写。群里聊过的事不能忘, 拿不准就翻群记录。",
     "- 其它接口: `hxaioa api <METHOD> <路径> [JSON]`",

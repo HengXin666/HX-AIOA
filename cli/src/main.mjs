@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { configPath, loadConfig, loadState, saveConfig, saveHead } from "./config.mjs";
 import { print } from "./format.mjs";
 import { ApiError, VERSION, call, enc } from "./http.mjs";
+import { syncHistory } from "./history.mjs";
 import { watch } from "./watch.mjs";
 
 const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
@@ -17,6 +18,7 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa watch [-c 群] [--all] [--once] [--timeout 秒] [--window 秒] [--any] [--exec 命令] [--json] [--mine] [--interval 秒]
   hxaioa memory [--add 一句话] [--set 全文|-]   长期记忆 (存服务端, 最多 4000 字)
   hxaioa todos [-c 群] [--all] [--json]          本群待办; --all 含已完成
+  hxaioa history [-c 群] [--limit 条数]          历史存本地文件 (增量), 打印路径, 用 grep / sed 节选
   hxaioa typing [-c 群]            告诉群里 "正在输入"
   hxaioa recall <seq> | delete <seq>
   hxaioa report --title 标题 [--summary 摘要] [--file 正文.md] [--dedupe key]
@@ -131,6 +133,13 @@ const COMMANDS = {
     const stamp = new Date().toISOString().slice(0, 10);
     const r = await call(cfg, "PUT", path, { text: [cur.text, `- ${stamp} ${v.add.trim()}`].filter(Boolean).join("\n") });
     out(`已记, 共 ${r.text.length} 字`);
+  },
+  async history(cfg, v) {
+    const ch = await channelOf(cfg, v);
+    const h = await syncHistory(cfg, ch, num(v.limit));
+    if (v.json) return out(h);
+    out(`${h.file}\n共 ${h.count} 条 (#${h.first} 到 #${h.last}), 本次拉了 ${h.fetched} 条。一行一条, 首行 "#seq 时间 名字: 正文", 多行正文缩进两格。`);
+    out(`节选: grep -n "关键词" ${h.file} | tail -20; sed -n '100,160p' ${h.file}; 原始 JSON 在 ${h.json}`);
   },
   async todos(cfg, v) {
     const r = await call(cfg, "GET", `/api/v1/chats/${enc(await channelOf(cfg, v))}/todos`);

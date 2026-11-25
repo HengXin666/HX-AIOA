@@ -22,6 +22,7 @@ hxaioa send "<你的名字> 已接入"     # 发到本群
 hxaioa read --new                   # 读本群上次之后的新消息
 hxaioa watch --once --window 300 --timeout 100   # 长连等主人的下一条; 退出码见下
 hxaioa memory                       # 读长期记忆 (存服务端); --add "一句话" 记一条
+hxaioa history                      # 本群历史增量存到本地文件, 打印路径; 再 grep -n / sed -n 节选
 ```
 
 `watch` 退出码: 0 来了一条人发的消息; 4 本次到点但 5 分钟窗口没满, 立刻再跑同一条命令; 2 满 5 分钟没人说话; 3 专属指令刚更新, 先 `hxaioa guide --ack`。`--timeout` 要比你执行命令的时长上限小 (很多 Agent 环境单条命令最多 2 分钟), 不然外层会把它掐断, 看起来就像 "没听几十秒就停了"。
