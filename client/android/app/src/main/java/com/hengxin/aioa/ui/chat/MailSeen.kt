@@ -9,7 +9,7 @@ import androidx.compose.runtime.setValue
  * 邮件已读: 水位线之前的都算已读, 之后的按打开过的 id 记。
  * 第一次用时水位线设为现在, 旧信不会一片未读。
  */
-class MailSeen(context: Context) {
+class MailSeen private constructor(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private var mark = prefs.getLong(KEY_MARK, 0L).takeIf { it > 0 } ?: System.currentTimeMillis().also { prefs.edit().putLong(KEY_MARK, it).apply() }
     private val ids = prefs.getStringSet(KEY_IDS, emptySet()).orEmpty().toMutableSet()
@@ -48,11 +48,15 @@ class MailSeen(context: Context) {
         version++
     }
 
-    private companion object {
-        const val PREFS = "mail-seen"
-        const val KEY_MARK = "mark"
-        const val KEY_IDS = "ids"
-        const val KEY_FORCED = "forced"
-        const val MAX_IDS = 400
+    companion object {
+        private const val PREFS = "mail-seen"
+        private const val KEY_MARK = "mark"
+        private const val KEY_IDS = "ids"
+        private const val KEY_FORCED = "forced"
+        @Volatile private var shared: MailSeen? = null
+
+        /** 全 App 一份: 邮件群和总览里单独打开的信共用, 否则两份内存各存各的, 后存的覆盖先存的。 */
+        fun of(context: Context): MailSeen = shared ?: synchronized(this) { shared ?: MailSeen(context.applicationContext).also { shared = it } }
+        private const val MAX_IDS = 400
     }
 }

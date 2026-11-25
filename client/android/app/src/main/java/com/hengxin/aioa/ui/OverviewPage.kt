@@ -36,6 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.CardHeader
 import com.hengxin.aioa.proto.plainLine
+import com.hengxin.aioa.proto.toMsg
+import com.hengxin.aioa.data.groupKey
+import com.hengxin.aioa.ui.chat.mailItem
 
 private const val ALERT_SRC_PREFIX = "probe"
 private const val ALERT_WINDOW_MS = 24 * 60 * 60 * 1000L
@@ -55,7 +58,13 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     WatchProbes(chat.metrics, picked?.metricSubjects().orEmpty())
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
     var detail by remember { mutableStateOf<Envelope?>(null) }
-    detail?.let { ev -> EventSheet(ev, { detail = null }) { detail = null; open(Tab.CHAT) } }
+    val mails = com.hengxin.aioa.ui.chat.rememberMailState()
+    detail?.let { ev ->
+        // 邮件: 直接用邮件详情打开这一封, 不进群 (不动群里其它消息的已读); 其它: 预览, 可去所在的群定位到它
+        val mail = remember(ev.id) { ev.mailItem(mails.api) }
+        if (mail != null) com.hengxin.aioa.ui.chat.MailPeek(mail, mails) { detail = null }
+        else EventSheet(ev, { detail = null }) { detail = null; chat.groups.openAt(ev.toMsg().groupKey(), ev.seq) }
+    }
     PageColumn("总览") {
         Status(chat.online, chat.metrics.probes.size, feed.v1)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

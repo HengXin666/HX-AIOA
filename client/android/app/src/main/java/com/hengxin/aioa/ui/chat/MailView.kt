@@ -53,7 +53,7 @@ private val PILL = RoundedCornerShape(50)
 @Composable
 fun MailView(head: Long?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val s = remember { MailState(MailApi(context.applicationContext), MailSeen(context.applicationContext)) }
+    val s = remember { MailState(MailApi(context.applicationContext), MailSeen.of(context)) }
     val scope = rememberCoroutineScope()
     // 群里来了新信 (head 变了) 或筛选变了就刷新第一页
     LaunchedEffect(head, s.account, s.category, s.vendor, s.query) { s.reload() }

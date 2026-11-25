@@ -69,6 +69,10 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
 
+      - name: 单元测试
+        working-directory: client/android
+        run: gradle :app:testDebugUnitTest --no-daemon
+
       - name: 编译 Release
         working-directory: client/android
         env:

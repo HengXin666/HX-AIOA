@@ -31,7 +31,7 @@ import com.hengxin.aioa.ui.chat.MdColors
 
 private const val HTML_MAX_DP = 4000
 
-/** 点开总览里的一条: 完整渲染 Markdown 或 HTML 卡片, 可跳到所在的群或打开链接。 */
+/** 点开总览里的一条 (邮件以外): 完整渲染 Markdown 或 HTML 卡片, 可去所在的群定位到它, 或打开链接。 */
 @Composable
 fun EventSheet(ev: Envelope, onClose: () -> Unit, toChat: () -> Unit) {
     val c = Aioa.colors

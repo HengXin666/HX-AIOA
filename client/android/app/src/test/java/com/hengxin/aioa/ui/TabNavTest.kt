@@ -1,0 +1,67 @@
+package com.hengxin.aioa.ui
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/** 返回路径的约定; 新加一处跨栏跳转时, 在这里补一条它的 "进去 → 返回" 用例。 */
+class TabNavTest {
+    private fun path(vararg steps: (TabNav) -> TabNav): TabNav = steps.fold(TabNav()) { n, s -> s(n) }
+
+    @Test
+    fun 启动在总览_返回交给系统() {
+        assertFalse(TabNav().canBack)
+    }
+
+    @Test
+    fun 点底部栏_返回回总览() {
+        val n = path({ it.select(Tab.ME) })
+        assertTrue(n.canBack)
+        assertEquals(TabNav(Tab.OVERVIEW), n.back())
+    }
+
+    @Test
+    fun 我的跳工作台_返回回我的() {
+        val n = path({ it.select(Tab.ME) }, { it.go(Tab.RESOURCES) })
+        assertEquals(Tab.ME, n.back().tab)
+        assertEquals(Tab.OVERVIEW, n.back().back().tab)
+    }
+
+    @Test
+    fun 消息横幅从资源进群_退出群后回资源() {
+        val n = path({ it.select(Tab.RESOURCES) }, { it.go(Tab.CHAT) })
+        assertEquals(Tab.RESOURCES, n.back().tab)
+    }
+
+    @Test
+    fun 总览卡片跳走_返回回总览且不再有路径() {
+        val n = path({ it.go(Tab.AGENT) }).back()
+        assertEquals(TabNav(Tab.OVERVIEW), n)
+        assertFalse(n.canBack)
+    }
+
+    @Test
+    fun 连跳两层_逐级返回() {
+        val n = path({ it.select(Tab.ME) }, { it.go(Tab.RESOURCES) }, { it.go(Tab.CHAT) })
+        assertEquals(listOf(Tab.RESOURCES, Tab.ME, Tab.OVERVIEW), generateSequence(n.back()) { if (it.tab == Tab.OVERVIEW) null else it.back() }.map { it.tab }.toList())
+    }
+
+    @Test
+    fun 跳回路径上的栏_截断不绕圈() {
+        val n = path({ it.select(Tab.ME) }, { it.go(Tab.RESOURCES) }, { it.go(Tab.ME) })
+        assertEquals(TabNav(Tab.ME), n)
+    }
+
+    @Test
+    fun 跳到当前栏_不记路径() {
+        val n = path({ it.select(Tab.CHAT) }, { it.go(Tab.CHAT) })
+        assertEquals(TabNav(Tab.CHAT), n)
+    }
+
+    @Test
+    fun 换栏清空路径() {
+        val n = path({ it.select(Tab.ME) }, { it.go(Tab.RESOURCES) }, { it.select(Tab.AGENT) })
+        assertEquals(TabNav(Tab.AGENT), n)
+    }
+}
