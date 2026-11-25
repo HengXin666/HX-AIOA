@@ -68,7 +68,11 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
     val st = marks.status(it)
     val dead = st == ST_DEAD
     val base = if (flat) modifier else modifier.clip(CARD).background(c.surface).border(1.dp, c.border, CARD)
-    Column(base.clickable(enabled = it.url != null) { Browser.open(context, it.url) }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
+    var sheet by remember { mutableStateOf(false) }
+    val html = it.html
+    if (sheet && html != null) FeedHtmlSheet(it.summary ?: it.title, html) { sheet = false }
+    // 有链接开链接; 旧格式没有链接, 点开看原卡片
+    Column(base.clickable(enabled = it.url != null || html != null) { if (it.url != null) Browser.open(context, it.url) else sheet = true }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val site = it.site
             if (site != null) MailAvatar(site, site, 18.dp)

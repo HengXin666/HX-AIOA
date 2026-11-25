@@ -23,6 +23,8 @@ data class FeedItem(
     val source: String,
     val ts: Long,
     val seq: Long,
+    // 旧格式推送的原 HTML 卡片, 没有链接时点开看它
+    val html: String? = null,
 )
 
 const val ST_OK = "ok"
@@ -33,15 +35,9 @@ val STATUS_LABEL = mapOf(ST_OK to "有效", ST_GO to "进行中", ST_DOUBT to "�
 
 private fun JSONObject.s(k: String) = optString(k).trim().ifEmpty { null }
 
-/** 解析一条消息的 data.feed; 没有 feed 的消息当成一条 "其他", 让信息流里样式也统一。 */
-fun feedOf(m: ServerFrame.Msg): List<FeedItem> {
-    val raw = m.feed?.let { runCatching { JSONObject(it) }.getOrNull() }
-    if (raw == null) {
-        if (m.deleted != null || m.text.isBlank()) return emptyList()
-        val lines = m.text.trim().lines()
-        val title = lines.first().trimStart('#', ' ', '*').trimEnd('*').take(TITLE_MAX)
-        return listOf(FeedItem("m:${m.id ?: m.seq}", title, null, null, TAG_OTHER, null, lines.drop(1).joinToString("\n").trim().ifEmpty { null }, null, null, null, emptyList(), m.src, m.ts, m.seq))
-    }
+/** 解析一条消息的 data.feed; 没有 feed 的旧格式消息交给 legacyItems 拆条, 让信息流里样式也统一。 */
+fun feedOf(m: ServerFrame.Msg, tags: List<FeedTag> = DEFAULT_TAGS): List<FeedItem> {
+    val raw = m.feed?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return legacyItems(m, tags)
     val source = raw.s("source") ?: m.src
     val arr = raw.optJSONArray("items") ?: return emptyList()
     return (0 until arr.length()).mapNotNull { i ->
@@ -62,12 +58,10 @@ fun feedOf(m: ServerFrame.Msg): List<FeedItem> {
 }
 
 /** 群里所有条目, 新的在前; 同 key 只留最新一次推送。 */
-fun feedItems(messages: List<ServerFrame.Msg>): List<FeedItem> {
+fun feedItems(messages: List<ServerFrame.Msg>, tags: List<FeedTag> = DEFAULT_TAGS): List<FeedItem> {
     val seen = HashSet<String>()
-    return messages.sortedByDescending { it.seq }.flatMap(::feedOf).filter { seen.add(it.key) }
+    return messages.sortedByDescending { it.seq }.flatMap { feedOf(it, tags) }.filter { seen.add(it.key) }
 }
-
-private const val TITLE_MAX = 120
 
 /** 本机的标记: 用过了, 我标的失效, 收藏。界面读 version 重组。 */
 class FeedMarks(context: Context) {

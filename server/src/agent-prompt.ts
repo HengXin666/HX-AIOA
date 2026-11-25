@@ -6,7 +6,7 @@ function feedSection(tags: FeedTag[]): string[] {
   const first = tags[0]?.id ?? "other";
   return [
     "## 推送格式: 信息流",
-    "本群按信息流展示。推送一批条目只发 feed 消息, 不要再发 HTML 或长文, 一批只发一条:",
+    "本群按信息流展示。推送一批条目只发 feed 消息, 一批只发一条; 带 HTML 卡片的消息会被拒收 (422 feed_required), 以前存的 HTML 模板作废:",
     "",
     "```",
     `hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id":"<帖子 id>","title":"标题","url":"https://...","kind":"${first}","status":"ok","summary":"结论和关键时间","todo":"怎么拿到","until":"2026-11-30","heat":12}]}}'`,

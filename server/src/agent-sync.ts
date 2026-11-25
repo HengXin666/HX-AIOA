@@ -62,7 +62,7 @@ export async function stampGuide(core: Core, req: Request, url: URL, who: Princi
   const stale = agent.joined && agent.version !== g.version && agent.notified !== g.version;
   if (stale && !QUIET_PATHS.includes(url.pathname)) {
     replace(core, meta, { ...agent, notified: g.version, pending: true });
-    await notice(core, meta.channel, `${agent.name} 的专属指令已更新到 ${g.version}: 下次干活前先运行 hxaioa guide --ack, 用新全文替换旧指令。`);
+    await notice(core, meta.channel, `${agent.name} 的专属指令已更新到 ${g.version}: 下次干活前先运行 hxaioa guide --ack (直接调接口的: GET ${PATH_AGENT_GUIDE} 再 POST ${PATH_AGENT_GUIDE_ACK}), 用新全文替换旧指令和自己存的模板。`);
   }
   return out;
 }

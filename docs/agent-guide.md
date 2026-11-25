@@ -84,7 +84,7 @@ Content-Type: application/json
 
 ### 4.2 HTML 卡片
 
-条目类推送请用上面的 `feed`。确实需要自己排版 (表格, 周报) 时另加 `"html": "<div>...</div>"`, `text` 仍写一句纯文字摘要: 系统通知和锁屏只显示摘要。
+条目类推送请用上面的 `feed`; 信息流群里带 HTML 的消息会被拒收 (422 `feed_required`)。其他群确实需要自己排版 (表格, 周报) 时另加 `"html": "<div>...</div>"`, `text` 仍写一句纯文字摘要: 系统通知和锁屏只显示摘要。
 
 - HTML 在沙箱里渲染: 不执行脚本, 不联网。样式写内联或 `<style>`, 图片用 `data:`。上限 64KB。
 - App 有白天和黑夜两种主题。没写颜色的文字会跟随主题; 写了颜色或背景, 请用 `@media (prefers-color-scheme: dark) { ... }` 再给一套深色。

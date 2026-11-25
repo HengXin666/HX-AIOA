@@ -49,6 +49,9 @@ const post = (kind) => api("POST", `${V1}/messages`, { channel: GROUP, feed: { s
 const rej = await post("news");
 check("未声明标签被拒并列出可用", rej.status === 400 && JSON.stringify(rej.data).includes("ai (AI)"), rej);
 check("声明过的标签可发", (await post("ai")).status === 200);
+const html = await api("POST", `${V1}/messages`, { channel: GROUP, title: "快报", text: "摘要", html: "<div>x</div>" }, key);
+check("信息流群 Agent 发 HTML 被拒并给出 feed 写法", html.status === 422 && JSON.stringify(html.data).includes("feed_required"), html);
+check("信息流群普通文字照常", (await api("POST", `${V1}/messages`, { channel: GROUP, text: "采集 已接入" }, key)).status === 200);
 
 const tag = { id: "oss", label: "开源", desc: "开源项目和工具" };
 const stale = await api("POST", TAGS_PATH, { rev: 0, tag }, key);

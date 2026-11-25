@@ -21,7 +21,7 @@
 | `items[].heat` | 热度 (数字) |
 | `items[].links[]` | 最多 4 个 `{label, url}` |
 
-定义与校验在 `protocol/src/v1/feed.ts` (`parseFeed`, `feedText`)。没写 `text` / `title` 时服务端用 `feedText` 生成通知摘要, 一批只响一次。`html` 仍可用, 但只作兜底。
+定义与校验在 `protocol/src/v1/feed.ts` (`parseFeed`, `feedText`)。没写 `text` / `title` 时服务端用 `feedText` 生成通知摘要, 一批只响一次。信息流群 (`view: feed`) 里 Agent 发带 `html` 的消息会被拒收 (422 `feed_required`, 错误里给出 feed 写法和本群标签, `server/src/feed-guard.ts`); 主人和普通文字不受影响。旧的 HTML 推送在 App 里按摘要 "【类别】a；b" 拆成条目, 点开看原卡片 (`ui/feed/FeedLegacy.kt`)。
 
 ## 展示
 
