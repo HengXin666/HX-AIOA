@@ -20,6 +20,8 @@ export const TOPIC_TASKS = `${ANY}|${FIELD_TASK}`;
 export const TOPIC_EVENTS = `${ANY}|${FIELD_EVENTS}`;
 
 export const topicOf = (subject: string, field: string) => `${subject}|${field}`;
+// 插件数据有变 (pdata_sync): 组件按 (插件, 集合) 订阅, 新 rev 记在 pdataRev
+export const pdataTopic = (plugin: string, coll: string) => `pdata|${plugin}|${coll}`;
 
 // 唯一数据中心: 组件只按 subject + field 订阅, 数据由流或 mock 灌入
 export class Store {
@@ -33,6 +35,7 @@ export class Store {
   private errors = new Map<string, string>();
   readonly events = new Map<string, Envelope>();
   readonly tasks = new Map<string, TaskSnapshot>();
+  readonly pdataRev = new Map<string, number>();
   readonly logs = new Map<string, TaskLogEntry[]>();
   spaces: Space[] = [];
   agents: AgentStatus[] = [];

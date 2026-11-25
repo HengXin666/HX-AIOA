@@ -62,6 +62,8 @@ sealed interface ServerFrame {
     data class Settings(val raw: String) : ServerFrame
     data class Agents(val agents: List<AgentStatus>) : ServerFrame
     data class ChatSync(val topic: String, val channel: String?) : ServerFrame
+    /** 插件数据有变: 按 rev 增量拉。 */
+    data class PDataSync(val plugin: String, val coll: String, val rev: Long) : ServerFrame
     /** 群里谁在监听 / 输入; until 为 0 表示长连在线, 否则到点自动消失。 */
     data class Presence(val channel: String, val listening: List<PresenceEntry>, val typing: List<PresenceEntry>) : ServerFrame
     data class TaskLog(val taskId: String, val role: String, val kind: String, val text: String?, val ts: Long) : ServerFrame
@@ -130,6 +132,7 @@ object Frames {
             "space_update" -> ServerFrame.SpaceUpdate(o.optString("id"), o.optBoolean("deleted"), o.toString())
             "settings" -> ServerFrame.Settings(o.optJSONObject("settings")?.toString() ?: "{}")
             "chat_sync" -> ServerFrame.ChatSync(o.optString("topic"), o.optString("channel").ifEmpty { null })
+            "pdata_sync" -> ServerFrame.PDataSync(o.optString("plugin"), o.optString("coll"), o.optLong("rev"))
             "presence" -> ServerFrame.Presence(o.optString("channel"), presence(o.optJSONArray("listening")), presence(o.optJSONArray("typing")))
             "agents" -> ServerFrame.Agents(V1Decode.agents(o.optJSONArray("agents")))
             "task_log" -> o.getJSONObject("entry").let { e ->

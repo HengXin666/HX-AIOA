@@ -113,6 +113,10 @@ object Constants {
     const val EVENTS_PATH = "api/v1/events"
     const val KEYS_PATH = "api/v1/keys"
     const val CHATS_API = "api/v1/chats"
+    // 插件数据 pdata 与待办插件 (#101): 待办存在 hengxin666.todo 的 items 集合, 与 protocol/src/v1/plugin-todo.ts 一致
+    const val PDATA_API = "api/v1/pdata"
+    const val TODO_PLUGIN = "hengxin666.todo"
+    const val TODO_COLL = "items"
     // 群邀请链接: hxaioa://join?server=..&code=.., 与服务端 APP_SCHEME 一致
     const val APP_SCHEME = "hxaioa"
     const val JOIN_HOST = "join"
