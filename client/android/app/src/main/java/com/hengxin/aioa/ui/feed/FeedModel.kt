@@ -27,6 +27,9 @@ data class FeedItem(
     val html: String? = null,
     // 原帖发布时间, 0 = 推送方没给
     val at: Long = 0,
+    // 点赞数, 评论数; 推送方拿不到就是 null, 界面不显示
+    val likes: Int? = null,
+    val replies: Int? = null,
 ) {
     /** 显示用的时间: 发布时间, 没有就用消息的服务端时间。 */
     val time: Long get() = if (at > 0) at else ts
@@ -39,6 +42,7 @@ const val ST_DEAD = "dead"
 val STATUS_LABEL = mapOf(ST_OK to "有效", ST_GO to "进行中", ST_DOUBT to "存疑", ST_DEAD to "失效")
 
 private fun JSONObject.s(k: String) = optString(k).trim().ifEmpty { null }
+private fun JSONObject.count(k: String): Int? = if (has(k)) optDouble(k).takeIf { it.isFinite() && it >= 0 }?.toInt() else null
 
 /** 解析一条消息的 data.feed; 没有 feed 的旧格式消息交给 legacyItems 拆条, 让信息流里样式也统一。 */
 fun feedOf(m: ServerFrame.Msg, tags: List<FeedTag> = DEFAULT_TAGS): List<FeedItem> {
@@ -58,6 +62,7 @@ fun feedOf(m: ServerFrame.Msg, tags: List<FeedTag> = DEFAULT_TAGS): List<FeedIte
             summary = o.s("summary"), todo = o.s("todo"), until = o.s("until"),
             heat = if (o.has("heat")) o.optDouble("heat").toInt() else null,
             links = links, source = source, ts = m.ts, seq = m.seq, at = o.optLong("at"),
+            likes = o.count("likes"), replies = o.count("replies"),
         )
     }
 }

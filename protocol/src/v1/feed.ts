@@ -13,7 +13,8 @@ export const FEED_STATUS_LABEL: Record<FeedStatus, string> = { ok: "有效", go:
 export type FeedLink = { label: string; url: string };
 /**
  * 一条: title 必填; id 用于跨批次去重 (不写用 url); site 为来源站点域名 (不写取 url 的域名, 用来显示网站图标);
- * todo 是 "要做什么才能拿到"; until 是截止日期 (如 2026-11-30); heat 是热度 (回复数之类);
+ * todo 是 "要做什么才能拿到"; until 是截止日期 (如 2026-11-30); heat 是热度 (站点给的综合热度或浏览数);
+ * likes 点赞数, replies 评论 / 回复数, 拿不到就不写, 各端没有就不显示;
  * at 是原帖发布时间 (毫秒, 也收 ISO 字符串), 不写时各端用消息时间。
  */
 export type FeedItem = {
@@ -27,6 +28,8 @@ export type FeedItem = {
   todo?: string;
   until?: string;
   heat?: number;
+  likes?: number;
+  replies?: number;
   at?: number;
   links?: FeedLink[];
 };
@@ -45,6 +48,9 @@ const SECONDS_LIMIT = 1e11;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const optStr = (v: unknown, max: number) => v === undefined || (typeof v === "string" && v.length <= max);
+// 计数: heat 沿用原来的 "有限数字"; likes / replies 是新加的, 不收负数
+const COUNTS = ["likes", "replies"] as const;
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
 const isUrl = (v: unknown): v is string => typeof v === "string" && v.length <= MAX_FEED_URL && URL_RE.test(v);
 
 function parseItem(r: unknown, i: number): FeedItem | string {
@@ -57,6 +63,7 @@ function parseItem(r: unknown, i: number): FeedItem | string {
   if (!optStr(r.summary, MAX_FEED_SUMMARY) || !optStr(r.todo, MAX_FEED_TODO)) return `${at} summary / todo 过长`;
   if (!optStr(r.id, MAX_FEED_SHORT) || !optStr(r.site, MAX_FEED_SHORT) || !optStr(r.until, MAX_FEED_SHORT)) return `${at} id / site / until 过长`;
   if (r.heat !== undefined && (typeof r.heat !== "number" || !Number.isFinite(r.heat))) return `${at}.heat 需要数字`;
+  for (const k of COUNTS) if (r[k] !== undefined && !isCount(r[k])) return `${at}.${k} 需要非负数字`;
   const posted = timeOf(r.at);
   if (posted === null) return `${at}.at 需要毫秒时间戳或 ISO 时间`;
   const out: FeedItem = { title: r.title.trim() };
@@ -64,6 +71,7 @@ function parseItem(r: unknown, i: number): FeedItem | string {
   if (r.kind) out.kind = r.kind as string;
   if (r.status) out.status = r.status as FeedStatus;
   if (typeof r.heat === "number") out.heat = r.heat;
+  for (const k of COUNTS) if (isCount(r[k])) out[k] = r[k];
   if (posted) out.at = posted;
   const site = typeof r.site === "string" && r.site ? r.site : out.url ? hostOf(out.url) : "";
   if (site) out.site = site.toLowerCase();

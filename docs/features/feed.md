@@ -18,7 +18,9 @@
 | `items[].summary` | 400 字内结论 |
 | `items[].todo` | 要做什么 |
 | `items[].until` | 截止日期 |
-| `items[].heat` | 热度 (数字) |
+| `items[].heat` | 热度 (数字, 综合热度或浏览数) |
+| `items[].likes` | 点赞数 (非负数字, 可选) |
+| `items[].replies` | 评论 / 回复数 (非负数字, 可选) |
 | `items[].at` | 原帖发布时间, 毫秒或 ISO (秒级时间戳也认), 存成毫秒; 不写时 App 用消息时间 |
 | `items[].links[]` | 最多 4 个 `{label, url}` |
 

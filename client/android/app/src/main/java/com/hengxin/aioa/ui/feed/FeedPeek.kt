@@ -95,10 +95,7 @@ fun FeedPeek(it: FeedItem, marks: FeedMarks, focus: Pair<String, String>? = null
                         }
                     }
                     FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Meta("clock", feedTime(it.time))
-                        if (it.at > 0 && it.at != it.ts) Meta("send", "推送 ${feedTime(it.ts)}")
-                        it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", "$h") }
-                        it.until?.let { u -> Meta("calendar-days", "截止 $u") }
+                        FeedMetas(it, pushedToo = true)
                     }
                     target?.let { url -> UrlBox(url, focus?.first) { copyLink(context, url) } }
                     // 其余链接: 点一行就打开, 已经是主按钮的那条不重复列

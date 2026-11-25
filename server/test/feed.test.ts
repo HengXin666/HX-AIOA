@@ -19,6 +19,16 @@ test("feed: 校验与站点推断", () => {
   assert.match(parseFeed({ items: [] }) as string, /items/);
 });
 
+test("feed: 点赞与评论数可选, 不收负数和非数字", () => {
+  const f = parseFeed({ items: [{ title: "x", likes: 30, replies: 0 }, { title: "y" }] });
+  assert.ok(typeof f !== "string");
+  assert.equal(f.items[0]!.likes, 30);
+  assert.equal(f.items[0]!.replies, 0);
+  assert.ok(!("likes" in f.items[1]!) && !("replies" in f.items[1]!));
+  assert.match(parseFeed({ items: [{ title: "x", likes: -1 }] }) as string, /likes/);
+  assert.match(parseFeed({ items: [{ title: "x", replies: "8" }] }) as string, /replies/);
+});
+
 test("feed: 通知摘要按类别计数", () => {
   const f = parseFeed({ source: "NodeLoc", items: ITEMS });
   assert.ok(typeof f !== "string");

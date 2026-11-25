@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -104,24 +105,44 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
                 Text(s, color = c.text, fontSize = 13.sp, lineHeight = 18.sp)
             }
         }
-        FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Meta("clock", feedTime(it.time))
-            it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", "$h") }
-            it.until?.let { u -> Meta("calendar-days", "截止 $u") }
-            it.links.forEach { link -> LinkChip(link.first) { focus = link; peek = true } }
+        // 左下: 时间和计数 (拿不到的不画); 右下: 链接, 多个时只露第一个并标 +N, 点了也先出过渡层
+        Row(Modifier.padding(top = 8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FeedMetas(it)
+            }
+            it.links.firstOrNull()?.let { link ->
+                val more = it.links.size - 1
+                LinkChip(if (more > 0) "${link.first} +$more" else link.first, Modifier.padding(start = 8.dp).widthIn(max = 140.dp)) { focus = link; peek = true }
+            }
         }
     }
 }
 
 @Composable
-fun LinkChip(label: String, onClick: () -> Unit) {
+fun LinkChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Aioa.colors
-    Row(Modifier.clip(TAG).clickable(onClick = onClick).padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.clip(TAG).clickable(onClick = onClick).padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon("link", c.accent, 13.dp)
         Spacer(Modifier.width(3.dp))
-        Text(label, color = c.accent, fontSize = 12.sp)
+        Text(label, color = c.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+/** 时间, 热度, 点赞, 评论, 截止; 卡片和过渡层共用, 没有的字段不画。 */
+@Composable
+fun FeedMetas(it: FeedItem, pushedToo: Boolean = false) {
+    Meta("clock", feedTime(it.time))
+    if (pushedToo && it.at > 0 && it.at != it.ts) Meta("send", "推送 ${feedTime(it.ts)}")
+    it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", countText(h)) }
+    it.likes?.let { n -> Meta("thumbs-up", countText(n)) }
+    it.replies?.let { n -> Meta("message-circle", countText(n)) }
+    it.until?.let { u -> Meta("calendar-days", "截止 $u") }
+}
+
+private const val WAN = 10_000
+
+/** 一万以下原样, 以上写 "1.2万"。 */
+fun countText(n: Int): String = if (n < WAN) "$n" else "%.1f万".format(n / WAN.toFloat()).replace(".0万", "万")
 
 /** 今年内 "11-25 14:03", 往年带年份。 */
 fun feedTime(ms: Long): String {
