@@ -61,7 +61,7 @@
 | [push-experiment.md](design/push-experiment.md) | 推送延迟与耗电实验手册 |
 | [research-cf-probe-panels.md](design/research-cf-probe-panels.md) | CF 探针面板调研 (#11) |
 | [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
-| [plugin-arch.md](design/plugin-arch.md) | 插件体系重新设计 (D 方案) 结论图 (#99) |
+| [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`
 

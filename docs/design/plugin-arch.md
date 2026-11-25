@@ -1,28 +1,106 @@
-# 插件体系重新设计 (D 方案)
+# 插件体系重新设计 (D 方案) 定稿 v1
 
-讨论记录见 issue [#99](https://github.com/HengXin666/HX-AIOA/issues/99)。本文只放结论图, 细节以 issue 为准。
+讨论记录见 issue [#99](https://github.com/HengXin666/HX-AIOA/issues/99)。本文是定稿, 写插件和实现都以本文为准; 有改动先改本文。
 
-## 最终方案
+![定稿 v1](plugin-arch/7-v1.png)
+
+## 1. 结论一览
+
+| 问题 | 定稿 |
+| --- | --- |
+| 方案 | D: Hub 内的运行时内核 (服务 + 事件 + 可撤销注册) + 清单在运行时强制 |
+| 谁决定能用什么 | 管理员白名单 (全局, 多管理员取并集), 每个插件在白名单里**只有一个版本** |
+| 谁决定装什么 | 每个账号从白名单里自己启用, 瞬间生效, 不部署 |
+| 启用状态放哪 | 主 Hub 内存 `Map<账号, Set<插件>>`, Hub 唤醒时从 SQLite 读一次; 判断 0 次查库, 0 次额外 DO 请求 |
+| 依赖求解 | v1 不做 PubGrub: 白名单每个插件只有一个版本, 只检查 `engines` 与 `requires` 是否被满足 |
+| 服务端代码 | L2a: 白名单里的代码编进部署, 账号开关; 第三方代码先走 L3 Agent; Dynamic Workers (L2b) 不进 v1 |
+| 安卓 "改一切" 的边界 | 主题 token + 服务端驱动 UI (工作台 schema) + WebView 插槽; WebView 插槽要单独权限 `ui.webview` |
+| `single` 扩展点冲突 | 不搞 "后装覆盖": 放进白名单时 CI 报冲突, 管理员指定默认提供者; 账号可在白名单里的提供者之间改选 |
+| 插件 id | `<GitHub 登录名>.<名字>`, 例 `hengxin.todo`; 市场 PR 作者必须等于该登录名, CI 校验; 现有 `todo` 视为 `hengxin.todo` |
+| 信任模型 | v1 只有官方市场 (仓库 PR + CI + 管理员放行); 本地开发插件只能在管理员自己的账号开 "开发模式", 只允许 L0 / L1 / L3; 第三方市场源不进 v1 |
+| 事件总线 | 只在 Hub 内存分发, 至多一次, 不落库; 要可靠就由插件自己写 `pdata` |
+| 版本支持窗口 | 最近 2 个协议大版本 |
+| 版本兼容 | 启动不等更新; 握手三档 (兼容 / 建议更新 / 低于底线), 低于底线只灰掉新功能; 只有安全漏洞才完全拒绝 |
+
+## 2. 清单 `plugin.json` v2
+
+在现有字段 (`id name summary version icon tags author readme prompt group agent space`) 上**只加不改**, 旧清单按 `api: "1"` 理解, 照常能用。
+
+```jsonc
+{
+  "id": "hengxin.todo",
+  "version": "2.0.0",
+  "api": "2",                                   // 清单 schema 版本
+  "engines": { "aioa": "^3" },                  // 需要的宿主协议大版本
+  "requires": { "service:chat.messages": "^1" },
+  "optional": { "service:calendar.events": "^1" },
+  "provides": { "service:todo.items": "1.0.0" },
+  "contributes": {
+    "commands":   [{ "id": "hengxin.todo.add", "title": "加待办" }],
+    "widgets":    [{ "id": "hengxin.todo.list", "schema": "widgets/list.json" }],
+    "settings":   [{ "key": "hengxin.todo.remind", "type": "boolean", "default": true }],
+    "collections":[{ "name": "items", "schema": "data/items.json", "index": ["state"] }],
+    "push.route": [{ "id": "hengxin.todo.due", "after": ["core.mute"] }]
+  },
+  "permissions": ["data:own", "push:send"],     // 见第 6 节
+  "budget": { "cron": "0 * * * *", "agentPoll": 0 } // 见第 7 节, 市场 CI 累加
+}
+```
+
+扩展点基数沿用 issue 正文 4.2 (`single` / `multiple` / `layered` / `pipeline`)。命名空间: 所有 id, 设置键, 集合名都以插件 id 开头, 撞名 = 冲突, CI 拒绝。
+
+## 3. 运行时 (主 Hub 内)
+
+- 内核三件事: 服务表 (`provides` / `requires`), 事件总线 (`emits` / `listens`), 可撤销注册 (每次注册返回一个撤销句柄, 卸载 = 按插件撤销全部)。
+- 请求进 Hub 后: 解析出账号 → 查内存 Set → 未启用直接 404 (界面不展示), 启用则交给插件。
+- 安装 / 卸载 / 升级: 每账号一把锁, 一次 `transactionSync` 写完 (启用记录, 设置默认值, 集合迁移), 失败整体回滚; 修掉现在的重复安装和卸载复活。
+- 变化推送: Hub 改完内存后经 WebSocket 推 `plugin_update` (只推给该账号的界面连接与 Agent 长连, 不推安卓后台连接)。
+
+## 4. 热加载
+
+| 层 | 内容 | 生效方式 |
+| --- | --- | --- |
+| L0 声明 | 提示词, 布局, 主题 token, 文案, 集合 schema | 宿主解释, 收到 `plugin_update` 即生效 |
+| L1 客户端 | Web 动态 `import()`; 安卓服务端驱动 UI | 同上, 失败回退到上一版 |
+| L2a 服务端 | 白名单代码编进部署 | 白名单变化触发 CI 重新部署; 账号开关不部署 |
+| L3 Agent | 插件逻辑跑在用户的 Agent 上 | Agent 长连收到 `plugin_update` 立即重拉指令, 不再等每天一次 |
+
+## 5. 数据 `pdata`
+
+- 一张表 `pdata(acct, plugin, coll, id, ver, updated, deleted, body)`, 主键 `(acct, plugin, coll, id)`。
+- 写入带读到的 `ver`, 不匹配返回 409; 删除写墓碑; 客户端按 `since` 增量同步。
+- 只持久化真正的数据, 每次写入算 1 行写入, 计入每天 10 万行预算; 配额按 (账号, 插件) 计。
+- 现有 `todo` 表一次性迁移成 `hengxin.todo` 的 `items` 集合。
+
+## 6. 权限
+
+`data:own` (自己的集合), `data:read:<插件>.<集合>` (读别人公开的集合, 需用户授权), `push:send`, `net:<域名>` (只对 L2a), `ui.webview`, `core.replace` (替换 `single` 核心扩展点)。后三项是高危, 单独确认。
+
+## 7. 请求预算
+
+所有 HTTP 请求都经 Worker 转发到同一个 Hub DO, 每个请求 = 1 次 Worker 请求 + 1 次 DO 请求; WebSocket 入站消息, cron, RPC 也算 DO 请求。免费额度两者都是每天 10 万 (UTC 0 点重置)。
+
+- 不新增 DO 跳转, 不为插件单独建 DO, 插件不加定时拉取, 变化一律推送。
+- 插件 Agent 默认用长连 (`hxaioa watch`), `agent.interval` 只作退路; 退路间隔不小于 60 秒 (20 秒一次一天就是 4,320 次)。
+- `budget` 声明 cron 与预计拉取; 市场 CI 按白名单累加估算每天请求, 超过 5 万 (额度一半) 不让进白名单。
+
+## 8. 实施顺序
+
+| 步 | 内容 | 完成标准 |
+| --- | --- | --- |
+| P1 | 清单 v2 类型与校验 (protocol), 旧清单兼容; 市场 CI 校验命名空间与冲突 | `npm run typecheck`; 旧 `todo` 清单校验通过 |
+| P2 | 白名单 + 账号启用 (Hub 内存 Set, 安装锁与事务, `plugin_update` 推送) | e2e: 启用后立刻可用, 停用后立刻 404, 不部署 |
+| P3 | `pdata` 通用数据层 + 增量同步; `todo` 迁移 | e2e: 409, 墓碑, since 同步 |
+| P4 | Agent 长连收 `plugin_update` 立即换指令; 插件 Agent 改为默认长连 | 改提示词后 Agent 秒级生效, 不用重启 |
+| P5 | 扩展点注册表, 核心功能逐个改为内置插件 (主题, 工作台组件, 推送路由先行) | 每个扩展点有契约测试 |
+
+## 附: 选型过程
 
 ![最终方案](plugin-arch/6-final.png)
-
-## 请求预算
-
-所有 HTTP 请求都经 Worker 转发到同一个 Hub DO, 所以每个请求 = 1 次 Worker 请求 + 1 次 DO 请求; WebSocket 入站消息, cron, RPC 也算 DO 请求。免费额度两者都是每天 10 万 (UTC 0 点重置)。
-
-插件体系的硬约束:
-
-- 不新增 DO 跳转: 启用判断, 插件钩子, 事件总线都在 Hub 进程内完成。
-- 不为插件单独建 DO, 不在插件里加定时拉取; 变化一律 WebSocket 推送。
-- 每个插件的清单声明 cron / alarm 频率, 市场 CI 按全部白名单插件累加估算每日请求, 超预算不让进白名单。
-
-## 服务端代码与版本兼容
 
 ![服务端代码两条路](plugin-arch/4-server-code.png)
 
 ![版本兼容](plugin-arch/5-compat.png)
-
-## 选型过程
 
 ![四个方案](plugin-arch/1-options.png)
 
