@@ -140,6 +140,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onStatus(online: Boolean) {
         this.online = online
         if (online) metrics.onOnline() else terms.onOffline()
+        if (online) github.probeIfOff()
         if (online) groups.refreshOpen()
         if (online) CrashLog.take(getApplication())?.let { send(CRASH_TITLE + FENCE + "\n" + it + "\n" + FENCE) }
     }
@@ -148,6 +149,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
         if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
+        if (frame is ServerFrame.PluginUpdate) return if (frame.id == Constants.GITHUB_PLUGIN) github.onPlugin(frame.change) else Unit
         if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)

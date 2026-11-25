@@ -21,7 +21,7 @@ object ApiCache {
     private const val KEY_ETAG = "etag"
 
     /** 刷新结果: changed 为 false 表示和缓存一样, body 为 null 表示失败。 */
-    class Fresh(val body: JSONObject?, val changed: Boolean, val error: String?)
+    class Fresh(val body: JSONObject?, val changed: Boolean, val error: String?, val code: Int = 0)
 
     private fun file(context: Context, name: String) = File(File(context.filesDir, DIR).apply { mkdirs() }, "$name.json")
 
@@ -46,15 +46,15 @@ object ApiCache {
         etagOf(context, name)?.let { b.header(IF_NONE_MATCH, it) }
         return runCatching {
             Net.client(context).newCall(b.build()).execute().use { res ->
-                if (res.code == NOT_MODIFIED) return@use Fresh(read(context, name), false, null)
+                if (res.code == NOT_MODIFIED) return@use Fresh(read(context, name), false, null, res.code)
                 val text = res.body?.string().orEmpty()
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 if (!res.isSuccessful || json == null) {
-                    return@use Fresh(null, false, json?.optString("error")?.ifEmpty { null } ?: "请求失败 (HTTP ${res.code})")
+                    return@use Fresh(null, false, json?.optString("error")?.ifEmpty { null } ?: "请求失败 (HTTP ${res.code})", res.code)
                 }
                 val same = read(context, name)?.toString() == json.toString()
                 if (!same) write(context, name, json, res.header(ETAG))
-                Fresh(json, !same, null)
+                Fresh(json, !same, null, res.code)
             }
         }.getOrElse { Fresh(null, false, "网络错误: ${it.message ?: it.javaClass.simpleName}") }
     }
@@ -62,16 +62,19 @@ object ApiCache {
     /**
      * 缓存优先的 GET (后台线程调用): 有缓存先回调一次 (fromCache = true), 再问服务端,
      * 内容变了才再回调; 返回错误信息, 成功为 null。页面因此二次打开不转圈, 没变化也不重绘。
+     * onCode 收到服务端的 HTTP 状态码 (网络错误时为 0)。
      */
     suspend fun get(
         context: Context,
         name: String,
         segments: List<String>,
         query: Map<String, String> = emptyMap(),
+        onCode: (Int) -> Unit = {},
         onBody: suspend (body: JSONObject, fromCache: Boolean) -> Unit,
     ): String? {
         read(context, name)?.let { onBody(it, true) }
         val fresh = refresh(context, name, segments, query)
+        onCode(fresh.code)
         if (fresh.changed && fresh.body != null) onBody(fresh.body, false)
         return fresh.error
     }

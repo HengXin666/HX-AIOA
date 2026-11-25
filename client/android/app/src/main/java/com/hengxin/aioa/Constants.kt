@@ -125,6 +125,8 @@ object Constants {
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
     const val SOURCE_AGENT = "agent"
+    // GitHub 接入是插件: 主人停用后 github 接口 404, 入口隐藏
+    const val GITHUB_PLUGIN = "hengxin666.github"
     const val GITHUB_REPOS_PATH = "api/v1/github/repos"
     const val GITHUB_SYNC_PATH = "api/v1/github/sync"
     const val GITHUB_AVAILABLE_PATH = "api/v1/github/available"

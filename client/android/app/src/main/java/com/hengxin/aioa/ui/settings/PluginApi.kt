@@ -31,8 +31,11 @@ data class PluginEntry(
     val pending get() = allowed == null || allowed.version != version
 }
 
-/** 详情: 介绍原文 (Markdown 或 HTML), 建议的定时, 任务提示词 (不含密钥)。 */
-data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?, val admin: Boolean)
+/** 详情: 介绍原文 (Markdown 或 HTML), 建议的定时, 任务提示词 (不含密钥); 没有 Agent 的插件 (如 GitHub 接入) 不安装, 只启用。 */
+data class PluginDetail(
+    val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?, val admin: Boolean,
+    val agentless: Boolean = false, val enabled: Boolean = false,
+)
 
 /** 安装结果, 只给这一次: 本地 Agent 接入语 (含密钥), 云端 Agent 委托语 (不含密钥), 密钥本身。 */
 data class PluginInstalled(val prompt: String, val key: String)
@@ -53,7 +56,16 @@ class PluginApi(private val context: Context) {
         val b = r.body ?: error(r.error ?: FAILED)
         val m = b.getJSONObject("manifest")
         m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL).put(KEY_ALLOWED, b.optJSONObject(KEY_ALLOWED) ?: JSONObject.NULL)
-        PluginDetail(entry(m), b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, b.optBoolean("admin"))
+        val agent = m.optJSONObject("agent")
+        // 没有 Agent 的插件才多问一次本账号启用了哪些
+        val on = agent == null && Api.call(context, GET, listOf(PATH_ALLOW)).body?.optJSONArray(KEY_ENABLED)?.let { a -> (0 until a.length()).any { a.optString(it) == id } } == true
+        PluginDetail(entry(m), b.optString("readme"), b.optString("readmeType") == "html", agent?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, b.optBoolean("admin"), agent == null, on)
+    }
+
+    /** 本账号启用 / 停用; 停用时数据保留, 再启用即恢复。 */
+    suspend fun setEnabled(id: String, on: Boolean): Result<Unit> = io {
+        val r = Api.call(context, if (on) PUT else DELETE, listOf(PATH, id, KEY_ENABLED), if (on) JSONObject() else null)
+        if (r.body == null) error(r.error ?: FAILED)
     }
 
     /** 管理员放行市场当前版本 (已放行的就是换成新版); 有冲突时服务端返回原因。 */
@@ -117,6 +129,7 @@ class PluginApi(private val context: Context) {
         private const val PATH = "api/v1/plugins"
         private const val KEY_INSTALLED = "installed"
         private const val KEY_ALLOWED = "allowed"
+        private const val KEY_ENABLED = "enabled"
         private const val PATH_ALLOW = "api/v1/plugin-allow"
         private const val PUT = "PUT"
         private const val GET = "GET"

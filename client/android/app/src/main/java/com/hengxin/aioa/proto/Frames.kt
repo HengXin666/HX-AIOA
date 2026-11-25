@@ -71,6 +71,8 @@ sealed interface ServerFrame {
     data class TermReady(val sid: String) : ServerFrame
     data class TermData(val sid: String, val d: String) : ServerFrame
     data class TermClose(val sid: String, val reason: String?) : ServerFrame
+    /** 插件放行, 启用, 停用, 撤销, 换版本; change 原样交给上层。 */
+    data class PluginUpdate(val id: String, val change: String) : ServerFrame
 }
 
 data class PresenceEntry(val id: String, val name: String, val until: Long)
@@ -141,6 +143,7 @@ object Frames {
             "term_ready" -> ServerFrame.TermReady(o.getString(KEY_SID))
             "term" -> ServerFrame.TermData(o.getString(KEY_SID), o.getString("d"))
             "term_close" -> ServerFrame.TermClose(o.getString(KEY_SID), o.optString("reason").ifEmpty { null })
+            "plugin_update" -> ServerFrame.PluginUpdate(o.optString("id"), o.optString("change"))
             else -> null
         }
     }

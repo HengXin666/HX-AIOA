@@ -45,6 +45,8 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏
     var github by rememberSaveable { mutableStateOf<String?>(null) }
     val openGithub = { github = "" }
+    // GitHub 插件被停用: 正开着的 GitHub 页一起关掉
+    androidx.compose.runtime.LaunchedEffect(chat.github.enabled) { if (!chat.github.enabled) github = null }
     // 工作台里点待办: 跳到消息栏的原消息
     androidx.compose.runtime.LaunchedEffect(chat.groups.focusTick) { if (chat.groups.focusTick > 0) { github = null; tab = Tab.CHAT } }
     BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }

@@ -33,7 +33,7 @@ private const val TASKS_SHOWN = 5
 @Composable
 fun DevBoard(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
-    GithubOverviewCard(chat.github, openGithub)
+    if (chat.github.enabled) GithubOverviewCard(chat.github, openGithub)
     val waiting = feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }
     waiting.forEach { task -> TaskCard(task.toCard(feed.pending[task.id]), onOption = null) { open(Tab.AGENT) } }
     val recent = feed.tasks.values.filter { it.state != Constants.TASK_WAITING }.sortedByDescending { it.updated }.take(TASKS_SHOWN).map { t ->

@@ -86,6 +86,16 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         }
         if (installed == null && e.allowed == null) {
             if (!d.admin) Paragraph("管理员还没放行这个插件, 放行后才能安装。", c.textSecondary, BODY_SP)
+        } else if (d.agentless) {
+            SettingsGroup("启用", "这个插件没有 Agent, 不用安装。停用后它的接口与入口都隐藏, 数据保留, 再启用即恢复。") {
+                SwitchRow("启用", d.enabled) { on ->
+                    busy = true
+                    scope.launch {
+                        api.setEnabled(id, on).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
+                        busy = false
+                    }
+                }
+            }
         } else if (installed == null) {
             PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy) {
                 busy = true
