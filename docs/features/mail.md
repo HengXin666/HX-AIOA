@@ -73,3 +73,21 @@ HX-Email → 设置 → 通知 → Webhook:
 分类: AI, 开发, 云服务, 账号安全, 金融, 购物, 社交, 影音, 游戏, 办公, 教育, 政务, 其他。厂商表优先; 不在表里的按域名关键词猜 (如 `.edu` 归教育, `bank-` 开头的段归金融), 都不中归 "其他"。旧库升级时按发件人补上分类。
 
 计划: 用户自定义映射表 (域名 -> 厂商 / 分类 / 图标), 图标可取邮件里的 BIMI 标志 (`BIMI-Location` 头) 作为权威来源。
+
+## 详情显示 (#46)
+
+- 原文直接内嵌 (WebView 不跑脚本, 不读文件), 按屏宽排版; 设计稿 `docs/design/mockups/mail-detail.html`
+- 远程图片: 白名单 (上面的厂商表, 含子域名) 默认放行, 其余拦截; 冒充的信 (spoof) 只认明确放行。详情里可 "显示" (本次) 或 "总是显示" (记到发件人主域名)
+- 样式: 深色适配 (默认, 深色主题下反色, 图片不反) / 原样 / 纯文本, 按发件人主域名记住
+- 点链接先弹出真实去向: 跳转参数 (url, u, redirect 等) 里带目标的直接解开, 去掉跟踪; 只走内置浏览器或复制
+- 验证码只取 "验证码 / code" 字样附近, 中间不隔句读, 年份 (19xx / 20xx) 不算
+
+偏好存服务端, 各端共用:
+
+- `GET /api/v1/mail/prefs`: `{ images, senders, known }`。`images`: `known` (只放行白名单, 默认) / `all` / `none`; `senders`: 键为小写地址或域名, 值 `{ images?: show|block, style?: adapt|original|text }`, 地址优先, 域名逐级往上找; `known`: 白名单域名 (只读)
+- `PUT /api/v1/mail/prefs`: `{ images, senders }`, 最多 500 个发件人
+
+## 转进群 / 交给 Agent (#46)
+
+- `POST /api/v1/mail/{id}/forward` `{ channel }`: 以主人的名义发到群里: 标题, 发件人, 收件, 时间, 纯文本正文 (超过 3500 字截断), 原文作附件, `fwd.channel = "mail"`。来源是主人, 所以群里监听的 Agent 会被叫醒。群不存在 404
+- `GET / PUT /api/v1/mail/rules` `{ rules: [{ id, on, from?, domain?, category?, subject?, to?, channel, keep }] }`: 自动转发, 条件全部满足才转 (至少一个条件), `subject` 为标题关键词, `domain` 含子域名。新信到达时服务端执行, 同一个群只转一次; `keep=false` 转完从邮件列表删掉。冒充的信不转。规则转过的信 30 天内重投直接忽略 (删掉的不会复活)。最多 50 条

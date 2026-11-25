@@ -1,4 +1,4 @@
-import { AGENT_ACTIVE_STEP_MS, PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type KeyInfo } from "@hx-aioa/protocol";
+import { AGENT_ACTIVE_STEP_MS, PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type ChatSyncFrame, type KeyInfo } from "@hx-aioa/protocol";
 import { canRead } from "./api-chats";
 import { CODE_FORBIDDEN, ERR_FORBIDDEN, GET, HISTORY_MAX_LIMIT, OWNER_NAME, POST } from "./constants";
 import { type Core, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
@@ -16,13 +16,17 @@ export function agentMe(core: Core, key: KeyInfo): ChatAgentMe {
   return { keyId: key.id, name: key.name, reads: key.channels, ...(key.sourceId ? { sourceId: key.sourceId } : {}) };
 }
 
-/** Agent 有动作 (拉消息, 发消息, 拉指令, 长连): 记最近活跃, 同一个 Agent 最多每 10 分钟写一次库, 不广播。 */
+/**
+ * Agent 有动作 (拉消息, 发消息, 拉指令, 长连): 记最近活跃, 同一个 Agent 最多每 2 分钟写一次库,
+ * 写了就通知各端重拉群资料 (以前不广播, App 一直显示旧时间, 发言 5 分钟前却显示 40 分钟前活跃)。
+ */
 export function touchAgent(core: Core, keyId: string, now = Date.now()): void {
   for (const meta of core.chats.chats()) {
     const a = meta.agents?.find((x) => x.keyId === keyId);
     if (!a) continue;
     if (now - (a.active ?? 0) < AGENT_ACTIVE_STEP_MS) return;
     core.chats.replaceChat({ ...meta, agents: (meta.agents ?? []).map((x) => (x.keyId === keyId ? { ...x, active: now } : x)) });
+    core.sockets.toAllClients({ t: "chat_sync", topic: "chats", channel: meta.channel } satisfies ChatSyncFrame);
     return;
   }
 }

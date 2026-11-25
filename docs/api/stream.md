@@ -160,7 +160,7 @@ Agent 处理后回 `act_ack`; 没有 ack 的动作在下次连上时会重发 (2
 
 ## 3.5 群 Agent 长连 (role=chat)
 
-`hxaioa watch` 用的就是它。`welcome` 带 `me` (`keyId`, `name`, `channel`, `sourceId`, `reads`), 之后补发 `since` 之后可读群里的事件, 再实时推 `ev` (只推 key 白名单里的群)。可发 `typing` 帧, 其它帧忽略。连着期间这些群的 `presence.listening` 里有它; 断开即移除。
+`hxaioa watch` 用的就是它。`welcome` 带 `me` (`keyId`, `name`, `channel`, `sourceId`, `reads`), 之后补发 `since` 之后可读群里的事件, 再实时推 `ev` (只推 key 白名单里的群)。可发 `typing` 帧, 其它帧忽略。主人改了群资料, Agent 设置, 插件或 GitHub 授权后, 这把 key 的专属指令版本若变了, 服务端立刻推 `{ "t": "guide", "channel": "...", "version": "..." }` (同时在群里发一条系统通知), 不等 Agent 下次请求。连着期间这些群的 `presence.listening` 里有它; 断开即移除。
 
 ## 4. 探针 (role=probe)
 

@@ -38,6 +38,31 @@ private const val KEY_TEXT = "text"
 private const val JSON_TYPE = "application/json"
 private const val KEY_TODOS = "todos"
 private const val TOPIC_TODOS = "todos"
+private const val KEY_TODOS_SYNC = "todos-sync"
+
+private fun JSONObject.optPositive(k: String): Long? = optLong(k).takeIf { it > 0 }
+
+/** 协议 TodoItem -> TodoRow。 */
+internal fun todoRow(o: JSONObject): TodoRow {
+    val gh = o.optJSONObject("gh")
+    return TodoRow(
+        id = o.optString("id"),
+        title = o.optString("title"),
+        note = o.optString("note").ifEmpty { null },
+        state = o.optString("state", TodoRow.STATE_OPEN),
+        prio = o.optInt("prio", 2),
+        src = o.optPositive("src"),
+        updated = o.optLong("updated"),
+        created = o.optLong("created"),
+        doneAt = o.optPositive("doneAt"),
+        repo = o.optString("repo").ifEmpty { null },
+        issue = o.optPositive("issue")?.toInt(),
+        parent = o.optString("parent").ifEmpty { null },
+        ghOpen = gh?.let { it.optString("state") != "closed" },
+        ghComments = gh?.optInt("comments") ?: 0,
+        ghParent = gh?.optPositive("parent")?.toInt(),
+    )
+}
 
 /** 工作台的界面状态: 布局来自 space_update 帧, 用户的排序与尺寸 PUT 到服务端, 打开时取一次服务端解析好的当前值。 */
 class SpacesState(
@@ -136,26 +161,30 @@ class SpacesState(
     }
 
     /** 勾选本地先生效, 失败时以服务端为准重拉。 */
-    fun setTodo(channel: String, row: TodoRow, done: Boolean) {
-        val state = if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN
-        todos[channel] = todos[channel].orEmpty().map { if (it.id == row.id) it.copy(state = state, updated = System.currentTimeMillis()) else it }
-        val body = JSONObject().put(KEY_TODOS, JSONArray().put(JSONObject().put("id", row.id).put("state", state)))
+    fun setTodo(channel: String, row: TodoRow, done: Boolean) = setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
+
+    fun setState(channel: String, row: TodoRow, state: String) = patchTodo(channel, row.copy(state = state), JSONObject().put("state", state))
+
+    fun setPrio(channel: String, row: TodoRow, prio: Int) = patchTodo(channel, row.copy(prio = prio), JSONObject().put("prio", prio))
+
+    /** 改一条: 本地先换成 next, 再把 fields (只含要改的字段) 发给服务端。 */
+    private fun patchTodo(channel: String, next: TodoRow, fields: JSONObject) {
+        val now = System.currentTimeMillis()
+        todos[channel] = todos[channel].orEmpty().map { if (it.id == next.id) next.copy(updated = now) else it }
+        val body = JSONObject().put(KEY_TODOS, JSONArray().put(fields.put("id", next.id)))
         io { if (call(url(Constants.CHATS_API, channel, KEY_TODOS), "POST", body) == null) loadTodos(channel) }
+    }
+
+    /** 立即按 GitHub 同步关联的 issue, 再重拉。 */
+    fun syncTodos(channel: String, done: () -> Unit = {}) = io {
+        call(url(Constants.CHATS_API, channel, KEY_TODOS_SYNC), "POST", JSONObject())
+        loadTodos(channel)
+        withContext(Dispatchers.Main) { done() }
     }
 
     private fun loadTodos(channel: String) = io {
         val arr = call(url(Constants.CHATS_API, channel, KEY_TODOS), "GET", null)?.optJSONArray(KEY_TODOS) ?: return@io
-        val rows = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { o ->
-            TodoRow(
-                id = o.optString("id"),
-                title = o.optString("title"),
-                note = o.optString("note").ifEmpty { null },
-                state = o.optString("state", TodoRow.STATE_OPEN),
-                prio = o.optInt("prio", 2),
-                src = o.optLong("src").takeIf { it > 0 },
-                updated = o.optLong("updated"),
-            )
-        }
+        val rows = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map(::todoRow)
         withContext(Dispatchers.Main) { todos[channel] = rows }
     }
 

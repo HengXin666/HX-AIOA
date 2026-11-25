@@ -7,7 +7,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** 已安装的实例: 群, 工作台, 当前版本, 自动更新开关 (缺省开)。 */
-data class PluginInstall(val channel: String, val space: String?, val version: String, val installed: Long, val auto: Boolean)
+data class PluginInstall(val channel: String, val space: String?, val version: String, val installed: Long, val auto: Boolean, val base: Boolean = false)
+
+/** 依赖的插件; optional 为真时没装也能用。 */
+data class PluginDep(val id: String, val optional: Boolean)
 
 /** 市场里的一项, 对应协议 PluginEntry + 本机安装状态。 */
 data class PluginEntry(
@@ -19,6 +22,8 @@ data class PluginEntry(
     val tags: List<String>,
     val author: String,
     val installed: PluginInstall?,
+    val base: Boolean = false,
+    val deps: List<PluginDep> = emptyList(),
 ) {
     /** 市场有比已装更新的版本。 */
     val outdated get() = installed != null && installed.version != version
@@ -82,10 +87,12 @@ class PluginApi(private val context: Context) {
             tags = (0 until (tags?.length() ?: 0)).mapNotNull { tags?.optString(it)?.ifEmpty { null } },
             author = o.optString("author"),
             installed = o.optJSONObject(KEY_INSTALLED)?.let(::install),
+            base = o.optBoolean("base"),
+            deps = o.optJSONArray("deps")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { PluginDep(it.optString("id"), it.optBoolean("optional")) } }.orEmpty(),
         )
     }
 
-    private fun install(o: JSONObject) = PluginInstall(o.optString("channel"), o.optString("space").ifEmpty { null }, o.optString("version"), o.optLong("installed"), o.optBoolean("auto", true))
+    private fun install(o: JSONObject) = PluginInstall(o.optString("channel"), o.optString("space").ifEmpty { null }, o.optString("version"), o.optLong("installed"), o.optBoolean("auto", true), o.optBoolean("base"))
 
     private suspend fun <T> io(block: () -> T): Result<T> = withContext(Dispatchers.IO) { runCatching(block) }
 

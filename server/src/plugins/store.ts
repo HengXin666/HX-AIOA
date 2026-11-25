@@ -1,4 +1,4 @@
-import { PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall } from "@hx-aioa/protocol";
+import { GH_PLUGIN_ID, PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall } from "@hx-aioa/protocol";
 import { todoGuide } from "./todo-guide";
 
 type Row = { id: string; body: string };
@@ -51,12 +51,14 @@ export class PluginStore {
   /** 专属指令里的 "插件任务" 一节: 模板替换占位符, 再附上待办接口。 */
   promptFor(id: string, base: string, channel: string, title: string): string | undefined {
     const s = this.all().get(id);
-    return s ? renderTask(s.name, s.prompt, base, channel, title) : undefined;
+    // 声明了 gh 依赖且 GitHub 授权插件已装, 指令里多一节 issue 接口
+    const gh = !!s?.install.deps?.includes(GH_PLUGIN_ID) && this.all().has(GH_PLUGIN_ID);
+    return s ? renderTask(s.name, s.prompt, base, channel, title, gh) : undefined;
   }
 }
 
 /** 插件模板代入群和地址, 拼上服务端生成的待办接口说明。 */
-export function renderTask(name: string, prompt: string, base: string, channel: string, title: string): string {
+export function renderTask(name: string, prompt: string, base: string, channel: string, title: string, gh = false): string {
   const body = prompt.replaceAll(PLUGIN_VAR_CHANNEL, channel).replaceAll(PLUGIN_VAR_TITLE, title).replaceAll(PLUGIN_VAR_BASE, base).trim();
-  return [`## 插件任务: ${name}`, "", body, "", todoGuide(base, channel)].join("\n");
+  return [`## 插件任务: ${name}`, "", body, "", todoGuide(base, channel, gh)].join("\n");
 }

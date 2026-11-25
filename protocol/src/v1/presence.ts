@@ -15,6 +15,12 @@ export const TYPING_THROTTLE_MS = 4000;
 export const LISTEN_TTL_MS = 45_000;
 export const PATH_CHAT_TYPING = `${API_V1}/chats/{channel}/typing`;
 export const PATH_AGENT_ME = `${API_V1}/chat-agent/me`;
+// 主人改了群 Agent 相关设置, 指令版本变了: 立刻推给这把 key 的长连, hxaioa watch 收到即退出码 3
+export type GuideFrame = { t: "guide"; channel: string; version: string };
+// Agent 的长期记忆: 存服务端, 换机器 / 云端每次新开也不丢; 只有这把 key 自己能读写
+export const PATH_AGENT_MEMORY = `${API_V1}/chat-agent/memory`;
+export const AGENT_MEMORY_MAX = 4000;
+export type AgentMemory = { text: string; updated: number };
 
 export function parseTyping(f: Record<string, unknown>): TypingFrame | null {
   return typeof f.channel === "string" && f.channel ? { t: "typing", channel: f.channel } : null;

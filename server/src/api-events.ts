@@ -1,7 +1,5 @@
 import { attachFile } from "./files/api";
 import {
-  checkFeedKinds,
-  feedTagsOf,
   feedText,
   parseFeed,
   type FeedData,
@@ -52,6 +50,7 @@ import { ApiFail, badJson, clampInt, fail, json, readJson } from "./http";
 import { textToEventData } from "./legacy";
 import { canRead } from "./api-chats";
 import { touchAgent } from "./api-presence";
+import { feedGuard } from "./feed-guard";
 import { refOf } from "./chat";
 import { groupOf } from "./store";
 
@@ -77,12 +76,10 @@ export async function writeEvent(core: Core, who: Principal, input: EventInput, 
     if (list.length && !(channel && list.some((p) => globMatch(p, channel)))) throw new ApiFail(403, CODE_FORBIDDEN, "频道不在该 key 的白名单内");
     if (!input.subject && who.key.subject) input.subject = who.key.subject;
   }
-  const feed = input.kind === "event" ? (input.data as { feed?: FeedData } | undefined)?.feed : undefined;
   const target = input.channel ?? origin.sourceInfo?.channel;
-  if (feed && target) {
-    const meta = core.chats.chat(target);
-    const bad = meta?.view === "feed" ? checkFeedKinds(feed.items.map((it) => it.kind), feedTagsOf(meta).tags) : null;
-    if (bad) throw new ApiFail(400, "bad_request", bad);
+  if (target && input.kind === "event") {
+    const bad = feedGuard(core.chats.chat(target), input.data as Record<string, unknown> | undefined, who.owner);
+    if (bad) throw new ApiFail(bad.status, bad.code, bad.text);
   }
   const ev = await core.pipeline.fromInput(input, origin);
   const out: IngestResult = { id: ev.id, delivered: ev.route?.action === "drop" || ev.kind === "metric" ? 0 : 1 };

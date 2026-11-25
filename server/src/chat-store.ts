@@ -1,4 +1,4 @@
-import type { ChatMeta, ChatPatch, Envelope, Favorite } from "@hx-aioa/protocol";
+import type { AgentMemory, ChatMeta, ChatPatch, Envelope, Favorite } from "@hx-aioa/protocol";
 
 type MetaRow = { channel: string; body: string };
 type FavRow = { seq: number; saved: number; body: string };
@@ -25,6 +25,19 @@ export class ChatStore {
     sql.exec("CREATE TABLE IF NOT EXISTS chat_meta (channel TEXT PRIMARY KEY, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS fav (seq INTEGER PRIMARY KEY, saved INTEGER NOT NULL, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS avatar (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created INTEGER NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS agent_memory (who TEXT PRIMARY KEY, text TEXT NOT NULL, updated INTEGER NOT NULL)");
+  }
+
+  /** Agent 的长期记忆, who 为来源 id (换 key 不丢)。 */
+  memory(who: string): AgentMemory {
+    const r = this.sql.exec<AgentMemory>("SELECT text, updated FROM agent_memory WHERE who = ?", who).toArray()[0];
+    return r ? { text: r.text, updated: r.updated } : { text: "", updated: 0 };
+  }
+
+  setMemory(who: string, text: string, now = Date.now()): AgentMemory {
+    if (!text) this.sql.exec("DELETE FROM agent_memory WHERE who = ?", who);
+    else this.sql.exec("INSERT OR REPLACE INTO agent_memory (who, text, updated) VALUES (?, ?, ?)", who, text, now);
+    return { text, updated: text ? now : 0 };
   }
 
   chats(): ChatMeta[] {

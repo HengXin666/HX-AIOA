@@ -57,6 +57,7 @@ fun MailView(head: Long?, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     // 群里来了新信 (head 变了) 或筛选变了就刷新第一页
     LaunchedEffect(head, s.account, s.category, s.vendor, s.query) { s.reload() }
+    LaunchedEffect(Unit) { s.loadPrefs() }
     LaunchedEffect(s.search) { delay(SEARCH_DEBOUNCE_MS); s.query = s.search.trim().ifEmpty { null } }
     BackHandler(s.open == null && (s.vendors || s.vendor != null || s.category != null)) { s.vendors = false; s.vendor = null; s.category = null }
     val c = Aioa.colors

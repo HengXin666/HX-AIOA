@@ -48,6 +48,8 @@ export const PATH_FILE_COMMIT = `${API_V1}/files/{id}/commit`;
 
 export const QUERY_KIND = "kind";
 export const QUERY_BEFORE = "before";
+// slim=1: 去掉 data.html (换成 htmlBytes), 给只看文字的 Agent 省流量
+export const QUERY_SLIM = "slim";
 export const QUERY_STATE = "state";
 export const QUERY_AGENT = "agent";
 export const QUERY_SUBJECTS = "subjects";

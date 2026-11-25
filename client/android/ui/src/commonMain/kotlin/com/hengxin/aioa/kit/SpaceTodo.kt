@@ -17,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** 一条待办, 对应协议 TodoItem; prio 1 急, 2 普通, 3 以后。 */
+/** 一条待办, 对应协议 TodoItem; prio 1 急, 2 普通, 3 以后; gh* 是服务端从 GitHub 同步的 issue 状态。 */
 data class TodoRow(
     val id: String,
     val title: String,
@@ -26,6 +26,14 @@ data class TodoRow(
     val prio: Int,
     val src: Long?,
     val updated: Long,
+    val created: Long = 0,
+    val doneAt: Long? = null,
+    val repo: String? = null,
+    val issue: Int? = null,
+    val parent: String? = null,
+    val ghOpen: Boolean? = null,
+    val ghComments: Int = 0,
+    val ghParent: Int? = null,
 ) {
     val finished: Boolean get() = state == STATE_DONE || state == STATE_DROPPED
 
@@ -34,6 +42,7 @@ data class TodoRow(
         const val STATE_DROPPED = "dropped"
         const val STATE_OPEN = "open"
         const val STATE_DOING = "doing"
+        const val STATE_HOLD = "hold"
     }
 }
 
@@ -75,6 +84,7 @@ private fun TodoLine(subject: String, row: TodoRow, handler: SpaceHandler) {
                     row.finished -> Unit
                     row.prio == PRIO_URGENT -> { Dot(c.danger); Spacer(Modifier.width(6.dp)) }
                     row.state == TodoRow.STATE_DOING -> { Dot(c.accent); Spacer(Modifier.width(6.dp)) }
+                    row.state == TodoRow.STATE_HOLD -> { Dot(c.textSecondary); Spacer(Modifier.width(6.dp)) }
                 }
                 Text(row.title, if (row.finished || row.prio == PRIO_LATER) c.textSecondary else c.text, 14, Modifier.weight(1f, fill = false))
             }

@@ -38,6 +38,8 @@ private const val META_SP = 12
 private const val BODY_SP = 13
 private val README_MAX = 4000.dp
 private val README_SHAPE = RoundedCornerShape(14.dp)
+private const val GH_ID = "gh"
+private const val TODO_ID = "todo"
 
 /** 插件详情: 介绍 (Markdown 或沙箱 HTML), 安装 / 卸载; 刚装完显示接入语供复制。 */
 @Composable
@@ -51,7 +53,14 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
     // 接入语含密钥, 只放内存, 离开页面就没了
     var prompt by remember(id) { mutableStateOf<PluginInstalled?>(null) }
     var confirm by rememberSaveable { mutableStateOf(false) }
-    val reload = { scope.launch { api.detail(id).onSuccess { detail = it; error = null }.onFailure { error = it.message } } }
+    // 依赖插件的安装情况, 有依赖时才拉列表
+    var others by remember(id) { mutableStateOf<Map<String, PluginEntry>>(emptyMap()) }
+    val reload = {
+        scope.launch {
+            api.detail(id).onSuccess { detail = it; error = null }.onFailure { error = it.message }
+            if (detail?.entry?.deps?.isNotEmpty() == true) api.list().onSuccess { (l, _) -> others = l.associateBy { it.id } }
+        }
+    }
     LaunchedEffect(id) { reload() }
     val d = detail
     SettingsPageFrame(d?.entry?.name ?: "插件", onBack) {
@@ -72,7 +81,15 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
         val installed = e.installed
         val p = prompt
-        if (p != null) Handoff(p)
+        if (p != null && p.prompt.isNotEmpty()) Handoff(p)
+        if (e.deps.isNotEmpty()) SettingsGroup("依赖") {
+            e.deps.forEachIndexed { i, dep ->
+                if (i > 0) RowDivider()
+                val o = others[dep.id]
+                val ok = o?.installed != null
+                InfoRow((o?.name ?: dep.id) + if (dep.optional) " (可选)" else "", if (ok) "已满足" else if (dep.optional) "没装, 相关功能不出现" else "需要先装", if (ok) c.success else c.textSecondary)
+            }
+        }
         if (installed == null) {
             PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy) {
                 busy = true
@@ -84,8 +101,10 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             d.schedule?.let { Paragraph("建议的定时: $it", c.textSecondary, META_SP) }
         } else {
             SettingsGroup("已安装", d.schedule?.let { "建议的定时: $it" }) {
-                InfoRow("群", installed.channel)
-                RowDivider()
+                if (installed.channel.isNotEmpty()) {
+                    InfoRow("群", installed.channel)
+                    RowDivider()
+                }
                 ActionRow(
                     if (busy) "更新中..." else if (e.outdated) "更新到 v${e.version}" else "重新拉取最新版",
                     "refresh-cw",
@@ -101,12 +120,16 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                 SwitchRow("自动更新", installed.auto, "市场出新版后, 下次打开市场或 Agent 拉指令时自动换上。群, 密钥, 待办都不变。") { on ->
                     scope.launch { api.setAuto(id, on).onSuccess { reload() }.onFailure { error = it.message } }
                 }
-                RowDivider()
-                ActionRow("打开群", "message-circle") { openGroup(installed.channel) }
+                if (installed.channel.isNotEmpty()) {
+                    RowDivider()
+                    ActionRow("打开群", "message-circle") { openGroup(installed.channel) }
+                }
                 RowDivider()
                 ActionRow("卸载", "trash-2", danger = true, enabled = !busy) { confirm = true }
             }
         }
+        if (installed != null && id == GH_ID) GhSection()
+        if (installed != null && id == TODO_ID && installed.channel.isNotEmpty()) TodoExtSection(installed.channel)
         d.task?.let { TaskPrompt(it, installed != null) }
         Column(Modifier.fillMaxWidth().clip(README_SHAPE).background(c.surface).padding(16.dp)) {
             if (d.html) HtmlCard(d.readme, maxHeight = README_MAX)

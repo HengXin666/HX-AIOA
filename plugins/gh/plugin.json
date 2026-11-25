@@ -1,0 +1,12 @@
+{
+  "id": "gh",
+  "name": "GitHub 授权",
+  "summary": "授权一次 GitHub, 令牌只存在服务端; 别的插件和你允许的 Agent 通过服务端操作 issue。",
+  "version": "1.0.0",
+  "icon": "github",
+  "tags": ["GitHub", "授权", "基础"],
+  "author": "HengXin666",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "base": true
+}

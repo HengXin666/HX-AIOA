@@ -22,6 +22,7 @@ import {
   PATH_FAVORITE,
   PATH_FAVORITES,
   QUERY_BEFORE,
+  QUERY_SLIM,
   QUERY_LIMIT,
   QUERY_SINCE,
   globMatch,
@@ -31,6 +32,7 @@ import {
   type ChatCleared,
   type ChatMeta,
   type ChatPatch,
+  type Envelope,
   type ChatSyncFrame,
   type OnboardResult,
   type Scope,
@@ -158,20 +160,30 @@ async function patchChat(c: ReqCtx): Promise<Response> {
   return json({ chat: meta });
 }
 
+// 去掉 HTML 卡片, 只留长度, 其余原样
+function slimmed(ev: Envelope): Envelope {
+  const d = ev.data as Record<string, unknown> | undefined;
+  if (typeof d?.html !== "string") return ev;
+  const { html, ...rest } = d;
+  return { ...ev, data: { ...rest, htmlBytes: html.length } } as unknown as Envelope;
+}
+
 function chatMessages(c: ReqCtx): Response {
   const channel = param(c, 0);
   if (!canRead(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const slim = c.url.searchParams.get(QUERY_SLIM) === "1";
+  const out = (list: Envelope[]) => (slim ? list.map(slimmed) : list);
   const limit = clampInt(c.url.searchParams.get(QUERY_LIMIT), HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT);
   // before: 向前翻页, 群键与客户端一致 (没写 channel 的按来源名, 本机发出的归备忘)
   const before = c.url.searchParams.get(QUERY_BEFORE);
   if (before !== null) {
     const messages = c.core.store.groupBefore(channel, clampInt(before, 1, Number.MAX_SAFE_INTEGER), limit);
-    return json({ messages, head: c.core.store.head() });
+    return json({ messages: out(messages), head: c.core.store.head() });
   }
   const since = clampInt(c.url.searchParams.get(QUERY_SINCE), 0, Number.MAX_SAFE_INTEGER);
   notePoll(c.core, c.who, channel);
   const messages = c.core.store.inChannel(channel, since, limit);
-  return json({ messages, head: messages.at(-1)?.seq ?? since });
+  return json({ messages: out(messages), head: messages.at(-1)?.seq ?? since });
 }
 
 // 清空聊天记录: 删服务端存档, 并把位置记进群资料, 各端据此删本地

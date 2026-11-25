@@ -62,7 +62,8 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
     var kind by rememberSaveable { mutableStateOf<String?>(null) }
     var live by rememberSaveable { mutableStateOf(false) }
     var swiped by remember { mutableStateOf<String?>(null) }
-    val all = remember(messages.size, messages.lastOrNull()?.seq) { feedItems(messages) }
+    val tags = LocalFeedTags.current
+    val all = remember(messages.size, messages.lastOrNull()?.seq, tags) { feedItems(messages, tags) }
     val today = remember(all) { startOfDay() }
     @Suppress("UNUSED_VARIABLE") val v = marks.version
     val inTab = all.filter {
@@ -73,7 +74,6 @@ fun FeedView(messages: List<ServerFrame.Msg>, modifier: Modifier = Modifier) {
             else -> true
         }
     }
-    val tags = LocalFeedTags.current
     // 标签按群里的顺序, 旧消息里出现但表里没有的排在后面
     val kinds = remember(all, tags) { tags.map { it.id } + all.map { it.kind }.distinct().filter { k -> tags.none { it.id == k } } }
     val shown = inTab.filter { (kind == null || it.kind == kind) && (!live || marks.status(it).let { s -> s == ST_OK || s == ST_GO }) }

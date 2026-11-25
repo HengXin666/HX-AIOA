@@ -8,6 +8,7 @@ type FacetCol = "vendor" | "account" | "cat";
 
 // 统计结果缓存: 新信到达立即失效, 删信靠过期兜底
 const FACET_TTL_MS = 60_000;
+const FWD_KEEP_MS = 30 * 86_400_000;
 const LIKE_ESCAPE = "\\";
 const likeOf = (q: string) => `%${q.toLowerCase().replace(/[\\%_]/g, (c) => LIKE_ESCAPE + c)}%`;
 
@@ -37,6 +38,10 @@ export class MailStore {
     for (const r of sql.exec<{ account: string }>("SELECT DISTINCT account FROM mail").toArray()) {
       if (isRelayAddress(r.account)) sql.exec("UPDATE mail SET account = ? WHERE account = ?", MAIL_ACCOUNT_UNKNOWN, r.account);
     }
+    // 显示偏好与转发规则: 键值 JSON, 读多写少, 内存缓存
+    sql.exec("CREATE TABLE IF NOT EXISTS mail_conf (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+    // 规则转发过的信 (按去重键): 重投时不再转, 转完删掉的也不会复活; 保留 30 天
+    sql.exec("CREATE TABLE IF NOT EXISTS mail_fwd (dedupe TEXT PRIMARY KEY, ts INTEGER NOT NULL)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_ts ON mail (ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_cat ON mail (cat, ts)");
     sql.exec("CREATE INDEX IF NOT EXISTS mail_vendor ON mail (vendor, ts)");
@@ -46,6 +51,30 @@ export class MailStore {
   add(r: MailRow): void {
     this.sql.exec("INSERT OR REPLACE INTO mail (ev, ts, account, vendor, frm, subj, cat) VALUES (?, ?, ?, ?, ?, ?, ?)", r.ev, r.ts, r.account, r.vendor, r.frm, r.subj.toLowerCase(), r.cat);
     this.cache = null;
+  }
+
+  private conf = new Map<string, unknown>();
+
+  /** 读设置, 没有时给默认值。 */
+  getConf<T>(k: string, fallback: T): T {
+    if (!this.conf.has(k)) {
+      const row = this.sql.exec<{ v: string }>("SELECT v FROM mail_conf WHERE k = ?", k).toArray()[0];
+      this.conf.set(k, row ? JSON.parse(row.v) : fallback);
+    }
+    return this.conf.get(k) as T;
+  }
+
+  setConf(k: string, v: unknown): void {
+    this.sql.exec("INSERT OR REPLACE INTO mail_conf (k, v) VALUES (?, ?)", k, JSON.stringify(v));
+    this.conf.set(k, v);
+  }
+
+  forwarded(dedupe: string): boolean {
+    return this.sql.exec("SELECT 1 FROM mail_fwd WHERE dedupe = ?", dedupe).toArray().length > 0;
+  }
+
+  markForwarded(dedupe: string, now = Date.now()): void {
+    this.sql.exec("INSERT OR REPLACE INTO mail_fwd (dedupe, ts) VALUES (?, ?)", dedupe, now);
   }
 
   /** 按时间倒序的事件 id; 多取一条用来判断还有没有更早的。 */
@@ -81,6 +110,7 @@ export class MailStore {
 
   /** 消息已被删掉的索引行, 每天扫一次; 按 ev.id 逐行查, 不扫整张消息表。 */
   prune(): number {
+    this.sql.exec("DELETE FROM mail_fwd WHERE ts < ?", Date.now() - FWD_KEEP_MS);
     const n = this.sql.exec("DELETE FROM mail WHERE NOT EXISTS (SELECT 1 FROM ev e WHERE e.id = mail.ev AND e.gone IS NULL)").rowsWritten;
     if (n) this.cache = null;
     return n;

@@ -3,16 +3,17 @@
 ### 每次运行
 
 1. `hxaioa read --new --json` 取主人的新消息 (`source.type` 为 `user`)。没有就结束, 什么都不发。
-2. 需要上下文时 `hxaioa read --before <第一条的 seq> --limit 20`; 再读一遍当前待办, 避免重复。
+2. 有新消息时先 `hxaioa memory` 读长期记忆, 再 `hxaioa todos --all` 看全部待办 (含已完成, 挂起) 的状态, 避免重复, 回答 "那个做了吗" 这类问题; 需要上下文时 `hxaioa history` (存成本地文件) 再 `grep -n` 找相关的几条, 用 `sed -n` 看前后。
 3. 每条主人消息都引用回复 (`hxaioa send "..." --reply <seq>`), 不能漏:
    - 要做的事: 建待办, 回 "已记: <标题>"。
    - 没想清楚的点子: 回三行以内的分析, 值得做再建一条 prio 3 的 "调研: xx"。
-   - 进展 ("做完了", "不做了"): 改 state, 回 "已更新: <标题>"。
+   - 进展: "在做了" 改 doing, "先放放" 改 hold, "做完了" 改 done, "不做了" 改 done 并在 note 写 "放弃"; 回 "已更新: <标题>"。
+   - 提到仓库或 issue (如 "HX-AIOA#94"): 填 repo 和 issue 关联上; 主人说 "建个 issue" 且有 GitHub 接口时, 用接口建并关联, 回 issue 号。
    - 同一件事连发几条: 引用最后一条回一次, 写明覆盖了哪几条。
    - 闲聊: 回一句即可。
 4. 主人说 "整理一下" / "列一下": 按优先级发未完成待办, 最多 15 条。
-5. 回复后 `hxaioa watch --once --timeout 300 --json` 等下一条, 有就回到第 3 步; 退出码 2 (5 分钟没动静) 就结束。
-6. 本地记忆 `aioa-{{channel}}-memory.md` 只记主人的背景, 偏好和讨论过的结论, 不超过 2000 字。
+5. 回复后 `hxaioa watch --once --window 300 --timeout 100 --json` 等下一条: 0 有新消息, 回到第 3 步; 4 立刻再跑同一条命令; 3 先 `hxaioa guide --ack` 再等; 2 (满 5 分钟没动静) 才结束。
+6. 记忆存服务端: 主人的背景, 偏好, 讨论过的结论用 `hxaioa memory --add "..."` 记一句, 不记待办本身 (待办里已经有)。以前存在本地 `aioa-{{channel}}-memory.md` 的, 合并进来后不再用本地文件。
 
 ### 回复
 
@@ -21,8 +22,9 @@
 ### 待办规则
 
 - id 用 `t-<来源 seq>` (一条拆多条加 `-2`), src 填来源 seq; title 动词开头, 20 字以内; prio 拿不准就 2。
-- 主人在 App 里改过的 (state 不是 open, 或 updated 比你上次写入晚) 以主人为准。
-- 不删除; 重复的较新那条设为 `dropped`, note 写 "与 <id> 重复"。
+- 主人在 App 里改过的 (state 不是 open, 或 updated 比你上次写入晚) 以主人为准; 关联了 issue 的状态由服务端按 GitHub 同步, 你别反复改。
+- 大任务拆子任务: 子待办 parent 填父待办 id。
+- 不删除; 重复的较新那条设为 `done`, note 写 "与 <id> 重复"。
 
 ### 安全
 

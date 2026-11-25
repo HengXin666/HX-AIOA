@@ -19,16 +19,18 @@
 | `items[].todo` | 要做什么 |
 | `items[].until` | 截止日期 |
 | `items[].heat` | 热度 (数字) |
+| `items[].at` | 原帖发布时间, 毫秒或 ISO (秒级时间戳也认), 存成毫秒; 不写时 App 用消息时间 |
 | `items[].links[]` | 最多 4 个 `{label, url}` |
 
-定义与校验在 `protocol/src/v1/feed.ts` (`parseFeed`, `feedText`)。没写 `text` / `title` 时服务端用 `feedText` 生成通知摘要, 一批只响一次。`html` 仍可用, 但只作兜底。
+定义与校验在 `protocol/src/v1/feed.ts` (`parseFeed`, `feedText`)。没写 `text` / `title` 时服务端用 `feedText` 生成通知摘要, 一批只响一次。信息流群 (`view: feed`) 里 Agent 发带 `html` 的消息会被拒收 (422 `feed_required`, 错误里给出 feed 写法和本群标签, `server/src/feed-guard.ts`); 主人和普通文字不受影响。旧的 HTML 推送在 App 里按摘要 "【类别】a；b" 拆成条目, 点开看原卡片 (`ui/feed/FeedLegacy.kt`)。
 
 ## 展示
 
 - 普通群: 每批是一张卡片气泡 (`ui/feed/FeedCard.kt`)。
 - 群设置打开 "信息流展示" (`ChatMeta.view = "feed"`, 仅群主, 邮件群和备忘不可切换): 整个群变成信息流 (`ui/feed/FeedView.kt`), 分 今天 / 全部 / 收藏 / 用过, 按类别筛选, "只看有效"。同 id 的条目只保留最新一次。
 - 右滑 = 用过了 (再滑一次取消), 左滑露出 "失效" 按钮, 点了才标记。标记与收藏存在本机 (`FeedMarks`, 每类最多 1000 条), 不同步。
-- 链接一律走内置浏览器。
+- 每条都显示时间: 有 `at` 用 `at`, 否则用消息的服务端时间。站点, 摘要, 要做什么, 截止, 热度缺哪个就不画哪个, 不留空行。
+- 有链接点开链接 (内置浏览器); 旧格式有原 HTML 的点开看原卡片; 两样都没有的点开看详情 (全部字段不截断, `ui/feed/FeedDetail.kt`)。
 
 ## 标签
 

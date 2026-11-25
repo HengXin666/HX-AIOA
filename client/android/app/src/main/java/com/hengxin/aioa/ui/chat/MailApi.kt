@@ -73,6 +73,41 @@ class MailApi(private val context: Context) {
         r.body?.optString("html")?.ifEmpty { null } ?: error(r.error ?: FAILED)
     }
 
+    suspend fun prefs(): Result<MailPrefs> = io {
+        val r = Api.call(context, GET, listOf(PATH, "prefs"))
+        MailPrefs.parse(r.body ?: error(r.error ?: FAILED))
+    }
+
+    /** 保存偏好, 白名单沿用旧的 (服务端不收)。 */
+    suspend fun savePrefs(p: MailPrefs): Result<MailPrefs> = io {
+        val r = Api.call(context, PUT, listOf(PATH, "prefs"), p.json())
+        MailPrefs.parse(r.body ?: error(r.error ?: FAILED)).copy(known = p.known)
+    }
+
+    suspend fun rules(): Result<List<MailRule>> = io {
+        val r = Api.call(context, GET, listOf(PATH, "rules"))
+        MailRule.list((r.body ?: error(r.error ?: FAILED)).optJSONArray("rules"))
+    }
+
+    suspend fun saveRules(list: List<MailRule>): Result<List<MailRule>> = io {
+        val body = JSONObject().put("rules", JSONArray().apply { list.forEach { put(it.json()) } })
+        val r = Api.call(context, PUT, listOf(PATH, "rules"), body)
+        MailRule.list((r.body ?: error(r.error ?: FAILED)).optJSONArray("rules"))
+    }
+
+    /** 以主人的名义把信转进群, 群里的 Agent 会被叫醒。 */
+    suspend fun forward(id: String, channel: String): Result<Unit> = io {
+        val r = Api.call(context, POST, listOf(PATH, id, "forward"), JSONObject().put("channel", channel))
+        r.body ?: error(r.error ?: FAILED)
+        Unit
+    }
+
+    /** 群列表 (转发时选群), 带 Agent。 */
+    suspend fun chats(): Result<List<ChatMeta>> = io {
+        val r = Api.call(context, GET, listOf("api/v1/chats"))
+        parseChats(r.body ?: error(r.error ?: FAILED)).values.filter { it.deleted == 0L && !it.isMail }.sortedByDescending { it.updated }
+    }
+
     /** 删掉一封信 (群里的消息一起删)。 */
     suspend fun remove(seq: Long): Result<Unit> = io { ChatHistory(context).remove(seq, DELETE_MODE).getOrThrow(); Unit }
 
@@ -112,6 +147,8 @@ class MailApi(private val context: Context) {
     companion object {
         private const val PATH = "api/v1/mail"
         private const val GET = "GET"
+        private const val PUT = "PUT"
+        private const val POST = "POST"
         private const val FAILED = "加载失败"
         private const val DELETE_MODE = "delete"
     }

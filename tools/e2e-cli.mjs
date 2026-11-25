@@ -2,7 +2,7 @@
 // CLI 与群状态冒烟测试: 接入 Agent, CLI login/send/read/watch --once, 长连监听名单, 输入提示与开关。
 // 环境变量: AIOA_SERVER, AIOA_TOKEN (AUTH_TOKEN)
 import { execFile } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -80,6 +80,7 @@ const a2 = await agentOf();
 check("报到后自动记一笔", (await texts()).includes("小助手 已更新到专属指令") && a2?.version !== a1.version && !a2.pending, a2);
 await run("node", [CLI, "me"], { env, timeout: 20000 }).then((r) => check("报到后不再提示", !r.stderr.includes("专属指令已更新"), r.stderr), (e) => check("报到后不再提示", false, String(e)));
 await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { view: "chat" });
+await cli("guide", "--ack");
 
 const sent = JSON.parse(await cli("send", "CLI 你好"));
 check("CLI send 到本群", sent.channel === GROUP, sent);
@@ -102,6 +103,52 @@ check("watch --once 收到新消息", got.includes("叫一下小助手") && !got
 const gone = await ui.next((f) => f.t === "presence" && f.channel === GROUP && !f.listening.some((x) => !x.until));
 check("断开后长连监听移除", !!gone, gone);
 check("watch --timeout 超时退出码 2", (await cli("watch", "--once", "--timeout", "2")).startsWith("ERR 2"));
+
+// 0.3.0: --window 跨调用累计, 本次到点但窗口没满退出码 4
+check("watch --window 未满退出码 4", (await cli("watch", "--once", "--window", "5", "--timeout", "2")).startsWith("ERR 4"));
+check("watch --window 满了退出码 2", (await cli("watch", "--once", "--window", "5", "--timeout", "10")).startsWith("ERR 2"));
+
+// 主人改设置: 服务端当场推 guide 帧, 正在等的 watch 退出码 3, 系统通知不当成主人的话
+const waitGuide = cli("watch", "--once", "--timeout", "10", "--json");
+await new Promise((r) => setTimeout(r, 1500));
+await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { view: "feed" });
+const g3 = await waitGuide;
+check("改设置后 watch 退出码 3", g3.startsWith("ERR 3") && g3.includes('"guide"'), g3);
+await cli("guide", "--ack");
+await api("PATCH", `${V1}/chats/${enc(GROUP)}`, { view: "chat" });
+await cli("guide", "--ack");
+
+// 长期记忆存服务端
+check("记忆为空", (await cli("memory")).includes("还没有记忆"));
+check("记忆追加", (await cli("memory", "--add", "主人喜欢短回复")).includes("已记"));
+check("记忆读回", (await cli("memory")).includes("主人喜欢短回复"));
+const big = await cli("memory", "--set", "x".repeat(4001));
+check("记忆超长被拒", big.startsWith("ERR 1") && big.includes("4000"), big);
+check("记忆清空", JSON.parse(await cli("memory", "--set", "")).text === "");
+
+// 最近活跃: Agent 有动作就记下 (各端收到群资料更新)
+const chatsNow = (await api("GET", `${V1}/chats`)).data;
+const meta = (chatsNow.chats ?? chatsNow).find((x) => x.channel === GROUP);
+check("Agent 最近活跃已记录", Date.now() - (meta?.agents?.[0]?.active ?? 0) < 120_000, meta?.agents);
+
+// 历史存本地文件: 第一次往前翻, 第二次只拉新的; 撤回 / 删除的去掉; slim 不带 HTML
+await api("POST", `${V1}/messages`, { text: "带卡片", html: "<b>很长的卡片</b>", channel: GROUP });
+const h1 = JSON.parse(await cli("history", "--json"));
+const txt = readFileSync(h1.file, "utf8");
+check("history 写本地文件", h1.count >= 3 && txt.includes("叫一下小助手") && txt.startsWith("#"), h1);
+check("history 不下载 HTML", !readFileSync(h1.json, "utf8").includes("很长的卡片"));
+const tmp = await api("POST", `${V1}/messages`, { text: "马上删掉", channel: GROUP });
+const tmpSeq = (await api("GET", `${V1}/chats/${enc(GROUP)}/messages?since=0&limit=500`)).data.messages.find((m) => m.id === tmp.data.id)?.seq;
+await api("DELETE", `${V1}/events/seq/${tmpSeq}?mode=delete`);
+const h2 = JSON.parse(await cli("history", "--json"));
+check("history 增量", h2.fetched >= 1 && h2.fetched <= 3, h2);
+check("history 去掉删除的", !readFileSync(h2.file, "utf8").includes("马上删掉"));
+
+// 待办: 一行一条, --all 含已完成
+await api("POST", `${V1}/chats/${enc(GROUP)}/todos`, { todos: [{ id: "t-1", title: "写测试", state: "doing" }, { id: "t-2", title: "早做完了", state: "done" }] });
+const td = await cli("todos");
+check("todos 列未完成", td.includes("[进行中]") && td.includes("t-1") && !td.includes("t-2"), td);
+check("todos --all 含已完成", (await cli("todos", "--all")).includes("[已完成]"));
 
 // 输入提示: 人走长连接, Agent 走 HTTP; 发出消息后消失
 ui.send({ t: "typing", channel: GROUP });

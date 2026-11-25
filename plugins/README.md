@@ -27,6 +27,8 @@ plugins/
 | `readme` | 介绍文件名, `.md` 或 `.html` |
 | `prompt` | 提示词模板文件名, `.md` |
 | `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` |
+| `base` | 为 `true` 时是基础插件: 不建群不带 Agent, 只给别的插件提供能力 (如 `gh`), 此时 `group` 与 `agent` 可省略 |
+| `deps` | 依赖 `[{ "id": "gh", "optional": true }]`; 必需依赖没装时拒绝安装, 可选依赖没装时相关功能不出现 |
 | `agent.name` | 接入 Agent 的名字; `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
 

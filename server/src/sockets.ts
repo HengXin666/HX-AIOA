@@ -72,6 +72,14 @@ export class Sockets {
     });
   }
 
+  /** 某把 key 的 CLI 长连。 */
+  chatSockets(keyId: string): WebSocket[] {
+    return this.all().filter((ws) => {
+      const a = attOf(ws);
+      return a.role === "chat" && a.keyId === keyId;
+    });
+  }
+
   /** 发给看得到这个群的人: 主人的连接都收, 子号只在群成员里时收。 */
   toChannel(members: Set<string>, frame: unknown): void {
     const text = JSON.stringify(frame);

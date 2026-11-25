@@ -36,15 +36,24 @@ export function saveConfig(cfg) {
 }
 
 export const configPath = CONFIG;
+export const dataDir = DIR;
 
 export function loadState() {
   const s = readJson(STATE);
-  return { heads: s.heads ?? {}, last: s.last ?? 0 };
+  return { heads: s.heads ?? {}, last: s.last ?? 0, until: s.until ?? 0 };
+}
+
+/** watch --window 的截止时间 (ms): 跨多次调用累计等待, 0 清掉。 */
+export function saveUntil(until) {
+  const s = { ...readJson(STATE) };
+  if (until) s.until = until;
+  else delete s.until;
+  writeJson(STATE, s);
 }
 
 /** 记下读到的位置: 每个群一个 head, last 为见过的最大 seq (长连补发用)。 */
 export function saveHead(channel, seq) {
-  const s = loadState();
+  const s = { ...readJson(STATE), ...loadState() };
   if (channel) s.heads[channel] = Math.max(s.heads[channel] ?? 0, seq);
   s.last = Math.max(s.last, seq);
   writeJson(STATE, s);

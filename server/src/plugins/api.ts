@@ -8,6 +8,8 @@ import {
   PATH_PLUGINS,
   PATH_TODO,
   PATH_TODOS,
+  PATH_TODOS_SYNC,
+  GH_PLUGIN_ID,
   PLUGIN_CHANNEL_PREFIX,
   TODO_SYNC_TOPIC,
   isPluginId,
@@ -27,6 +29,7 @@ import { ApiFail, fail, json, readJson } from "../http";
 import { rank, roleIn } from "../room-access";
 import { renderTask } from "./store";
 import { applySpace, autoUpgrade, upgrade } from "./update";
+import { maybeSync, syncTodoIssues } from "../gh/todo-sync";
 
 const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
@@ -38,11 +41,13 @@ function pluginId(c: ReqCtx): string {
   return id;
 }
 
-// 群里接入的 Agent: key 白名单第一项就是它所在的群
-const homeAgent = (who: Principal, channel: string) => !who.owner && !who.member && who.key.channels[0] === channel;
-// 主人, 群管理员, 本群 Agent 能改待办
-function canWriteTodos(core: Core, who: Principal, channel: string): boolean {
+// 群里接入的 Agent: key 白名单第一项就是它所在的群; 外部接入 key 另算
+const homeAgent = (who: Principal, channel: string) => !who.owner && !who.member && !who.key.ext && who.key.channels[0] === channel;
+const extKey = (who: Principal, channel: string) => !who.owner && !who.member && !!who.key.ext && who.key.channels[0] === channel;
+// 主人, 群管理员, 本群 Agent, 可写的外部接入 key 能改待办
+export function canWriteTodos(core: Core, who: Principal, channel: string): boolean {
   if (homeAgent(who, channel)) return true;
+  if (extKey(who, channel)) return !who.owner && who.key.ext === "write";
   const role = roleIn(core, who, channel);
   return role !== null && rank(role) >= ADMIN_RANK;
 }
@@ -79,7 +84,9 @@ async function detail(c: ReqCtx): Promise<Response> {
   const base = baseOf(c.url);
   const channel = installed?.channel ?? `${PLUGIN_CHANNEL_PREFIX}${id}`;
   const title = c.core.chats.chat(channel)?.title || manifest.group.title;
-  const task = installed
+  const task = manifest.base
+    ? undefined
+    : installed
     ? c.core.plugins.promptFor(id, base, channel, title)
     : renderTask(manifest.name, await c.core.market.file(id, manifest.prompt), base, channel, title);
   const body: PluginDetail = {
@@ -97,7 +104,16 @@ async function install(c: ReqCtx): Promise<Response> {
   if (c.core.plugins.get(id)) return fail(409, `插件 ${id} 已安装, 先卸载再装`, CODE_CONFLICT);
   if (c.core.plugins.list().length >= MAX_PLUGINS) return fail(400, `最多安装 ${MAX_PLUGINS} 个插件`);
   const m = await c.core.market.manifest(id);
+  const missing = (m.deps ?? []).filter((d) => !d.optional && !c.core.plugins.get(d.id));
+  if (missing.length) return fail(400, `先安装依赖: ${missing.map((d) => d.id).join(", ")}`);
   const prompt = await c.core.market.file(id, m.prompt);
+  const deps = (m.deps ?? []).map((d) => d.id);
+  // base 插件只记安装, 不建群不发 key
+  if (m.base) {
+    const rec: PluginInstall = { id, version: m.version, name: m.name, channel: "", keyId: "", installed: Date.now(), base: true, ...(deps.length ? { deps } : {}) };
+    c.core.plugins.save(rec, m.name, prompt);
+    return json({ install: rec, prompt: "", key: "" } satisfies PluginInstalled);
+  }
   const channel = `${PLUGIN_CHANNEL_PREFIX}${id}`;
   const meta = c.core.chats.chat(channel);
   if ((meta?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `群 ${channel} 的 Agent 已满`);
@@ -105,7 +121,7 @@ async function install(c: ReqCtx): Promise<Response> {
   const title = c.core.chats.chat(channel)?.title || m.group.title;
   const space = await applySpace(c.core, id, m, channel, title);
   const { agent, key } = await createAgent(c.core, channel, m.agent.name, [channel], id);
-  const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}) };
+  const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}), ...(deps.length ? { deps } : {}) };
   const job = { interval: m.agent.interval, task: m.agent.task };
   c.core.plugins.save(rec, m.name, prompt, job);
   return json({ install: rec, prompt: agentBootstrap(baseOf(c.url), title, key, job), key } satisfies PluginInstalled);
@@ -133,7 +149,9 @@ async function uninstall(c: ReqCtx): Promise<Response> {
   const id = pluginId(c);
   const rec = c.core.plugins.get(id);
   if (!rec) return notFound();
-  if (c.core.chats.chat(rec.channel)?.agents?.some((a) => a.keyId === rec.keyId)) dropAgent(c.core, rec.channel, rec.keyId);
+  // 卸 GitHub 授权就把令牌一起删掉
+  if (id === GH_PLUGIN_ID) c.core.gh.revoke();
+  if (rec.channel && c.core.chats.chat(rec.channel)?.agents?.some((a) => a.keyId === rec.keyId)) dropAgent(c.core, rec.channel, rec.keyId);
   if (rec.space && (await c.core.spaces.remove(rec.space))) c.core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   c.core.plugins.remove(id);
   return json({ ok: true });
@@ -141,7 +159,8 @@ async function uninstall(c: ReqCtx): Promise<Response> {
 
 function getTodos(c: ReqCtx): Response {
   const channel = param(c, 0);
-  if (!canRead(c.core, c.who, channel) && !homeAgent(c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  if (!canRead(c.core, c.who, channel) && !homeAgent(c.who, channel) && !extKey(c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  maybeSync(c.core);
   return json({ todos: c.core.todos.list(channel) });
 }
 
@@ -163,6 +182,14 @@ async function postTodos(c: ReqCtx): Promise<Response> {
   return json({ todos: out });
 }
 
+// 立即同步关联的 issue (下拉刷新用)
+async function syncNow(c: ReqCtx): Promise<Response> {
+  const channel = param(c, 0);
+  if (!canWriteTodos(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const changed = await syncTodoIssues(c.core);
+  return json({ changed, todos: c.core.todos.list(channel) });
+}
+
 function deleteTodo(c: ReqCtx): Response {
   const channel = param(c, 0);
   if (!canWriteTodos(c.core, c.who, channel)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
@@ -182,4 +209,5 @@ export const PLUGIN_ROUTES: Route[] = [
   route(GET, PATH_TODOS, ROOM, getTodos),
   route(POST, PATH_TODOS, ROOM, postTodos),
   route(DELETE, PATH_TODO, ROOM, deleteTodo),
+  route(POST, PATH_TODOS_SYNC, ROOM, syncNow),
 ];

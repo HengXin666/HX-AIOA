@@ -68,7 +68,13 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
     val st = marks.status(it)
     val dead = st == ST_DEAD
     val base = if (flat) modifier else modifier.clip(CARD).background(c.surface).border(1.dp, c.border, CARD)
-    Column(base.clickable(enabled = it.url != null) { Browser.open(context, it.url) }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
+    var sheet by remember { mutableStateOf(false) }
+    val html = it.html
+    if (sheet) {
+        if (html != null) FeedHtmlSheet(it.summary ?: it.title, html) { sheet = false } else FeedDetail(it, marks) { sheet = false }
+    }
+    // 有链接开链接; 旧格式点开看原卡片; 都没有就看详情
+    Column(base.clickable { if (it.url != null) Browser.open(context, it.url) else sheet = true }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val site = it.site
             if (site != null) MailAvatar(site, site, 18.dp)
@@ -93,24 +99,35 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
                 Text(s, color = c.text, fontSize = 13.sp, lineHeight = 18.sp)
             }
         }
-        if (it.heat != null || it.until != null || it.links.isNotEmpty()) {
-            FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", "$h") }
-                it.until?.let { u -> Meta("calendar-days", "截止 $u") }
-                it.links.forEach { (label, url) ->
-                    Row(Modifier.clip(TAG).clickable { Browser.open(context, url) }.padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon("link", c.accent, 13.dp)
-                        Spacer(Modifier.width(3.dp))
-                        Text(label, color = c.accent, fontSize = 12.sp)
-                    }
-                }
-            }
+        FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Meta("clock", feedTime(it.time))
+            it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", "$h") }
+            it.until?.let { u -> Meta("calendar-days", "截止 $u") }
+            it.links.forEach { (label, url) -> LinkChip(label) { Browser.open(context, url) } }
         }
     }
 }
 
 @Composable
-private fun Meta(icon: String, text: String) {
+fun LinkChip(label: String, onClick: () -> Unit) {
+    val c = Aioa.colors
+    Row(Modifier.clip(TAG).clickable(onClick = onClick).padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon("link", c.accent, 13.dp)
+        Spacer(Modifier.width(3.dp))
+        Text(label, color = c.accent, fontSize = 12.sp)
+    }
+}
+
+/** 今年内 "11-25 14:03", 往年带年份。 */
+fun feedTime(ms: Long): String {
+    val now = java.util.Calendar.getInstance()
+    val t = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+    val fmt = if (t.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR)) "MM-dd HH:mm" else "yyyy-MM-dd HH:mm"
+    return android.text.format.DateFormat.format(fmt, ms).toString()
+}
+
+@Composable
+fun Meta(icon: String, text: String) {
     val c = Aioa.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, c.textSecondary, 13.dp)

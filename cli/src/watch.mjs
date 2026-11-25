@@ -1,18 +1,42 @@
 // 监听: 优先 WebSocket 长连 (服务端推送不计费, 心跳自动应答不计费), 连不上退回定时拉取, 并定期再试长连
 import { spawn } from "node:child_process";
 import { hostname } from "node:os";
-import { saveHead, loadState } from "./config.mjs";
+import { saveHead, saveUntil, loadState } from "./config.mjs";
 import { isMine, print } from "./format.mjs";
-import { call, enc, headers } from "./http.mjs";
+import { call, enc, guideChanged, headers } from "./http.mjs";
 
 const PING_MS = 25_000;
 const RETRY_WS_MS = 60_000;
 const DEFAULT_POLL_S = 20;
 const EXIT_TIMEOUT = 2;
+const EXIT_GUIDE = 3;
+const EXIT_AGAIN = 4;
+const SLACK_MS = 1000;
+
+/** --window: 第一次调用开一个窗口, 之后的调用接着等到窗口结束; 返回本次最多等多久 (ms) 和截止时间。 */
+function budget(opts, now = Date.now()) {
+  const cap = opts.timeout > 0 ? opts.timeout * 1000 : Infinity;
+  if (!(opts.window > 0)) return { ms: cap, until: 0 };
+  let until = loadState().until;
+  if (!until || until <= now + SLACK_MS) {
+    until = now + opts.window * 1000;
+    saveUntil(until);
+  }
+  return { ms: Math.min(cap, until - now), until };
+}
+
+const SYSTEM_PREFIX = "system:";
+/** 是不是要叫醒: 默认只认人 (App 里的人, 或用主人令牌直接发的, 都不带来源类型或类型为 user); --any 时别的 Agent 和系统消息也算。 */
+function wake(ev, me, opts) {
+  if (opts.any) return opts.mine || !isMine(ev, me);
+  const src = ev.source ?? {};
+  if (ev.deleted || isMine(ev, me) || String(src.id ?? "").startsWith(SYSTEM_PREFIX)) return false;
+  return !src.type || src.type === "user";
+}
 
 /**
- * opts: channels (null = 能读的全部), once, timeout (秒), json, exec, mine, interval (秒)
- * 返回进程退出码: 0 收到消息 (once) 或被打断, 2 超时没等到。
+ * opts: channels (null = 能读的全部), once, timeout (秒), window (秒), json, exec, mine, any, interval (秒), guide (已报到的指令版本)
+ * 返回进程退出码: 0 收到消息 (once) 或被打断, 2 等满了没人说话, 3 指令更新了, 4 本次到点但窗口没满 (再跑一次)。
  */
 export function watch(cfg, me, opts) {
   return new Promise((resolve) => {
@@ -20,9 +44,12 @@ export function watch(cfg, me, opts) {
     let ws = null;
     let pollTimer = null;
     let pingTimer = null;
+    const { ms, until } = budget(opts);
     const finish = (code) => {
       if (done) return;
       done = true;
+      // 等到消息或窗口用完就关掉窗口, 下一轮重新计 5 分钟
+      if (until && (code === 0 || code === EXIT_TIMEOUT)) saveUntil(0);
       clearInterval(pollTimer);
       clearInterval(pingTimer);
       try {
@@ -30,13 +57,19 @@ export function watch(cfg, me, opts) {
       } catch {}
       resolve(code);
     };
-    if (opts.timeout > 0) setTimeout(() => finish(EXIT_TIMEOUT), opts.timeout * 1000).unref?.();
+    const expire = () => finish(until && Date.now() < until - SLACK_MS ? EXIT_AGAIN : EXIT_TIMEOUT);
+    if (Number.isFinite(ms)) setTimeout(expire, Math.max(0, ms)).unref?.();
     process.once("SIGINT", () => finish(0));
 
     const wanted = (ev) => {
       const ch = ev.channel;
       if (!ch || (opts.channels && !opts.channels.includes(ch))) return false;
-      return opts.mine || !isMine(ev, me);
+      return wake(ev, me, opts);
+    };
+    const guide = (version) => {
+      if (!version || version === opts.guide) return;
+      process.stdout.write(opts.json ? `${JSON.stringify({ guide: version })}\n` : `专属指令已更新到 ${version}: 先运行 hxaioa guide --ack\n`);
+      if (opts.once) finish(EXIT_GUIDE);
     };
     const seen = new Set();
     const handle = (ev) => {
@@ -60,6 +93,7 @@ export function watch(cfg, me, opts) {
           process.stderr.write(`拉取 ${ch} 失败: ${e.message}\n`);
         }
       }
+      guide(guideChanged());
     };
     const startPolling = () => {
       if (pollTimer || done) return;
@@ -87,6 +121,7 @@ export function watch(cfg, me, opts) {
         pollTimer = null;
         pingTimer = setInterval(() => ws.readyState === 1 && ws.send("ping"), PING_MS);
         process.stderr.write("已连上, 正在监听\n");
+        guide(guideChanged());
       };
       ws.onmessage = (m) => {
         if (typeof m.data !== "string" || m.data === "pong") return;
@@ -97,6 +132,7 @@ export function watch(cfg, me, opts) {
           return;
         }
         if (f.t === "ev" && f.ev) handle(f.ev);
+        else if (f.t === "guide") guide(f.version);
       };
       ws.onclose = (e) => {
         clearInterval(pingTimer);

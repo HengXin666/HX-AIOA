@@ -24,10 +24,12 @@ export async function upgrade(core: Core, id: string): Promise<PluginInstall> {
   const m = await core.market.manifest(id, true);
   const prompt = await core.market.file(id, m.prompt, true);
   const title = core.chats.chat(rec.channel)?.title || m.group.title;
-  const space = await applySpace(core, id, m, rec.channel, title);
+  const space = m.base ? undefined : await applySpace(core, id, m, rec.channel, title);
   if (rec.space && !space && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   const { space: _old, ...rest } = rec;
-  const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...(space ? { space } : {}) };
+  const { deps: _d, ...keep } = rest;
+  const deps = (m.deps ?? []).map((d) => d.id);
+  const next: PluginInstall = { ...keep, version: m.version, name: m.name, updated: Date.now(), ...(space ? { space } : {}), ...(deps.length ? { deps } : {}) };
   core.plugins.save(next, m.name, prompt, { interval: m.agent.interval, task: m.agent.task });
   return next;
 }

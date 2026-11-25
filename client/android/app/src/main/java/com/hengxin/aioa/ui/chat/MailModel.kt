@@ -71,6 +71,11 @@ class MailState(val api: MailApi, val seen: MailSeen) {
     // 左滑展开删除按钮的那一行; 同一时间只展开一行
     var swiped by mutableStateOf<String?>(null)
     private val removing = mutableSetOf<Long>()
+    // 显示偏好与转发规则 (服务端存), 打开邮件视图时拉一次
+    var prefs by mutableStateOf(MailPrefs())
+    var rules by mutableStateOf<List<MailRule>>(emptyList())
+    // 正文按信缓存, 来回切换不重复下载
+    val bodies = mutableMapOf<String, String>()
 
     val filter get() = MailFilter(category, vendor, account)
     val threads get() = threadsOf(items)
@@ -83,6 +88,24 @@ class MailState(val api: MailApi, val seen: MailSeen) {
         api.facets().onSuccess { facets = it }
         loading = false
         refreshing = false
+    }
+
+    suspend fun loadPrefs() {
+        api.prefs().onSuccess { prefs = it }
+        api.rules().onSuccess { rules = it }
+    }
+
+    /** 改偏好: 先改本地, 失败再退回。 */
+    suspend fun savePrefs(p: MailPrefs) {
+        val old = prefs
+        prefs = p
+        api.savePrefs(p).onSuccess { prefs = it }.onFailure { prefs = old; error = it.message }
+    }
+
+    suspend fun saveRules(list: List<MailRule>): Boolean {
+        val r = api.saveRules(list)
+        r.onSuccess { rules = it }.onFailure { error = it.message }
+        return r.isSuccess
     }
 
     suspend fun older() {

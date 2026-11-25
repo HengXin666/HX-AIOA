@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { configPath, loadConfig, loadState, saveConfig, saveHead } from "./config.mjs";
 import { print } from "./format.mjs";
 import { ApiError, VERSION, call, enc } from "./http.mjs";
+import { syncHistory } from "./history.mjs";
 import { watch } from "./watch.mjs";
 
 const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
@@ -14,14 +15,19 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa guide [--ack]             打印专属指令; --ack 顺带报到
   hxaioa send <文字|->  [-c 群] [--reply seq] [--title 标题] [--html 文件] [--priority need_me|worth_reading]
   hxaioa read  [-c 群] [--new] [--since seq] [--before seq] [--limit n] [--json]
-  hxaioa watch [-c 群] [--all] [--once] [--timeout 秒] [--exec 命令] [--json] [--mine] [--interval 秒]
+  hxaioa watch [-c 群] [--all] [--once] [--timeout 秒] [--window 秒] [--any] [--exec 命令] [--json] [--mine] [--interval 秒]
+  hxaioa memory [--add 一句话] [--set 全文|-]   长期记忆 (存服务端, 最多 4000 字)
+  hxaioa todos [-c 群] [--all] [--json]          本群待办; --all 含已完成
+  hxaioa history [-c 群] [--limit 条数]          历史存本地文件 (增量), 打印路径, 用 grep / sed 节选
   hxaioa typing [-c 群]            告诉群里 "正在输入"
   hxaioa recall <seq> | delete <seq>
   hxaioa report --title 标题 [--summary 摘要] [--file 正文.md] [--dedupe key]
   hxaioa api <METHOD> <路径> [JSON|-]
 
   不写 -c 就是本群。文字写 - 表示从标准输入读。环境变量 AIOA_SERVER / AIOA_KEY 可代替 login。
-  watch --once: 等到一条新消息就退出 (退出码 0), --timeout 到了还没有就退出码 2。
+  watch 默认只等人发的消息, --any 时别的 Agent 和系统消息也算。
+  watch --once 退出码: 0 来了一条; 2 等满了没人说话; 3 专属指令更新了 (先 guide --ack);
+    4 本次 --timeout 到了但 --window 还没满, 再跑一次接着等 (命令有时长上限时用)。
   watch 优先用长连接 (省额度), 连不上自动改为每 --interval 秒 (默认 20) 拉一次。`;
 
 const OPTIONS = {
@@ -41,6 +47,10 @@ const OPTIONS = {
   exec: { type: "string" },
   mine: { type: "boolean" },
   interval: { type: "string" },
+  window: { type: "string" },
+  any: { type: "boolean" },
+  add: { type: "string" },
+  set: { type: "string" },
   ack: { type: "boolean" },
   summary: { type: "string" },
   file: { type: "string" },
@@ -62,6 +72,15 @@ async function channelOf(cfg, v) {
   if (v.channel) return v.channel;
   if (cfg.channel) return cfg.channel;
   return (cfg.me ?? (await whoami(cfg))).channel;
+}
+
+const STATE_LABEL = { open: "待进行", hold: "挂起", doing: "进行中", done: "已完成", dropped: "已完成" };
+// 一行一条: [状态] P优先级 id 标题 (repo#issue) <- 父 | note
+function todoLine(t) {
+  const issue = t.repo && t.issue ? ` (${t.repo}#${t.issue})` : "";
+  const parent = t.parent ? ` <- ${t.parent}` : "";
+  const note = t.note ? ` | ${t.note.replace(/\s+/g, " ").slice(0, 80)}` : "";
+  return `[${STATE_LABEL[t.state] ?? t.state}] P${t.prio ?? 2} ${t.id} ${t.title}${issue}${parent}${note}`;
 }
 
 const COMMANDS = {
@@ -100,9 +119,34 @@ const COMMANDS = {
     if (v.new && r.head) saveHead(ch, r.head);
   },
   async watch(cfg, v) {
-    const me = cfg.me ?? (await whoami(cfg));
+    // 每次重新问身份: 轮换密钥或改名后, 旧的 sourceId 会把自己的消息当成别人的
+    const me = await whoami(cfg).catch(() => cfg.me);
     const channels = v.all ? null : [await channelOf(cfg, v)];
-    return watch(cfg, me, { channels, once: v.once, timeout: num(v.timeout), json: v.json, exec: v.exec, mine: v.mine, interval: num(v.interval) });
+    const opts = { channels, once: v.once, timeout: num(v.timeout), window: num(v.window), json: v.json, exec: v.exec, mine: v.mine, any: v.any, interval: num(v.interval) };
+    return watch(cfg, me, { ...opts, guide: cfg.guide });
+  },
+  async memory(cfg, v) {
+    const path = "/api/v1/chat-agent/memory";
+    if (v.set !== undefined) return out(await call(cfg, "PUT", path, { text: v.set === "-" ? stdin() : v.set }));
+    const cur = await call(cfg, "GET", path);
+    if (v.add === undefined) return out(cur.text || "(还没有记忆)");
+    const stamp = new Date().toISOString().slice(0, 10);
+    const r = await call(cfg, "PUT", path, { text: [cur.text, `- ${stamp} ${v.add.trim()}`].filter(Boolean).join("\n") });
+    out(`已记, 共 ${r.text.length} 字`);
+  },
+  async history(cfg, v) {
+    const ch = await channelOf(cfg, v);
+    const h = await syncHistory(cfg, ch, num(v.limit));
+    if (v.json) return out(h);
+    out(`${h.file}\n共 ${h.count} 条 (#${h.first} 到 #${h.last}), 本次拉了 ${h.fetched} 条。一行一条, 首行 "#seq 时间 名字: 正文", 多行正文缩进两格。`);
+    out(`节选: grep -n "关键词" ${h.file} | tail -20; sed -n '100,160p' ${h.file}; 原始 JSON 在 ${h.json}`);
+  },
+  async todos(cfg, v) {
+    const r = await call(cfg, "GET", `/api/v1/chats/${enc(await channelOf(cfg, v))}/todos`);
+    const list = (r.todos ?? []).filter((t) => v.all || (t.state !== "done" && t.state !== "dropped"));
+    if (v.json) return out(list);
+    if (!list.length) return out("(没有待办)");
+    for (const t of list) out(todoLine(t));
   },
   async typing(cfg, v) {
     out(await call(cfg, "POST", `/api/v1/chats/${enc(await channelOf(cfg, v))}/typing`, {}));

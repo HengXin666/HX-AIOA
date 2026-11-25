@@ -164,6 +164,12 @@ export function siteOf(addr: string): string {
 }
 const SECOND_LEVEL = new Set(["com", "net", "org", "gov", "edu", "ac", "co"]);
 
+/** 白名单域名 (分类表的键), 客户端按它判断能否放行远程图片。 */
+export const knownSenderDomains = (): string[] => Object.keys(VENDORS);
+
+/** 白名单: 分类表里认识的厂商域名 (含子域名)。 */
+export const isKnownSender = (addr: string): boolean => known(domainOf(addr)) !== undefined;
+
 /** 认识的厂商给名字, 不认识的用主域名 (a.b.example.com -> example.com)。 */
 export function vendorOf(addr: string): string {
   const d = domainOf(addr);
@@ -179,14 +185,43 @@ export function categoryOf(addr: string): MailCategory {
   return known(d)?.[1] ?? GUESS.find(([re]) => re.test(d))?.[1] ?? MAIL_CATEGORY_OTHER;
 }
 
-const CODE_HINT = /(验证码|校验码|动态码|code|otp|verification|verify|passcode|一次性)/i;
+// 英文词按整词匹配 (避免 Unicode / barcode); 码只在提示词后面不远处找 (避免资讯信里的年份 "2026")
+const CODE_HINT = /(验证码|校验码|动态码|一次性|\b(?:code|otp|verification|verify|passcode)\b)/gi;
 const CODE_RE = /(?<![\w-])([A-Z0-9]{4,8})(?![\w-])/g;
+const CODE_NEAR = 60;
+const YEAR = /^(19|20)\d{2}$/;
 
-/** 只在出现 "验证码 / code" 字样时取码: 优先纯数字, 再取含数字的大写串。 */
+/** 只取 "验证码 / code" 字样附近 (先看后 60 字, 再看前 30 字, 中间不隔句读) 的码: 优先纯数字 (年份除外), 再取含数字的大写串。 */
 export function extractCode(subject: string, text: string): string | undefined {
   const hay = `${subject}\n${text.slice(0, 4000)}`;
-  if (!CODE_HINT.test(hay)) return undefined;
-  const hits = [...hay.matchAll(CODE_RE)].map((m) => m[1] ?? "").filter((s) => /\d/.test(s));
+  const hints = [...hay.matchAll(CODE_HINT)];
+  for (const h of hints) {
+    const start = (h.index ?? 0) + h[0].length;
+    const code = pick(hay.slice(start, start + CODE_NEAR), false);
+    if (code) return code;
+  }
+  // "123456 是你的验证码": 提示词前面紧挨着的
+  for (const h of hints) {
+    const end = h.index ?? 0;
+    const code = pick(hay.slice(Math.max(0, end - CODE_NEAR / 2), end), true);
+    if (code) return code;
+  }
+  return undefined;
+}
+
+// 提示词与码之间不能隔着句读 ("write code, win 25000" 不算)
+const BREAK = /[,.;!?，。；！？]/;
+
+function pick(near: string, before: boolean): string | undefined {
+  const hits = [...near.matchAll(CODE_RE)]
+    .filter((m) => {
+      const at = m.index ?? 0;
+      const gap = before ? near.slice(at + m[0].length) : near.slice(0, at);
+      return !BREAK.test(gap);
+    })
+    .map((m) => m[1] ?? "")
+    .filter((s) => /\d/.test(s) && !YEAR.test(s));
+  if (before) hits.reverse();
   return hits.find((s) => /^\d{4,8}$/.test(s)) ?? hits.find((s) => /^[A-Z0-9]{6,8}$/.test(s));
 }
 
