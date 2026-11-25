@@ -126,6 +126,11 @@ const big = await cli("memory", "--set", "x".repeat(4001));
 check("记忆超长被拒", big.startsWith("ERR 1") && big.includes("4000"), big);
 check("记忆清空", JSON.parse(await cli("memory", "--set", "")).text === "");
 
+// 最近活跃: Agent 有动作就记下 (各端收到群资料更新)
+const chatsNow = (await api("GET", `${V1}/chats`)).data;
+const meta = (chatsNow.chats ?? chatsNow).find((x) => x.channel === GROUP);
+check("Agent 最近活跃已记录", Date.now() - (meta?.agents?.[0]?.active ?? 0) < 120_000, meta?.agents);
+
 // 历史存本地文件: 第一次往前翻, 第二次只拉新的; 撤回 / 删除的去掉; slim 不带 HTML
 await api("POST", `${V1}/messages`, { text: "带卡片", html: "<b>很长的卡片</b>", channel: GROUP });
 const h1 = JSON.parse(await cli("history", "--json"));

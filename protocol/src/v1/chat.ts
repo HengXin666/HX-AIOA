@@ -58,7 +58,7 @@ export type ChatAgent = {
 export type AgentJob = { interval?: number; task?: string };
 export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view" | "feedTags">>;
 export type AgentRequest = { name: string; reads?: string[] } & AgentJob;
-export const AGENT_ACTIVE_STEP_MS = 600_000;
+export const AGENT_ACTIVE_STEP_MS = 120_000;
 export const MAX_AGENT_TASK = 2000;
 export type AgentAck = { version: string };
 // 收藏按引用: ev 是原消息的当前版本; gone 表示原消息已撤回 / 删除 / 清空, ev 只剩收藏时的摘要
