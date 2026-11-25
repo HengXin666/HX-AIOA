@@ -136,7 +136,7 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
             // 先显示上次的列表, 服务端有变化再替换
             var latest: List<GhRepo>? = null
             val err = ApiCache.get(context, CACHE_REPOS, listOf(Constants.GITHUB_REPOS_PATH), onCode = { code ->
-                if (code != 0) scope.launch(Dispatchers.Main) { setEnabled(code != HTTP_NOT_FOUND) }
+                if (code != 0) scope.launch(Dispatchers.Main) { applyEnabled(code != HTTP_NOT_FOUND) }
             }) { body, _ ->
                 val list = body.optJSONArray("repos")?.let { objects(it).map(::repo) }?.sortedByDescending { it.active } ?: return@get
                 latest = list
@@ -198,7 +198,7 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
         sync { }
     }
 
-    private fun setEnabled(on: Boolean) {
+    private fun applyEnabled(on: Boolean) {
         if (enabled == on) return
         enabled = on
         prefs.edit().putBoolean(KEY_OFF, !on).apply()
@@ -206,7 +206,7 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
 
     /** 收到 hengxin666.github 的 plugin_update: 停用或撤销就隐藏, 否则重新拉一次 (成功即显示)。只在主线程调用。 */
     fun onPlugin(change: String) {
-        if (change in PLUGIN_OFF) return setEnabled(false)
+        if (change in PLUGIN_OFF) return applyEnabled(false)
         refresh(withRecent = true)
     }
 
