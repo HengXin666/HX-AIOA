@@ -30,6 +30,7 @@ HX-AIOA (All In One App) 是一个个人用的随处可用对话入口: 把各�
 - 记录写入 `docs/aegis/`, 用 `aegis-workspace.py` 管理, 不要手工改 `BASELINE-GOVERNANCE.md`。
 - 改动保持最小且可验证, 不要新增没有证据支撑的目录, fallback 或兼容路径。
 - 没有跑过验证命令, 不要声称 "完成" 或 "通过"。
+- 提交标题写 `type(scope): 描述`, 不超过 72 字, 细节放正文, 类型见 `.github/commit-convention.yml`; PR 标题同样, 合并按 squash。
 
 ## 4. 代码规范 (硬性)
 
