@@ -1,4 +1,5 @@
 import type { FileStore } from "./files/store";
+import type { GhService } from "./gh/service";
 import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
 import type { PluginStore } from "./plugins/store";
@@ -44,6 +45,7 @@ export type Core = {
   plugins: PluginStore;
   mail: MailStore;
   todos: TodoStore;
+  gh: GhService;
   market: Market;
   users: Users;
   terms: Terminals;

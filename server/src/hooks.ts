@@ -1,4 +1,5 @@
 import { isHookAdapter, type HookAdapter, type IngestResult, type KeyInfo, type SourceRef } from "@hx-aioa/protocol";
+import { onGithubHook } from "./gh/todo-sync";
 import { parseHookBody, runAdapter, typeInfo } from "./adapters";
 import { GITHUB_EVENT_HEADER, GITHUB_SIGNATURE_HEADER } from "./adapters/github";
 import { writeEvent } from "./api-events";
@@ -53,7 +54,11 @@ export async function handleHook(core: Core, req: Request, url: URL, adapter: st
   const input = { body, headers: req.headers, source: { name: source.name, ...(info?.subject ? { subject: info.subject } : {}), ...(info?.mapping ? { mapping: info.mapping } : {}) } };
   const events = runAdapter(adapter as HookAdapter, input);
   if (typeof events === "string") return fail(400, events);
-  if (adapter === GITHUB_ADAPTER) core.github.apply(req.headers.get(GITHUB_EVENT_HEADER) ?? "", body);
+  if (adapter === GITHUB_ADAPTER) {
+    const kind = req.headers.get(GITHUB_EVENT_HEADER) ?? "";
+    core.github.apply(kind, body);
+    onGithubHook(core, kind, body);
+  }
   const who: Principal = { owner: false, key };
   const results: IngestResult[] = [];
   for (const ev of events) results.push(await writeEvent(core, who, ev, { source, sourceInfo: info }));

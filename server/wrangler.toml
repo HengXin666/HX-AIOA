@@ -46,3 +46,5 @@ zone_name = "woa.qzz.io"
 # WXPUSHER_APP_TOKEN    可选, WxPusher 应用 token
 # WXPUSHER_UID          可选, WxPusher 用户 UID
 # GITHUB_TOKEN          可选, GitHub 只读 fine-grained token, 用于 GitHub 页面回填
+# GH_CLIENT_ID          可选, GitHub 授权插件的设备码流程 (OAuth App 或开了 Device Flow 的 GitHub App)
+# GH_CLIENT_SECRET      可选, 只用于 GitHub App 过期令牌的自动续期

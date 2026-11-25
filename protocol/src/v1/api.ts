@@ -66,6 +66,10 @@ export type KeyInfo = {
   sourceId?: string;
   subject?: string;
   created: number;
+  // 过期时间 (毫秒), 到点后这把 key 当不存在; ext 表示外部接入密钥 (只碰 channels[0] 的待办)
+  expires?: number;
+  ext?: "read" | "write";
+  used?: number;
 };
 export type KeyCreated = KeyInfo & { key: string; webhookSecret: string; webhookUrls: Record<string, string> };
 

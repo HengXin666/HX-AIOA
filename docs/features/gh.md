@@ -1,0 +1,50 @@
+# GitHub 授权插件与待办关联
+
+云端 Agent 是无状态的, 没有主人的 GitHub 账号。`gh` 是一个 base 插件 (不建群, 不带 Agent): 主人授权一次, 令牌加密存在服务端, 其他插件的 Agent 通过服务端代办 issue 操作, 永远拿不到令牌。
+
+## 授权
+
+| 方式 | 说明 |
+| --- | --- |
+| 设备码 (推荐) | `POST /api/v1/gh/device` 返回 `userCode` 与 `verifyUrl`, 主人在任何登录了 GitHub 的设备 (通常是电脑) 上输入; App 每 `interval` 秒 `POST /api/v1/gh/device/{id}` 轮询, `status` 为 `done` 即完成。需要服务端变量 `GH_CLIENT_ID` (OAuth App 或开了 Device Flow 的 GitHub App)。 |
+| 粘贴令牌 | `PUT /api/v1/gh/token { "token": "github_pat_..." }`, 建议 fine-grained, 只给 Issues 读写。 |
+
+- 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或卸载插件即删除。
+- GitHub App 的过期令牌在剩 5 分钟时自动续期, 需要 `GH_CLIENT_SECRET`; 没配就到期后重新授权。
+
+## 仓库范围
+
+GitHub 上授权的仓库是上限, `PUT /api/v1/gh/rules` 再收窄 (`GhRules`):
+
+| 字段 | 含义 |
+| --- | --- |
+| `pushedDays` | 最近 N 天有推送的 (近一年 = 365) |
+| `public` / `private` | 全部公开 / 全部私有 |
+| `repos` / `deny` | 手动放行 / 排除, 优先级 deny > repos > 规则 |
+
+`GET /api/v1/gh/repos` 列出令牌能看到的仓库及是否放行 (10 分钟缓存, `fresh=1` 刷新)。
+
+## Agent 权限与 issue 代理
+
+- 插件清单 `deps` 声明了 `gh` 的插件, 其 Agent 默认可用; 其他 Agent 默认不可用。`PUT /api/v1/gh/agents/{keyId} { "allowed": bool }` 单独开关。子号与外部接入密钥一律不可用。
+- 接口 (主人或获准的 Agent): `GET|POST /api/v1/gh/issues/{owner}/{name}` (列出 / 新建, 新建可带 `parent` 挂到父 issue, 带 `todo: { channel, id }` 顺手关联待办), `GET|PATCH .../{number}`, `POST .../{number}/comments`, `POST .../{number}/sub`。
+- 每次操作记一笔 (`GET /api/v1/gh` 的 `ops`, 最近 50 条)。没授权 409, 仓库没放行或没权限 403, 错误里写明怎么放行。
+
+## 待办与 issue 同步
+
+待办写了 `repo` + `issue` 就算关联。服务端按 GitHub 状态改待办:
+
+| GitHub | 待办 |
+| --- | --- |
+| issue 关闭 | 已完成, 群里发一条不响铃的系统消息 |
+| 打开且有评论 | 待进行 -> 进行中 |
+| 重新打开 | 已完成 -> 待进行 (有评论则进行中) |
+
+挂起只由人或 Agent 改, 同步不动。触发: GitHub webhook 的 `issues` / `issue_comment` 事件 (只同步那一条), 打开待办 (最多 5 分钟一次), 每 30 分钟定时, 以及 `POST /chats/{channel}/todos-sync`。查询走 GraphQL 批量 (每次 40 条), 同时取父 issue 号与子 issue 数, 供 App 画树。
+
+## 外部接入
+
+待办插件可以给别的 AI (Hark, Claude, Cursor 等) 发接入密钥: 只能碰这一个群的待办, 默认 24 小时过期, 可只读或可写, 随时吊销。
+
+- MCP: `POST /api/v1/ext/mcp`, `Authorization: Bearer <密钥>`。
+- 不支持 MCP 的: `GET /api/v1/ext/todos.md?key=<密钥>` 返回按日期和仓库分组的 Markdown。

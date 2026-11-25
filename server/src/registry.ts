@@ -6,6 +6,8 @@ type KeyRow = { id: string; hash: string; body: string };
 type SourceRow = { id: string; body: string };
 
 // 接入 key 与来源注册表; 多账号 (#5) 落地后迁到目录 DO, 结构不变
+const USED_GAP = 10 * 60_000;
+
 export class Registry {
   private readonly rate = new Map<string, { minute: number; count: number }>();
 
@@ -35,7 +37,16 @@ export class Registry {
   async keyBySecret(key: string): Promise<KeyInfo | null> {
     if (!key.startsWith(KEY_PREFIX)) return null;
     const row = this.sql.exec<KeyRow>("SELECT id, hash, body FROM apikey WHERE hash = ?", await sha256(key)).toArray()[0];
-    return row ? (JSON.parse(row.body) as KeyInfo) : null;
+    if (!row) return null;
+    const info = JSON.parse(row.body) as KeyInfo;
+    const now = Date.now();
+    // 过期的 key 当不存在; 外部接入 key 记一下最近使用, 最多 10 分钟写一次
+    if (info.expires && info.expires < now) return null;
+    if (info.ext && (!info.used || now - info.used > USED_GAP)) {
+      info.used = now;
+      this.saveKey(info);
+    }
+    return info;
   }
 
   key(id: string): KeyInfo | null {

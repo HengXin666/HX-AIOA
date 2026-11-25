@@ -5,6 +5,7 @@ import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
 import { PluginStore } from "./plugins/store";
 import { TodoStore } from "./plugins/todos";
+import { GhService, syncTodoIssues } from "./gh/service";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -132,7 +133,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -315,6 +316,10 @@ export class Hub extends DurableObject<Env> {
   // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 时什么也不做
   async githubSync(): Promise<GithubSyncResult | null> {
     return this.core.github.sync();
+  }
+
+  async todoIssueSync(): Promise<number> {
+    return syncTodoIssues(this.core);
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {

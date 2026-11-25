@@ -18,6 +18,7 @@
 | 文档 | 内容 |
 |---|---|
 | [mail.md](features/mail.md) | 邮件聚合: CF 邮件路由 / HX-Email / 通用推送, 分类, 搜索, 正文存储 |
+| [gh.md](features/gh.md) | GitHub 授权插件: 服务端保管令牌, 仓库范围, Agent 代办 issue, 待办与 issue 同步, 外部接入 (MCP) |
 | [feed.md](features/feed.md) | 统一推送卡片: feed 格式, 信息流展示, 用过 / 失效标记 |
 | [files.md](features/files.md) | 文件: R2 存储, 票据, 额度 |
 | [sources.md](features/sources.md) | 接入数据源 (GitHub, Uptime Kuma 等) 的操作步骤 |
