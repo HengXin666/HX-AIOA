@@ -315,9 +315,11 @@ export class Hub extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 或主人没启用 GitHub 插件时什么也不做
-  async githubSync(): Promise<GithubSyncResult | null> {
-    return githubOn(this.core) ? this.core.github.sync() : null;
+  // RPC (cron 每 30 分钟): GitHub 回填与 CF 额度检查合成一次 DO 请求; 主人没启用 GitHub 插件时只做额度检查
+  async halfHourly(): Promise<GithubSyncResult | null> {
+    const cf = this.env.CF_API_TOKEN && this.env.CF_ACCOUNT_ID ? this.cfCheck().catch((e) => console.error("CF 额度检查失败:", e)) : null;
+    const github = githubOn(this.core) ? await this.core.github.sync() : null;
+    return cf ? cf.then(() => github) : github;
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {

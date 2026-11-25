@@ -35,7 +35,7 @@ export default {
       return;
     }
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
-    if (env.GITHUB_TOKEN) ctx.waitUntil(hub.githubSync().then((r) => console.log("GitHub 定时同步:", JSON.stringify(r))));
-    if (env.CF_API_TOKEN && env.CF_ACCOUNT_ID) ctx.waitUntil(hub.cfCheck().catch((e) => console.error("CF 额度检查失败:", e)));
+    // 两件事合成一次 RPC, 每天省 48 次 DO 请求
+    if (env.GITHUB_TOKEN || (env.CF_API_TOKEN && env.CF_ACCOUNT_ID)) ctx.waitUntil(hub.halfHourly().then((r) => r && console.log("GitHub 定时同步:", JSON.stringify(r))));
   },
 } satisfies ExportedHandler<Env>;
