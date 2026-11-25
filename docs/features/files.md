@@ -52,7 +52,3 @@
 
 本机联调: Drive 仓库里起 `mock-tg` 与 `wrangler dev`, 再在 `server/` 起 `wrangler dev --var CFD_TOKEN:<受限令牌> --var CFD_ORIGIN:<Drive 本机地址>`, 两个 dev 进程会自动连上 Service Binding, 然后跑 `node tools/e2e-drive.mjs` (36 项, 含 96 MB 分片上传, 迁移任务与 TG 直连清单)。
 
-## 以后
-
-- 服务端静态加密: Workers 免费计划 CPU 不够, 放到安卓端做 (端到端加密后服务端只存密文)。
-
