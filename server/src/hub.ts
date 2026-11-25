@@ -62,6 +62,7 @@ import {
   TIMER_PROMPT_PREFIX,
   UNKNOWN_DEVICE,
   OWNER_NAME,
+  BG_DEVICE_PREFIX,
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
 import { joinPage } from "./join-page";
@@ -274,6 +275,7 @@ export class Hub extends DurableObject<Env> {
     const uid = role === "client" ? authorOf(this.core, who) : undefined;
     if (uid) att.uid = uid;
     if (!who.owner && who.member) att.member = true;
+    if (device.startsWith(BG_DEVICE_PREFIX)) att.bg = true;
     server.serializeAttachment(att);
 
     const head = this.core.store.head();
@@ -291,7 +293,7 @@ export class Hub extends DurableObject<Env> {
       this.core.presence.listenerChanged(listen.reads);
     }
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
-    this.core.presence.snapshot((f) => sendFrame(server, f));
+    if (!att.bg) this.core.presence.snapshot((f) => sendFrame(server, f));
     if (att.member) {
       if (uid && Number.isFinite(since)) {
         const grps = this.core.rooms.roomsOf(uid).map((m) => m.grp);

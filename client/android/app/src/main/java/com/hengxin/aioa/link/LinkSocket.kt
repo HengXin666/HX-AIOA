@@ -167,7 +167,10 @@ class LinkSocket(
     }
 
     private fun log(event: String) {
-        LinkLog.add(context, if (ui) "[界面] $event" else event)
+        // 后台连接的记录标上 App 当时是否打开, 方便区分 "打开 App 时的重连" 与 "后台自己的重连"
+        val app = context.applicationContext as android.app.Application
+        val line = if (ui) "${DebugReport.UI_PREFIX} $event" else "$event ${if (com.hengxin.aioa.AioaApp.uiForeground(app)) DebugReport.FG else DebugReport.BG}"
+        LinkLog.add(context, line)
     }
 
     private fun reconnectNow() {

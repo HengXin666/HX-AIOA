@@ -23,6 +23,8 @@ object Constants {
     const val UI_PING_INTERVAL_SEC = 30L
     // 界面连接连续这么多个心跳间隔收不到任何数据才重连
     const val UI_DEAD_INTERVALS = 3
+    // 界面切到后台后, 界面连接再保留多久才断开
+    const val UI_LINGER_MS = 90_000L
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
     const val NORMAL_CLOSE = 1000

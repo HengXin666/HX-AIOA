@@ -9,6 +9,8 @@ export const MAX_TEXT_LENGTH = 8000;
 export const RECENT_SCAN = 300;
 export const OVERVIEW_SCAN = 1000;
 export const METRIC_PERSIST_MS = 300_000;
+// 安卓后台常驻连接的设备 id 前缀: 只收消息与通知, 不收 "谁在监听 / 输入" 这类界面帧, 免得空推唤醒手机
+export const BG_DEVICE_PREFIX = "android-link-";
 
 export const KEY_PENDING_SEQ = "pendingSeq";
 export const KEY_ACKED_SEQ = "ackedSeq";

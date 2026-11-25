@@ -61,6 +61,7 @@ class LinkService : Service(), LinkSocket.Listener {
         socket.start()
         picker.start()
         watchdog.start()
+        BatteryLog.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -77,6 +78,7 @@ class LinkService : Service(), LinkSocket.Listener {
         LinkLog.add(this, "后台服务被销毁")
         LinkStats.flush(this)
         watchdog.stop()
+        BatteryLog.stop(this)
         socket.stop()
         picker.stop()
         io.shutdown()
@@ -98,6 +100,10 @@ class LinkService : Service(), LinkSocket.Listener {
     override fun onNetwork() = watchdog.onNetworkChanged()
 
     override fun onFrame(frame: ServerFrame) {
+        LinkStats.hit(LinkStats.Key.RX)
+        val used = frame is ServerFrame.Welcome || frame is ServerFrame.Msg || frame is ServerFrame.Ev || frame is ServerFrame.Task
+        if (!used) LinkStats.hit(LinkStats.Key.RX_UNUSED)
+        if (DebugReport.enabled(this)) LinkLog.add(this, "收到 ${frame.javaClass.simpleName}${if (used) "" else " (后台用不到)"}")
         when (frame) {
             is ServerFrame.Welcome -> {
                 replayHead = frame.head

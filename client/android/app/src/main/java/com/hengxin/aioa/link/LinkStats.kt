@@ -21,6 +21,8 @@ object LinkStats {
         CORE_START("内核启动"),
         CORE_STOP("内核停止"),
         OPTIMIZE("节点测速"),
+        RX("后台收帧"),
+        RX_UNUSED("其中后台用不到的帧"),
     }
 
     private const val FILE_NAME = "link_stats.json"

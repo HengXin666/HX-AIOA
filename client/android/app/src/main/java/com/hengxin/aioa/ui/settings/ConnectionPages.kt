@@ -122,13 +122,30 @@ private fun NodeRow(node: NodeInfo, selected: Boolean, enabled: Boolean, onClick
     }
 }
 
-/** 连接日志: 第一行是计数摘要, 下面是长连接的连接, 断开, 重连记录。 */
+/** 调试模式: 今天的重连统计, 近 24 小时耗电, 计数摘要, 长连接的连接 / 断开 / 重连记录。 */
 @Composable
 fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
     val c = Aioa.colors
-    val log = model.proxy.linkLog
+    val view = model.proxy
+    val log = view.linkLog
     SettingsPageFrame(SettingsPage.LINK_LOG.title, onBack) {
-        SettingsGroup { ActionRow(TEXT_REFRESH, ICON_REFRESH, onClick = model::refreshProxy) }
+        SettingsGroup(footer = "开启后后台连接每收到一帧都记一行 (类型, 后台是否用得到), 用来找是什么在频繁唤醒手机。统计与耗电采样不论开关都在记, 不额外唤醒。") {
+            SwitchRow("详细记录", model.debugOn, onChange = model::setDebug)
+            RowDivider()
+            ActionRow(TEXT_REFRESH, ICON_REFRESH, onClick = model::refreshProxy)
+        }
+        SettingsGroup("今天的连接", "\"App 打开时\" 指当时界面在前台。界面连接只在打开 App 时存在, 切走后保留 90 秒。") {
+            view.today.forEachIndexed { i, line ->
+                if (i > 0) RowDivider(false)
+                NoteRow(line)
+            }
+        }
+        SettingsGroup("近 24 小时耗电 (整机)", "电量是整台手机的, 用来对照: 熄屏每小时掉电明显变多, 再看下面的唤醒与收帧计数。精确到本 App 请用系统电池页。") {
+            view.battery.forEachIndexed { i, line ->
+                if (i > 0) RowDivider(false)
+                NoteRow(line)
+            }
+        }
         SettingsGroup(
             "记录 (最新在前)",
             "第一行是连接与唤醒计数 (对照耗电测量用), 下面是后台长连接的连接, 断开, 重连记录。排查断线不重连时看这里。",
