@@ -26,6 +26,7 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.ui.chat.FileTransfer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -40,6 +41,9 @@ private const val LABEL_SP = 14
 private const val MB = 1024L * 1024
 private val THRESHOLDS = listOf(5L, 10L, 20L, 50L, 95L)
 private val STORE_LABELS = listOf(STORE_R2 to "R2", STORE_CFD to "Drive")
+private const val MIGRATE_API = "api/v1/files/migrate"
+private const val MIGRATE_POLL_MS = 3000L
+private val COLD_DAYS = listOf(0, 30, 90, 180)
 
 /**
  * 存储: 主人看各后端用量并改存储路由 (只影响之后上传的文件, 已有文件留在原后端);
@@ -66,6 +70,15 @@ fun StoragePage(owner: Boolean, onBack: (() -> Unit)?) {
                     scope.launch {
                         error = withContext(Dispatchers.IO) { saveRoute(context, patch) }
                         reload++
+                    }
+                }
+                val ready = body.optJSONObject("ready")
+                if (ready?.optBoolean(STORE_R2) == true && ready.optBoolean(STORE_CFD)) {
+                    MigrateGroup(body.optJSONObject(KEY_STORAGE)?.optInt("coldDays") ?: 0, { reload++ }) { patch ->
+                        scope.launch {
+                            error = withContext(Dispatchers.IO) { saveRoute(context, patch) }
+                            reload++
+                        }
                     }
                 }
             }
@@ -136,6 +149,69 @@ private fun RouteGroup(body: JSONObject, save: (JSONObject) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * 迁移: 把已有文件整体搬到另一个后端 (文件 id 不变, 已发的消息照常能下载), 跑的时候每 3 秒刷新进度;
+ * 冷迁移: 每天把多少天没下载过的 R2 文件搬到 Drive。
+ */
+@Composable
+private fun MigrateGroup(coldDays: Int, onDone: () -> Unit, saveRoute: (JSONObject) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var job by remember { mutableStateOf<JSONObject?>(null) }
+    var tick by remember { mutableIntStateOf(0) }
+    var error by remember { mutableStateOf("") }
+    val running = job != null && !job!!.has("finished")
+    LaunchedEffect(tick) {
+        val r = withContext(Dispatchers.IO) { Api.call(context, "GET", listOf(MIGRATE_API)) }
+        job = r.body?.optJSONObject("job")
+        if (r.error != null) error = r.error
+        if (job != null && !job!!.has("finished")) {
+            delay(MIGRATE_POLL_MS)
+            tick++
+        } else if (tick > 0) onDone()
+    }
+    val act = { method: String, body: JSONObject? ->
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { Api.call(context, method, listOf(MIGRATE_API), body) }
+            error = r.error.orEmpty()
+            tick++
+        }
+    }
+    SettingsGroup("迁移", "搬已有文件, 文件 id 不变, 已发的消息照常能下载; 搬回 R2 只搬 95 MB 以内的。") {
+        job?.let { InfoRow(if (running) "进行中" else "上次", jobText(it)) }
+        job?.optString("error")?.takeIf { it.isNotEmpty() }?.let {
+            RowDivider(false)
+            NoteRow(it, Aioa.colors.warning)
+        }
+        if (job != null) RowDivider(false)
+        if (running) {
+            ActionRow("停止迁移", "x", danger = true) { act("DELETE", null) }
+        } else {
+            ActionRow("全部搬到 Drive", "hard-drive") { act("POST", JSONObject().put("to", STORE_CFD)) }
+            RowDivider(false)
+            ActionRow("全部搬回 R2", "archive") { act("POST", JSONObject().put("to", STORE_R2)) }
+        }
+        RowDivider(false)
+        OptionRow("冷迁移: 多少天没下载的 R2 文件每天搬到 Drive", COLD_DAYS.map { "$it" to if (it == 0) "关闭" else "$it 天" }, "$coldDays") {
+            saveRoute(JSONObject().put("coldDays", it.toInt()))
+        }
+        if (error.isNotEmpty()) {
+            RowDivider(false)
+            NoteRow(error, Aioa.colors.danger)
+        }
+    }
+}
+
+private fun jobText(j: JSONObject): String {
+    val to = if (j.optString("to") == STORE_CFD) "到 Drive" else "回 R2"
+    val cold = if (j.optBoolean("cold")) "冷迁移 " else ""
+    val parts = mutableListOf("$cold$to: 已搬 ${j.optInt("moved")} 个 (${FileTransfer.sizeText(j.optLong("bytes"))})")
+    if (!j.has("finished")) parts += "剩 ${j.optInt("left")}"
+    if (j.optInt("failed") > 0) parts += "失败 ${j.optInt("failed")}"
+    if (j.optInt("skipped") > 0) parts += "跳过 ${j.optInt("skipped")}"
+    return parts.joinToString(" · ")
 }
 
 @Composable

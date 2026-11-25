@@ -16,7 +16,11 @@ export type FileRow = {
   ext: string | null;
   // 分片上传进行中: Drive 的上传票据, 提交后清空
   up: string | null;
+  // 最近一次换下载地址的时间 (跨天才写), 冷迁移用; 没有按 created 算
+  last_dl: number | null;
 };
+
+const DAY_MS = 24 * 3600_000;
 
 // 上传后一直没被消息引用的文件, 过这么久就清掉
 const ORPHAN_MS = 24 * 3600_000;
@@ -49,6 +53,7 @@ export class FileStore {
     if (!cols.includes("store")) sql.exec("ALTER TABLE file ADD COLUMN store TEXT NOT NULL DEFAULT 'r2'");
     if (!cols.includes("ext")) sql.exec("ALTER TABLE file ADD COLUMN ext TEXT");
     if (!cols.includes("up")) sql.exec("ALTER TABLE file ADD COLUMN up TEXT");
+    if (!cols.includes("last_dl")) sql.exec("ALTER TABLE file ADD COLUMN last_dl INTEGER");
     sql.exec("CREATE INDEX IF NOT EXISTS file_grp ON file (grp)");
     sql.exec("CREATE INDEX IF NOT EXISTS file_orphan ON file (refs, created)");
   }
@@ -161,6 +166,73 @@ export class FileStore {
     }
     this.sql.exec("UPDATE file SET up = NULL WHERE id = ?", id);
     return { id, name: r.name, size: node.size, mime: r.mime };
+  }
+
+  /** 换下载地址时记一下, 一天最多写一次。 */
+  touch(id: string, now = Date.now()): void {
+    this.sql.exec("UPDATE file SET last_dl = ? WHERE id = ? AND COALESCE(last_dl, created) < ?", now, id, now - DAY_MS);
+  }
+
+  /**
+   * 迁移候选: 已传完, 不在目标后端, 不在 skip 里; 搬回 R2 只要 95 MB 以内的; coldDays 大于 0 时只要这么多天没下载过的。
+   * 返回候选的前 limit 个与总数。
+   */
+  candidates(to: FileStoreKind, coldDays: number, skip: string[], limit: number, now = Date.now()): { rows: FileRow[]; total: number } {
+    const where = ["done = 1", "store != ?", "id NOT IN (SELECT value FROM json_each(?))"];
+    const args: unknown[] = [to, JSON.stringify(skip)];
+    if (to === "r2") {
+      where.push("size <= ?");
+      args.push(FILE_MAX_BYTES);
+    }
+    if (coldDays > 0) {
+      where.push("COALESCE(last_dl, created) < ?");
+      args.push(now - coldDays * DAY_MS);
+    }
+    const w = where.join(" AND ");
+    const total = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM file WHERE ${w}`, ...args).one().n;
+    const rows = this.sql.exec<FileRow>(`SELECT * FROM file WHERE ${w} ORDER BY created LIMIT ?`, ...args, limit).toArray();
+    return { rows, total };
+  }
+
+  /** 搬回 R2 时不搬的 (超过 95 MB) 有多少。 */
+  tooBigForR2(): number {
+    return this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM file WHERE done = 1 AND store != 'r2' AND size > ?", FILE_MAX_BYTES).one().n;
+  }
+
+  /**
+   * 把一个文件搬到另一个后端: 先写新后端, 再一次 UPDATE 改 store / ext, 最后删旧字节。
+   * 搬的过程中文件被删了 (UPDATE 没改到行) 就把新写的删掉。旧地址随之失效, 客户端换一次地址即可。
+   */
+  async move(r: FileRow, to: FileStoreKind): Promise<void> {
+    if (r.store === to) return;
+    if (to === "cfd") {
+      if (!this.drive || !this.bucket) throw new Error("R2 或 Drive 没接入");
+      const obj = await this.bucket.get(r.id);
+      if (!obj) throw new Error("R2 里没有这个文件");
+      const node = await this.drive.upload(driveDir(), driveName(r.id, r.name), obj.size, obj.httpMetadata?.contentType ?? r.mime, obj.body);
+      if (this.sql.exec("UPDATE file SET store = 'cfd', ext = ? WHERE id = ? AND store = 'r2'", node.id, r.id).rowsWritten === 0) {
+        await this.drive.remove(node.id);
+        return;
+      }
+      await this.bucket.delete(r.id);
+    } else {
+      if (!this.drive || !this.bucket || !r.ext) throw new Error("R2 或 Drive 没接入");
+      if (r.size > FILE_MAX_BYTES) throw new Error("超过 95 MB 的文件不搬回 R2");
+      if (this.r2Bytes() + r.size > FILES_TOTAL_MAX_BYTES) throw new Error("R2 文件总量已满");
+      const res = await this.drive.open(r.ext);
+      const len = Number(res.headers.get("content-length"));
+      if (!res.body || !Number.isFinite(len)) throw new Error("Drive 没有返回文件长度");
+      const fixed = new FixedLengthStream(len);
+      void res.body.pipeTo(fixed.writable).catch(() => undefined);
+      await this.bucket.put(r.id, fixed.readable, { httpMetadata: { contentType: r.mime } });
+      if (this.sql.exec("UPDATE file SET store = 'r2', ext = NULL WHERE id = ? AND store = 'cfd'", r.id).rowsWritten === 0) {
+        await this.bucket.delete(r.id);
+        return;
+      }
+      // 删旧的失败时文件已经在 R2 了, 错误照常抛出计入失败数; 留下的 Drive 节点在 Drive 后台 /aioa 下能看到
+      await this.drive.remove(r.ext);
+    }
+    this.links.delete(r.id);
   }
 
   /** 字节写完后回报: 以后端实际大小为准; cfd 同时记下 Drive 节点 id。行已被删返回 false。 */

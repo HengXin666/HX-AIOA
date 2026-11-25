@@ -86,10 +86,15 @@ export class Drive {
     return (await this.json<{ url: string }>("/fs/link", { id, expiresIn: ttlSec })).url;
   }
 
-  async text(id: string): Promise<string> {
+  /** 读文件内容 (整个响应, 调用方流式读 body)。 */
+  async open(id: string): Promise<Response> {
     const res = await this.fetcher.fetch(new Request(`${this.origin}${API}/files/${encodeURIComponent(id)}/content`, { headers: { authorization: `Bearer ${this.token}` } }));
     if (!res.ok) throw new DriveError(res.status, `Drive ${res.status}`);
-    return res.text();
+    return res;
+  }
+
+  async text(id: string): Promise<string> {
+    return (await this.open(id)).text();
   }
 
   /** 立即删除: 进回收站后马上彻底删 (TG 消息当场删)。已经不在了算成功。 */

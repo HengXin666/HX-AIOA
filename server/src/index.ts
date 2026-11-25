@@ -31,7 +31,7 @@ export default {
     if (ctrl.cron === MAIL_CLEANUP_CRON) {
       ctx.waitUntil(cleanupTempMail(env).then((n) => console.log("临时邮箱清理:", n)).catch((e) => console.error("临时邮箱清理失败:", e)));
       ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).mailPrune().then((n) => console.log("邮件索引清理:", n)));
-      if (env.FILES) ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).fileSweep().then((n) => console.log("文件清理:", n)));
+      if (env.FILES || env.DRIVE) ctx.waitUntil(env.HUB.get(env.HUB.idFromName(HUB_NAME)).fileSweep().then((n) => console.log("文件清理:", n)));
       return;
     }
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));

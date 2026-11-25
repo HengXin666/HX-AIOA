@@ -1,5 +1,7 @@
 import { attachFile } from "./files/api";
 import { Drive } from "./files/drive";
+import { Migrator, TIMER_MIGRATE } from "./files/migrate";
+import { storageOf } from "./files/storage";
 import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
 import { MailStore } from "./mail/store";
@@ -133,7 +135,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -150,9 +152,15 @@ export class Hub extends DurableObject<Env> {
     return this.core.files.done(id, size, ext);
   }
 
-  // RPC (每天的清理 cron): 删掉传了没发出去的文件
+  // RPC (每天的清理 cron): 删掉传了没发出去的文件; 开了冷迁移且没有任务在跑时, 开一轮冷迁移
   async fileSweep(): Promise<number> {
-    return this.core.files.sweep();
+    const n = await this.core.files.sweep();
+    const s = storageOf(await this.core.config.settings());
+    if (s.coldDays > 0 && this.core.files.ready("cfd") && this.core.files.ready("r2")) {
+      const r = await this.core.migrator.start("cfd", true, s);
+      if (typeof r !== "string") console.log("冷迁移:", r.left, "个");
+    }
+    return n;
   }
 
   // RPC (Worker 的 email 入口): CF 邮件路由收到的信, 已在 Worker 里解析好
@@ -484,6 +492,7 @@ export class Hub extends DurableObject<Env> {
         if (name === TIMER_FALLBACK) await this.core.pipeline.runFallback();
         else if (name.startsWith(TIMER_AGG_PREFIX)) await this.core.pipeline.flushBucket(name.slice(TIMER_AGG_PREFIX.length));
         else if (name.startsWith(TIMER_PROMPT_PREFIX)) await this.core.agents.expire(name.slice(TIMER_PROMPT_PREFIX.length));
+        else if (name === TIMER_MIGRATE) await this.core.migrator.tick();
       } catch (e) {
         console.error("定时任务失败:", name, e);
       }

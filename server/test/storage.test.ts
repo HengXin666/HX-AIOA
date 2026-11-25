@@ -142,6 +142,26 @@ test("Drive 删除失败: 行保留成未完成无引用, 发不出去, 下次 s
   assert.equal(again.row(a.id), null);
 });
 
+test("迁移候选: 冷迁移按最近下载时间, 换地址一天只记一次, 搬回 R2 只要 95 MB 以内", () => {
+  const { drive } = fakeDrive();
+  const files = new FileStore(sqlStorage(), bucket as unknown as R2Bucket, drive);
+  const DAY = 24 * 3600_000;
+  const now = Date.UTC(2026, 10, 25);
+  const old = files.create("g", "old.bin", 10, "a/b", "owner", "r2", now - 100 * DAY);
+  const fresh = files.create("g", "fresh.bin", 10, "a/b", "owner", "r2", now - 100 * DAY);
+  const big = files.create("g", "big.bin", 200 * MB, "a/b", "owner", "cfd", now);
+  for (const f of [old, fresh]) files.done(f.id, 10);
+  files.done(big.id, 200 * MB, "n_big");
+  files.touch(fresh.id, now - 10 * DAY);
+  files.touch(fresh.id, now - 10 * DAY + 1000);
+  assert.equal(files.row(fresh.id)?.last_dl, now - 10 * DAY);
+  assert.deepEqual(files.candidates("cfd", 90, [], 10, now).rows.map((r) => r.id), [old.id]);
+  assert.equal(files.candidates("cfd", 0, [], 10, now).total, 2);
+  assert.equal(files.candidates("cfd", 0, [old.id], 10, now).total, 1);
+  assert.equal(files.candidates("r2", 0, [], 10, now).total, 0);
+  assert.equal(files.tooBigForR2(), 1);
+});
+
 test("存储设置校验: 合并缺省键, 拒绝没绑定的后端与非法值", () => {
   const all = () => true;
   const r2only = (k: string) => k === "r2";
@@ -153,6 +173,9 @@ test("存储设置校验: 合并缺省键, 拒绝没绑定的后端与非法值"
   assert.match(checkStorage({ foo: 1 }, STORAGE_DEFAULTS, all) as string, /foo/);
   assert.deepEqual(storageOf({}), STORAGE_DEFAULTS);
   assert.equal(storageOf({ storage: { large: "off" } }).large, "off");
+  assert.match(checkStorage({ coldDays: 90 }, STORAGE_DEFAULTS, r2only) as string, /HX-CF-Drive/);
+  assert.match(checkStorage({ coldDays: -1 }, STORAGE_DEFAULTS, all) as string, /coldDays/);
+  assert.equal((checkStorage({ coldDays: 90 }, STORAGE_DEFAULTS, all) as StorageSettings).coldDays, 90);
 });
 
 /** Worker 侧: Drive 的 Service Binding 与 Hub 都是假的, 记下收到的请求。 */

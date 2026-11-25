@@ -23,6 +23,7 @@ export type FileStoreKind = (typeof FILE_STORES)[number];
  * - small / large: 不超过 / 超过 threshold 的文件走哪个后端; large 为 off 时拒收
  * - onFull: R2 到总量上限时, reject 拒收, cfd 新文件改走 Drive (主人显式选择)
  * - direct: 主人设备可以直连 TG 拉取 cfd 文件
+ * - coldDays: 大于 0 时每天把这么多天没下载过的 R2 文件搬到 Drive (冷迁移), 0 关闭
  */
 export type StorageSettings = {
   small: FileStoreKind;
@@ -30,12 +31,33 @@ export type StorageSettings = {
   threshold: number;
   onFull: "reject" | "cfd";
   direct: boolean;
+  coldDays: number;
 };
 export const SETTING_STORAGE = "storage";
 export const FILE_BIG_THRESHOLD = 20 * 1024 * 1024;
 export const FILE_THRESHOLD_MIN = 1024 * 1024;
 // 不配时和接入 Drive 之前一样, 全部走 R2
-export const STORAGE_DEFAULTS: StorageSettings = { small: "r2", large: "r2", threshold: FILE_BIG_THRESHOLD, onFull: "reject", direct: false };
+export const STORAGE_DEFAULTS: StorageSettings = { small: "r2", large: "r2", threshold: FILE_BIG_THRESHOLD, onFull: "reject", direct: false, coldDays: 0 };
+export const COLD_DAYS_MAX = 3650;
+
+/**
+ * 迁移任务: 把已有文件搬到另一个后端, 文件 id 不变, 消息不用改; 一次只跑一个, 由 Hub 的闹钟分批执行。
+ * cold 为冷迁移 (只搬 coldDays 天没下载过的 R2 文件)。搬回 R2 只搬 95 MB 以内的, 大的计入 skipped。
+ */
+export type MigrateJob = {
+  to: FileStoreKind;
+  cold: boolean;
+  started: number;
+  // 结束时间; 没有表示还在跑
+  finished?: number;
+  moved: number;
+  bytes: number;
+  failed: number;
+  skipped: number;
+  left: number;
+  error?: string;
+};
+export type MigrateRequest = { to: FileStoreKind };
 
 export type StoreUsage = { bytes: number; count: number };
 // 文件总用量: 字节数与个数, limit 为 R2 的总量上限 (只算 r2); byStore 分后端统计, ready 为该后端是否已绑定

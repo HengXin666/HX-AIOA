@@ -13,6 +13,7 @@ import {
   PATH_FILE_COMMIT,
   PATH_FILE_LINK,
   PATH_FILES,
+  PATH_FILES_MIGRATE,
   type Scope,
 } from "@hx-aioa/protocol";
 import { canRead } from "../api-chats";
@@ -125,6 +126,7 @@ async function link(c: ReqCtx): Promise<Response> {
   const row = c.core.files.row(decodeURIComponent(c.params[0] ?? ""));
   if (!row?.done) return fail(404, "文件不存在或已删除", CODE_NOT_FOUND);
   if (!canRead(c.core, c.who, row.grp)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  c.core.files.touch(row.id);
   if (row.store === "cfd") {
     try {
       return json((await c.core.files.driveLink(row)) satisfies FileLink | null);
@@ -147,7 +149,23 @@ async function remove(c: ReqCtx): Promise<Response> {
   return json({ ok: true });
 }
 
+/** 迁移任务 (主人): POST { to } 开始, GET 状态, DELETE 停止。 */
+async function migrate(c: ReqCtx): Promise<Response> {
+  if (!c.who.owner) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const m = c.core.migrator;
+  if (c.req.method === GET) return json({ job: await m.status() });
+  if (c.req.method === DELETE) return json({ job: await m.stop() });
+  const b = (await readJson(c.req)) as Record<string, unknown> | undefined;
+  if (b?.to !== "r2" && b?.to !== "cfd") return fail(400, "to 只能是 r2 或 cfd");
+  const r = await m.start(b.to, false, storageOf(await c.core.config.settings()));
+  return typeof r === "string" ? fail(409, r) : json({ job: r });
+}
+
 export const FILE_ROUTES: Route[] = [
+  // 放在 /files/{id} 前面, 免得 migrate 被当成文件 id
+  route(GET, PATH_FILES_MIGRATE, ROOM, migrate),
+  route(POST, PATH_FILES_MIGRATE, ROOM, migrate),
+  route(DELETE, PATH_FILES_MIGRATE, ROOM, migrate),
   route(POST, PATH_FILES, ROOM, create),
   route(GET, PATH_FILES, ROOM, async (c) => (c.who.owner ? json(c.core.files.usage(storageOf(await c.core.config.settings()))) : fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN))),
   route(GET, PATH_FILE_LINK, ROOM, link),

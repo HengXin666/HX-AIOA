@@ -125,6 +125,34 @@ while (have.length < huge.length) {
 }
 ok(sha(have) === sha(huge), "分片文件下载一致");
 ok((await api("DELETE", `/api/v1/files/${c.body.file.id}`)).status === 200 && (await driveTree()).n === 0, "分片文件删除后 Drive 清空");
+
+// 9. 迁移任务: R2 → Drive → R2, 文件 id 不变
+await api("PATCH", "/api/v1/settings", { storage: { large: "r2", threshold: 20 * MB } });
+const mv = randomBytes(2 * MB + 3);
+r = await upload("move.bin", mv);
+const mvId = r.body.file.id;
+const oldUrl = (await api("GET", `/api/v1/files/${mvId}/link`)).body.url;
+async function runJob(to) {
+  const st = await api("POST", "/api/v1/files/migrate", { to });
+  if (st.status !== 200) return st;
+  for (let i = 0; i < 30; i++) {
+    const j = await api("GET", "/api/v1/files/migrate");
+    if (j.body.job?.finished) return j;
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+  return { status: 0, body: {} };
+}
+let job = await runJob("cfd");
+ok(job.status === 200 && job.body.job.moved >= 1 && job.body.job.failed === 0 && job.body.job.left === 0, `迁到 Drive ${JSON.stringify(job.body.job)}`);
+l = await api("GET", `/api/v1/files/${mvId}/link`);
+ok(l.body.url.startsWith(D + "/") && sha(Buffer.from(await (await fetch(l.body.url)).arrayBuffer())) === sha(mv), "迁移后同一个 id 换到 Drive 地址, 内容一致");
+ok([403, 404, 410].includes((await fetch(abs(oldUrl))).status), "迁移前的 R2 地址失效 (客户端换一次地址)");
+ok((await api("POST", "/api/v1/files/migrate", { to: "s3" })).status === 400, "目标后端校验");
+job = await runJob("r2");
+ok(job.status === 200 && job.body.job.moved >= 1 && job.body.job.failed === 0, `迁回 R2 ${JSON.stringify(job.body.job)}`);
+l = await api("GET", `/api/v1/files/${mvId}/link`);
+ok(!l.body.url.startsWith(D + "/") && sha(Buffer.from(await (await fetch(abs(l.body.url))).arrayBuffer())) === sha(mv), "迁回后换到 R2 地址, 内容一致");
+ok((await driveTree()).n === 0, "迁回后 Drive 里的旧副本已删");
 await api("PATCH", "/api/v1/settings", { storage: null });
 
 console.log(`\n全部通过: ${n} 项`);

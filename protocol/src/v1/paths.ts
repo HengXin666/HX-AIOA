@@ -36,6 +36,8 @@ export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
 export const PATH_GITHUB_DAILY = `${API_V1}/github/daily`;
 export const PATH_GITHUB_BRANCHES = `${API_V1}/github/branches`;
 export const PATH_FILES = `${API_V1}/files`;
+// 迁移任务 (主人): GET 状态, POST { to } 开始, DELETE 停止
+export const PATH_FILES_MIGRATE = `${API_V1}/files/migrate`;
 export const PATH_FILE = `${API_V1}/files/{id}`;
 export const PATH_FILE_LINK = `${API_V1}/files/{id}/link`;
 // 字节上传 / 下载: Worker 凭票据直接读写 R2

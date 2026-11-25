@@ -1,4 +1,4 @@
-import { FILE_MAX_BYTES, FILE_STORES, FILE_THRESHOLD_MIN, type FileStoreKind, type Settings, SETTING_STORAGE, STORAGE_DEFAULTS, type StorageSettings } from "@hx-aioa/protocol";
+import { COLD_DAYS_MAX, FILE_MAX_BYTES, FILE_STORES, FILE_THRESHOLD_MIN, type FileStoreKind, type Settings, SETTING_STORAGE, STORAGE_DEFAULTS, type StorageSettings } from "@hx-aioa/protocol";
 
 const isStore = (v: unknown): v is FileStoreKind => typeof v === "string" && (FILE_STORES as readonly string[]).includes(v);
 
@@ -23,9 +23,10 @@ export function checkStorage(raw: unknown, current: StorageSettings, ready: (k: 
   }
   if (next.onFull !== "reject" && next.onFull !== "cfd") return "storage.onFull 只能是 reject 或 cfd";
   if (typeof next.direct !== "boolean") return "storage.direct 必须是布尔值";
+  if (!Number.isInteger(next.coldDays) || next.coldDays < 0 || next.coldDays > COLD_DAYS_MAX) return `storage.coldDays 必须是 0 到 ${COLD_DAYS_MAX} 之间的整数 (天)`;
   const used = new Set<FileStoreKind>([next.small]);
   if (next.large !== "off") used.add(next.large);
-  if (next.onFull === "cfd" || next.direct) used.add("cfd");
+  if (next.onFull === "cfd" || next.direct || next.coldDays > 0) used.add("cfd");
   for (const k of used) if (!ready(k)) return k === "r2" ? "服务端还没绑定 R2 文件桶, 不能选 r2" : "服务端还没接入 HX-CF-Drive, 不能选 cfd";
   return next;
 }

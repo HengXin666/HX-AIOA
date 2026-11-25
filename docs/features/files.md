@@ -13,11 +13,15 @@
 | `threshold` | 1 MB 到 95 MB (字节) | 20 MB | |
 | `onFull` | `reject` / `cfd` | `reject` | R2 到 8 GB 上限时拒收 (507), 或新文件改走 Drive |
 | `direct` | 布尔 | `false` | 主人设备直连 TG 拉取 (待实现) |
+| `coldDays` | 0 到 3650 | 0 | 大于 0 时每天把这么多天没下载过的 R2 文件搬到 Drive (冷迁移) |
 
 - 默认与接入 Drive 之前一样全走 R2。选了服务端没绑定的后端, 保存时直接 400, 上传时不会悄悄换后端。
 - 每个文件记自己的后端 (`store`) 和 Drive 节点 id (`ext`)。改路由只影响之后上传的文件, 老文件留在原后端, 换地址时按文件自己的后端解析, 已发的消息和安卓本机缓存都不受影响。
 - cfd 文件: 上传票据带 `b=cfd` (签进票据, 改不了), Worker 把字节流式转给 Drive; `link` 返回 Drive 的签名直链 (24 小时, 绑定 AIOA 的令牌, 服务端缓存 12 小时), 字节不经过 AIOA; 删除时当场在 Drive 彻底删 (TG 消息一起删), Drive 删失败的行保留成不可用, 由每天的清理重试。
 - 接入 Drive 需要三项: Service Binding `DRIVE -> hx-cf-drive`, 变量 `CFD_ORIGIN` (Drive 公网地址), 密钥 `CFD_TOKEN` (Drive 后台建的受限令牌, 根目录 `/aioa`, read+write)。缺一项就当没接入, 不经公网退回。
+- 迁移任务 (主人): `POST /api/v1/files/migrate { to: "r2" | "cfd" }` 开始, `GET` 看进度, `DELETE` 停止。一次只有一个任务, 状态存在 Hub 里, 由闹钟每 10 秒搬 3 个 (DO 重启后接着跑)。每个文件先写新后端, 再一次 UPDATE 改 `store` / `ext`, 最后删旧字节; 文件 id 不变, 已发的消息不用改。搬回 R2 只搬 95 MB 以内的 (大的计入 skipped), R2 满了就停。失败的文件记下不再重试, 超过 200 个就停。旧地址随之失效, 安卓遇到 403 / 404 / 410 会换一次地址。
+- 冷迁移: 每天 03:00 (UTC+8) 的清理任务里, `coldDays` 大于 0 且没有任务在跑时, 开一轮只搬冷文件的迁移。"最近下载" 按换下载地址的时间算, 一天最多写一次。
+- 撤销 Drive 令牌前先把文件迁回 R2: 令牌吊销后 Drive 直链 60 秒内失效。
 - `GET /api/v1/files` (主人) 返回分后端用量 `byStore`, 各后端是否就绪 `ready`, 当前路由 `storage`。R2 的 8 GB 上限只算 R2 里的字节。
 
 ## 额度设计
@@ -45,9 +49,8 @@
 
 部署流程会先确保桶存在 (`wrangler r2 bucket create`)。部署 token 没有 R2 编辑权限时去掉绑定照常部署, R2 不可用。仓库 secret `CFD_TOKEN` 配了才同步到 Worker; 两个后端都没有时文件接口返回 503。
 
-本机联调: Drive 仓库里起 `mock-tg` 与 `wrangler dev`, 再在 `server/` 起 `wrangler dev --var CFD_TOKEN:<受限令牌> --var CFD_ORIGIN:<Drive 本机地址>`, 两个 dev 进程会自动连上 Service Binding, 然后跑 `node tools/e2e-drive.mjs` (26 项, 含 96 MB 分片上传)。
+本机联调: Drive 仓库里起 `mock-tg` 与 `wrangler dev`, 再在 `server/` 起 `wrangler dev --var CFD_TOKEN:<受限令牌> --var CFD_ORIGIN:<Drive 本机地址>`, 两个 dev 进程会自动连上 Service Binding, 然后跑 `node tools/e2e-drive.mjs` (33 项, 含 96 MB 分片上传与迁移任务)。
 
 ## 以后
 
-- 迁移任务 (R2 与 Drive 之间搬文件, 冷迁移), 见 #88 分期 3。
 - 主人设备直连 TG 拉取, 见 #88 分期 4。

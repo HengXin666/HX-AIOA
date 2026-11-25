@@ -1,3 +1,4 @@
+import type { Migrator } from "./files/migrate";
 import type { FileStore } from "./files/store";
 import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
@@ -41,6 +42,7 @@ export type Core = {
   presence: Presence;
   rooms: RoomStore;
   files: FileStore;
+  migrator: Migrator;
   plugins: PluginStore;
   mail: MailStore;
   todos: TodoStore;
