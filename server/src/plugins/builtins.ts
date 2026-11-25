@@ -1,13 +1,14 @@
-import { GH_LEGACY_ID, GH_PLUGIN_ID, GITHUB_PLUGIN, isRisky, parseManifest } from "@hx-aioa/protocol";
+import { GH_LEGACY_ID, GH_PLUGIN_ID, GITHUB_PLUGIN, TODO_PLUGIN, isRisky, parseManifest } from "@hx-aioa/protocol";
 import ghManifest from "../../../plugins/hengxin666.gh/plugin.json";
 import githubManifest from "../../../plugins/hengxin666.github/plugin.json";
+import todoManifest from "../../../plugins/hengxin666.todo/plugin.json";
 import type { AllowRow, AllowStore } from "./allow-store";
 
 export const SEED_BY = "升级迁移";
 const FLAG_PREFIX = "builtin:";
 
 /** 旧安装记录: 只用来判断升级前装没装过 GitHub 授权 (base 插件 gh), 迁移后删掉。 */
-export type LegacyInstalls = { has(id: string): boolean; remove(id: string): void };
+export type LegacyInstalls = { has(id: string): boolean; remove(id: string): void; hasTodos?(): boolean };
 
 /** 内置插件的清单随部署打包, 迁移时直接用, 不去市场拉。 */
 export function builtinRow(raw: unknown, now: number): AllowRow {
@@ -32,11 +33,13 @@ function once(store: AllowStore, id: string, want: boolean, raw: unknown, uid: s
  * 升级迁移: 以前写死在服务端或以 base 插件装的, 现有部署行为不变。
  * - GitHub 接入 (hengxin666.github): 以前总是开着, 放行并为主人启用。
  * - GitHub 授权 (hengxin666.gh, 旧 id gh): 只有升级前装过才放行并启用, 删掉旧安装记录; 令牌与规则原样保留。
+ * - 待办 (hengxin666.todo): 没装过插件但用过待办接口 (库里有待办) 的, 放行并为主人启用, 免得升级后待办接口 404。
  */
 export function seedBuiltins(store: AllowStore, uid: string, now = Date.now(), old?: LegacyInstalls): boolean {
   const github = once(store, GITHUB_PLUGIN, true, githubManifest, uid, now);
   const hadGh = !!old?.has(GH_LEGACY_ID);
   const gh = once(store, GH_PLUGIN_ID, hadGh, ghManifest, uid, now);
   if (hadGh) old?.remove(GH_LEGACY_ID);
-  return github || gh;
+  const todo = once(store, TODO_PLUGIN, !!old?.hasTodos?.(), todoManifest, uid, now);
+  return github || gh || todo;
 }

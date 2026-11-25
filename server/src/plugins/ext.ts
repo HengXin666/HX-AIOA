@@ -17,7 +17,7 @@ import { baseOf } from "../api-chats";
 import { CODE_FORBIDDEN, DELETE, ERR_FORBIDDEN, GET, POST } from "../constants";
 import { type Handler, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
 import { githubOff } from "../github/gate";
-import { fail, json, readJson } from "../http";
+import { fail, json, readJson, pathParam } from "../http";
 import { mcp } from "./mcp";
 import { todosMarkdown } from "./todo-md";
 
@@ -26,7 +26,7 @@ const EXT_RATE = 60;
 // 不带 channel 时默认点子待办群
 export const DEFAULT_TODO_CHANNEL = pluginChannel(TODO_PLUGIN);
 
-const p = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
+const p = (c: ReqCtx, i: number) => pathParam(c.params, i);
 const infoOf = (k: KeyInfo): ExtKeyInfo => ({ id: k.id, name: k.name, access: k.ext!, prefix: k.prefix, created: k.created, ...(k.expires ? { expires: k.expires } : {}), ...(k.used ? { used: k.used } : {}) });
 
 /** 外部接入能碰的群: ext key 只有自己那个群; 主人用 ?channel= 指定。 */
@@ -45,8 +45,8 @@ function list(c: ReqCtx): Response {
 }
 
 async function create(c: ReqCtx): Promise<Response> {
-  const channel = p(c, 0);
   const b = (await readJson(c.req)) as { name?: unknown; access?: unknown; hours?: unknown } | undefined;
+  const channel = p(c, 0);
   const name = typeof b?.name === "string" && b.name.trim() ? b.name.trim().slice(0, 40) : "外部接入";
   const access: ExtAccess = (EXT_ACCESS as readonly unknown[]).includes(b?.access) ? (b!.access as ExtAccess) : "read";
   const hours = b?.hours === undefined ? EXT_TTL_HOURS : Number(b.hours);

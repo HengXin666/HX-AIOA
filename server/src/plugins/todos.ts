@@ -25,8 +25,8 @@ export function normTodo(prev: TodoBody | null, next: TodoBody, now = Date.now()
 const live = (it: PDataItem | null): TodoBody | null => (it && !it.deleted ? (it.body as TodoBody) : null);
 
 /**
- * 旧待办接口 (/chats/{群}/todos) 的转发层: 数据在 pdata (主人账号, hengxin666.todo, items),
- * 行 id 是 <群>:<待办 id>; 保留一个大版本, 之后删除。
+ * 旧待办接口 (/chats/{群}/todos) 的转发层: 数据在 pdata (调用者自己的账号, hengxin666.todo, items),
+ * 行 id 是 <群>:<待办 id>; 待办归个人, 子号写的是自己的, 默认主人。保留一个大版本, 之后删除。
  */
 export class TodoStore {
   private readonly pdata: PDataStore;
@@ -36,23 +36,22 @@ export class TodoStore {
     migrateTodo(sql, this.pdata, owner, tx);
   }
 
-  private rows(prefix: string) {
-    return this.pdata.withPrefix(this.owner(), TODO_PLUGIN, TODO_COLL, prefix);
+  private rows(prefix: string, acct = this.owner()) {
+    return this.pdata.withPrefix(acct, TODO_PLUGIN, TODO_COLL, prefix);
   }
 
-  list(grp: string): TodoItem[] {
-    return this.rows(`${grp}:`).flatMap((it) => todoOf(it, grp) ?? []);
+  list(grp: string, acct = this.owner()): TodoItem[] {
+    return this.rows(`${grp}:`, acct).flatMap((it) => todoOf(it, grp) ?? []);
   }
 
-  get(grp: string, id: string): TodoItem | null {
-    const it = this.pdata.get(this.owner(), TODO_PLUGIN, TODO_COLL, todoRowId(grp, id));
+  get(grp: string, id: string, acct = this.owner()): TodoItem | null {
+    const it = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, todoRowId(grp, id));
     return it ? todoOf(it, grp) : null;
   }
 
   /** 按 id 合并; 返回错误文字或改后的条目, 内容没变的不写库。 */
-  upsert(grp: string, inputs: TodoInput[], now = Date.now()): TodoWrite | string {
-    const acct = this.owner();
-    const have = new Set(this.list(grp).map((t) => t.id));
+  upsert(grp: string, inputs: TodoInput[], now = Date.now(), acct = this.owner()): TodoWrite | string {
+    const have = new Set(this.list(grp, acct).map((t) => t.id));
     const fresh = inputs.filter((i) => !have.has(i.id));
     if (have.size + fresh.length > MAX_TODOS) return `每个群最多 ${MAX_TODOS} 条待办, 先删掉一些已完成的`;
     if (fresh.some((i) => !i.title)) return "新增待办需要 title";
@@ -81,7 +80,7 @@ export class TodoStore {
     return out;
   }
 
-  /** 关联了 issue 的待办 (全部群); 总量有 2000 行的上限, 直接扫。 */
+  /** 关联了 issue 的待办 (主人账号的全部群, GitHub 授权只归主人); 总量有 2000 行的上限, 直接扫。 */
   linked(): TodoLinked[] {
     return this.rows("").flatMap((it) => {
       const b = it.body as TodoBody;
@@ -105,8 +104,7 @@ export class TodoStore {
   }
 
   /** 删除写墓碑, 新客户端按增量同步删掉本地副本; 返回 rev, 没有这条返回 0。 */
-  remove(grp: string, id: string): number {
-    const acct = this.owner();
+  remove(grp: string, id: string, acct = this.owner()): number {
     const rid = todoRowId(grp, id);
     const cur = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, rid);
     if (!cur || cur.deleted) return 0;

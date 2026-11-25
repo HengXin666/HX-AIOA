@@ -18,6 +18,8 @@ type IssueData = { state?: string; title?: string; comments?: { totalCount?: num
 
 let last = 0;
 
+export const SYNC_FAIL = "待办 issue 同步失败:";
+
 export function nextState(cur: TodoState, prev: TodoGh | undefined, gh: TodoGh): TodoState | undefined {
   if (gh.state === "closed") return cur === "done" || cur === "dropped" ? undefined : "done";
   if (cur === "done" && prev?.state === "closed") return gh.comments > 0 ? "doing" : "open";
@@ -107,7 +109,7 @@ export async function syncTodoIssues(core: Core, only?: Set<string>): Promise<nu
 export function maybeSync(core: Core): void {
   if (!ghOn(core) || !core.gh.auth() || Date.now() - last < SYNC_GAP) return;
   last = Date.now();
-  syncTodoIssues(core).catch((e) => console.error("待办 issue 同步失败:", e));
+  syncTodoIssues(core).catch((e) => console.error(SYNC_FAIL, e));
 }
 
 /** GitHub webhook 的 issues / issue_comment 事件: 只同步涉及的那一条。 */
@@ -117,5 +119,5 @@ export function onGithubHook(core: Core, kind: string, body: unknown): void {
   const repo = b.repository?.full_name;
   const n = b.issue?.number;
   if (!repo || !n) return;
-  syncTodoIssues(core, new Set([`${repo.toLowerCase()}#${n}`])).catch((e) => console.error("待办 issue 同步失败:", e));
+  syncTodoIssues(core, new Set([`${repo.toLowerCase()}#${n}`])).catch((e) => console.error(SYNC_FAIL, e));
 }

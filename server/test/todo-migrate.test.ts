@@ -127,3 +127,13 @@ test("市场里的清单与服务端的待办数据声明一致", () => {
   assert.ok(typeof m !== "string", String(m));
   for (const k of ["api", "engines", "permissions", "contributes", "budget"] as const) assert.deepEqual(m[k], TODO_V2[k], k);
 });
+
+test("待办归个人: 子号的待办与主人的分开存", () => {
+  const todos = new TodoStore(memSql(), () => OWNER, tx);
+  todos.upsert(CH, [{ id: "a", title: "主人的" }]);
+  todos.upsert(CH, [{ id: "a", title: "子号的" }], 1, "u_member");
+  assert.equal(todos.list(CH)[0]?.title, "主人的");
+  assert.equal(todos.list(CH, "u_member")[0]?.title, "子号的");
+  assert.ok(todos.remove(CH, "a", "u_member"));
+  assert.equal(todos.list(CH).length, 1, "删子号的不影响主人的");
+});

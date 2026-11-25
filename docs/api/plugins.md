@@ -55,23 +55,24 @@
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/pdata/{plugin}/{coll}?since=0&limit=200` | 增量: `{ items, rev, more }`, 按 `rev` 升序, 含墓碑 (`deleted: true`) |
+| GET | `/api/v1/pdata/{plugin}/{coll}?since=0&limit=200` | 增量: `{ items, rev, more, reset? }`, 按 `rev` 升序, 含墓碑 (`deleted: true`); `reset: true` 表示 since 早于回收或清除, 这一页从头给, 客户端先清空本地副本 |
 | GET | `/api/v1/pdata/{plugin}/{coll}/{id}` | 单行 |
 | PUT | `/api/v1/pdata/{plugin}/{coll}/{id}` | `{ "ver": 读到的版本 (新建为 0), "body": {...} }`; 版本不对返回 409 与 `current` |
 | DELETE | `/api/v1/pdata/{plugin}/{coll}/{id}?ver=3` | 写墓碑 |
 | POST | `/api/v1/pdata/{plugin}/{coll}` | 批量写 `{ "items": [{ "id", "ver", "body" }, { "id", "ver", "deleted": true }] }`, 一次最多 50 行, 每行独立生效; 返回 `{ items: [{ id, item? , conflict?, error? }], rev }`, 只推一次 `pdata_sync`。Agent 一轮整理多条只用一次请求 |
 
-- 谁能用: 主人与子号用自己账号下启用了的插件; 插件 Agent 的密钥落在主人账号, 能读写本插件的集合, 读别的插件要清单里有 `data:read:<插件>.<集合>`, 不能写别人的。
-- 校验: 声明了 `fields` 的集合只收声明过的字段且类型要对; 每行 16000 字以内; 每个 (账号, 插件) 最多 2000 行。
+- 谁能用: 主人与子号用自己账号下启用了的插件; 插件 Agent 的密钥落在主人账号, 能读写本插件的集合, 读别的插件要清单里有 `data:read:<插件>.<集合>`, 不能写别人的。待办集合按群限范围: 插件 Agent 只看得到, 写得了密钥白名单里的群的行 (墓碑照给, 只露 id), 越界单行写返回 403, 批量里那一行报错。
+- 校验: 声明了 `fields` 的集合只收声明过的字段且类型要对; 每行 16000 字以内; 每个 (账号, 插件) 最多 2000 行, 墓碑也算; 满了先回收最早的墓碑 (记进 `pdata_gc`), 没有墓碑可回收才拒绝。
 - 内容没变不写库也不推送; 新建一行约 3 行写入 (数据行, 主键, rev 索引), 改一行约 2 行, 计入每天 10 万行写入额度。rev 取 (账号, 插件) 当前最大 rev 加 1, 只在清除数据时把下限记进 `pdata_seq`。
 - 写入后推 `pdata_sync` 给该账号的界面连接 (见 `stream.md`)。
 
 ## 待办插件 (#101)
 
 - id `hengxin666.todo` (旧 id `todo` 在 `/plugins/{id}`, `/plugins/{id}/enabled`, `/plugin-allow/{id}` 路径里作别名); 群与工作台沿用 `plugin-todo`。
-- 数据: 主人账号下集合 `items`, 一行一条, id = `<群>:<待办 id>`, body `{ channel, title, note?, state, prio, src?, created, repo?, issue?, parent?, gh?, doneAt? }`, 更新时间用行的 `updated`。state 为 open / hold / doing / done (dropped 是旧数据)。除了集合声明的类型, 服务端还校验 state / prio / repo / issue / parent 取值与 id 前缀 (`checkTodoBody`)。`doneAt` (进入 done 的时间) 与 `gh` (GitHub 同步状态) 由服务端维护: 不管经旧接口还是 pdata 写, 都按上一版补齐, 客户端写的不算 (`normTodo`)。
-- 升级: Hub 唤醒时一次性把旧 `todo` 表搬进 pdata, 并把白名单, 启用, 单选, 安装记录, 群里 Agent 的 `plugin` 字段中的 `todo` 改成新 id; 白名单快照补上 v2 数据声明, 版本号不变, 管理员放行 2.0.0 后整份换掉。Agent 密钥照用, 专属指令的待办说明换成 pdata 接口 (版本变化会提示 Agent 重拉)。
-- 旧接口 `/api/v1/chats/{channel}/todos` 转发到 pdata (主人账号), 保留一个大版本后删除; 启用判断看调用者自己的账号 (子号要自己启用), 普通 Agent 的 key 算主人账号。写入同时推 `pdata_sync` 与旧客户端认的 `chat_sync` (`topic: todos`); 经 pdata 改主人的待办也会推 `chat_sync`。
+- 归属: 待办归个人, 谁启用的插件, 效果和数据就归谁 (特化插件除外)。主人和子号各存各的, 互不可见; 想让别人一起看, 把他拉进自己的待办群。
+- 数据: 每个账号下集合 `items`, 一行一条, id = `<群>:<待办 id>`, body `{ channel, title, note?, state, prio, src?, created, repo?, issue?, parent?, gh?, doneAt? }`, 更新时间用行的 `updated`。state 为 open / hold / doing / done (dropped 是旧数据)。除了集合声明的类型, 服务端还校验 state / prio / repo / issue / parent 取值与 id 前缀 (`checkTodoBody`)。`doneAt` (进入 done 的时间) 与 `gh` (GitHub 同步状态) 由服务端维护: 不管经旧接口还是 pdata 写, 都按上一版补齐, 客户端写的不算 (`normTodo`)。
+- 升级: Hub 唤醒时一次性把旧 `todo` 表搬进 pdata, 并把白名单, 启用, 单选, 安装记录, 群里 Agent 的 `plugin` 字段中的 `todo` 改成新 id; 白名单快照补上 v2 数据声明, 版本号不变, 管理员放行 2.0.0 后整份换掉。没装过插件但用过待办接口 (库里有待办) 的部署, 用打包的清单放行并为主人启用, 只做一次; 迁移拼出的清单没有工作台, 手动重新应用时保留原工作台。Agent 密钥照用, 专属指令的待办说明换成 pdata 接口 (版本变化会提示 Agent 重拉)。
+- 旧接口 `/api/v1/chats/{channel}/todos` 转发到 pdata, 保留一个大版本后删除; 启用判断与读写的数据都是调用者自己的账号 (子号要自己启用, 能看这个群就能改自己的待办), Agent 与外部接入的 key 由主人发放, 算主人账号。卸载 (停用) 待办后, 该账号的外部接入与 MCP 一起 404。关联 issue 的同步只跑主人的待办 (GitHub 授权归主人)。写入同时推 `pdata_sync` 与旧客户端认的 `chat_sync` (`topic: todos`); 经 pdata 改主人的待办也会推 `chat_sync`。
 - 回滚: 迁移不可逆 (旧表已删), 回滚旧版服务端会看到空的待办表; 需要回滚时先用 `GET /api/v1/pdata/hengxin666.todo/items` 导出。
 
 ## 事件与扩展点

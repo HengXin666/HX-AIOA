@@ -1,10 +1,10 @@
-import type { PluginManifest } from "@hx-aioa/protocol";
+import { TODO_PLUGIN, type PluginManifest } from "@hx-aioa/protocol";
 import { AllowStore, type AllowRow } from "./allow-store";
 import { SEED_BY, seedBuiltins } from "./builtins";
 import { PluginKernel } from "./kernel";
 import { PDataStore } from "./pdata";
 import { PluginStore } from "./store";
-import { asTodoV2 } from "./todo-migrate";
+import { OLD_TABLE, asTodoV2 } from "./todo-migrate";
 
 const LEGACY_README = "README.md";
 const LEGACY_PROMPT = "prompt.md";
@@ -28,10 +28,17 @@ export function legacySeed(store: PluginStore, uid: string): { rows: AllowRow[];
   return { rows, uid };
 }
 
+// 迁移前的旧表或迁移后的 pdata 里有待办; 只在一次性迁移时读
+function hasTodos(sql: SqlStorage): boolean {
+  const tables = new Set(sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map((r) => r.name));
+  if (tables.has(OLD_TABLE) && sql.exec(`SELECT 1 FROM ${OLD_TABLE} LIMIT 1`).toArray().length) return true;
+  return tables.has("pdata") && sql.exec("SELECT 1 FROM pdata WHERE plugin = ? LIMIT 1", TODO_PLUGIN).toArray().length > 0;
+}
+
 /** Hub 装配插件相关的三件: 安装记录, 内核 (带升级迁移种子), 插件数据。 */
 export function pluginParts(sql: SqlStorage, ownerId: () => string): { plugins: PluginStore; kernel: PluginKernel; pdata: PDataStore } {
   const plugins = new PluginStore(sql);
   const allow = new AllowStore(sql);
-  const kernel = new PluginKernel(allow, () => legacySeed(plugins, ownerId()), () => seedBuiltins(allow, ownerId(), Date.now(), { has: (id) => !!plugins.get(id), remove: (id) => plugins.remove(id) }));
+  const kernel = new PluginKernel(allow, () => legacySeed(plugins, ownerId()), () => seedBuiltins(allow, ownerId(), Date.now(), { has: (id) => !!plugins.get(id), remove: (id) => plugins.remove(id), hasTodos: () => hasTodos(sql) }));
   return { plugins, kernel, pdata: new PDataStore(sql) };
 }

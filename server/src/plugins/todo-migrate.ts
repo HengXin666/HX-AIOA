@@ -1,4 +1,5 @@
 import { TODO_COLL, TODO_LEGACY_ID, TODO_PLUGIN, TODO_V2, todoRowId, type TodoBody, type TodoItem } from "@hx-aioa/protocol";
+import { PLUGIN_FLAG_DDL } from "./allow-store";
 import type { AllowRow } from "./allow-store";
 import type { PDataStore } from "./pdata";
 
@@ -6,7 +7,7 @@ export type Tx = <T>(fn: () => T) => T;
 type Body = { body: string };
 type OldTodo = { grp: string; id: string; body: string };
 const FLAG = "todo-v2";
-const OLD_TABLE = "todo";
+export const OLD_TABLE = "todo";
 
 /** 旧 todo 快照补上 v2 数据声明 (集合 items, data:own), 版本号不变; 管理员放行新版后整份换掉。 */
 export function asTodoV2<T extends AllowRow["manifest"]>(m: T): T {
@@ -65,7 +66,7 @@ function moveData(sql: SqlStorage, pdata: PDataStore, owner: string): number {
  * 标记之后每次唤醒只多一次按主键的读。返回搬过来的条数。
  */
 export function migrateTodo(sql: SqlStorage, pdata: PDataStore, owner: () => string, tx: Tx): number {
-  sql.exec("CREATE TABLE IF NOT EXISTS plugin_flag (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+  sql.exec(PLUGIN_FLAG_DDL);
   if (sql.exec("SELECT v FROM plugin_flag WHERE k = ?", FLAG).toArray().length) return 0;
   return tx(() => {
     // 这些表由各自的 store 建, 装配顺序不同或全新部署时可能还没有

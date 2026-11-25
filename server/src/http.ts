@@ -43,3 +43,12 @@ export class ApiFail extends Error {
     super(text);
   }
 }
+
+/** 路径参数解码; 编码不合法时按 400 拒绝。 */
+export function pathParam(params: string[], i: number): string {
+  try {
+    return decodeURIComponent(params[i] ?? "");
+  } catch {
+    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
+  }
+}

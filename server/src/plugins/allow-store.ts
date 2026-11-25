@@ -1,6 +1,8 @@
 import type { PluginAllow, PluginManifest } from "@hx-aioa/protocol";
 
 // 放行时的快照: 清单与提示词模板都存下, 安装与更新只用快照, 不再看市场当前版本
+export const PLUGIN_FLAG_DDL = "CREATE TABLE IF NOT EXISTS plugin_flag (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+
 export type AllowRow = { meta: PluginAllow; manifest: PluginManifest; prompt: string };
 type Body = { body: string };
 const SEEDED = "seeded";
@@ -13,7 +15,7 @@ export class AllowStore {
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_allow (id TEXT PRIMARY KEY, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_enable (uid TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (uid, id))");
     sql.exec("CREATE TABLE IF NOT EXISTS plugin_choice (uid TEXT NOT NULL, point TEXT NOT NULL, plugin TEXT NOT NULL, PRIMARY KEY (uid, point))");
-    sql.exec("CREATE TABLE IF NOT EXISTS plugin_flag (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+    sql.exec(PLUGIN_FLAG_DDL);
   }
 
   /** 升级迁移是否做过; 白名单后来被清空也不再重做。 */

@@ -75,3 +75,12 @@ test("待办行: 关联字段校验, doneAt 与 gh 由服务端维护", () => {
   assert.deepEqual(item, { title: "t", state: "open", prio: 2, created: 1, repo: "o/r", issue: 3, gh, id: "a", updated: 9 });
   assert.equal(TODO_PLUGIN, "hengxin666.todo");
 });
+
+test("升级迁移: 没装待办插件但库里有待办, 放行并为主人启用; 没有待办不动", () => {
+  const a = new AllowStore(memSql());
+  const k = new PluginKernel(a, undefined, () => seedBuiltins(a, OWNER, 1, { ...legacy([]), hasTodos: () => true }));
+  assert.ok(k.isEnabled(OWNER, TODO_PLUGIN));
+  const b = new AllowStore(memSql());
+  const k2 = new PluginKernel(b, undefined, () => seedBuiltins(b, OWNER, 1, { ...legacy([]), hasTodos: () => false }));
+  assert.equal(k2.get(TODO_PLUGIN), undefined);
+});

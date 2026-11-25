@@ -3,7 +3,7 @@ import { cfUsage } from "./api-cf";
 import { messageInput } from "./api-events";
 import type { Core } from "./core";
 import { ghOn } from "./gh/gate";
-import { syncTodoIssues } from "./gh/todo-sync";
+import { syncTodoIssues, SYNC_FAIL } from "./gh/todo-sync";
 import { githubOn } from "./github/gate";
 
 const CF_SOURCE = "CF 额度";
@@ -29,7 +29,7 @@ async function cfCheck(core: Core, storage: DurableObjectStorage): Promise<void>
 export async function halfHourly(core: Core, storage: DurableObjectStorage): Promise<GithubSyncResult | null> {
   const env = core.env;
   const cf = env.CF_API_TOKEN && env.CF_ACCOUNT_ID ? cfCheck(core, storage).catch((e) => console.error("CF 额度检查失败:", e)) : null;
-  const todos = ghOn(core) ? syncTodoIssues(core).catch((e) => console.error("待办 issue 同步失败:", e)) : null;
+  const todos = ghOn(core) ? syncTodoIssues(core).catch((e) => console.error(SYNC_FAIL, e)) : null;
   const github = githubOn(core) && env.GITHUB_TOKEN ? core.github.sync().catch((e) => (console.error("GitHub 回填失败:", e), null)) : null;
   const [, , r] = await Promise.all([cf, todos, github]);
   return r ?? null;

@@ -74,9 +74,9 @@ function write(c: ReqCtx, channel: string, a: Record<string, unknown>, fresh: bo
 }
 
 export async function mcp(c: ReqCtx): Promise<Response> {
+  const rpc = (await readJson(c.req)) as Rpc | undefined;
   const channel = extChannel(c);
   if (!channel) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  const rpc = (await readJson(c.req)) as Rpc | undefined;
   if (!rpc || typeof rpc.method !== "string") return err(null, -32600, "不是 JSON-RPC 请求");
   // 通知没有 id, 不回内容
   if (rpc.id === undefined) return new Response(null, { status: 202 });

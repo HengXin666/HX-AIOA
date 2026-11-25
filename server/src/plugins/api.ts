@@ -17,20 +17,14 @@ import { agentBootstrap } from "../agent-prompt";
 import { baseOf, createAgent, dropAgent } from "../api-chats";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
 import { type Core, OWNER, type ReqCtx, type Route, route } from "../core";
-import { ApiFail, fail, json, readJson } from "../http";
+import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { TODO_ROUTES } from "./api-todos";
 import { usesGh } from "../gh/gate";
 import { renderTask } from "./store";
 import { pushPlugin } from "./notify";
 import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
 
-function param(c: ReqCtx, i: number): string {
-  try {
-    return decodeURIComponent(c.params[i] ?? "");
-  } catch {
-    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
-  }
-}
+const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 
 // 改过 id 的插件 (todo -> hengxin666.todo) 旧路径照常能用
@@ -122,10 +116,10 @@ async function update(c: ReqCtx): Promise<Response> {
 
 // 设置: 目前只有自动更新开关
 async function settings(c: ReqCtx): Promise<Response> {
+  const body = (await readJson(c.req)) as { auto?: unknown } | undefined;
   const id = pluginId(c);
   const rec = c.core.plugins.get(id);
   if (!rec) return notFound();
-  const body = (await readJson(c.req)) as { auto?: unknown } | undefined;
   if (typeof body?.auto !== "boolean") return fail(400, "需要 { \"auto\": true | false }");
   const next: PluginInstall = { ...rec, auto: body.auto };
   c.core.plugins.setInstall(next);

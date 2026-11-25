@@ -16,7 +16,7 @@ import {
 } from "@hx-aioa/protocol";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, POST, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
-import { ApiFail, fail, json, readJson } from "../http";
+import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { legacyTodoSync } from "./api-todos";
 import { pushPData } from "./notify";
 import { checkBody } from "./pdata";
@@ -26,13 +26,7 @@ import { acctOf, pluginOfKey } from "./who";
 // scope: 插件 Agent 的 key 只能碰自己白名单里的群的待办 (主人账号下各群共用一个集合); null 表示不限
 type Target = { acct: string; plugin: string; coll: Contribution; scope: string[] | null };
 
-function param(c: ReqCtx, i: number): string {
-  try {
-    return decodeURIComponent(c.params[i] ?? "");
-  } catch {
-    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
-  }
-}
+const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
 const deny = (text = ERR_FORBIDDEN) => new ApiFail(403, CODE_FORBIDDEN, text);
 const ID_ERR = "id 只能包含字母数字和 _ . : -, 最多 64 字";
 

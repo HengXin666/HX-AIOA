@@ -15,7 +15,7 @@ import {
 } from "@hx-aioa/protocol";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
-import { ApiFail, fail, json, readJson } from "../http";
+import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import type { AllowRow } from "./allow-store";
 import { purgeBuiltin } from "../github/gate";
 import { teardown } from "./api";
@@ -26,13 +26,7 @@ import { acctOf, isAdmin } from "./who";
 const CODE_PLUGIN_CONFLICT = "plugin_conflict";
 const QUERY_PURGE = "purge";
 
-function param(c: ReqCtx, i: number): string {
-  try {
-    return decodeURIComponent(c.params[i] ?? "");
-  } catch {
-    throw new ApiFail(400, CODE_BAD_REQUEST, "路径参数编码不合法");
-  }
-}
+const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
 
 function pluginParam(c: ReqCtx): string {
   const id = resolvePluginId(param(c, 0));
@@ -68,9 +62,10 @@ function badDefault(m: PluginManifest, d: string): boolean {
 }
 
 async function putAllow(c: ReqCtx): Promise<Response> {
+  // 先读完请求体再判断, 提前拒绝时留着没读的流会卡住同一连接的下一个请求
+  const body = ((await readJson(c.req)) ?? {}) as PluginAllowInput;
   const by = admin(c);
   const id = pluginParam(c);
-  const body = ((await readJson(c.req)) ?? {}) as PluginAllowInput;
   // 放行是管理员主动操作, 绕过市场缓存
   const manifest = await c.core.market.manifest(id, true);
   if (body.version && body.version !== manifest.version) return fail(409, `市场当前是 ${manifest.version}, 只能放行这个版本`, CODE_CONFLICT);
@@ -123,9 +118,9 @@ async function disable(c: ReqCtx): Promise<Response> {
 }
 
 async function choose(c: ReqCtx): Promise<Response> {
+  const body = (await readJson(c.req)) as { plugin?: unknown } | undefined;
   const uid = acct(c);
   const point = param(c, 0);
-  const body = (await readJson(c.req)) as { plugin?: unknown } | undefined;
   const plugin = typeof body?.plugin === "string" ? body.plugin : null;
   const err = c.core.kernel.choose(uid, point, plugin);
   if (err) return fail(400, err);
