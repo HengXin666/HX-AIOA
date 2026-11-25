@@ -42,6 +42,8 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     androidx.compose.runtime.LaunchedEffect(chat.groups.pendingInvite) { if (chat.groups.pendingInvite != null) tab = Tab.CHAT }
     // 从 GitHub 空状态跳来时直接进数据源页
     var meStart by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
+    // 跳进 "我的" 子页之前所在的栏 (GitHub 页叠在它上面); 子页返回时回到这里, 而不是 "我的" 列表
+    var meFrom by rememberSaveable { mutableStateOf<String?>(null) }
     // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏
     var github by rememberSaveable { mutableStateOf<String?>(null) }
     val openGithub = { github = "" }
@@ -51,7 +53,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
-        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; meFrom = null; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
             val gh = github
             if (gh != null) KeepState("gh:$gh") {
                 if (gh == GH_PICK) {
@@ -60,6 +62,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                     GithubPage(chat.github, { github = null }, { github = it }, { github = GH_PICK }) {
                         github = null
                         chat.sources.startAdd(Constants.SOURCE_GITHUB)
+                        meFrom = tab.name
                         meStart = SettingsPage.SOURCES
                         tab = Tab.ME
                     }
@@ -73,7 +76,14 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                 Tab.AGENT -> AgentPage(chat)
                 Tab.RESOURCES -> MetricsPage(chat, openGithub)
                 // "我的" 的子页自己处理返回键, 逐级回到列表
-                Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart)
+                Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart, meFrom?.let { from ->
+                    {
+                        meFrom = null
+                        meStart = SettingsPage.ROOT
+                        tab = Tab.valueOf(from)
+                        github = ""
+                    }
+                })
             }
             }
         }

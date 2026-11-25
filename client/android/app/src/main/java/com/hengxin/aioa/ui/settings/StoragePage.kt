@@ -1,0 +1,153 @@
+package com.hengxin.aioa.ui.settings
+
+import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.Chip
+import com.hengxin.aioa.kit.Text
+import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.ui.chat.FileTransfer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+private const val FILES_API = "api/v1/files"
+private const val SETTINGS_API = "api/v1/settings"
+private const val KEY_STORAGE = "storage"
+private const val STORE_R2 = "r2"
+private const val STORE_CFD = "cfd"
+private const val OFF = "off"
+private const val LABEL_SP = 14
+private const val MB = 1024L * 1024
+private val THRESHOLDS = listOf(5L, 10L, 20L, 50L, 95L)
+private val STORE_LABELS = listOf(STORE_R2 to "R2", STORE_CFD to "Drive")
+
+/**
+ * 存储: 主人看各后端用量并改存储路由 (只影响之后上传的文件, 已有文件留在原后端);
+ * 所有人都能看和清理本机的附件缓存。头像等不走文件后端, 不在这里。
+ */
+@Composable
+fun StoragePage(owner: Boolean, onBack: (() -> Unit)?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var reload by remember { mutableIntStateOf(0) }
+    var cache by remember { mutableLongStateOf(-1L) }
+    var error by remember { mutableStateOf("") }
+    var clearing by remember { mutableStateOf(false) }
+    LaunchedEffect(reload) { cache = withContext(Dispatchers.IO) { FileTransfer.cacheBytes(context) } }
+    SettingsPageFrame(SettingsPage.STORAGE.title, onBack) {
+        if (owner) {
+            val usage = rememberCached("files:usage", FILES_API, reload = reload)
+            val body = usage.body
+            if (body == null) {
+                SettingsGroup { NoteRow(usage.error.ifEmpty { "加载中..." }) }
+            } else {
+                UsageGroup(body)
+                RouteGroup(body) { patch ->
+                    scope.launch {
+                        error = withContext(Dispatchers.IO) { saveRoute(context, patch) }
+                        reload++
+                    }
+                }
+            }
+            if (error.isNotEmpty()) SettingsGroup { NoteRow(error, Aioa.colors.danger) }
+        }
+        SettingsGroup("本机", "下载过的附件存在本机, 同一个文件只下一次; 清理后再打开会重新下载。") {
+            InfoRow("附件缓存", if (cache < 0) "计算中..." else FileTransfer.sizeText(cache))
+            RowDivider(false)
+            ActionRow("清理附件缓存", "trash-2", danger = true, enabled = cache > 0) { clearing = true }
+        }
+    }
+    if (clearing) {
+        AlertDialog(
+            onDismissRequest = { clearing = false },
+            title = { androidx.compose.material3.Text("清理附件缓存?") },
+            text = { androidx.compose.material3.Text("只删本机副本, 服务端的文件和消息不受影响。") },
+            confirmButton = {
+                TextButton({
+                    clearing = false
+                    scope.launch {
+                        withContext(Dispatchers.IO) { FileTransfer.clearCache(context) }
+                        reload++
+                    }
+                }) { androidx.compose.material3.Text("清理", color = Aioa.colors.danger) }
+            },
+            dismissButton = { TextButton({ clearing = false }) { androidx.compose.material3.Text("取消") } },
+        )
+    }
+}
+
+@Composable
+private fun UsageGroup(body: JSONObject) {
+    val by = body.optJSONObject("byStore")
+    val ready = body.optJSONObject("ready")
+    val r2 = by?.optJSONObject(STORE_R2)
+    val cfd = by?.optJSONObject(STORE_CFD)
+    val limit = body.optLong("limit")
+    SettingsGroup("用量") {
+        InfoRow(
+            "R2",
+            if (ready?.optBoolean(STORE_R2) == true) "${FileTransfer.sizeText(r2?.optLong("bytes") ?: 0)} / ${FileTransfer.sizeText(limit)} · ${r2?.optInt("count") ?: 0} 个" else "未绑定",
+        )
+        RowDivider(false)
+        InfoRow(
+            "Drive (TG)",
+            if (ready?.optBoolean(STORE_CFD) == true) "${FileTransfer.sizeText(cfd?.optLong("bytes") ?: 0)} · ${cfd?.optInt("count") ?: 0} 个" else "未接入",
+        )
+    }
+}
+
+/** 路由: 小文件, 大文件各选一个后端, 阈值, R2 满了怎么办。没绑定的后端不可选, 由服务端最终校验。 */
+@Composable
+private fun RouteGroup(body: JSONObject, save: (JSONObject) -> Unit) {
+    val s = body.optJSONObject(KEY_STORAGE) ?: JSONObject()
+    val ready = body.optJSONObject("ready")
+    val can = { k: String -> ready?.optBoolean(k) == true }
+    val threshold = s.optLong("threshold") / MB
+    SettingsGroup("存储路由", "只影响之后上传的文件; 已有文件留在原后端, 已发的消息照常能下载。") {
+        OptionRow("${threshold} MB 以内", STORE_LABELS.filter { can(it.first) }, s.optString("small")) { save(JSONObject().put("small", it)) }
+        RowDivider(false)
+        OptionRow("超过 ${threshold} MB", STORE_LABELS.filter { can(it.first) } + (OFF to "不收"), s.optString("large")) { save(JSONObject().put("large", it)) }
+        RowDivider(false)
+        OptionRow("分界", THRESHOLDS.map { "${it * MB}" to "$it MB" }, "${s.optLong("threshold")}") { save(JSONObject().put("threshold", it.toLong())) }
+        if (can(STORE_CFD)) {
+            RowDivider(false)
+            SwitchRow("R2 满了改走 Drive", s.optString("onFull") == STORE_CFD, "关闭时 R2 满了拒收新文件") {
+                save(JSONObject().put("onFull", if (it) STORE_CFD else "reject"))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionRow(title: String, options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, Aioa.colors.text, LABEL_SP)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, label) -> Chip(label, value == selected) { if (value != selected) onPick(value) } }
+        }
+    }
+}
+
+/** 改存储路由; 返回错误原因, 成功为空。 */
+private fun saveRoute(context: Context, patch: JSONObject): String =
+    Api.call(context, "PATCH", listOf(SETTINGS_API), JSONObject().put(KEY_STORAGE, patch)).error.orEmpty()

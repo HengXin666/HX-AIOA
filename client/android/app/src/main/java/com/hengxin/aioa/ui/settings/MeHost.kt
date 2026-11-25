@@ -25,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.config.AppearancePrefs
+import androidx.compose.ui.platform.LocalContext
+import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.ui.ChatModel
 import com.hengxin.aioa.ui.SettingsModel
@@ -48,12 +50,16 @@ class MeDeps(
     val openWorkspace: () -> Unit,
 )
 
-/** "我的" 导航: 手机单栏, 子页从右滑入, 返回键回到列表; 宽屏左列表右详情。 */
+/**
+ * "我的" 导航: 手机单栏, 子页从右滑入; 宽屏左列表右详情。
+ * 返回: 从别的栏直接跳进来的子页 (onLeave 不为空), 返回回到来源; 其余子页回到列表。
+ * 宽屏列表一直在, 返回不再把右侧换成 "关于" (看起来像没反应), 交给外层 (回总览或退出)。
+ */
 @Composable
-fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
+fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT, onLeave: (() -> Unit)? = null) {
     var page by rememberSaveable(initial) { mutableStateOf(initial) }
-    val toRoot = { page = SettingsPage.ROOT }
-    BackHandler(enabled = page != SettingsPage.ROOT, onBack = toRoot)
+    val entered = onLeave != null && initial != SettingsPage.ROOT
+    val back: () -> Unit = { if (entered && page == initial) onLeave?.invoke() else page = SettingsPage.ROOT }
     val chat = deps.chat
     val summary = MeSummary(
         online = chat.online,
@@ -62,14 +68,16 @@ fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
         mode = deps.prefs.mode,
     )
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth >= TWO_PANE_MIN) {
+        val wide = maxWidth >= TWO_PANE_MIN
+        BackHandler(enabled = if (wide) entered && page == initial else page != SettingsPage.ROOT, onBack = back)
+        if (wide) {
             // 宽屏默认展示 "关于", 不创建 SettingsModel
             val detail = if (page == SettingsPage.ROOT) SettingsPage.ABOUT else page
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.width(LIST_PANE).fillMaxHeight()) { KeepState("me:root") { MeRoot(summary, detail, { page = it }, deps.openWorkspace) } }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(Aioa.colors.border))
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    Crossfade(detail, animationSpec = tween(FADE_MS)) { KeepState("me:${it.name}") { Detail(it, deps, null, toRoot) } }
+                    Crossfade(detail, animationSpec = tween(FADE_MS)) { KeepState("me:${it.name}") { Detail(it, deps, if (entered && it == initial) back else null, back) } }
                 }
             }
         } else {
@@ -83,7 +91,7 @@ fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT) {
                 label = "me",
             ) { p ->
                 KeepState("me:${p.name}") {
-                    if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace) else Detail(p, deps, toRoot, toRoot)
+                    if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace) else Detail(p, deps, back, back)
                 }
             }
         }
@@ -108,6 +116,7 @@ private fun Detail(p: SettingsPage, deps: MeDeps, onBack: (() -> Unit)?, toRoot:
         SettingsPage.APPEARANCE -> AppearancePage(deps.prefs, deps.setPrefs, onBack)
         SettingsPage.SYSTEM -> SystemPage(deps.actions, onBack)
         SettingsPage.CF_USAGE -> CfUsagePage(onBack)
+        SettingsPage.STORAGE -> StoragePage(Auth.load(LocalContext.current)?.role == ROLE_OWNER, onBack)
         SettingsPage.UPDATE -> UpdatePage(deps.settings(), deps.onNotes, onBack)
         SettingsPage.ABOUT -> AboutPage(onBack)
     }

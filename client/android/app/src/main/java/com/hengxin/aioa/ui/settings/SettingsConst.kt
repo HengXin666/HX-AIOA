@@ -12,8 +12,10 @@ const val TEXT_DIRECT = "直连"
 const val TEXT_STATUS = "状态"
 const val TEXT_ALLOWED = "已允许"
 const val TEXT_NOT_ALLOWED = "未允许"
+const val ROLE_OWNER = "owner"
+const val ROLE_ADMIN = "admin"
 
-/** "我的" 下的页面; ROOT 是分组列表, 其余每项一个独立子页, 父页都是 ROOT。 */
+/** "我的" 下的页面; ROOT 是分组列表, 其余每项一个独立子页, 父页都是 ROOT (从别的栏直接跳进来的, 返回回到来源栏)。 */
 enum class SettingsPage(val title: String, val icon: String) {
     ROOT("我的", "user"),
     ACCOUNT("账号", "user"),
@@ -28,6 +30,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     APPEARANCE("外观", "palette"),
     SYSTEM("系统权限", "shield-check"),
     CF_USAGE("CF 总览", "gauge"),
+    STORAGE("存储", "hard-drive"),
     UPDATE("更新", ICON_REFRESH),
     ABOUT("关于", "bot"),
 }

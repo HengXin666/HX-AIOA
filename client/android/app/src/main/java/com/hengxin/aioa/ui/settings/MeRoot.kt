@@ -88,6 +88,12 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
     SettingsPageFrame(SettingsPage.ROOT.title, null) {
         val who = account?.let { it.display.ifEmpty { it.name } }
         AccountCard(who, host, summary.online, selected == SettingsPage.ACCOUNT) { open(SettingsPage.ACCOUNT) }
+        // 分组按 "多常用" 排: 常用 → 数据 → 存储 → 连接 → 管理 (只有主人 / 管理员) → 系统; 账号由顶部卡片进入
+        SettingsGroup("常用") {
+            PageRow(SettingsPage.NOTIFY, if (notify) TEXT_ON else TEXT_OFF, selected, open)
+            RowDivider()
+            PageRow(SettingsPage.APPEARANCE, summary.mode.label, selected, open)
+        }
         SettingsGroup("数据") {
             PageRow(SettingsPage.SOURCES, summary.sources?.let { "$it 个" }.orEmpty(), selected, open)
             RowDivider()
@@ -96,29 +102,30 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
             PageRow(SettingsPage.PLUGINS, "", selected, open)
             RowDivider()
             NavRow(WORKSPACE_ICON, WORKSPACE_TITLE, if (summary.spaces > 0) "${summary.spaces} 个" else "未下发", onClick = openWorkspace)
+            RowDivider()
+            PageRow(SettingsPage.STORAGE, if (account?.role == ROLE_OWNER) "用量与路由" else "本机缓存", selected, open)
         }
         SettingsGroup("连接") {
-            PageRow(SettingsPage.ACCOUNT, account?.let { it.display.ifEmpty { it.name } } ?: "未登录", selected, open)
-            if (account?.role == "owner" || account?.role == "admin") {
-                RowDivider()
-                PageRow(SettingsPage.MEMBERS, "", selected, open)
-            }
-            RowDivider()
             PageRow(SettingsPage.SERVER, host.ifEmpty { "未配置" }, selected, open)
             RowDivider()
             PageRow(SettingsPage.PROXY, if (config?.proxyEnabled == true) "订阅" else TEXT_DIRECT, selected, open)
             RowDivider()
             PageRow(SettingsPage.LINK_LOG, "", selected, open)
         }
-        SettingsGroup("通知") { PageRow(SettingsPage.NOTIFY, if (notify) TEXT_ON else TEXT_OFF, selected, open) }
-        SettingsGroup("外观") { PageRow(SettingsPage.APPEARANCE, summary.mode.label, selected, open) }
+        if (account?.role == ROLE_OWNER || account?.role == ROLE_ADMIN) {
+            SettingsGroup("管理") {
+                PageRow(SettingsPage.MEMBERS, "", selected, open)
+                RowDivider()
+                PageRow(SettingsPage.CF_USAGE, "", selected, open)
+            }
+        }
         SettingsGroup("系统") {
             PageRow(SettingsPage.SYSTEM, if (battery) "已加白名单" else "待设置", selected, open)
             RowDivider()
             PageRow(SettingsPage.UPDATE, version, selected, open)
-
+            RowDivider()
+            PageRow(SettingsPage.ABOUT, "", selected, open)
         }
-        SettingsGroup { PageRow(SettingsPage.ABOUT, "", selected, open) }
     }
 }
 

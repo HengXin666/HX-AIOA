@@ -19,12 +19,16 @@ import okio.BufferedSink
 import org.json.JSONObject
 import java.io.File
 
-/** 文件上传下载: 先向服务端登记 / 换地址, 字节直接走 R2; 下载过的文件留在本机, 同一个文件只下载一次。 */
+/** 文件上传下载: 先向服务端登记 / 换地址, 字节直接走存储后端 (R2 或 HX-CF-Drive, 由服务端决定); 下载过的文件留在本机, 同一个文件只下载一次。 */
 object FileTransfer {
     private const val FILES_API = "api/v1/files"
     private const val LINK = "link"
     private const val DIR = "att"
     private const val CHUNK = 64 * 1024
+    private const val HTTP_PARTIAL = 206
+    private const val HTTP_RANGE_BAD = 416
+    private const val MAX_STALLS = 3
+    private val RELINK_CODES = setOf(403, 404, 410)
     private const val DEFAULT_MIME = "application/octet-stream"
     private val UNSAFE = Regex("[\\\\/:*?\"<>|]")
 
@@ -63,34 +67,80 @@ object FileTransfer {
         }
     }
 
-    /** 换下载地址并下到本机; 已经有了直接返回。 */
+    /**
+     * 换下载地址并下到本机; 已经有了直接返回。
+     * - 断点续传: 上次没下完的 .part 留着, 这次带 Range 从断点接着下; 服务器回 200 (不支持 Range) 就从头写。
+     * - 一次响应没给全 (Drive 单次最多回一段, 206 截断) 时接着用 Range 拉剩下的。
+     * - 地址失效 (过期, 文件被迁到别的后端): 403 / 404 / 410 时重新换一次地址再下, 只重试一次。
+     */
     suspend fun download(context: Context, f: FileRef, progress: (Float) -> Unit): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
             cached(context, f)?.let { return@runCatching it }
-            val r = Api.call(context, "GET", listOf(FILES_API, f.id, LINK))
-            val url = r.body?.optString("url")?.ifEmpty { null } ?: error(r.error ?: "文件不存在或已删除")
             val out = target(context, f)
             out.parentFile?.mkdirs()
             val tmp = File(out.path + ".part")
-            Net.client(context).newCall(Request.Builder().url(absolute(context, url)).build()).execute().use { res ->
-                if (!res.isSuccessful) error(errorOf(res.body?.string(), res.code))
-                val total = res.body?.contentLength()?.takeIf { it > 0 } ?: f.size
-                res.body!!.byteStream().use { input ->
-                    tmp.outputStream().use { o ->
-                        val buf = ByteArray(CHUNK)
-                        var done = 0L
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            o.write(buf, 0, n)
-                            done += n
-                            progress(done.toFloat() / total)
-                        }
+            if (tmp.length() > f.size) tmp.delete()
+            var relinked = false
+            var url = link(context, f)
+            var stalls = 0
+            while (tmp.length() < f.size) {
+                val before = tmp.length()
+                try {
+                    fetchRange(context, url, tmp, f.size, progress)
+                } catch (e: LinkGone) {
+                    if (relinked) throw e
+                    relinked = true
+                    url = link(context, f)
+                    continue
+                }
+                if (tmp.length() == before && ++stalls >= MAX_STALLS) error("下载没有进展, 稍后再试")
+            }
+            if (tmp.length() != f.size) error("下载的大小不对")
+            if (!tmp.renameTo(out)) error("保存失败")
+            out
+        }
+    }
+
+    /** 本机附件缓存占用的字节数。 */
+    fun cacheBytes(context: Context): Long = File(context.filesDir, DIR).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+
+    /** 删掉本机所有下载过的附件 (含没下完的), 服务端不受影响。 */
+    fun clearCache(context: Context) {
+        File(context.filesDir, DIR).deleteRecursively()
+    }
+
+    private class LinkGone(message: String) : Exception(message)
+
+    private fun link(context: Context, f: FileRef): String {
+        val r = Api.call(context, "GET", listOf(FILES_API, f.id, LINK))
+        return absolute(context, r.body?.optString("url")?.ifEmpty { null } ?: error(r.error ?: "文件不存在或已删除"))
+    }
+
+    /** 从 tmp 现有长度接着下一段, 追加写入; 地址失效抛 LinkGone。 */
+    private fun fetchRange(context: Context, url: String, tmp: File, size: Long, progress: (Float) -> Unit) {
+        val have = tmp.length()
+        val req = Request.Builder().url(url).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
+        Net.client(context).newCall(req).execute().use { res ->
+            if (res.code in RELINK_CODES) throw LinkGone(errorOf(res.body?.string(), res.code))
+            if (res.code == HTTP_RANGE_BAD) {
+                tmp.delete()
+                return
+            }
+            if (!res.isSuccessful) error(errorOf(res.body?.string(), res.code))
+            val append = res.code == HTTP_PARTIAL && have > 0
+            var done = if (append) have else 0L
+            res.body!!.byteStream().use { input ->
+                java.io.FileOutputStream(tmp, append).use { o ->
+                    val buf = ByteArray(CHUNK)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        o.write(buf, 0, n)
+                        done += n
+                        progress(done.toFloat() / size)
                     }
                 }
             }
-            if (!tmp.renameTo(out)) error("保存失败")
-            out
         }
     }
 
