@@ -30,7 +30,8 @@ export function canWriteTodos(core: Core, who: Principal, channel: string): bool
 }
 
 // 按调用者自己的账号判断是否启用 (之前误查主人的); 普通 Agent 的 key 由主人发放, 算主人账号
-const todoOff = (c: ReqCtx) => !c.core.kernel.isEnabled(acctOf(c.core, c.who) ?? c.core.users.ownerId(), TODO_PLUGIN);
+// key (群 Agent, 插件 Agent, 外部接入) 都由主人发放, 直接按主人判断, 不用查是哪个插件的
+const todoOff = (c: ReqCtx) => !c.core.kernel.isEnabled(c.who.owner || c.who.member ? (acctOf(c.core, c.who) ?? c.core.users.ownerId()) : c.core.users.ownerId(), TODO_PLUGIN);
 
 /** 旧客户端只认 chat_sync: 收到后重拉该群待办。 */
 export function legacyTodoSync(core: Core, channel: string): void {

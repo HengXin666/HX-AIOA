@@ -7,6 +7,7 @@ import {
   PERM_READ_PREFIX,
   TODO_PLUGIN,
   checkTodoBody,
+  globMatch,
   type Contribution,
   type PDataBatch,
   type PDataBatchResult,
@@ -22,7 +23,8 @@ import { checkBody } from "./pdata";
 import { normTodo } from "./todos";
 import { acctOf, pluginOfKey } from "./who";
 
-type Target = { acct: string; plugin: string; coll: Contribution };
+// scope: 插件 Agent 的 key 只能碰自己白名单里的群的待办 (主人账号下各群共用一个集合); null 表示不限
+type Target = { acct: string; plugin: string; coll: Contribution; scope: string[] | null };
 
 function param(c: ReqCtx, i: number): string {
   try {
@@ -54,7 +56,8 @@ function target(c: ReqCtx, write: boolean): Target {
     const perms = k.get(caller)?.manifest.permissions ?? [];
     if (write || !perms.includes(`${PERM_READ_PREFIX}${plugin}.${name}`)) throw deny(`插件 ${caller} 不能${write ? "写" : "读"} ${plugin}.${name}`);
   }
-  return { acct, plugin, coll };
+  const keyed = !(c.who.owner || c.who.member);
+  return { acct, plugin, coll, scope: keyed && plugin === TODO_PLUGIN && !c.who.owner ? c.who.key.channels : null };
 }
 
 function itemId(c: ReqCtx): string {
@@ -75,25 +78,38 @@ function touched(c: ReqCtx, t: Target, rev: number, channels: (string | undefine
   if (t.plugin !== TODO_PLUGIN || t.acct !== c.core.users.ownerId()) return;
   for (const ch of new Set(channels)) if (ch) legacyTodoSync(c.core, ch);
 }
+// 写之前: 新内容 (有的话) 与库里现有的行都要在范围内, 免得把别的群的待办改到本群或反过来
+function scoped(c: ReqCtx, t: Target, id: string, next?: unknown): boolean {
+  if (!t.scope) return true;
+  if (next !== undefined && !inScope(t, next)) return false;
+  const prev = c.core.pdata.get(t.acct, t.plugin, t.coll.id, id);
+  return !prev || !!prev.deleted || inScope(t, prev.body);
+}
+
 // 待办的 doneAt 与 gh 由服务端维护 (见 normTodo), 其他插件原样写
 function fixBody(c: ReqCtx, t: Target, id: string, body: unknown): unknown {
   if (t.plugin !== TODO_PLUGIN) return body;
   const prev = c.core.pdata.get(t.acct, t.plugin, t.coll.id, id);
   return normTodo(prev && !prev.deleted ? (prev.body as TodoBody) : null, body as TodoBody);
 }
+// 行所在的群是否在 key 的白名单里; 不是待办或不限范围时恒为真
+const inScope = (t: Target, body: unknown): boolean => !t.scope || (t.scope as string[]).some((p) => globMatch(p, channelOf(body) ?? ""));
+const outOfScope = () => new ApiFail(403, CODE_FORBIDDEN, "只能读写本群的待办");
 const channelOf = (body: unknown) => (body as Partial<TodoBody> | null | undefined)?.channel;
 
 function list(c: ReqCtx): Response {
   const t = target(c, false);
   const since = Math.max(0, Number(c.url.searchParams.get("since") ?? 0) || 0);
   const limit = Number(c.url.searchParams.get("limit") ?? 0) || undefined;
-  return json(c.core.pdata.list(t.acct, t.plugin, t.coll.id, since, limit));
+  const page = c.core.pdata.list(t.acct, t.plugin, t.coll.id, since, limit);
+  // 墓碑没有 body, 照常给 (只透露 id); 其余按群过滤, rev 与 more 不变
+  return json(t.scope ? { ...page, items: page.items.filter((i) => i.deleted || inScope(t, i.body)) } : page);
 }
 
 function getOne(c: ReqCtx): Response {
   const t = target(c, false);
   const item = c.core.pdata.get(t.acct, t.plugin, t.coll.id, itemId(c));
-  return item ? json({ item }) : fail(404, "没有这一行", CODE_NOT_FOUND);
+  return item && (item.deleted || inScope(t, item.body)) ? json({ item }) : fail(404, "没有这一行", CODE_NOT_FOUND);
 }
 
 async function put(c: ReqCtx): Promise<Response> {
@@ -103,6 +119,7 @@ async function put(c: ReqCtx): Promise<Response> {
   if (!body || !Number.isInteger(body.ver) || (body.ver as number) < 0) return fail(400, "需要 { \"ver\": 读到的版本 (新建为 0), \"body\": {...} }");
   const err = bodyError(t, id, body.body);
   if (err) return fail(400, err);
+  if (!scoped(c, t, id, body.body)) throw outOfScope();
   const r = c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, body.ver as number, fixBody(c, t, id, body.body));
   if ("error" in r) return fail(400, r.error);
   if ("conflict" in r) return fail(409, "版本不对, 先重新读再改", CODE_CONFLICT, { current: r.conflict });
@@ -116,6 +133,7 @@ function remove(c: ReqCtx): Response {
   const ver = Number(c.url.searchParams.get("ver"));
   if (!Number.isInteger(ver) || ver < 1) return fail(400, "删除需要 ?ver=读到的版本");
   const id = itemId(c);
+  if (!scoped(c, t, id)) throw outOfScope();
   const was = channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body);
   const r = c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver);
   if ("conflict" in r) return fail(409, "版本不对, 先重新读再删", CODE_CONFLICT, { current: r.conflict });
@@ -134,7 +152,7 @@ async function batch(c: ReqCtx): Promise<Response> {
   for (const row of rows) {
     const id = typeof row?.id === "string" ? row.id : "";
     const ver = row?.ver as number;
-    const err = !PDATA_ID_RE.test(id) ? ID_ERR : !Number.isInteger(ver) || ver < 0 ? "ver 必须是读到的版本 (新建为 0)" : row.deleted === true ? null : bodyError(t, id, row.body);
+    const err = !PDATA_ID_RE.test(id) ? ID_ERR : !Number.isInteger(ver) || ver < 0 ? "ver 必须是读到的版本 (新建为 0)" : (row.deleted === true ? null : bodyError(t, id, row.body)) ?? (scoped(c, t, id, row.deleted === true ? undefined : row.body) ? null : "只能读写本群的待办");
     if (err) {
       out.items.push({ id, error: err });
       continue;

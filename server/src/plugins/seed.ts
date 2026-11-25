@@ -1,6 +1,6 @@
 import type { PluginManifest } from "@hx-aioa/protocol";
 import { AllowStore, type AllowRow } from "./allow-store";
-import { seedBuiltins } from "./builtins";
+import { SEED_BY, seedBuiltins } from "./builtins";
 import { PluginKernel } from "./kernel";
 import { PDataStore } from "./pdata";
 import { PluginStore } from "./store";
@@ -8,7 +8,6 @@ import { asTodoV2 } from "./todo-migrate";
 
 const LEGACY_README = "README.md";
 const LEGACY_PROMPT = "prompt.md";
-const SEED_BY = "升级迁移";
 
 /** 升级前已安装的插件: 用安装时存下的模板拼最小清单 (api 1), 放进白名单并为主人启用。 */
 export function legacySeed(store: PluginStore, uid: string): { rows: AllowRow[]; uid: string } {

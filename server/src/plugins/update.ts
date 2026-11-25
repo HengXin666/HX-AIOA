@@ -1,4 +1,5 @@
 import { PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, pluginSpaceId, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
+import { SEED_BY } from "./builtins";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
@@ -38,9 +39,11 @@ export async function upgrade(core: Core, id: string): Promise<PluginInstall> {
     if (space && !core.plugins.get(id) && (await core.spaces.remove(space))) core.sockets.toV1Clients({ t: "space_update", id: space, deleted: true });
     throw new ApiFail(409, CODE_CONFLICT, `插件 ${id} 在更新期间被撤销或换了版本`);
   }
-  if (rec.space && !space && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
+  // 升级迁移拼出的清单不带工作台布局: 这时留着原来的工作台, 不当作新版去掉了它
+  const keep = !m.space && core.kernel.get(id)?.meta.by === SEED_BY ? rec.space : undefined;
+  if (rec.space && !space && !keep && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   const { space: _old, ...rest } = rec;
-  const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...(space ? { space } : {}) };
+  const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...((space ?? keep) ? { space: space ?? keep } : {}) };
   core.plugins.save(next, m.name, prompt, { interval: m.agent?.interval, task: m.agent?.task });
   pushPlugin(core, id, "updated", { uid: core.users.ownerId(), version: m.version, keyId: next.keyId });
   return next;

@@ -204,6 +204,8 @@ class SpacesState(
             do {
                 val r = call(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL)?.newBuilder()?.addQueryParameter(Constants.QUERY_SINCE, todoRev.toString())?.build(), "GET", null) ?: return@withLock
                 val items = r.optJSONArray("items") ?: JSONArray()
+                // 服务端回收过墓碑或清除过数据: 这一页从头给, 本地副本先清空
+                if (r.optBoolean("reset")) todoRows.clear()
                 for (i in 0 until items.length()) {
                     val o = items.optJSONObject(i) ?: continue
                     if (o.optBoolean("deleted")) todoRows.remove(o.optString(KEY_ID)) else todoRows[o.optString(KEY_ID)] = o

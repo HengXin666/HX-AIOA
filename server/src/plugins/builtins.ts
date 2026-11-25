@@ -3,7 +3,7 @@ import ghManifest from "../../../plugins/hengxin666.gh/plugin.json";
 import githubManifest from "../../../plugins/hengxin666.github/plugin.json";
 import type { AllowRow, AllowStore } from "./allow-store";
 
-const SEED_BY = "升级迁移";
+export const SEED_BY = "升级迁移";
 const FLAG_PREFIX = "builtin:";
 
 /** 旧安装记录: 只用来判断升级前装没装过 GitHub 授权 (base 插件 gh), 迁移后删掉。 */

@@ -82,6 +82,15 @@ const key = inst.data?.key;
 check("装待办", inst.status === 200 && !!key, inst.data?.install);
 const guide = await call(key, "GET", `${V1}/chat-agent/guide`);
 check("专属指令带四态和 GitHub issue 接口", guide.status === 200 && guide.data.includes("hold 挂起") && guide.data.includes("### GitHub issue") && guide.data.includes("/api/v1/gh/issues/"), guide.status);
+// 插件 Agent 的 key 只能碰本群的待办: 主人在别的群建一条, Agent 读不到也写不了
+const ITEMS = `${V1}/pdata/hengxin666.todo/items`;
+await api("POST", `${V1}/messages`, { text: "建群", channel: "e2e-private" });
+await api("POST", `${V1}/chats/e2e-private/todos`, { todos: [{ id: "s1", title: "别的群的秘密" }] });
+const seen = await call(key, "GET", `${ITEMS}?since=0`);
+const forge = await call(key, "POST", ITEMS, { items: [{ id: "e2e-private:s2", ver: 0, body: { channel: "e2e-private", title: "x", state: "open", prio: 2, created: 1 } }] });
+const one = await call(key, "GET", `${ITEMS}/e2e-private:s1`);
+check("插件 Agent 只看得到, 写得了本群的待办", seen.status === 200 && !seen.data.items.some((i) => i.body?.channel === "e2e-private") && forge.data?.items?.[0]?.error && one.status === 404, [seen.data?.items?.length, forge.data, one.status]);
+await api("DELETE", `${V1}/chats/e2e-private/todos/s1`);
 const agents = (await api("GET", `${V1}/gh`)).data.agents ?? [];
 const me = agents.find((a) => a.keyId === inst.data.install.keyId);
 check("清单声明了 issue 服务的 Agent 默认有权限", me?.allowed === true && me.dep === true, agents);

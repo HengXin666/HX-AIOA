@@ -30,7 +30,7 @@ export async function halfHourly(core: Core, storage: DurableObjectStorage): Pro
   const env = core.env;
   const cf = env.CF_API_TOKEN && env.CF_ACCOUNT_ID ? cfCheck(core, storage).catch((e) => console.error("CF 额度检查失败:", e)) : null;
   const todos = ghOn(core) ? syncTodoIssues(core).catch((e) => console.error("待办 issue 同步失败:", e)) : null;
-  const github = githubOn(core) && env.GITHUB_TOKEN ? await core.github.sync() : null;
-  await Promise.all([cf, todos]);
-  return github;
+  const github = githubOn(core) && env.GITHUB_TOKEN ? core.github.sync().catch((e) => (console.error("GitHub 回填失败:", e), null)) : null;
+  const [, , r] = await Promise.all([cf, todos, github]);
+  return r ?? null;
 }

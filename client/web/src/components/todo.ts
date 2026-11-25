@@ -19,6 +19,8 @@ let pulling: Promise<void> | null = null;
 async function pullOnce(): Promise<void> {
   for (let more = true; more; ) {
     const r = await api<PDataList>(`${COLL}?since=${rev}`);
+    // 服务端回收过墓碑或清除过数据: 这一页从头给, 本地副本先清空
+    if (r.reset) rows.clear();
     for (const it of r.items) {
       if (it.deleted) rows.delete(it.id);
       else rows.set(it.id, it);

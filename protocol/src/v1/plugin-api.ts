@@ -35,7 +35,8 @@ export type PluginUpdateFrame = { t: "plugin_update"; id: string; change: Plugin
 
 // 插件数据: ver 每改一次加 1, 写入必须带读到的 ver (新建为 0); rev 是该账号该插件内递增的变更序号, 增量同步用
 export type PDataItem = { id: string; ver: number; rev: number; updated: number; deleted?: true; body?: unknown };
-export type PDataList = { items: PDataItem[]; rev: number; more: boolean };
+// reset: since 早于回收掉的墓碑, 增量会漏删除, 这一页从头给; 客户端先清空本地副本再用
+export type PDataList = { items: PDataItem[]; rev: number; more: boolean; reset?: true };
 export type PDataPut = { ver: number; body: unknown };
 // 批量写: 每行独立生效, deleted 为 true 时写墓碑; 结果按顺序给出新行, 冲突时的当前行或错误
 export type PDataBatch = { items: { id: string; ver: number; body?: unknown; deleted?: true }[] };
