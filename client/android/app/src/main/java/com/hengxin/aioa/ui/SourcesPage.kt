@@ -50,7 +50,8 @@ private const val TITLE = "数据源"
 @Composable
 fun SourcesPage(state: SourcesState, onBack: () -> Unit) {
     LaunchedEffect(Unit) { state.refresh() }
-    BackHandler { if (!state.back()) onBack() }
+    // 添加 / 结果页退回列表; 列表页的返回交给 "我的" (手机回列表, 宽屏交给外层), 不在这里截
+    BackHandler(enabled = state.screen != SourcesScreen.LIST) { state.back() }
     when (state.screen) {
         SourcesScreen.LIST -> SourceList(state, onBack)
         SourcesScreen.ADD -> SourceAdd(state)

@@ -34,26 +34,28 @@ private const val GH_PICK = "#pick"
 
 private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
-/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先退子页, 再回总览, 最后退出。 */
+/** 主界面: 手机底部五栏, 平板左侧导航; 返回键先退子页, 再回跳过来的那一栏 (没有就回总览), 最后退出。 */
 @Composable
 fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions, prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, onNotes: () -> Unit) {
-    var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
+    // 当前栏与跨栏跳转的返回路径, 规则见 TabNav; 改栏只走 nav.select / go / back
+    var nav by rememberSaveable(stateSaver = TabNav.saver) { mutableStateOf(TabNav()) }
+    val tab = nav.tab
     // 邀请链接拉起 App: 切到消息页弹出加入框
-    androidx.compose.runtime.LaunchedEffect(chat.groups.pendingInvite) { if (chat.groups.pendingInvite != null) tab = Tab.CHAT }
+    androidx.compose.runtime.LaunchedEffect(chat.groups.pendingInvite) { if (chat.groups.pendingInvite != null) nav = nav.go(Tab.CHAT) }
     // 从 GitHub 空状态跳来时直接进数据源页
     var meStart by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
-    // 跳进 "我的" 子页之前所在的栏 (GitHub 页叠在它上面); 子页返回时回到这里, 而不是 "我的" 列表
-    var meFrom by rememberSaveable { mutableStateOf<String?>(null) }
+    // 从 GitHub 页跳进 "我的" 子页时为 true; 子页返回时回到来源栏并重新叠上 GitHub 页, 而不是 "我的" 列表
+    var meFromGithub by rememberSaveable { mutableStateOf(false) }
     // GitHub 页叠在当前栏之上: null 不显示, 空串是列表, owner/repo 是详情; 返回逐级回到打开它的那一栏
     var github by rememberSaveable { mutableStateOf<String?>(null) }
     val openGithub = { github = "" }
     // 工作台里点待办: 跳到消息栏的原消息
-    androidx.compose.runtime.LaunchedEffect(chat.groups.focusTick) { if (chat.groups.focusTick > 0) { github = null; tab = Tab.CHAT } }
-    BackHandler(enabled = tab != Tab.OVERVIEW) { tab = Tab.OVERVIEW }
+    androidx.compose.runtime.LaunchedEffect(chat.groups.focusTick) { if (chat.groups.focusTick > 0) { github = null; nav = nav.go(Tab.CHAT) } }
+    BackHandler(enabled = nav.canBack) { nav = nav.back() }
     val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
-        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; meFrom = null; tab = Tab.valueOf(key) }, Modifier.safeDrawingPadding()) {
+        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; meFromGithub = false; nav = nav.select(Tab.valueOf(key)) }, Modifier.safeDrawingPadding()) {
             val gh = github
             if (gh != null) KeepState("gh:$gh") {
                 if (gh == GH_PICK) {
@@ -62,34 +64,34 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                     GithubPage(chat.github, { github = null }, { github = it }, { github = GH_PICK }) {
                         github = null
                         chat.sources.startAdd(Constants.SOURCE_GITHUB)
-                        meFrom = tab.name
+                        meFromGithub = true
                         meStart = SettingsPage.SOURCES
-                        tab = Tab.ME
+                        nav = nav.go(Tab.ME)
                     }
                 } else GithubRepoPage(chat.github, gh) { github = "" }
             }
             if (gh != null) return@AppScaffold
             KeepState("tab:${tab.name}") {
             when (tab) {
-                Tab.OVERVIEW -> OverviewPage(chat, openGithub) { tab = it }
+                Tab.OVERVIEW -> OverviewPage(chat, openGithub) { nav = nav.go(it) }
                 Tab.CHAT -> ChatScreen(chat)
                 Tab.AGENT -> AgentPage(chat)
                 Tab.RESOURCES -> MetricsPage(chat, openGithub)
                 // "我的" 的子页自己处理返回键, 逐级回到列表
-                Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { tab = Tab.RESOURCES }, meStart, meFrom?.let { from ->
+                Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { nav = nav.go(Tab.RESOURCES) }, meStart, if (meFromGithub) {
                     {
-                        meFrom = null
+                        meFromGithub = false
                         meStart = SettingsPage.ROOT
-                        tab = Tab.valueOf(from)
+                        nav = nav.back()
                         github = ""
                     }
-                })
+                } else null)
             }
             }
         }
         MessageBanner(chat) {
             github = null
-            tab = Tab.CHAT
+            nav = nav.go(Tab.CHAT)
             chat.openBanner()
         }
     }

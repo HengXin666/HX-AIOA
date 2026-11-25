@@ -50,7 +50,7 @@ npm run typecheck          # protocol + server + web
 npm run build -w client/web
 ```
 
-安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/deploy/android-signing.md`, 更新与代理见 `docs/deploy/android-update-proxy.md`。
+安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/deploy/android-signing.md`, 更新与代理见 `docs/deploy/android-update-proxy.md`。加页面或页面间跳转时按 `docs/client/android-navigation.md` 处理返回键, 并更新其中的入口清单与 `TabNavTest`。
 
 - 密钥, 令牌, 服务端地址不得写进 APK 或仓库, 仓库是公开的。
 

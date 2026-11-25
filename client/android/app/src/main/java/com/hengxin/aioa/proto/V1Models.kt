@@ -61,6 +61,8 @@ data class Envelope(
     val cid: String? = null,
     // 统一推送卡片 data.feed 的原始 JSON, 由 ui/feed 解析
     val feed: String? = null,
+    // 邮件群的一封信: data.mail 的原始 JSON, 总览里点开时按邮件详情渲染
+    val mail: String? = null,
     val reply: MsgRef? = null,
     val fwd: FwdInfo? = null,
     // 墓碑: recall / delete, 以及被替换那条的旧序号

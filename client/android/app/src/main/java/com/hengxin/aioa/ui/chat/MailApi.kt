@@ -115,7 +115,8 @@ class MailApi(private val context: Context) {
         a?.optJSONObject(i)?.let { MailFacet(it.optString("key"), it.optInt("count"), it.optLong("last"), it.optString("from").ifEmpty { null }) }
     }
 
-    private fun item(o: JSONObject): MailItem? {
+    /** 事件 JSON (id, seq, ts, data.mail) 转成一封信; 总览里点开单封信也用它。 */
+    fun item(o: JSONObject): MailItem? {
         val data = o.optJSONObject("data") ?: return null
         val m = data.optJSONObject("mail") ?: return null
         fun JSONObject.s(k: String) = optString(k).ifEmpty { null }

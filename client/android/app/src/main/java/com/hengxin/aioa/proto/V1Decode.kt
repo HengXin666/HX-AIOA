@@ -63,6 +63,7 @@ internal object V1Decode {
             markdown = opt(data, "markdown"),
             html = opt(data, KEY_HTML) ?: sniffed,
             feed = data.optJSONObject("feed")?.toString(),
+            mail = data.optJSONObject("mail")?.toString(),
             cid = opt(o, "cid"),
             reply = o.optJSONObject("reply")?.let(::ref),
             fwd = o.optJSONObject("fwd")?.let { FwdInfo(it.optString("src"), it.optLong("ts")) },
