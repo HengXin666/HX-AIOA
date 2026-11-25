@@ -17,6 +17,10 @@ export interface Env {
   TEMP_MAIL_DB?: D1Database;
   // 可选, 文件桶 (R2), 没绑定时文件接口返回 503
   FILES?: R2Bucket;
+  // 可选, HX-CF-Drive: Service Binding, Drive 公网地址, Drive 后台建的受限令牌 (根目录 /aioa); 三项都配了才算接入
+  DRIVE?: Fetcher;
+  CFD_ORIGIN?: string;
+  CFD_TOKEN?: string;
   // 可选, 插件市场根地址 (本地测试指向本机目录服务); 不配就用仓库 main 分支的 plugins/
   PLUGIN_MARKET?: string;
 }

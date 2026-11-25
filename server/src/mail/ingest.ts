@@ -20,6 +20,7 @@ import {
 } from "@hx-aioa/protocol";
 import { htmlToText, writeEvent } from "../api-events";
 import type { Core, Principal } from "../core";
+import { storageOf } from "../files/storage";
 import { EventStore } from "../store";
 
 // 列表摘要与 HTML 卡片的上限, 与普通消息一致
@@ -79,7 +80,7 @@ async function keepBody(core: Core, data: EventData, html: string | undefined, t
   const prev = dedupe ? core.store.byDedupe(dedupe) : null;
   const old = prev?.kind === "event" && prev.data.mail?.body === kind ? prev.data.file : undefined;
   const spec = kind === "html" ? HTML_FILE : TEXT_FILE;
-  const file: FileRef | null = old ?? (await core.files.save(MAIL_CHANNEL, spec.name, html ?? text, spec.mime, BY));
+  const file: FileRef | null = old ?? (await core.files.save(MAIL_CHANNEL, spec.name, html ?? text, spec.mime, BY, storageOf(await core.config.settings())));
   if (file) data.file = file;
   else if (html && html.length <= MAX_HTML) data.html = html;
   else return;

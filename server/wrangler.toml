@@ -33,6 +33,15 @@ database_id = "eeda9a60-a925-400e-8020-ad76c731aab1"
 binding = "FILES"
 bucket_name = "hx-aioa-files"
 
+# HX-CF-Drive (字节存 TG): 同账号 Service Binding, 不经过公网和 WAF; CFD_ORIGIN 是 Drive 的公网地址, 用来生成客户端可访问的直链
+# 还要用 wrangler secret put CFD_TOKEN 配 Drive 后台建的受限令牌 (根目录 /aioa, read+write); 三项缺一就当没接入, 存储设置里选不了 cfd
+[[services]]
+binding = "DRIVE"
+service = "hx-cf-drive"
+
+[vars]
+CFD_ORIGIN = "https://cfdb.woa.qzz.io"
+
 [[routes]]
 pattern = "aioa.woa.qzz.io/*"
 zone_name = "woa.qzz.io"
@@ -46,3 +55,4 @@ zone_name = "woa.qzz.io"
 # WXPUSHER_APP_TOKEN    可选, WxPusher 应用 token
 # WXPUSHER_UID          可选, WxPusher 用户 UID
 # GITHUB_TOKEN          可选, GitHub 只读 fine-grained token, 用于 GitHub 页面回填
+# CFD_TOKEN             可选, HX-CF-Drive 受限令牌 (根目录 /aioa, read+write), 大文件走 TG 时需要

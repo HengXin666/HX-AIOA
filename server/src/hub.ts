@@ -1,4 +1,5 @@
 import { attachFile } from "./files/api";
+import { Drive } from "./files/drive";
 import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
 import { MailStore } from "./mail/store";
@@ -117,7 +118,7 @@ export class Hub extends DurableObject<Env> {
       return new Set(grp ? rooms.members(grp).map((m) => m.member) : []);
     });
     this.timers = new Timers(ctx.storage);
-    const files = new FileStore(sql, env.FILES);
+    const files = new FileStore(sql, env.FILES, Drive.from(env));
     const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers, files);
     const spaces = new Spaces(ctx.storage);
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
@@ -145,8 +146,8 @@ export class Hub extends DurableObject<Env> {
   }
 
   // RPC (Worker): R2 写完后回报实际大小; 登记已被删掉时返回 false, Worker 会删掉刚写的对象
-  async fileDone(id: string, size: number): Promise<boolean> {
-    return this.core.files.done(id, size);
+  async fileDone(id: string, size: number, ext?: string): Promise<boolean> {
+    return this.core.files.done(id, size, ext);
   }
 
   // RPC (每天的清理 cron): 删掉传了没发出去的文件

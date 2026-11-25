@@ -2,6 +2,8 @@ import { PATH_FILE_DATA } from "@hx-aioa/protocol";
 import { HUB_NAME } from "../constants";
 import type { Env } from "../env";
 import { json } from "../http";
+import { Drive, DriveError } from "./drive";
+import { driveDir, driveName } from "./store";
 import { checkTicket } from "./ticket";
 
 const DATA_RE = new RegExp(`^${PATH_FILE_DATA.replace("{id}", "([^/]+)")}$`);
@@ -19,21 +21,23 @@ const err = (status: number, error: string) => json({ error }, status);
 export async function fileData(req: Request, env: Env, url: URL): Promise<Response | null> {
   const m = DATA_RE.exec(url.pathname);
   if (!m) return null;
-  if (!env.FILES) return err(503, "服务端还没绑定 R2 文件桶");
   const id = decodeURIComponent(m[1] ?? "");
   if (req.method === "PUT") return upload(req, env, url, id);
+  if (!env.FILES) return err(503, "服务端还没绑定 R2 文件桶");
   if (req.method === "GET" || req.method === "HEAD") return download(req, env, url, id);
   return err(405, "只支持 PUT / GET");
 }
 
 async function upload(req: Request, env: Env, url: URL, id: string): Promise<Response> {
-  const size = await checkTicket(env, "up", id, url);
-  if (size === null) return err(403, "上传地址无效或已过期");
+  const t = await checkTicket(env, "up", id, url);
+  if (t === null) return err(403, "上传地址无效或已过期");
   const len = Number(req.headers.get("content-length"));
   if (!req.body || !Number.isFinite(len) || len <= 0) return err(411, "需要 Content-Length");
-  if (len > size) return err(413, "比登记的大小大");
+  if (len > t.size) return err(413, "比登记的大小大");
   const raw = req.headers.get("content-type")?.trim();
   const type = raw && raw.length <= 100 && MIME_RE.test(raw) ? raw.toLowerCase() : undefined;
+  if (t.store === "cfd") return toDrive(req.body, env, url, id, len, type);
+  if (!env.FILES) return err(503, "服务端还没绑定 R2 文件桶");
   const obj = await (env.FILES as R2Bucket).put(id, req.body, type ? { httpMetadata: { contentType: type } } : {});
   const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
   if (!(await hub.fileDone(id, obj.size))) {
@@ -41,6 +45,27 @@ async function upload(req: Request, env: Env, url: URL, id: string): Promise<Res
     return err(410, "文件已被删除");
   }
   return json({ ok: true, size: obj.size });
+}
+
+/** 登记到 Drive 的文件: 字节流式转给 Drive, 回报 Drive 节点 id; Drive 限流 / 忙时把状态码和 Retry-After 原样给客户端。 */
+async function toDrive(body: ReadableStream, env: Env, url: URL, id: string, len: number, type: string | undefined): Promise<Response> {
+  const drive = Drive.from(env);
+  if (!drive) return err(503, "服务端还没接入 HX-CF-Drive");
+  let node: { id: string; size: number };
+  try {
+    node = await drive.upload(driveDir(), driveName(id, url.searchParams.get(QUERY_NAME) ?? "file"), len, type ?? "application/octet-stream", body);
+  } catch (e) {
+    if (!(e instanceof DriveError)) throw e;
+    const res = json({ error: e.message }, e.status === 429 || e.status === 503 ? e.status : 502);
+    if (e.retryAfter) res.headers.set("retry-after", e.retryAfter);
+    return res;
+  }
+  const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
+  if (!(await hub.fileDone(id, node.size, node.id))) {
+    await drive.remove(node.id);
+    return err(410, "文件已被删除");
+  }
+  return json({ ok: true, size: node.size });
 }
 
 async function download(req: Request, env: Env, url: URL, id: string): Promise<Response> {

@@ -83,6 +83,17 @@ jobs:
           printf '%s' "$AIOA_CF_TOKEN" | npx wrangler secret put CF_API_TOKEN
           printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | npx wrangler secret put CF_ACCOUNT_ID
 
+      # 可选: 配置了 CFD_TOKEN (HX-CF-Drive 受限令牌, 根目录 /aioa) 时同步, 大文件才能走 TG; 不配时存储设置里选不了 cfd
+      - name: 同步 HX-CF-Drive 令牌
+        env:
+          AIOA_CFD_TOKEN: ${{ secrets.CFD_TOKEN }}
+        run: |
+          if [ -z "$AIOA_CFD_TOKEN" ]; then
+            echo "未配置 CFD_TOKEN secret, 跳过, 文件只走 R2"
+            exit 0
+          fi
+          printf '%s' "$AIOA_CFD_TOKEN" | npx wrangler secret put CFD_TOKEN
+
       # 可选: 仅当配置了 AUTH_TOKEN secret 时, 才同步 Worker 运行时密钥 (if 中不能引用 secrets, 改在脚本里判断)
       - name: 同步运行时密钥
         env:

@@ -7,6 +7,7 @@ import {
   PATH_RULES_TEST,
   PATH_SETTINGS,
   PATH_SOURCES,
+  SETTING_STORAGE,
   PATH_SOURCE_TYPES,
   SCOPES,
   parseEventInput,
@@ -25,6 +26,7 @@ import { type Core, OWNER, type ReqCtx, type Route, route } from "./core";
 import { BUILTIN_RULES } from "./rules/builtin";
 import { decide } from "./rules/engine";
 import { groupContext } from "./group";
+import { checkStorage, storageOf } from "./files/storage";
 import { badJson, fail, json, readJson } from "./http";
 import { Registry } from "./registry";
 
@@ -125,7 +127,15 @@ export const CONFIG_ROUTES: Route[] = [
   route(DELETE, `${PATH_RULES}/{id}`, OWNER, async (c) => ((await c.core.config.deleteRule(idParam(c))) ? json({ ok: true }) : notFound())),
   route(GET, PATH_SETTINGS, OWNER, async (c) => json({ settings: await c.core.config.settings() })),
   route(PATCH, PATH_SETTINGS, OWNER, async (c) => {
-    const r = await c.core.config.patchSettings(await readJson(c.req));
+    const body = await readJson(c.req);
+    // 存储路由要看服务端绑了哪些后端, 在这里校验并补全成完整配置再保存
+    if (typeof body === "object" && body !== null && !Array.isArray(body) && SETTING_STORAGE in body && (body as Record<string, unknown>)[SETTING_STORAGE] !== null) {
+      const files = c.core.files;
+      const s = checkStorage((body as Record<string, unknown>)[SETTING_STORAGE], storageOf(await c.core.config.settings()), (k) => files.ready(k));
+      if (typeof s === "string") return fail(400, s);
+      (body as Record<string, unknown>)[SETTING_STORAGE] = s;
+    }
+    const r = await c.core.config.patchSettings(body);
     if (typeof r === "string") return fail(400, r);
     c.core.sockets.toV1Clients({ t: "settings", settings: r });
     return json({ settings: r });
