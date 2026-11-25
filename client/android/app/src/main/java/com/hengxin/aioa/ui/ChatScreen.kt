@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -136,8 +137,14 @@ fun ChatScreen(model: ChatModel) {
         } else if (dir.metas[open]?.isFeed == true) {
             KeepState("chat:feed:$open:${g.visit}") { FeedView(g.messages, Modifier.weight(1f)) }
         } else {
-            KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
-            Composer(g)
+            // 装了待办插件的群: 顶上切 聊天 / 待办
+            var todo by rememberSaveable(open) { mutableStateOf(false) }
+            if (dir.metas[open]?.agents?.any { it.plugin == TODO_PLUGIN } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
+            if (todo) KeepState("chat:todo:$open") { com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { seq -> todo = false; g.jumpTo(seq) }, Modifier.weight(1f)) }
+            else {
+                KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
+                Composer(g)
+            }
         }
     } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
@@ -168,6 +175,7 @@ internal fun BackButton(onBack: () -> Unit) {
 }
 
 private const val PRESENCE_TICK_MS = 1000L
+private const val TODO_PLUGIN = "todo"
 
 @Composable
 private fun ChatTopBar(model: ChatModel, group: String, onBack: () -> Unit) {
