@@ -1,7 +1,7 @@
 import { API_V1 } from "./constants";
 import type { Space } from "./space";
 import type { PluginAllow } from "./plugin-api";
-import { checkExtras, isPluginId, type PluginExtras } from "./plugin-v2";
+import { PLUGIN_API_LEGACY, checkExtras, isPluginId, type PluginExtras } from "./plugin-v2";
 
 export { isPluginId };
 
@@ -34,10 +34,12 @@ export type PluginManifest = PluginEntry & {
   readme: string;
   prompt: string;
   group: { title: string };
-  // interval: 建议的定时 (秒); task: 一句话任务, 写进接入语, 详细规则在专属指令里
-  agent: { name: string; schedule?: string; interval?: number; task?: string };
+  // interval: 建议的定时 (秒); task: 一句话任务, 写进接入语, 详细规则在专属指令里; api 2 可以不要 Agent (只启用, 不安装)
+  agent?: PluginAgent;
   space?: Space;
 } & PluginExtras;
+
+export type PluginAgent = { name: string; schedule?: string; interval?: number; task?: string };
 
 export type PluginInstall = {
   id: string;
@@ -136,7 +138,10 @@ export function parseManifest(raw: unknown): PluginManifest | string {
   if (!/^[\w.-]+\.(md|html)$/.test(raw.readme as string)) return "readme 必须是插件目录里的 .md 或 .html 文件";
   if (!/^[\w.-]+\.md$/.test(raw.prompt as string)) return "prompt 必须是插件目录里的 .md 文件";
   if (!isObj(raw.group) || typeof raw.group.title !== "string" || !raw.group.title) return "缺少 group.title";
-  if (!isObj(raw.agent) || typeof raw.agent.name !== "string" || !raw.agent.name) return "缺少 agent.name";
+  // 旧清单 (api 1) 就是 "群 + Agent", 必须有 Agent; api 2 的 Agent 可选
+  if (raw.agent !== undefined || (raw.api ?? PLUGIN_API_LEGACY) === PLUGIN_API_LEGACY) {
+    if (!isObj(raw.agent) || typeof raw.agent.name !== "string" || !raw.agent.name) return "缺少 agent.name";
+  }
   if (raw.space !== undefined && !isObj(raw.space)) return "space 必须是工作台布局对象";
   const extra = checkExtras(raw);
   if (extra) return extra;

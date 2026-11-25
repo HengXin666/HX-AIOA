@@ -34,9 +34,11 @@ export class PluginKernel {
   private readonly undo = new Map<string, Undo[]>();
 
   // seed: 白名单还是空的时候, 把升级前已安装的插件放进白名单并为主人启用 (只跑一次)
+  // builtins: 内置 (L2a) 插件各自的一次性迁移, 返回是否写了白名单
   constructor(
     private readonly store: AllowStore,
     private readonly seed?: () => { rows: AllowRow[]; uid: string },
+    private readonly builtins?: () => boolean,
   ) {}
 
   private load(): void {
@@ -54,6 +56,7 @@ export class PluginKernel {
       }
       this.store.markSeeded();
     }
+    if (this.builtins?.()) rows = this.store.allows();
     for (const row of rows) this.register(row);
     for (const e of this.store.enables()) if (this.allow.has(e.id)) this.setOf(e.uid).add(e.id);
     for (const c of this.store.choices()) this.choicesOf(c.uid).set(c.point, c.plugin);

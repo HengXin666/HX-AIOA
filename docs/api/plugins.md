@@ -34,6 +34,19 @@
 
 升级前装好的插件在白名单为空时自动放进白名单并为主人启用, 只做一次。
 
+没有 Agent 的插件 (api 2 的清单可以不写 `agent`) 不能安装 (`install` 返回 400), 只启用。
+
+## 内置插件 (L2a)
+
+代码随部署发布, 清单也打进部署 (`plugins/<id>/plugin.json`), 门控同样只查内核内存。
+
+| 插件 | 门控 | 数据 |
+| --- | --- | --- |
+| `hengxin666.github` (GitHub 接入) | 主人没启用时: `/api/v1/github/*` 404 (云 Agent 的 key 也是), `POST /api/v1/hooks/github/...` 404 不入库, cron 不回填 | 现有 `gh_*` 表, 不进 pdata; 主人停用带 `?purge=1` 时清空 |
+
+- 升级迁移: 每个内置插件第一次唤醒时若不在白名单, 用打包的清单放进白名单并为主人启用 (`by: "升级迁移"`), 只做一次, 之后撤销或停用都不会被改回。
+- GitHub 数据属于整个部署 (一个 `GITHUB_TOKEN`), 所以只看主人的启用状态; 子号启用它没有作用。
+
 ## 插件数据 pdata
 
 集合必须在清单 `contributes.collections` 里声明, 插件要有 `data:own` 权限。
@@ -68,5 +81,5 @@
 ## 验证
 
 - 单元: `npm test` (清单, 冲突检测, 内核, pdata)。
-- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。
+- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。
 - 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`)。

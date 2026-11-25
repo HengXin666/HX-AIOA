@@ -2,6 +2,16 @@
 
 服务端与安卓共用的约定, 类型见 `protocol/src/v1/github.ts`, 路径常量 `PATH_GITHUB_REPOS`, `PATH_GITHUB_REPO`, `PATH_GITHUB_SYNC`。时间字段都是毫秒时间戳。
 
+## 插件门控
+
+GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.github/plugin.json`, 接口见 `docs/api/plugins.md`)。主人启用时下面一切照旧; 主人停用后:
+
+- 本页全部接口返回 404, 带 `events:read` 的云 Agent key 也是 404。云 Agent 读 GitHub 需要 `events:read` 且主人启用了本插件。
+- `POST /api/v1/hooks/github/{keyId}` 返回 404, 不入库也不进消息流 (GitHub 那边显示投递失败); 要彻底不发, 在仓库设置里删掉 webhook。
+- cron 照常调到 Hub, 但不回填 (不发 GitHub 子请求, 不写库)。
+- 数据保留, 再启用即恢复; 停用时带 `?purge=1` 清空全部 `gh_*` 表与关注列表, 登录名, 同步时间。
+- 升级前的部署第一次唤醒时自动放行并为主人启用, 行为不变。
+
 ## 接口
 
 - `GET /api/v1/github/repos` (owner 或 `events:read`) -> `GithubReposResult`
@@ -23,7 +33,7 @@
 - 仓库 = 所有 `type=github` 数据源的 subject (`github:owner/repo` 或 `owner/repo`) + 收到过 webhook 的仓库。只有数据源没有 webhook 的仓库, 摘要全为 0。
 - webhook 入库时同步更新: `ping` 登记仓库并取 stars, 描述, 默认分支, `open_issues_count` (减去已知 PR) 作为 Issue 数初值; 每个事件都会刷新 stars, 描述, 默认分支。
 - `push` 更新 `lastPush` 和活跃分支列表 (只认分支, 忽略 tag 与空推送; `deleted: true` 的推送把该分支从列表拿掉), 详情带 `branches: [{ branch, at, by, commits, sha?, ci? }]`, 最近的在前, 最多 8 个, `ci` 从已存的 runs 现算; `pull_request` opened / reopened / ready_for_review / converted_to_draft / edited 写入, closed (含合并) 删除; `issues` opened / reopened / edited 写入, closed 删除, 带 `pull_request` 的忽略; `workflow_run` 按 run id 覆盖; `release` published, `star` created, `issue_comment` created 进 timeline。
-- 有 `GITHUB_TOKEN` 时 Worker 的 cron 每 30 分钟自动回填一次。
+- 有 `GITHUB_TOKEN` 且主人启用了插件时, Worker 的 cron 每 30 分钟自动回填一次。
 
 ## 未合入分支
 

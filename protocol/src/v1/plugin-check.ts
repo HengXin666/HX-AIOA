@@ -34,7 +34,7 @@ export function cronPerDay(cron: string): number {
  */
 export function dailyRequests(m: PluginManifest): number {
   const b = m.budget ?? {};
-  const periods = [b.agentPoll ?? 0, m.agent.interval ?? 0].filter((x) => x > 0);
+  const periods = [b.agentPoll ?? 0, m.agent?.interval ?? 0].filter((x) => x > 0);
   const rounds = periods.length ? Math.ceil(DAY_S / Math.min(...periods)) : 0;
   return (b.cron ? cronPerDay(b.cron) : 0) + rounds * AGENT_ROUND_REQUESTS + (b.requestsPerDay ?? 0);
 }

@@ -156,7 +156,7 @@ export function checkExtras(raw: Record<string, unknown>): string | null {
     return null;
   }
   if (!isObj(raw.engines) || !isRange(raw.engines.aioa)) return "api 2 需要 engines.aioa 版本范围";
-  const agent = raw.agent as Record<string, unknown>;
+  const agent = (raw.agent ?? {}) as Record<string, unknown>;
   if (agent.interval !== undefined && !(Number.isInteger(agent.interval) && (agent.interval as number) >= MIN_AGENT_POLL_S)) return `agent.interval 不能小于 ${MIN_AGENT_POLL_S} 秒, 更快请用长连 (hxaioa watch)`;
   for (const k of ["requires", "optional", "provides"] as const) {
     const e = rangeMap(raw[k], k, SERVICE_RE);

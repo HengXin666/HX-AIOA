@@ -8,6 +8,15 @@
       "icon": "list-checks",
       "tags": ["待办", "点子", "Agent"],
       "author": "HengXin666"
+    },
+    {
+      "id": "hengxin666.github",
+      "name": "GitHub 接入",
+      "summary": "关注仓库的 PR, Issue, CI 与本人动态: webhook 实时入库, 有 GITHUB_TOKEN 时每 30 分钟回填; 云 Agent 也能用 events:read 的 key 读。",
+      "version": "1.0.0",
+      "icon": "github",
+      "tags": ["GitHub", "开发"],
+      "author": "HengXin666"
     }
   ]
 }

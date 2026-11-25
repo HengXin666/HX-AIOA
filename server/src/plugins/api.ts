@@ -90,6 +90,7 @@ async function install(c: ReqCtx): Promise<Response> {
   if (c.core.plugins.list().length >= MAX_PLUGINS) return fail(400, `最多安装 ${MAX_PLUGINS} 个插件`);
   // 只装白名单里的快照版本, 不看市场当前版本
   const { manifest: m, prompt } = allowed(c.core, id);
+  if (!m.agent) return fail(400, `插件 ${id} 没有 Agent, 不用安装, 启用即可`);
   const channel = pluginChannel(id);
   const meta = c.core.chats.chat(channel);
   if ((meta?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `群 ${channel} 的 Agent 已满`);

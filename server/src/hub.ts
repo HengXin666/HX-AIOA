@@ -69,6 +69,7 @@ import { joinPage } from "./join-page";
 import { authorOf } from "./room-access";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
+import { githubOn } from "./github/gate";
 import { buildOverview } from "./group";
 import { chatInput } from "./chat";
 import { ChatStore } from "./chat-store";
@@ -314,9 +315,9 @@ export class Hub extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 时什么也不做
+  // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 或主人没启用 GitHub 插件时什么也不做
   async githubSync(): Promise<GithubSyncResult | null> {
-    return this.core.github.sync();
+    return githubOn(this.core) ? this.core.github.sync() : null;
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {

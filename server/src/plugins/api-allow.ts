@@ -17,6 +17,7 @@ import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE
 import { ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
 import type { AllowRow } from "./allow-store";
+import { purgeBuiltin } from "../github/gate";
 import { teardown } from "./api";
 import { pushPlugin } from "./notify";
 import { CODE_NOT_ALLOWED, autoUpgrade } from "./update";
@@ -116,7 +117,7 @@ async function disable(c: ReqCtx): Promise<Response> {
   const id = pluginParam(c);
   const changed = c.core.kernel.setEnabled(uid, id, false);
   if (uid === c.core.users.ownerId()) await teardown(c.core, id);
-  const purged = c.url.searchParams.get(QUERY_PURGE) === "1" ? c.core.pdata.purge(uid, id) : 0;
+  const purged = c.url.searchParams.get(QUERY_PURGE) === "1" ? c.core.pdata.purge(uid, id) + (await purgeBuiltin(c.core, uid, id)) : 0;
   if (changed) pushPlugin(c.core, id, "disabled", { uid });
   return json({ ...view(c, uid), purged });
 }

@@ -1,0 +1,29 @@
+{
+  "id": "hengxin666.github",
+  "name": "GitHub 接入",
+  "summary": "关注仓库的 PR, Issue, CI 与本人动态: webhook 实时入库, 有 GITHUB_TOKEN 时每 30 分钟回填; 云 Agent 也能用 events:read 的 key 读。",
+  "version": "1.0.0",
+  "icon": "github",
+  "tags": ["GitHub", "开发"],
+  "author": "HengXin666",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "group": { "title": "GitHub" },
+  "api": "2",
+  "engines": { "aioa": "^2" },
+  "permissions": ["net:api.github.com"],
+  "contributes": {
+    "widgets": [
+      { "id": "hengxin666.github.card", "title": "GitHub 卡" },
+      { "id": "hengxin666.github.daily", "title": "每日柱状图" },
+      { "id": "hengxin666.github.branches", "title": "未合入分支" }
+    ],
+    "commands": [
+      { "id": "hengxin666.github.sync", "title": "立即同步" }
+    ]
+  },
+  "budget": {
+    "cron": "*/30 * * * *",
+    "requestsPerDay": 200
+  }
+}

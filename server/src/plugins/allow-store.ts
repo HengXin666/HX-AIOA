@@ -18,11 +18,20 @@ export class AllowStore {
 
   /** 升级迁移是否做过; 白名单后来被清空也不再重做。 */
   seeded(): boolean {
-    return this.sql.exec<{ v: string }>("SELECT v FROM plugin_flag WHERE k = ?", SEEDED).toArray().length > 0;
+    return this.flag(SEEDED);
   }
 
   markSeeded(): void {
-    this.sql.exec("INSERT OR REPLACE INTO plugin_flag (k, v) VALUES (?, ?)", SEEDED, "1");
+    this.setFlag(SEEDED);
+  }
+
+  /** 一次性迁移的标记: 做过就不再做, 哪怕之后被撤销。 */
+  flag(k: string): boolean {
+    return this.sql.exec<{ v: string }>("SELECT v FROM plugin_flag WHERE k = ?", k).toArray().length > 0;
+  }
+
+  setFlag(k: string): void {
+    this.sql.exec("INSERT OR REPLACE INTO plugin_flag (k, v) VALUES (?, ?)", k, "1");
   }
 
   allows(): AllowRow[] {

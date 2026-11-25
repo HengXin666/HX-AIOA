@@ -27,7 +27,7 @@ plugins/
 | `readme` | 介绍文件名, `.md` 或 `.html` |
 | `prompt` | 提示词模板文件名, `.md` |
 | `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` (改过 id 的插件沿用旧 id, 如待办是 `plugin-todo`) |
-| `agent.name` | 接入 Agent 的名字; `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
+| `agent.name` | 接入 Agent 的名字 (api 2 可以不写 `agent`, 这类插件不安装只启用, 如 `hengxin666.github`); `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
 
 ### v2 字段 (`"api": "2"`, 只加不改, 不写 api 的旧清单照常能用)
@@ -70,6 +70,10 @@ API 密钥: <密钥>
 改了 `prompt.md`, 介绍或工作台后, 同时把 `<id>/plugin.json` 和 `index.json` 里的 `version` 改成同一个新版本号。合并后市场里就是新版, 但**不会自动生效**: 管理员在 App 里放行新版后, 开着自动更新的实例立即换上, 关了的在详情页点 "更新到 vX"。不用重装, 群, 密钥, 数据都不变。
 
 换上新版时服务端推 `plugin_update` 给该插件 Agent 的长连, `hxaioa watch` 秒级提示重拉专属指令; 只用 HTTP 的 Agent 在下一次请求时从响应头看到新版本。
+
+## 内置插件 (L2a)
+
+`hengxin666.github` (GitHub 接入) 的代码随服务端部署发布 (要用 `GITHUB_TOKEN` 和服务端子请求), 清单也打进部署, 没有 Agent 和群。管理员放行, 主人启用后 GitHub 接口, webhook 入库, 定时回填才生效; 门控与数据见 `docs/api/github.md`。改它的清单要同时改 `index.json` 的版本, 并重新部署服务端。
 
 ## 新增插件
 

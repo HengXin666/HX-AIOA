@@ -156,6 +156,13 @@ export class GithubService {
     }
   }
 
+  /** 停用插件并清除数据: 表与关注列表, 登录名, 同步时间一起清掉; 返回删掉的行数。 */
+  async purge(): Promise<number> {
+    const n = this.store.clear() + this.activityStore.clear();
+    await this.storage.delete([KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED]);
+    return n;
+  }
+
   async sync(): Promise<GithubSyncResult | null> {
     const token = this.env.GITHUB_TOKEN;
     if (!token) return null;

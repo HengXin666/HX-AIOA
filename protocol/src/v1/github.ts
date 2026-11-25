@@ -1,3 +1,6 @@
+// GitHub 接入是 L2a 插件: 代码随部署发布, 主人启用后接口, webhook 入库, 定时回填才生效
+export const GITHUB_PLUGIN = "hengxin666.github";
+
 // GitHub 页面: 仓库摘要与详情, 由 webhook 增量维护, 可用 GITHUB_TOKEN 回填。时间字段都是毫秒时间戳
 export const GITHUB_CI_STATUSES = ["success", "failure", "running", "cancelled", "unknown"] as const;
 export type GithubCiStatus = (typeof GITHUB_CI_STATUSES)[number];
