@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -34,7 +37,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hengxin.aioa.browser.Browser
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
@@ -56,11 +58,10 @@ fun SoftTag(text: String, color: Color) {
     Text(text, Modifier.clip(TAG).background(color.copy(alpha = SOFT)).padding(horizontal = 6.dp, vertical = 1.dp), color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
 }
 
-/** 一条推送: 站点, 类别, 状态, 标题, 摘要, 要做什么, 热度 / 截止 / 链接; 用过了的变淡。 */
+/** 一条推送: 站点, 类别, 状态, 收藏, 标题, 摘要, 要做什么, 热度 / 截止 / 链接; 用过了的变淡。点哪里都先出过渡层 (FeedPeek)。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, flat: Boolean = false) {
-    val context = LocalContext.current
     val c = Aioa.colors
     @Suppress("UNUSED_VARIABLE") val v = marks.version
     val used = marks.has(FeedMarks.USED, it.key)
@@ -68,23 +69,27 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
     val st = marks.status(it)
     val dead = st == ST_DEAD
     val base = if (flat) modifier else modifier.clip(CARD).background(c.surface).border(1.dp, c.border, CARD)
-    var sheet by remember { mutableStateOf(false) }
+    // 点卡片 (或卡片上的链接) 先出过渡层, 不直接进浏览器; 旧格式 HTML 条目仍看原卡片
+    var peek by remember { mutableStateOf(false) }
+    var focus by remember { mutableStateOf<Pair<String, String>?>(null) }
     val html = it.html
-    if (sheet) {
-        if (html != null) FeedHtmlSheet(it.summary ?: it.title, html) { sheet = false } else FeedDetail(it, marks) { sheet = false }
+    if (peek) {
+        val close = { peek = false; focus = null }
+        if (html != null) FeedHtmlSheet(it.summary ?: it.title, html, close) else FeedPeek(it, marks, focus, close)
     }
-    // 有链接开链接; 旧格式点开看原卡片; 都没有就看详情
-    Column(base.clickable { if (it.url != null) Browser.open(context, it.url) else sheet = true }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            val site = it.site
-            if (site != null) MailAvatar(site, site, 18.dp)
-            Text(site ?: it.source, Modifier.weight(1f, fill = false), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (it.kind != TAG_OTHER) SoftTag(LocalFeedTags.current.labelOf(it.kind), kindColor(it.kind))
-            st?.let { s -> SoftTag(STATUS_LABEL.getValue(s), statusColor(s)) }
-            if (used) SoftTag("用过了", c.textSecondary)
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(28.dp).clip(CircleShape).clickable { marks.toggle(FeedMarks.STAR, it.key) }, contentAlignment = Alignment.Center) {
-                Icon("star", if (star) c.warning else c.textSecondary, 16.dp)
+    Column(base.clickable { peek = true }.padding(12.dp).alpha(if (used || dead) USED_ALPHA else 1f)) {
+        // 左边站点和标签占满剩余宽度, 收藏固定在最右; 行高不变, 热区 36dp 溢出这一行并右移贴齐卡片边
+        Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val site = it.site
+                if (site != null) MailAvatar(site, site, 18.dp)
+                Text(site ?: it.source, Modifier.weight(1f, fill = false), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (it.kind != TAG_OTHER) SoftTag(LocalFeedTags.current.labelOf(it.kind), kindColor(it.kind))
+                st?.let { s -> SoftTag(STATUS_LABEL.getValue(s), statusColor(s)) }
+                if (used) SoftTag("用过了", c.textSecondary)
+            }
+            Box(Modifier.padding(start = 4.dp).offset(x = 8.dp).requiredSize(36.dp).clip(CircleShape).clickable { marks.toggle(FeedMarks.STAR, it.key) }, contentAlignment = Alignment.Center) {
+                Icon("star", if (star) c.warning else c.textSecondary, 17.dp)
             }
         }
         Text(
@@ -103,7 +108,7 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
             Meta("clock", feedTime(it.time))
             it.heat?.takeIf { h -> h > 0 }?.let { h -> Meta("flame", "$h") }
             it.until?.let { u -> Meta("calendar-days", "截止 $u") }
-            it.links.forEach { (label, url) -> LinkChip(label) { Browser.open(context, url) } }
+            it.links.forEach { link -> LinkChip(link.first) { focus = link; peek = true } }
         }
     }
 }
