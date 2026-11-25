@@ -127,6 +127,17 @@ jobs:
           fi
           printf '%s' "$AIOA_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN
 
+      # 可选: 仓库变量 AIOA_GH_CLIENT_ID (OAuth App 的 Client ID, 开了 Device Flow, 公开值) 同步为 Worker 的 GH_CLIENT_ID, gh 插件设备码授权要用
+      - name: 同步 GitHub 设备码 Client ID
+        env:
+          AIOA_GH_CLIENT_ID: ${{ vars.AIOA_GH_CLIENT_ID }}
+        run: |
+          if [ -z "$AIOA_GH_CLIENT_ID" ]; then
+            echo "未配置 AIOA_GH_CLIENT_ID 变量, 跳过, gh 插件只能粘贴令牌授权"
+            exit 0
+          fi
+          printf '%s' "$AIOA_GH_CLIENT_ID" | npx wrangler secret put GH_CLIENT_ID
+
       # 可选: 配置了 AZURE_TRANSLATOR_KEY secret 时同步微软翻译密钥 (区域资源另配 AZURE_TRANSLATOR_REGION)
       - name: 同步翻译密钥
         env:
