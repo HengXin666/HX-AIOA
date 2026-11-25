@@ -26,4 +26,6 @@ export interface Env {
   AZURE_TRANSLATOR_KEY?: string;
   AZURE_TRANSLATOR_REGION?: string;
   TRANSLATE_MONTH_LIMIT?: string;
+  // 可选, 强制翻译通道: azure | google; 不填时有微软密钥用微软, 否则用谷歌免费通道
+  TRANSLATE_PROVIDER?: string;
 }

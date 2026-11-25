@@ -5,24 +5,34 @@ import {
   parseTranslateInput,
   skipSegment,
   type TranslateResult,
+  type TranslateProvider,
   type TranslateUsage,
 } from "@hx-aioa/protocol";
 import { GET, POST } from "../constants";
 import { type Core, OWNER, type ReqCtx, type Route, route } from "../core";
 import { badJson, fail, json, readJson } from "../http";
 import { azureTranslate, translateReady } from "./azure";
+import { googleTranslate } from "./google";
 import { cacheKey, monthOf } from "./store";
 
-// F0 每月 200 万字符, 用到九成自动停, 不会产生费用; 可用 TRANSLATE_MONTH_LIMIT 调整
+// 配了微软密钥走微软 F0 (每月 200 万字符, 用到九成自动停, 可用 TRANSLATE_MONTH_LIMIT 调整);
+// 没配走谷歌免费通道 (不限额, 只记数); TRANSLATE_PROVIDER 可强制指定
 const DEFAULT_LIMIT = 1_800_000;
 const CODE_OFF = "TRANSLATE_OFF";
 const CODE_QUOTA = "TRANSLATE_QUOTA";
+
+function providerOf(core: Core): TranslateProvider {
+  const p = core.env.TRANSLATE_PROVIDER;
+  if (p === "azure" || p === "google") return p;
+  return translateReady(core.env) ? "azure" : "google";
+}
 
 export function usageOf(core: Core, now = Date.now()): TranslateUsage {
   const n = Number(core.env.TRANSLATE_MONTH_LIMIT);
   const limit = Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_LIMIT;
   const month = monthOf(now);
-  return { month, used: core.tr.used(month), limit, ready: translateReady(core.env) };
+  const provider = providerOf(core);
+  return { month, used: core.tr.used(month), limit, ready: provider === "google" || translateReady(core.env), provider };
 }
 
 async function translate(c: ReqCtx): Promise<Response> {
@@ -57,8 +67,10 @@ async function translate(c: ReqCtx): Promise<Response> {
   const billed = misses.reduce((n, [, e]) => n + e.text.length, 0);
   if (billed > 0) {
     if (!usage.ready) return fail(503, "服务端还没配置翻译密钥 (AZURE_TRANSLATOR_KEY)", CODE_OFF);
-    if (usage.used + billed > usage.limit) return fail(429, `本月免费额度快用完了, 已自动停止 (${usage.used}/${usage.limit} 字符)`, CODE_QUOTA);
-    const out = await azureTranslate(c.core.env, misses.map(([, e]) => e.text), to, format);
+    const azure = usage.provider === "azure";
+    if (azure && usage.used + billed > usage.limit) return fail(429, `本月免费额度快用完了, 已自动停止 (${usage.used}/${usage.limit} 字符)`, CODE_QUOTA);
+    const src = misses.map(([, e]) => e.text);
+    const out = azure ? await azureTranslate(c.core.env, src, to, format) : await googleTranslate(src, to, format);
     c.core.tr.bill(usage.month, billed);
     usage.used += billed;
     for (const [k, [h, e]] of misses.entries()) {

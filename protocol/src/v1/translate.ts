@@ -1,6 +1,6 @@
 import { API_V1 } from "./constants";
 
-// 翻译 (#100): 客户端把正文切成段 (块级元素), 服务端去重, 查缓存, 再调用微软翻译, 按月计数, 用到上限自动停止
+// 翻译 (#100): 客户端把正文切成段 (块级元素), 服务端去重, 查缓存, 再调用翻译 (微软 F0 或谷歌免费通道), 按月计数
 
 export const PATH_TRANSLATE = `${API_V1}/translate`;
 export const PATH_TRANSLATE_USAGE = `${API_V1}/translate/usage`;
@@ -15,8 +15,11 @@ const MAX_LANG = 16;
 
 /** format=html 时段内可带行内标签 (b, a, span 等), 译文原样保留标签。 */
 export type TranslateInput = { texts: string[]; to?: string; format?: TranslateFormat };
-/** used / limit 为本月 (UTC) 已计费字符与自动停止线。 */
-export type TranslateUsage = { month: string; used: number; limit: number; ready: boolean };
+/** azure = 微软 F0 (要密钥, 有月额度); google = 谷歌网页翻译的免费通道 (非公开接口, 不限额)。 */
+export const TRANSLATE_PROVIDERS = ["azure", "google"] as const;
+export type TranslateProvider = (typeof TRANSLATE_PROVIDERS)[number];
+/** used 为本月 (UTC) 送去翻译的字符数; limit 只对 azure 生效, 到了自动停止。 */
+export type TranslateUsage = { month: string; used: number; limit: number; ready: boolean; provider: TranslateProvider };
 /** texts 与输入一一对应; 不需要翻译的段原样返回, from 为空串。 */
 export type TranslateResult = { texts: string[]; from: string[]; cached: number; billed: number; usage: TranslateUsage };
 

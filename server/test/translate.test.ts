@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseTranslateInput, skipSegment } from "@hx-aioa/protocol";
 import { azureTranslate } from "../src/translate/azure";
+import { googleTranslate } from "../src/translate/google";
 import type { Env } from "../src/env";
 
 test("跳过不用翻的段: 中文, 数字, 链接, 空白", () => {
@@ -37,4 +38,20 @@ test("微软接口: 请求格式与返回解析", async () => {
   assert.equal(h["Ocp-Apim-Subscription-Region"], "eastasia");
   const bad = (async () => new Response("", { status: 401 })) as unknown as typeof fetch;
   await assert.rejects(azureTranslate(env, ["x"], "zh-Hans", "text", bad), /密钥/);
+});
+
+test("谷歌免费通道: 纯文本先转义再还原, 语言代码换成谷歌的, 超过 50 段分批", async () => {
+  const bodies: unknown[] = [];
+  const fake = (async (_url: string, init: RequestInit) => {
+    const b = JSON.parse(String(init.body)) as [[string[], string, string], string];
+    bodies.push(b);
+    return new Response(JSON.stringify([b[0][0].map((t) => `译:${t}`), b[0][0].map(() => "en")]));
+  }) as unknown as typeof fetch;
+  const out = await googleTranslate(["a < b & c"], "zh-Hans", "text", fake);
+  assert.deepEqual(out, [{ text: "译:a < b & c", from: "en" }]);
+  assert.deepEqual(bodies[0], [[["a &lt; b &amp; c"], "auto", "zh-CN"], "te"]);
+  const many = await googleTranslate(Array.from({ length: 120 }, (_, i) => `s${i}`), "ja", "html", fake);
+  assert.equal(many.length, 120);
+  assert.equal(many[119]!.text, "译:s119");
+  assert.equal(bodies.length, 4);
 });
