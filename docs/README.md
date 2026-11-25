@@ -61,6 +61,7 @@
 | [push-experiment.md](design/push-experiment.md) | 推送延迟与耗电实验手册 |
 | [research-cf-probe-panels.md](design/research-cf-probe-panels.md) | CF 探针面板调研 (#11) |
 | [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
+| [mockups/gh-todo.html](design/mockups/gh-todo.html) | GitHub 授权插件与待办关联 issue 手机设计稿 (#90 #98) |
 
 ## 过程记录 `aegis/`
 
