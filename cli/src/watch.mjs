@@ -49,6 +49,14 @@ export function watch(cfg, me, opts) {
       if (opts.once) finish(0);
     };
 
+    // 插件更新: 服务端推到 Agent 长连, 马上提示换指令; --once 时就此醒来, 让调用方立即处理
+    const guideChanged = (f) => {
+      if (done) return;
+      process.stderr.write(`插件 ${f.id} 已${f.change === "updated" ? "更新" : "变化"}${f.version ? `到 ${f.version}` : ""}: 先运行 hxaioa guide --ack, 用新全文替换旧指令再继续。\n`);
+      if (opts.json) process.stdout.write(`${JSON.stringify({ t: "guide", id: f.id, version: f.version ?? null })}\n`);
+      if (opts.once) finish(0);
+    };
+
     const poll = async () => {
       const heads = loadState().heads;
       for (const ch of opts.channels ?? [me.channel].filter(Boolean)) {
@@ -97,6 +105,7 @@ export function watch(cfg, me, opts) {
           return;
         }
         if (f.t === "ev" && f.ev) handle(f.ev);
+        else if (f.t === "plugin_update" && f.guide) guideChanged(f);
       };
       ws.onclose = (e) => {
         clearInterval(pingTimer);

@@ -16,7 +16,7 @@
 | 服务端代码 | L2a: 白名单里的代码编进部署, 账号开关; 第三方代码先走 L3 Agent; Dynamic Workers (L2b) 不进 v1 |
 | 安卓 "改一切" 的边界 | 主题 token + 服务端驱动 UI (工作台 schema) + WebView 插槽; WebView 插槽要单独权限 `ui.webview` |
 | `single` 扩展点冲突 | 不搞 "后装覆盖": 放进白名单时 CI 报冲突, 管理员指定默认提供者; 账号可在白名单里的提供者之间改选 |
-| 插件 id | `<GitHub 登录名>.<名字>`, 例 `hengxin.todo`; 市场 PR 作者必须等于该登录名, CI 校验; 现有 `todo` 视为 `hengxin.todo` |
+| 插件 id | `<GitHub 登录名小写>.<名字>`, 例 `hengxin666.notes`; 市场 PR 作者必须等于该登录名, CI 校验 (维护者除外); 现有 `todo` 保留旧 id, 迁移见 issue |
 | 信任模型 | v1 只有官方市场 (仓库 PR + CI + 管理员放行); 本地开发插件只能在管理员自己的账号开 "开发模式", 只允许 L0 / L1 / L3; 第三方市场源不进 v1 |
 | 事件总线 | 只在 Hub 内存分发, 至多一次, 不落库; 要可靠就由插件自己写 `pdata` |
 | 版本支持窗口 | 最近 2 个协议大版本 |
@@ -28,19 +28,19 @@
 
 ```jsonc
 {
-  "id": "hengxin.todo",
+  "id": "hengxin666.todo",
   "version": "2.0.0",
   "api": "2",                                   // 清单 schema 版本
-  "engines": { "aioa": "^3" },                  // 需要的宿主协议大版本
+  "engines": { "aioa": "^2" },                  // 需要的宿主协议大版本 (当前 PROTOCOL_VERSION = 2)
   "requires": { "service:chat.messages": "^1" },
   "optional": { "service:calendar.events": "^1" },
   "provides": { "service:todo.items": "1.0.0" },
   "contributes": {
-    "commands":   [{ "id": "hengxin.todo.add", "title": "加待办" }],
-    "widgets":    [{ "id": "hengxin.todo.list", "schema": "widgets/list.json" }],
-    "settings":   [{ "key": "hengxin.todo.remind", "type": "boolean", "default": true }],
+    "commands":   [{ "id": "hengxin666.todo.add", "title": "加待办" }],
+    "widgets":    [{ "id": "hengxin666.todo.list", "schema": "widgets/list.json" }],
+    "settings":   [{ "id": "hengxin666.todo.remind", "type": "boolean", "default": true }],
     "collections":[{ "name": "items", "schema": "data/items.json", "index": ["state"] }],
-    "push.route": [{ "id": "hengxin.todo.due", "after": ["core.mute"] }]
+    "push.route": [{ "id": "hengxin666.todo.due", "writes": ["route"] }]
   },
   "permissions": ["data:own", "push:send"],     // 见第 6 节
   "budget": { "cron": "0 * * * *", "agentPoll": 0 } // 见第 7 节, 市场 CI 累加
@@ -48,6 +48,10 @@
 ```
 
 扩展点基数沿用 issue 正文 4.2 (`single` / `multiple` / `layered` / `pipeline`)。命名空间: 所有 id, 设置键, 集合名都以插件 id 开头, 撞名 = 冲突, CI 拒绝。
+
+## 实现状态
+
+P1 ~ P5 的服务端, 协议, 市场 CI, 命令行与安卓放行界面已实现, 接口见 `docs/api/plugins.md`。待办插件迁移与内置功能改为内置插件分别在两个迁移 issue 里做。
 
 ## 3. 运行时 (主 Hub 内)
 
@@ -63,14 +67,14 @@
 | L0 声明 | 提示词, 布局, 主题 token, 文案, 集合 schema | 宿主解释, 收到 `plugin_update` 即生效 |
 | L1 客户端 | Web 动态 `import()`; 安卓服务端驱动 UI | 同上, 失败回退到上一版 |
 | L2a 服务端 | 白名单代码编进部署 | 白名单变化触发 CI 重新部署; 账号开关不部署 |
-| L3 Agent | 插件逻辑跑在用户的 Agent 上 | Agent 长连收到 `plugin_update` 立即重拉指令, 不再等每天一次 |
+| L3 Agent | 插件逻辑跑在用户的 Agent 上 | Agent 长连收到带 `guide` 的 `plugin_update`, `hxaioa watch` 立即提示重拉 (`--once` 时立即醒来), 不再等每天一次 |
 
 ## 5. 数据 `pdata`
 
 - 一张表 `pdata(acct, plugin, coll, id, ver, updated, deleted, body)`, 主键 `(acct, plugin, coll, id)`。
 - 写入带读到的 `ver`, 不匹配返回 409; 删除写墓碑; 客户端按 `since` 增量同步。
 - 只持久化真正的数据, 每次写入算 1 行写入, 计入每天 10 万行预算; 配额按 (账号, 插件) 计。
-- 现有 `todo` 表一次性迁移成 `hengxin.todo` 的 `items` 集合。
+- 现有 `todo` 表一次性迁移成 `hengxin666.todo` 的 `items` 集合 (迁移 issue)。
 
 ## 6. 权限
 

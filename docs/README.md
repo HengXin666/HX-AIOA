@@ -12,6 +12,7 @@
 | [connectors.md](api/connectors.md) | 各来源适配器的字段映射, 去重与分组 |
 | [spaces.md](api/spaces.md) | 工作台布局与组件 |
 | [github.md](api/github.md) | GitHub 页面接口 |
+| [plugins.md](api/plugins.md) | 插件白名单, 账号启用, 单选扩展点改选, 插件数据 pdata |
 
 ## 功能 `features/`
 

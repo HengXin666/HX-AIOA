@@ -1,0 +1,29 @@
+name: plugins
+
+# 插件市场 CI: 清单校验, 命名空间, 静态冲突检测, 每日请求估算; 报告写进本次运行的摘要
+on:
+  pull_request:
+    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts"]
+  push:
+    branches: [main]
+    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: 改动的插件目录
+        if: github.event_name == 'pull_request'
+        run: |
+          dirs=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- plugins | awk -F/ 'NF>2{print $2}' | sort -u | paste -sd, -)
+          echo "CHANGED=$dirs" >> "$GITHUB_ENV"
+          echo "PR_AUTHOR=${{ github.event.pull_request.user.login }}" >> "$GITHUB_ENV"
+      - run: npm run check:plugins

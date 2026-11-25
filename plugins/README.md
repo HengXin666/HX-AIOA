@@ -22,13 +22,28 @@ plugins/
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` | 小写字母数字和 `-`, 与目录名一致 |
+| `id` | 新插件用 `<GitHub 登录名>.<名字>` (小写, 例 `hengxin666.notes`), 与目录名一致; 市场 CI 要求命名空间等于 PR 作者。旧插件 (如 `todo`) 保留不带点的 id |
 | `name`, `summary`, `version`, `icon`, `tags`, `author` | 市场展示用; `icon` 是 Lucide 图标名 |
 | `readme` | 介绍文件名, `.md` 或 `.html` |
 | `prompt` | 提示词模板文件名, `.md` |
 | `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` |
 | `agent.name` | 接入 Agent 的名字; `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
+
+### v2 字段 (`"api": "2"`, 只加不改, 不写 api 的旧清单照常能用)
+
+| 字段 | 说明 |
+| --- | --- |
+| `engines.aioa` | 需要的宿主协议版本范围, 例 `^2` |
+| `requires` / `optional` / `provides` | 服务接口与版本, 例 `{ "service:calendar.events": "^1" }` |
+| `conflicts` | 声明与哪些插件的哪些版本不能共存 |
+| `contributes` | 扩展点贡献, 目录见 `docs/api/plugins.md`; 非集合的 id 必须以插件 id 加 `.` 开头 |
+| `contributes.collections` | 插件数据集合 `{ "id": "items", "fields": { "title": "string" }, "index": ["title"] }` |
+| `emits` / `listens` | 事件名; `emits` 必须以插件 id 开头 |
+| `permissions` | `data:own`, `data:read:<插件>.<集合>`, `push:send`, `net:<域名>`, `ui.webview`, `core.replace`; 后三类是高危 |
+| `budget` | `{ "cron": "0 * * * *", "agentPoll": 0, "requestsPerDay": 0 }`; `agentPoll` 为 0 表示 Agent 用长连, 否则不小于 60 秒 |
+
+api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa watch`)。市场 CI (`npm run check:plugins`) 按 "全部放进白名单" 做冲突检测, 并估算每天请求, 合计超过 5 万不让合并。
 
 模板占位符: `{{channel}}` 群 channel, `{{title}}` 群标题, `{{base}}` 服务地址。`prompt.md` 与 `space` 里都能用。
 
@@ -52,12 +67,12 @@ API 密钥: <密钥>
 
 ## 发新版
 
-改了 `prompt.md`, 介绍或工作台后, 同时把 `<id>/plugin.json` 和 `index.json` 里的 `version` 改成同一个新版本号。已装的实例靠版本号判断要不要更新: 开着自动更新的会自己换上, 关了的在详情页点 "更新到 vX"。不用重装, 群, 密钥, 待办都不变。
+改了 `prompt.md`, 介绍或工作台后, 同时把 `<id>/plugin.json` 和 `index.json` 里的 `version` 改成同一个新版本号。合并后市场里就是新版, 但**不会自动生效**: 管理员在 App 里放行新版后, 开着自动更新的实例立即换上, 关了的在详情页点 "更新到 vX"。不用重装, 群, 密钥, 数据都不变。
 
-更新后专属指令换了版本号, Agent 下次拉取 (每天一次, 或遇到 401 / 403) 时会自己换成新的。
+换上新版时服务端推 `plugin_update` 给该插件 Agent 的长连, `hxaioa watch` 秒级提示重拉专属指令; 只用 HTTP 的 Agent 在下一次请求时从响应头看到新版本。
 
 ## 新增插件
 
 1. 新建 `plugins/<id>/`, 写好上面三个文件。
 2. 在 `index.json` 里加一项。
-3. 推到 main 后, 市场最多 5 分钟内能看到 (服务端缓存)。
+3. 推到 main 后, 市场最多 5 分钟内能看到 (服务端缓存); 管理员放行后各账号才能安装。

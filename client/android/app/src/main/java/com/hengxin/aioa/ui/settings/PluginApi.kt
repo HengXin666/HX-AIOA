@@ -9,7 +9,10 @@ import org.json.JSONObject
 /** 已安装的实例: 群, 工作台, 当前版本, 自动更新开关 (缺省开)。 */
 data class PluginInstall(val channel: String, val space: String?, val version: String, val installed: Long, val auto: Boolean)
 
-/** 市场里的一项, 对应协议 PluginEntry + 本机安装状态。 */
+/** 管理员放行的版本; risky 为需要单独确认的高危权限。 */
+data class PluginAllowed(val version: String, val risky: List<String>)
+
+/** 市场里的一项, 对应协议 PluginEntry + 本机安装状态 + 放行状态。 */
 data class PluginEntry(
     val id: String,
     val name: String,
@@ -19,13 +22,17 @@ data class PluginEntry(
     val tags: List<String>,
     val author: String,
     val installed: PluginInstall?,
+    val allowed: PluginAllowed?,
 ) {
-    /** 市场有比已装更新的版本。 */
-    val outdated get() = installed != null && installed.version != version
+    /** 管理员放行了比已装更新的版本 (市场出新版不算, 要等放行)。 */
+    val outdated get() = installed != null && allowed != null && installed.version != allowed.version
+
+    /** 市场版本比放行的新, 管理员可以放行新版。 */
+    val pending get() = allowed == null || allowed.version != version
 }
 
 /** 详情: 介绍原文 (Markdown 或 HTML), 建议的定时, 任务提示词 (不含密钥)。 */
-data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?)
+data class PluginDetail(val entry: PluginEntry, val readme: String, val html: Boolean, val schedule: String?, val task: String?, val admin: Boolean)
 
 /** 安装结果, 只给这一次: 本地 Agent 接入语 (含密钥), 云端 Agent 委托语 (不含密钥), 密钥本身。 */
 data class PluginInstalled(val prompt: String, val key: String)
@@ -45,8 +52,21 @@ class PluginApi(private val context: Context) {
         val r = Api.call(context, GET, listOf(PATH, id))
         val b = r.body ?: error(r.error ?: FAILED)
         val m = b.getJSONObject("manifest")
-        val e = entry(m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL))
-        PluginDetail(e, b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null })
+        m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL).put(KEY_ALLOWED, b.optJSONObject(KEY_ALLOWED) ?: JSONObject.NULL)
+        val admin = Api.call(context, GET, listOf(PATH_ALLOW)).body?.optBoolean("admin") ?: false
+        PluginDetail(entry(m), b.optString("readme"), b.optString("readmeType") == "html", m.optJSONObject("agent")?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, admin)
+    }
+
+    /** 管理员放行市场当前版本 (已放行的就是换成新版); 有冲突时服务端返回原因。 */
+    suspend fun allow(id: String): Result<Unit> = io {
+        val r = Api.call(context, PUT, listOf(PATH_ALLOW, id), JSONObject())
+        if (r.body == null) error(r.error ?: FAILED)
+    }
+
+    /** 撤销放行: 所有账号一起停用, 已装的一并卸掉, 数据保留。 */
+    suspend fun revoke(id: String): Result<Unit> = io {
+        val r = Api.call(context, DELETE, listOf(PATH_ALLOW, id))
+        if (r.body == null) error(r.error ?: FAILED)
     }
 
     suspend fun install(id: String): Result<PluginInstalled> = io {
@@ -82,6 +102,10 @@ class PluginApi(private val context: Context) {
             tags = (0 until (tags?.length() ?: 0)).mapNotNull { tags?.optString(it)?.ifEmpty { null } },
             author = o.optString("author"),
             installed = o.optJSONObject(KEY_INSTALLED)?.let(::install),
+            allowed = o.optJSONObject(KEY_ALLOWED)?.let { a ->
+                val risky = a.optJSONArray("risky")
+                PluginAllowed(a.optString("version"), (0 until (risky?.length() ?: 0)).mapNotNull { risky?.optString(it) })
+            },
         )
     }
 
@@ -93,6 +117,9 @@ class PluginApi(private val context: Context) {
         const val DEFAULT_ICON = "puzzle"
         private const val PATH = "api/v1/plugins"
         private const val KEY_INSTALLED = "installed"
+        private const val KEY_ALLOWED = "allowed"
+        private const val PATH_ALLOW = "api/v1/plugin-allow"
+        private const val PUT = "PUT"
         private const val GET = "GET"
         private const val POST = "POST"
         private const val DELETE = "DELETE"

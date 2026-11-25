@@ -44,6 +44,11 @@ export class PluginStore {
     this.all().delete(id);
   }
 
+  /** 升级前装好的插件: 用存下的模板拼一份最小清单, 放进白名单用。 */
+  legacy(): { install: PluginInstall; prompt: string; name: string; job?: PluginJob }[] {
+    return [...this.all().values()];
+  }
+
   job(id: string): PluginJob | undefined {
     return this.all().get(id)?.job;
   }

@@ -1,0 +1,32 @@
+{
+  "plugins": [
+    {
+      "id": "e2e.notes",
+      "name": "笔记",
+      "summary": "e2e 用",
+      "version": "1.0.0",
+      "author": "e2e"
+    },
+    {
+      "id": "e2e.theme-a",
+      "name": "主题 A",
+      "summary": "e2e 用",
+      "version": "1.0.0",
+      "author": "e2e"
+    },
+    {
+      "id": "e2e.theme-b",
+      "name": "主题 B",
+      "summary": "e2e 用",
+      "version": "1.0.0",
+      "author": "e2e"
+    },
+    {
+      "id": "e2e.greedy",
+      "name": "贪心",
+      "summary": "e2e 用",
+      "version": "1.0.0",
+      "author": "e2e"
+    }
+  ]
+}

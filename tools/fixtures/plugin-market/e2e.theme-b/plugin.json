@@ -1,0 +1,31 @@
+{
+  "id": "e2e.theme-b",
+  "name": "主题 B",
+  "summary": "e2e 用",
+  "version": "1.0.0",
+  "author": "e2e",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "group": {
+    "title": "主题 B"
+  },
+  "agent": {
+    "name": "助手",
+    "interval": 3600,
+    "task": "按专属指令做。"
+  },
+  "api": "2",
+  "engines": {
+    "aioa": "^2"
+  },
+  "permissions": [
+    "core.replace"
+  ],
+  "contributes": {
+    "core.theme.base": [
+      {
+        "id": "e2e.theme-b.base"
+      }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "e2e.notes",
+  "name": "笔记",
+  "summary": "e2e 用",
+  "version": "1.0.0",
+  "author": "e2e",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "group": {
+    "title": "笔记"
+  },
+  "agent": {
+    "name": "助手",
+    "interval": 3600,
+    "task": "按专属指令做。"
+  },
+  "api": "2",
+  "engines": {
+    "aioa": "^2"
+  },
+  "permissions": [
+    "data:own"
+  ],
+  "contributes": {
+    "collections": [
+      {
+        "id": "items",
+        "fields": {
+          "title": "string",
+          "done": "boolean"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "id": "e2e.notes.add",
+        "title": "记一条"
+      }
+    ]
+  },
+  "budget": {
+    "agentPoll": 0
+  }
+}

@@ -74,6 +74,14 @@ export class Sockets {
     });
   }
 
+  /** CLI 长连里用这把 key 的 (插件 Agent 收指令更新)。 */
+  agentListeners(keyId: string): WebSocket[] {
+    return this.all().filter((ws) => {
+      const a = attOf(ws);
+      return a.role === "chat" && a.keyId === keyId;
+    });
+  }
+
   /** 发给看得到这个群的人 (只用于 presence): 主人的连接都收, 子号只在群成员里时收, 安卓后台连接不收。 */
   toChannel(members: Set<string>, frame: unknown): void {
     const text = JSON.stringify(frame);
