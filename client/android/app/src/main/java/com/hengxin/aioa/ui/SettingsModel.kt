@@ -68,6 +68,20 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         refreshProxy()
     }
 
+    /** 表单和已保存的配置不一样 (改了还没保存)。 */
+    fun dirty(): Boolean {
+        val c = ConfigStore.read(app) ?: return server.isNotBlank() || subscription.isNotBlank()
+        return c.server != server.trim() || c.subscription != subscription.trim() || c.proxyLink != proxyLink
+    }
+
+    /** 放弃没保存的修改, 表单回到已保存的配置。 */
+    fun discard() {
+        val c = ConfigStore.read(app)
+        server = c?.server.orEmpty()
+        subscription = c?.subscription.orEmpty()
+        proxyLink = c?.proxyLink ?: true
+    }
+
     fun save(): Boolean {
         if (proxyBusy) return false
         val config = AppConfig(server.trim(), subscription.trim(), proxyLink)

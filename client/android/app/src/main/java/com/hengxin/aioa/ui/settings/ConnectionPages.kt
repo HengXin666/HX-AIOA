@@ -9,7 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,7 +35,34 @@ private const val META_SP = 12
 /** 服务端: 地址, 令牌, 保存并连接, 当前连接状态。 */
 @Composable
 fun ServerPage(model: SettingsModel, online: Boolean, onSaved: () -> Unit, onBack: (() -> Unit)?) {
-    SettingsPageFrame(SettingsPage.SERVER.title, onBack) { ServerFields(model, online, onSaved) }
+    SettingsPageFrame(SettingsPage.SERVER.title, guardedBack(model, onBack)) { ServerFields(model, online, onSaved) }
+}
+
+/**
+ * 有没保存的修改时, 返回 (系统返回键, 侧滑, 左上箭头) 先问 "放弃修改?"; 放弃就把表单恢复成已保存的再返回。
+ * 保存后停在原页显示结果, 不自动跳走。
+ */
+@Composable
+private fun guardedBack(model: SettingsModel, onBack: (() -> Unit)?): (() -> Unit)? {
+    if (onBack == null) return null
+    var ask by remember { mutableStateOf(false) }
+    BackHandler(enabled = model.dirty()) { ask = true }
+    if (ask) {
+        AlertDialog(
+            onDismissRequest = { ask = false },
+            title = { androidx.compose.material3.Text("放弃修改?") },
+            text = { androidx.compose.material3.Text("改的内容还没保存, 返回后会恢复成原来的设置。") },
+            confirmButton = {
+                TextButton({
+                    ask = false
+                    model.discard()
+                    onBack()
+                }) { androidx.compose.material3.Text("放弃", color = Aioa.colors.danger) }
+            },
+            dismissButton = { TextButton({ ask = false }) { androidx.compose.material3.Text("继续编辑") } },
+        )
+    }
+    return { if (model.dirty()) ask = true else onBack() }
 }
 
 /** 服务端表单本体, 首次配置页也复用它。 */
@@ -53,7 +87,7 @@ fun ColumnScope.ServerFields(model: SettingsModel, online: Boolean?, onSaved: ()
 fun ProxyPage(model: SettingsModel, onSaved: () -> Unit, onBack: (() -> Unit)?) {
     val c = Aioa.colors
     val view = model.proxy
-    SettingsPageFrame(SettingsPage.PROXY.title, onBack) {
+    SettingsPageFrame(SettingsPage.PROXY.title, guardedBack(model, onBack)) {
         ProxyFields(model, onSaved)
         SettingsGroup(TEXT_STATUS) {
             NoteRow(view.summary.ifEmpty { "读取中..." })
