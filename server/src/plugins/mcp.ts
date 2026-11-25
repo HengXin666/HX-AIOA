@@ -1,7 +1,8 @@
-import { MAX_TODOS, TODO_STATES, TODO_SYNC_TOPIC, parseTodoInput, type ChatSyncFrame, type TodoItem, type TodoState } from "@hx-aioa/protocol";
+import { MAX_TODOS, TODO_STATES, parseTodoInput, type TodoItem, type TodoState } from "@hx-aioa/protocol";
 import { CODE_FORBIDDEN, ERR_FORBIDDEN } from "../constants";
 import type { ReqCtx } from "../core";
 import { fail, json, readJson } from "../http";
+import { syncTodos } from "./api-todos";
 import { extChannel, extWritable } from "./ext";
 import { dayOf, todosMarkdown } from "./todo-md";
 
@@ -68,8 +69,8 @@ function write(c: ReqCtx, channel: string, a: Record<string, unknown>, fresh: bo
   if (!fresh && !c.core.todos.get(channel, input.id)) return text(`没有待办 ${input.id}`, true);
   const out = c.core.todos.upsert(channel, [input]);
   if (typeof out === "string") return text(out, true);
-  if (out.length) c.core.sockets.toAllClients({ t: "chat_sync", topic: TODO_SYNC_TOPIC, channel } satisfies ChatSyncFrame);
-  return text(fresh ? `已新增 ${input.id}` : out.length ? `已更新 ${input.id}` : "没有变化");
+  if (out.rev) syncTodos(c.core, channel, out.rev);
+  return text(fresh ? `已新增 ${input.id}` : out.rev ? `已更新 ${input.id}` : "没有变化");
 }
 
 export async function mcp(c: ReqCtx): Promise<Response> {

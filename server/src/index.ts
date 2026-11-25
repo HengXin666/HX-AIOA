@@ -35,8 +35,7 @@ export default {
       return;
     }
     const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
-    ctx.waitUntil(hub.todoIssueSync().catch((e) => console.error("待办 issue 同步失败:", e)));
-    if (env.GITHUB_TOKEN) ctx.waitUntil(hub.githubSync().then((r) => console.log("GitHub 定时同步:", JSON.stringify(r))));
-    if (env.CF_API_TOKEN && env.CF_ACCOUNT_ID) ctx.waitUntil(hub.cfCheck().catch((e) => console.error("CF 额度检查失败:", e)));
+    // GitHub 回填, 待办 issue 同步, CF 额度检查合成一次 RPC, 每天省 96 次 DO 请求; 各项在 Hub 里按配置与启用状态跳过
+    ctx.waitUntil(hub.halfHourly().then((r) => r && console.log("GitHub 定时同步:", JSON.stringify(r))).catch((e) => console.error("定时任务失败:", e)));
   },
 } satisfies ExportedHandler<Env>;

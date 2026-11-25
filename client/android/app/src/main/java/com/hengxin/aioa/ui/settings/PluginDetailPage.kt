@@ -38,8 +38,9 @@ private const val META_SP = 12
 private const val BODY_SP = 13
 private val README_MAX = 4000.dp
 private val README_SHAPE = RoundedCornerShape(14.dp)
-private const val GH_ID = "gh"
-private const val TODO_ID = "todo"
+// 服务端返回新 id (旧 id gh / todo 只作路径别名)
+private const val GH_ID = "hengxin666.gh"
+private const val TODO_ID = "hengxin666.todo"
 
 /** 插件详情: 介绍 (Markdown 或沙箱 HTML), 安装 / 卸载; 刚装完显示接入语供复制。 */
 @Composable
@@ -53,12 +54,9 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
     // 接入语含密钥, 只放内存, 离开页面就没了
     var prompt by remember(id) { mutableStateOf<PluginInstalled?>(null) }
     var confirm by rememberSaveable { mutableStateOf(false) }
-    // 依赖插件的安装情况, 有依赖时才拉列表
-    var others by remember(id) { mutableStateOf<Map<String, PluginEntry>>(emptyMap()) }
     val reload = {
         scope.launch {
             api.detail(id).onSuccess { detail = it; error = null }.onFailure { error = it.message }
-            if (detail?.entry?.deps?.isNotEmpty() == true) api.list().onSuccess { (l, _) -> others = l.associateBy { it.id } }
         }
     }
     LaunchedEffect(id) { reload() }
@@ -74,23 +72,38 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             PluginIcon(e.icon)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(e.name, c.text, TITLE_SP, weight = FontWeight.SemiBold)
-                val ver = if (e.outdated) "已装 v${e.installed?.version}, 最新 v${e.version}" else "v${e.version}"
+                val ver = when {
+                    e.outdated -> "已装 v${e.installed?.version}, 已放行 v${e.allowed?.version}"
+                    e.allowed == null -> "v${e.version} · 待放行"
+                    else -> "v${e.allowed.version}"
+                }
                 Text(listOf(ver, e.author).filter { it.isNotEmpty() }.joinToString(" · "), c.textSecondary, META_SP)
             }
         }
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
         val installed = e.installed
         val p = prompt
-        if (p != null && p.prompt.isNotEmpty()) Handoff(p)
-        if (e.deps.isNotEmpty()) SettingsGroup("依赖") {
-            e.deps.forEachIndexed { i, dep ->
-                if (i > 0) RowDivider()
-                val o = others[dep.id]
-                val ok = o?.installed != null
-                InfoRow((o?.name ?: dep.id) + if (dep.optional) " (可选)" else "", if (ok) "已满足" else if (dep.optional) "没装, 相关功能不出现" else "需要先装", if (ok) c.success else c.textSecondary)
+        if (p != null) Handoff(p)
+        AllowGroup(d, busy) { act ->
+            busy = true
+            scope.launch {
+                (if (act) api.allow(id) else api.revoke(id)).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
+                busy = false
             }
         }
-        if (installed == null) {
+        if (installed == null && e.allowed == null) {
+            if (!d.admin) Paragraph("管理员还没放行这个插件, 放行后才能安装。", c.textSecondary, BODY_SP)
+        } else if (d.agentless) {
+            SettingsGroup("启用", "这个插件没有 Agent, 不用安装。停用后它的接口与入口都隐藏, 数据保留, 再启用即恢复。") {
+                SwitchRow("启用", d.enabled) { on ->
+                    busy = true
+                    scope.launch {
+                        api.setEnabled(id, on).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
+                        busy = false
+                    }
+                }
+            }
+        } else if (installed == null) {
             PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy) {
                 busy = true
                 scope.launch {
@@ -106,7 +119,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                     RowDivider()
                 }
                 ActionRow(
-                    if (busy) "更新中..." else if (e.outdated) "更新到 v${e.version}" else "重新拉取最新版",
+                    if (busy) "更新中..." else if (e.outdated) "更新到 v${e.allowed?.version}" else "重新应用放行的版本",
                     "refresh-cw",
                     enabled = !busy,
                 ) {
@@ -117,7 +130,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                     }
                 }
                 RowDivider()
-                SwitchRow("自动更新", installed.auto, "市场出新版后, 下次打开市场或 Agent 拉指令时自动换上。群, 密钥, 待办都不变。") { on ->
+                SwitchRow("自动更新", installed.auto, "管理员放行新版后自动换上, Agent 长连会立即收到。群, 密钥, 待办都不变。") { on ->
                     scope.launch { api.setAuto(id, on).onSuccess { reload() }.onFailure { error = it.message } }
                 }
                 if (installed.channel.isNotEmpty()) {
@@ -128,7 +141,8 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                 ActionRow("卸载", "trash-2", danger = true, enabled = !busy) { confirm = true }
             }
         }
-        if (installed != null && id == GH_ID) GhSection()
+        // GitHub 授权没有 Agent: 启用后在这里授权
+        if (id == GH_ID && d.enabled) GhSection()
         if (installed != null && id == TODO_ID && installed.channel.isNotEmpty()) TodoExtSection(installed.channel)
         d.task?.let { TaskPrompt(it, installed != null) }
         Column(Modifier.fillMaxWidth().clip(README_SHAPE).background(c.surface).padding(16.dp)) {
@@ -157,6 +171,22 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
 }
 
 private const val TASK_PREVIEW_LINES = 6
+
+/** 管理员才看到: 放行 (或放行市场新版) 与撤销放行。act = true 放行, false 撤销。 */
+@Composable
+private fun AllowGroup(d: PluginDetail, busy: Boolean, onAct: (Boolean) -> Unit) {
+    if (!d.admin) return
+    val e = d.entry
+    val risky = e.allowed?.risky.orEmpty()
+    val hint = if (risky.isEmpty()) "放行后所有账号都能自己启用; 白名单里每个插件只有一个版本。" else "含高危权限: ${risky.joinToString(", ")}。"
+    SettingsGroup("管理员", hint) {
+        if (e.pending) {
+            ActionRow(if (e.allowed == null) "放行 v${e.version}" else "放行新版 v${e.version}", "shield-check", enabled = !busy) { onAct(true) }
+            if (e.allowed != null) RowDivider()
+        }
+        if (e.allowed != null) ActionRow("撤销放行", "shield-off", danger = true, enabled = !busy) { onAct(false) }
+    }
+}
 
 /** 任务提示词: 插件让 Agent 干什么, 不含密钥, 可以单独复制给任何 Agent (包括云端的)。 */
 @Composable

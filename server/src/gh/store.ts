@@ -23,6 +23,11 @@ export class GhStore {
     this.sql.exec("INSERT OR REPLACE INTO gh (k, v) VALUES (?, ?)", k, JSON.stringify(v));
   }
 
+  /** 停用并清除: 令牌, 规则, Agent 开关, 操作记录全删; 返回删掉的行数。 */
+  clear(): number {
+    return this.sql.exec("DELETE FROM gh").rowsWritten;
+  }
+
   secret(): GhSecret | null {
     return this.get<GhSecret>(K_AUTH);
   }

@@ -1,10 +1,11 @@
-import { GH_PLUGIN_ID, type GhAgent, type GhAuth, type GhAuthKind, type GhDevice, type GhDevicePoll, type GhOp, type GhRepo, type GhRules } from "@hx-aioa/protocol";
+import { type GhAgent, type GhAuth, type GhAuthKind, type GhDevice, type GhDevicePoll, type GhOp, type GhRepo, type GhRules } from "@hx-aioa/protocol";
 import { randomId } from "../auth";
 import type { Core, Principal } from "../core";
 import type { Env } from "../env";
 import { ApiFail } from "../http";
 import { GH_CODE, deviceStart, devicePoll, gh, refreshGrant, type TokenGrant } from "./client";
 import { seal, unseal } from "./crypto";
+import { usesGh } from "./gate";
 import { GhStore, type GhSecret } from "./store";
 
 // 定时任务入口: 同步待办关联的 issue (webhook 漏掉的兜底)
@@ -102,6 +103,12 @@ export class GhService {
     this.repoCache = null;
   }
 
+  purge(): number {
+    this.repoCache = null;
+    this.pending.clear();
+    return this.store.clear();
+  }
+
   async startDevice(): Promise<GhDevice> {
     const id = this.env.GH_CLIENT_ID;
     if (!id) throw new ApiFail(400, "bad_request", "服务端没配 GH_CLIENT_ID, 先用令牌授权");
@@ -157,7 +164,7 @@ export class GhService {
     if (!repoAllowed(r, this.store.rules())) throw denied(`${repo} 不在允许的仓库里, 请主人在 GitHub 授权插件里放行`);
   }
 
-  /** 主人随时可用; Agent 看开关, 没设过时插件声明了 gh 依赖就默认开。 */
+  /** 主人随时可用; Agent 看开关, 没设过时插件声明了 GitHub issue 服务就默认开。 */
   canUse(core: Core, who: Principal): boolean {
     if (who.owner) return true;
     if (who.member || who.key.ext) return false;
@@ -165,8 +172,9 @@ export class GhService {
     return set ?? this.depDefault(core, who.key.id);
   }
 
+  // 插件清单 (白名单快照) 声明了 service:gh.issues 的, 它的 Agent 默认可用
   private depDefault(core: Core, keyId: string): boolean {
-    return core.plugins.list().some((p) => p.keyId === keyId && p.deps?.includes(GH_PLUGIN_ID));
+    return core.plugins.list().some((p) => p.keyId === keyId && usesGh(core, p.id));
   }
 
   agents(core: Core): GhAgent[] {

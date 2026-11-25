@@ -12,6 +12,7 @@
 | [connectors.md](api/connectors.md) | 各来源适配器的字段映射, 去重与分组 |
 | [spaces.md](api/spaces.md) | 工作台布局与组件 |
 | [github.md](api/github.md) | GitHub 页面接口 |
+| [plugins.md](api/plugins.md) | 插件白名单, 账号启用, 单选扩展点改选, 插件数据 pdata |
 
 ## 功能 `features/`
 
@@ -65,6 +66,7 @@
 | [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
 | [mockups/mail-detail.html](design/mockups/mail-detail.html) | 邮件详情重做设计稿: 原文内嵌, 图片拦截, 深色, 链接去向, 转进群 / 交给 Agent (#46) |
 | [mockups/gh-todo.html](design/mockups/gh-todo.html) | GitHub 授权插件与待办关联 issue 手机设计稿 (#90 #98) |
+| [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`
 

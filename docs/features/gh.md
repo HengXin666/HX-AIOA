@@ -1,6 +1,12 @@
 # GitHub 授权插件与待办关联
 
-云端 Agent 是无状态的, 没有主人的 GitHub 账号。`gh` 是一个 base 插件 (不建群, 不带 Agent): 主人授权一次, 令牌加密存在服务端, 其他插件的 Agent 通过服务端代办 issue 操作, 永远拿不到令牌。
+云端 Agent 是无状态的, 没有主人的 GitHub 账号。`hengxin666.gh` (旧 id `gh`, 路径里照常能用) 是插件体系 v2 (#99) 里的无 Agent 内置插件 (不建群, 不带 Agent, 只启用不安装): 管理员放行, 主人启用后授权一次, 令牌加密存在服务端, 其他插件的 Agent 通过服务端代办 issue 操作, 永远拿不到令牌。
+
+## 启用与停用
+
+- 主人没启用时 `/api/v1/gh/*` 一律 404, 待办的 issue 同步 (定时, webhook, 打开待办时) 也不跑, 专属指令里没有 issue 一节; 判断只查 Hub 内存, 不查库。
+- `PUT /api/v1/plugins/hengxin666.gh/enabled` 启用; `DELETE .../enabled` 停用, 令牌与规则保留; 带 `?purge=1` 清掉令牌, 仓库规则, Agent 开关与操作记录。
+- 升级迁移: 升级前装过旧 base 插件 `gh` 的部署, 第一次唤醒时自动放行并为主人启用, 删掉旧安装记录, 令牌与规则原样保留; 只做一次, 之后停用或撤销不会被改回。没装过的等管理员放行。
 
 ## 授权
 
@@ -9,7 +15,7 @@
 | 设备码 (推荐) | `POST /api/v1/gh/device` 返回 `userCode` 与 `verifyUrl`, 主人在任何登录了 GitHub 的设备 (通常是电脑) 上输入; App 每 `interval` 秒 `POST /api/v1/gh/device/{id}` 轮询, `status` 为 `done` 即完成。需要服务端变量 `GH_CLIENT_ID` (OAuth App 或开了 Device Flow 的 GitHub App): 在仓库 Settings → Secrets and variables → Actions → Variables 填 `AIOA_GH_CLIENT_ID`, 部署时同步为 Worker 的 secret。Fork 请用自己的 OAuth App。 |
 | 粘贴令牌 | `PUT /api/v1/gh/token { "token": "github_pat_..." }`, 建议 fine-grained, 只给 Issues 读写。 |
 
-- 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或卸载插件即删除。
+- 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或停用并清除 (`?purge=1`) 即删除。
 - GitHub App 的过期令牌在剩 5 分钟时自动续期, 需要 `GH_CLIENT_SECRET`; 没配就到期后重新授权。
 
 ## 仓库范围
@@ -26,7 +32,7 @@ GitHub 上授权的仓库是上限, `PUT /api/v1/gh/rules` 再收窄 (`GhRules`)
 
 ## Agent 权限与 issue 代理
 
-- 插件清单 `deps` 声明了 `gh` 的插件, 其 Agent 默认可用; 其他 Agent 默认不可用。`PUT /api/v1/gh/agents/{keyId} { "allowed": bool }` 单独开关。子号与外部接入密钥一律不可用。
+- 插件清单在 `requires` / `optional` 里声明了 `service:gh.issues` (旧清单的 `deps` 写了 `gh` 也算) 的插件, 其 Agent 默认可用; 其他 Agent 默认不可用。`PUT /api/v1/gh/agents/{keyId} { "allowed": bool }` 单独开关。子号与外部接入密钥一律不可用。
 - 接口 (主人或获准的 Agent): `GET|POST /api/v1/gh/issues/{owner}/{name}` (列出 / 新建, 新建可带 `parent` 挂到父 issue, 带 `todo: { channel, id }` 顺手关联待办), `GET|PATCH .../{number}`, `POST .../{number}/comments`, `POST .../{number}/sub`。
 - 每次操作记一笔 (`GET /api/v1/gh` 的 `ops`, 最近 50 条)。没授权 409, 仓库没放行或没权限 403, 错误里写明怎么放行。
 

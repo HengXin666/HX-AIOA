@@ -139,7 +139,7 @@ fun ChatScreen(model: ChatModel) {
         } else {
             // 装了待办插件的群: 顶上切 聊天 / 待办
             var todo by rememberSaveable(open) { mutableStateOf(false) }
-            if (dir.metas[open]?.agents?.any { it.plugin == TODO_PLUGIN } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
+            if (dir.metas[open]?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
             if (todo) KeepState("chat:todo:$open") { com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { seq -> todo = false; g.jumpTo(seq) }, Modifier.weight(1f)) }
             else {
                 KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
@@ -175,7 +175,8 @@ internal fun BackButton(onBack: () -> Unit) {
 }
 
 private const val PRESENCE_TICK_MS = 1000L
-private const val TODO_PLUGIN = "todo"
+// 待办插件迁移后群里 Agent 的 plugin 是新 id, 没升级的服务端仍是旧 id
+private val TODO_PLUGINS = setOf(com.hengxin.aioa.Constants.TODO_PLUGIN, "todo")
 
 @Composable
 private fun ChatTopBar(model: ChatModel, group: String, onBack: () -> Unit) {

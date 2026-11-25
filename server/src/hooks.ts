@@ -18,6 +18,7 @@ import {
   HEADER_CONTENT_TYPE,
 } from "./constants";
 import type { Core, Principal } from "./core";
+import { githubOff, githubOn } from "./github/gate";
 import { fail, json } from "./http";
 import { Registry } from "./registry";
 
@@ -38,6 +39,8 @@ async function authenticate(core: Core, req: Request, url: URL, key: KeyInfo, ra
 // POST /api/v1/hooks/{adapter}/{keyId}: 外部系统原样推送, 适配器转成统一事件
 export async function handleHook(core: Core, req: Request, url: URL, adapter: string, keyId: string): Promise<Response> {
   if (!isHookAdapter(adapter)) return fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
+  // GitHub 插件没启用: 不入库, 404 让 GitHub 那边显示投递失败
+  if (adapter === GITHUB_ADAPTER && !githubOn(core)) return githubOff(req);
   const key = core.registry.key(keyId);
   if (!key) return fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED);
   const raw = await req.text();

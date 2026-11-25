@@ -12,13 +12,14 @@ import {
   type StreamClientFrame,
   type StreamServerFrame,
   type ServerFrame,
+  type PDataSyncFrame,
   type UserActionInput,
 } from "@hx-aioa/protocol";
 import { HEARTBEAT_MS, RECONNECT_MAX_MS, RECONNECT_MIN_MS } from "../constants";
 import type { Backend } from "./backend";
-import type { Store } from "./store";
+import { pdataTopic, type Store } from "./store";
 
-type Incoming = StreamServerFrame | ServerFrame;
+type Incoming = StreamServerFrame | ServerFrame | PDataSyncFrame;
 type Outgoing = StreamClientFrame | ClientFrame;
 
 export type StreamOptions = {
@@ -132,6 +133,12 @@ export class StreamLink implements Backend {
       case "settings":
         this.opts.onSettings?.(f.settings);
         break;
+      case "pdata_sync": {
+        const topic = pdataTopic(f.plugin, f.coll);
+        s.pdataRev.set(topic, Math.max(s.pdataRev.get(topic) ?? 0, f.rev));
+        s.emit(topic);
+        break;
+      }
       case "err":
         console.warn("服务端错误:", f.code, f.text);
         break;

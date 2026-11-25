@@ -1,4 +1,5 @@
 import {
+  TODO_PLUGIN,
   EXT_ACCESS,
   EXT_MAX_HOURS,
   EXT_TTL_HOURS,
@@ -6,7 +7,7 @@ import {
   PATH_EXT_MD,
   PATH_TODO_EXT,
   PATH_TODO_EXT_ONE,
-  PLUGIN_CHANNEL_PREFIX,
+  pluginChannel,
   type ExtAccess,
   type ExtKeyCreated,
   type ExtKeyInfo,
@@ -14,7 +15,8 @@ import {
 } from "@hx-aioa/protocol";
 import { baseOf } from "../api-chats";
 import { CODE_FORBIDDEN, DELETE, ERR_FORBIDDEN, GET, POST } from "../constants";
-import { OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
+import { type Handler, OWNER, type Principal, type ReqCtx, ROOM, type Route, route } from "../core";
+import { githubOff } from "../github/gate";
 import { fail, json, readJson } from "../http";
 import { mcp } from "./mcp";
 import { todosMarkdown } from "./todo-md";
@@ -22,7 +24,7 @@ import { todosMarkdown } from "./todo-md";
 const HOUR = 3_600_000;
 const EXT_RATE = 60;
 // 不带 channel 时默认点子待办群
-export const DEFAULT_TODO_CHANNEL = `${PLUGIN_CHANNEL_PREFIX}todo`;
+export const DEFAULT_TODO_CHANNEL = pluginChannel(TODO_PLUGIN);
 
 const p = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const infoOf = (k: KeyInfo): ExtKeyInfo => ({ id: k.id, name: k.name, access: k.ext!, prefix: k.prefix, created: k.created, ...(k.expires ? { expires: k.expires } : {}), ...(k.used ? { used: k.used } : {}) });
@@ -73,10 +75,13 @@ function md(c: ReqCtx): Response {
   return new Response(text, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
+// 外部接入只碰待办: 主人停用了待办插件就当接口不存在
+const todoOn = (h: Handler): Handler => (c) => (c.core.kernel.isEnabled(c.core.users.ownerId(), TODO_PLUGIN) ? h(c) : githubOff(c.req));
+
 export const EXT_ROUTES: Route[] = [
-  route(GET, PATH_TODO_EXT, OWNER, list),
-  route(POST, PATH_TODO_EXT, OWNER, create),
-  route(DELETE, PATH_TODO_EXT_ONE, OWNER, remove),
-  route(GET, PATH_EXT_MD, ROOM, md),
-  route(POST, PATH_EXT_MCP, ROOM, mcp),
+  route(GET, PATH_TODO_EXT, OWNER, todoOn(list)),
+  route(POST, PATH_TODO_EXT, OWNER, todoOn(create)),
+  route(DELETE, PATH_TODO_EXT_ONE, OWNER, todoOn(remove)),
+  route(GET, PATH_EXT_MD, ROOM, todoOn(md)),
+  route(POST, PATH_EXT_MCP, ROOM, todoOn(mcp)),
 ];

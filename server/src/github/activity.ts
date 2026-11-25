@@ -104,6 +104,10 @@ export class ActivityStore {
     return n;
   }
 
+  clear(): number {
+    return this.sql.exec("DELETE FROM gh_activity").rowsWritten;
+  }
+
   range(since: number, until: number): GithubActivityItem[] {
     return this.sql
       .exec<Row>("SELECT body FROM gh_activity WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 500", since, until)

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// GitHub 授权插件 + 待办 1.5 冒烟测试 (不连 GitHub): base 插件安装, 依赖, Agent 权限, 仓库规则,
+// GitHub 授权插件 (hengxin666.gh, 无 Agent, 放行后启用) + 待办冒烟测试 (不连 GitHub): 门控, Agent 权限, 仓库规则,
 // 待办四态与关联字段, 外部接入密钥 (Markdown 与 MCP)。市场同 e2e-plugins: 本机静态服务 + --var PLUGIN_MARKET
 // 环境变量: AIOA_SERVER, AIOA_TOKEN, AIOA_MARKET_PORT (默认 8797)
 import { readFile } from "node:fs/promises";
@@ -55,13 +55,21 @@ const api = (m, p, b) => call(token, m, p, b);
 // id 为 null 时是通知 (不带 id)
 const rpc = (k, method, params, id = 1) => call(k, "POST", `${V1}/ext/mcp`, { jsonrpc: "2.0", ...(id === null ? {} : { id }), method, ...(params ? { params } : {}) });
 
+const GH = "hengxin666.gh";
 await api("DELETE", `${V1}/plugins/todo`);
-await api("DELETE", `${V1}/plugins/gh`);
+await api("DELETE", `${V1}/plugins/${GH}/enabled?purge=1`);
 
+const off0 = await api("GET", `${V1}/gh`);
+check("GitHub 授权没启用时接口不存在", off0.status === 404, off0.data);
+const allowGh = await api("PUT", `${V1}/plugin-allow/${GH}`, {});
+const allowTodo = await api("PUT", `${V1}/plugin-allow/todo`, {});
+check("管理员放行 GitHub 授权与待办 (旧 id 作别名)", allowGh.status === 200 && allowTodo.status === 200, [allowGh.data, allowTodo.data]);
 const gh = await api("POST", `${V1}/plugins/gh/install`);
-check("装 GitHub 授权 (base 插件, 不建群不发 key)", gh.status === 200 && gh.data.install.base === true && gh.data.install.channel === "" && gh.data.key === "", gh.data);
-const ghDetail = await api("GET", `${V1}/plugins/gh`);
-check("base 插件详情没有任务提示词", ghDetail.status === 200 && ghDetail.data.manifest.base === true && !ghDetail.data.task, ghDetail.data?.task);
+check("GitHub 授权没有 Agent, 不能安装只能启用", gh.status === 400 && /启用/.test(gh.data.error), gh.data);
+const en = await api("PUT", `${V1}/plugins/gh/enabled`);
+check("启用 GitHub 授权 (旧 id gh 作别名)", en.status === 200, en.data);
+const ghDetail = await api("GET", `${V1}/plugins/${GH}`);
+check("无 Agent 插件详情没有任务提示词", ghDetail.status === 200 && !ghDetail.data.manifest.agent && !ghDetail.data.task, ghDetail.data?.task);
 const st = await api("GET", `${V1}/gh`);
 check("未授权状态", st.status === 200 && !st.data.auth && st.data.device === false && Array.isArray(st.data.ops), st.data);
 const devNo = await api("POST", `${V1}/gh/device`);
@@ -71,12 +79,12 @@ check("令牌太短被拒", badTok.status === 400, badTok.data);
 
 const inst = await api("POST", `${V1}/plugins/todo/install`);
 const key = inst.data?.key;
-check("装待办, 记下 gh 依赖", inst.status === 200 && inst.data.install.deps?.includes("gh"), inst.data?.install);
+check("装待办", inst.status === 200 && !!key, inst.data?.install);
 const guide = await call(key, "GET", `${V1}/chat-agent/guide`);
 check("专属指令带四态和 GitHub issue 接口", guide.status === 200 && guide.data.includes("hold 挂起") && guide.data.includes("### GitHub issue") && guide.data.includes("/api/v1/gh/issues/"), guide.status);
 const agents = (await api("GET", `${V1}/gh`)).data.agents ?? [];
 const me = agents.find((a) => a.keyId === inst.data.install.keyId);
-check("声明依赖的 Agent 默认有权限", me?.allowed === true && me.dep === true, agents);
+check("清单声明了 issue 服务的 Agent 默认有权限", me?.allowed === true && me.dep === true, agents);
 const noAuth = await call(key, "GET", `${V1}/gh/issues/a/b`);
 check("没授权时 Agent 调 issue 得到 409 和说明", noAuth.status === 409 && /授权/.test(noAuth.data.error), noAuth.data);
 const ownerOnly = await call(key, "GET", `${V1}/gh`);
@@ -148,9 +156,22 @@ await api("DELETE", `${EXT}/${rw.data.info.id}`);
 await api("DELETE", `${TODOS}/${newId}`);
 await api("DELETE", `${TODOS}/p-1`);
 await api("DELETE", `${TODOS}/c-1`);
+// 停用 GitHub 授权: 接口 404, 专属指令去掉 issue 一节; 再启用规则还在; 清除后规则没了
+const dis = await api("DELETE", `${V1}/plugins/${GH}/enabled`);
+const offSt = await api("GET", `${V1}/gh`);
+const offIssue = await call(key, "GET", `${V1}/gh/issues/a/b`);
+const guide2 = await call(key, "GET", `${V1}/chat-agent/guide`);
+check("停用后接口 404, 指令不再提 issue", dis.status === 200 && offSt.status === 404 && offIssue.status === 404 && !String(guide2.data).includes("### GitHub issue"), [offSt.status, offIssue.status]);
+await api("PUT", `${V1}/plugins/${GH}/enabled`);
+const back = await api("GET", `${V1}/gh`);
+check("再启用规则还在", back.data?.rules?.pushedDays === 365, back.data?.rules);
+const purge = await api("DELETE", `${V1}/plugins/${GH}/enabled?purge=1`);
+await api("PUT", `${V1}/plugins/${GH}/enabled`);
+const cleared = await api("GET", `${V1}/gh`);
+check("停用并清除删掉规则与令牌", purge.status === 200 && purge.data.purged > 0 && !cleared.data?.rules?.pushedDays && !cleared.data?.auth, [purge.data, cleared.data?.rules]);
 const un = await api("DELETE", `${V1}/plugins/todo`);
-const un2 = await api("DELETE", `${V1}/plugins/gh`);
-check("卸载两个插件", un.status === 200 && un2.status === 200, [un.data, un2.data]);
+const un2 = await api("DELETE", `${V1}/plugins/${GH}/enabled`);
+check("卸载待办, 停用 GitHub 授权", un.status === 200 && un2.status === 200, [un.data, un2.data]);
 
 market.close();
 console.log(failed ? `\n${failed} 项失败` : "\n全部通过");

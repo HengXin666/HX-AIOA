@@ -41,6 +41,7 @@ class LinkWatchdog(
     private val alarmReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, data: Intent) {
             LinkStats.hit(LinkStats.Key.ALARM)
+            BatteryLog.sample(context)
             val wake = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG)
             wake.acquire(Constants.WATCHDOG_WAKE_MS)
             val tried = interval
@@ -53,6 +54,7 @@ class LinkWatchdog(
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, data: Intent) {
             LinkStats.hit(LinkStats.Key.SCREEN)
+            BatteryLog.sample(context)
             socket.check(Constants.HEARTBEAT_MIN_MS / 2) { if (it == LinkSocket.Probe.DEAD) LinkLog.add(context, "亮屏检查: 连接已死, 已重连") }
             onWake()
         }

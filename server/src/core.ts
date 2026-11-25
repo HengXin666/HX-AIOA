@@ -6,6 +6,8 @@ import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
 import type { PluginStore } from "./plugins/store";
 import type { TodoStore } from "./plugins/todos";
+import type { PluginKernel } from "./plugins/kernel";
+import type { PDataStore } from "./plugins/pdata";
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
 import type { ChatStore } from "./chat-store";
@@ -46,6 +48,9 @@ export type Core = {
   files: FileStore;
   migrator: Migrator;
   plugins: PluginStore;
+  // 插件内核 (白名单, 账号启用, 扩展点, 事件) 与插件通用数据
+  kernel: PluginKernel;
+  pdata: PDataStore;
   mail: MailStore;
   // 译文缓存与每月计费字符
   tr: TranslateStore;

@@ -3,8 +3,11 @@
 // 环境变量: AIOA_SERVER, AIOA_TOKEN (AUTH_TOKEN)
 import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const server = process.env.AIOA_SERVER;
@@ -145,6 +148,16 @@ check("history 增量", h2.fetched >= 1 && h2.fetched <= 3, h2);
 check("history 去掉删除的", !readFileSync(h2.file, "utf8").includes("马上删掉"));
 
 // 待办: 一行一条, --all 含已完成
+// 待办接口跟着待办插件的启用状态走: 用仓库里的 plugins/ 当市场 (服务端 --var PLUGIN_MARKET 指到本机端口), 放行并启用
+const MARKET = join(dirname(fileURLToPath(import.meta.url)), "..", "plugins");
+const market = createServer(async (req, res) => {
+  const path = normalize(decodeURIComponent(req.url ?? "/")).replace(/^(\.\.[/\\])+/, "");
+  res.end(await readFile(join(MARKET, path), "utf8").catch(() => ((res.statusCode = 404), "not found")));
+});
+await new Promise((ok) => market.listen(Number(process.env.AIOA_MARKET_PORT ?? 8797), "127.0.0.1", ok));
+await api("PUT", `${V1}/plugin-allow/todo`, {});
+await api("PUT", `${V1}/plugins/todo/enabled`);
+market.close();
 await api("POST", `${V1}/chats/${enc(GROUP)}/todos`, { todos: [{ id: "t-1", title: "写测试", state: "doing" }, { id: "t-2", title: "早做完了", state: "done" }] });
 const td = await cli("todos");
 check("todos 列未完成", td.includes("[进行中]") && td.includes("t-1") && !td.includes("t-2"), td);

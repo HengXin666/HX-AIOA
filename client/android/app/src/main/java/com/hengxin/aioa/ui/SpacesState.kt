@@ -23,6 +23,8 @@ import com.hengxin.aioa.proto.V1Decode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -36,28 +38,32 @@ private const val ROLE_USER = "user"
 private const val ROLE_SYSTEM = "system"
 private const val KEY_TEXT = "text"
 private const val JSON_TYPE = "application/json"
-private const val KEY_TODOS = "todos"
 private const val TOPIC_TODOS = "todos"
+private const val KEY_ID = "id"
+private const val KEY_BODY = "body"
+private const val KEY_STATE = "state"
 private const val KEY_TODOS_SYNC = "todos-sync"
 
 private fun JSONObject.optPositive(k: String): Long? = optLong(k).takeIf { it > 0 }
 
-/** 协议 TodoItem -> TodoRow。 */
-internal fun todoRow(o: JSONObject): TodoRow {
-    val gh = o.optJSONObject("gh")
-    return TodoRow(
-        id = o.optString("id"),
-        title = o.optString("title"),
-        note = o.optString("note").ifEmpty { null },
-        state = o.optString("state", TodoRow.STATE_OPEN),
-        prio = o.optInt("prio", 2),
-        src = o.optPositive("src"),
+/** pdata 的一行待办 (id = <群>:<待办 id>, body 是整行) -> (群, TodoRow); 更新时间用行自带的 updated。 */
+internal fun todoRow(o: JSONObject): Pair<String, TodoRow>? {
+    val b = o.optJSONObject(KEY_BODY) ?: return null
+    val channel = b.optString("channel").ifEmpty { return null }
+    val gh = b.optJSONObject("gh")
+    return channel to TodoRow(
+        id = o.optString(KEY_ID).removePrefix("$channel:"),
+        title = b.optString("title"),
+        note = b.optString("note").ifEmpty { null },
+        state = b.optString(KEY_STATE, TodoRow.STATE_OPEN),
+        prio = b.optInt("prio", 2),
+        src = b.optPositive("src"),
         updated = o.optLong("updated"),
-        created = o.optLong("created"),
-        doneAt = o.optPositive("doneAt"),
-        repo = o.optString("repo").ifEmpty { null },
-        issue = o.optPositive("issue")?.toInt(),
-        parent = o.optString("parent").ifEmpty { null },
+        created = b.optLong("created"),
+        doneAt = b.optPositive("doneAt"),
+        repo = b.optString("repo").ifEmpty { null },
+        issue = b.optPositive("issue")?.toInt(),
+        parent = b.optString("parent").ifEmpty { null },
         ghOpen = gh?.let { it.optString("state") != "closed" },
         ghComments = gh?.optInt("comments") ?: 0,
         ghParent = gh?.optPositive("parent")?.toInt(),
@@ -76,9 +82,13 @@ class SpacesState(
     val logs = mutableStateMapOf<String, List<ChatLine>>()
     /** /data 接口带回的最近事件, 补充流里还没有的部分。 */
     val events = mutableStateMapOf<String, Envelope>()
-    /** 群下的待办: 组件第一次显示某个群时拉一次, 之后收到 todos 同步再拉。 */
+    /** 群下的待办: 数据在插件数据 pdata (各群共用一个集合), 组件第一次显示时拉一次, 之后收到 pdata_sync 按 rev 增量拉。 */
     val todos = mutableStateMapOf<String, List<TodoRow>>()
     private val todoAsked = HashSet<String>()
+    // pdata 行原文 (id, ver, body), 写回时要带 ver; 只在 todoLock 里改
+    private val todoRows = HashMap<String, JSONObject>()
+    private var todoRev = 0L
+    private val todoLock = Mutex()
     private val primed = HashSet<String>()
     private val asked = HashSet<String>()
 
@@ -94,9 +104,11 @@ class SpacesState(
                 val space = runCatching { SpaceDecode.space(raw) }.getOrNull() ?: return true
                 if (i >= 0) spaces[i] = space else spaces.add(space)
             }
-            is ServerFrame.ChatSync -> {
-                if (frame.topic != TOPIC_TODOS) return false
-                frame.channel?.takeIf { it in todoAsked }?.let(::loadTodos)
+            // 新版待办只认 pdata_sync, 旧的 chat_sync todos 留给没升级的客户端
+            is ServerFrame.ChatSync -> if (frame.topic != TOPIC_TODOS) return false
+            is ServerFrame.PDataSync -> {
+                if (frame.plugin != Constants.TODO_PLUGIN || frame.coll != Constants.TODO_COLL) return false
+                if (frame.rev > todoRev && todoAsked.isNotEmpty()) pullTodos()
             }
             is ServerFrame.TaskLog -> {
                 if (frame.taskId in logs) logs[frame.taskId] = logs[frame.taskId].orEmpty() + line(frame.role, frame.text ?: frame.kind)
@@ -156,36 +168,51 @@ class SpacesState(
     }
 
     fun todos(channel: String): List<TodoRow>? {
-        if (todoAsked.add(channel)) loadTodos(channel)
+        if (todoAsked.add(channel)) pullTodos()
         return todos[channel]
     }
 
-    /** 勾选本地先生效, 失败时以服务端为准重拉。 */
+    /** 勾选本地先生效, 再带 ver 写回; 版本冲突或失败时以服务端为准重拉。 */
     fun setTodo(channel: String, row: TodoRow, done: Boolean) = setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
 
-    fun setState(channel: String, row: TodoRow, state: String) = patchTodo(channel, row.copy(state = state), JSONObject().put("state", state))
+    fun setState(channel: String, row: TodoRow, state: String) = patchTodo(channel, row.copy(state = state)) { it.put(KEY_STATE, state) }
 
-    fun setPrio(channel: String, row: TodoRow, prio: Int) = patchTodo(channel, row.copy(prio = prio), JSONObject().put("prio", prio))
+    fun setPrio(channel: String, row: TodoRow, prio: Int) = patchTodo(channel, row.copy(prio = prio)) { it.put("prio", prio) }
 
-    /** 改一条: 本地先换成 next, 再把 fields (只含要改的字段) 发给服务端。 */
-    private fun patchTodo(channel: String, next: TodoRow, fields: JSONObject) {
-        val now = System.currentTimeMillis()
-        todos[channel] = todos[channel].orEmpty().map { if (it.id == next.id) next.copy(updated = now) else it }
-        val body = JSONObject().put(KEY_TODOS, JSONArray().put(fields.put("id", next.id)))
-        io { if (call(url(Constants.CHATS_API, channel, KEY_TODOS), "POST", body) == null) loadTodos(channel) }
+    /** 改一条: 本地先换成 next, 再在读到的整行上改要改的字段, 带 ver 写回 (doneAt 与 gh 由服务端补)。 */
+    private fun patchTodo(channel: String, next: TodoRow, edit: (JSONObject) -> Unit) {
+        todos[channel] = todos[channel].orEmpty().map { if (it.id == next.id) next.copy(updated = System.currentTimeMillis()) else it }
+        val id = "$channel:${next.id}"
+        io {
+            val cur = todoLock.withLock { todoRows[id] } ?: return@io pullTodos()
+            val body = JSONObject(cur.optJSONObject(KEY_BODY)?.toString() ?: "{}").also(edit)
+            val put = JSONObject().put("ver", cur.optInt("ver")).put(KEY_BODY, body)
+            call(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", put)
+            pullTodos()
+        }
     }
 
-    /** 立即按 GitHub 同步关联的 issue, 再重拉。 */
+    /** 立即按 GitHub 同步关联的 issue, 再增量拉。 */
     fun syncTodos(channel: String, done: () -> Unit = {}) = io {
         call(url(Constants.CHATS_API, channel, KEY_TODOS_SYNC), "POST", JSONObject())
-        loadTodos(channel)
+        pullTodos()
         withContext(Dispatchers.Main) { done() }
     }
 
-    private fun loadTodos(channel: String) = io {
-        val arr = call(url(Constants.CHATS_API, channel, KEY_TODOS), "GET", null)?.optJSONArray(KEY_TODOS) ?: return@io
-        val rows = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map(::todoRow)
-        withContext(Dispatchers.Main) { todos[channel] = rows }
+    private fun pullTodos(): Unit = io {
+        todoLock.withLock {
+            do {
+                val r = call(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL)?.newBuilder()?.addQueryParameter(Constants.QUERY_SINCE, todoRev.toString())?.build(), "GET", null) ?: return@withLock
+                val items = r.optJSONArray("items") ?: JSONArray()
+                for (i in 0 until items.length()) {
+                    val o = items.optJSONObject(i) ?: continue
+                    if (o.optBoolean("deleted")) todoRows.remove(o.optString(KEY_ID)) else todoRows[o.optString(KEY_ID)] = o
+                }
+                todoRev = r.optLong("rev", todoRev)
+            } while (r.optBoolean("more"))
+            val byGroup = todoRows.values.mapNotNull(::todoRow).groupBy({ it.first }, { it.second })
+            withContext(Dispatchers.Main) { for (ch in todoAsked) todos[ch] = byGroup[ch].orEmpty() }
+        }
     }
 
     private fun line(role: String, text: String) = ChatLine(

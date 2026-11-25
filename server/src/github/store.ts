@@ -36,6 +36,8 @@ export function emptyMeta(repo: string, now: number): RepoMeta {
   return { repo, url: `${GITHUB_WEB}/${repo}`, stars: 0, openIssues: 0, updatedAt: now };
 }
 
+const GH_TABLES = ["gh_repo", "gh_pr", "gh_issue", "gh_run", "gh_tl"];
+
 // 写入少: 仓库按行覆盖, PR / Issue 按 number upsert 且内容不变时不写, runs 与 timeline 各留最近 30 条
 export class GithubStore {
   constructor(private readonly sql: SqlStorage) {
@@ -45,6 +47,11 @@ export class GithubStore {
     sql.exec("CREATE TABLE IF NOT EXISTS gh_run (k TEXT NOT NULL, rid TEXT NOT NULL, at INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY (k, rid))");
     sql.exec("CREATE TABLE IF NOT EXISTS gh_tl (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, ts INTEGER NOT NULL, body TEXT NOT NULL)");
     sql.exec("CREATE INDEX IF NOT EXISTS gh_tl_k ON gh_tl (k, ts)");
+  }
+
+  /** 停用并清除数据时用: 清空全部 GitHub 表, 返回删掉的行数。 */
+  clear(): number {
+    return GH_TABLES.reduce((n, t) => n + this.sql.exec(`DELETE FROM ${t}`).rowsWritten, 0);
   }
 
   meta(repo: string): RepoMeta | null {

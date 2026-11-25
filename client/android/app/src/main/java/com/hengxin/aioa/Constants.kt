@@ -23,6 +23,8 @@ object Constants {
     const val UI_PING_INTERVAL_SEC = 30L
     // 界面连接连续这么多个心跳间隔收不到任何数据才重连
     const val UI_DEAD_INTERVALS = 3
+    // 界面切到后台后, 界面连接再保留多久才断开
+    const val UI_LINGER_MS = 90_000L
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
     const val NORMAL_CLOSE = 1000
@@ -111,6 +113,10 @@ object Constants {
     const val EVENTS_PATH = "api/v1/events"
     const val KEYS_PATH = "api/v1/keys"
     const val CHATS_API = "api/v1/chats"
+    // 插件数据 pdata 与待办插件 (#101): 待办存在 hengxin666.todo 的 items 集合, 与 protocol/src/v1/plugin-todo.ts 一致
+    const val PDATA_API = "api/v1/pdata"
+    const val TODO_PLUGIN = "hengxin666.todo"
+    const val TODO_COLL = "items"
     // 群邀请链接: hxaioa://join?server=..&code=.., 与服务端 APP_SCHEME 一致
     const val APP_SCHEME = "hxaioa"
     const val JOIN_HOST = "join"
@@ -119,6 +125,8 @@ object Constants {
     const val QUERY_KEY = "key"
     const val SOURCE_GITHUB = "github"
     const val SOURCE_AGENT = "agent"
+    // GitHub 接入是插件: 主人停用后 github 接口 404, 入口隐藏
+    const val GITHUB_PLUGIN = "hengxin666.github"
     const val GITHUB_REPOS_PATH = "api/v1/github/repos"
     const val GITHUB_SYNC_PATH = "api/v1/github/sync"
     const val GITHUB_AVAILABLE_PATH = "api/v1/github/available"

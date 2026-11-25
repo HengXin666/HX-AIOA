@@ -40,6 +40,11 @@ private const val CI_STALE_MS = 3 * 60_000L
 // 总览卡的动态取自最近活跃的几个仓库
 private const val RECENT_REPOS = 3
 const val GITHUB_RECENT_SHOWN = 3
+private const val PREFS = "github"
+private const val KEY_OFF = "plugin_off"
+private const val HTTP_NOT_FOUND = 404
+// 插件被停用或撤销: 入口立即隐藏
+private val PLUGIN_OFF = setOf("disabled", "revoked")
 
 enum class CiStatus { SUCCESS, FAILURE, RUNNING, CANCELLED, UNKNOWN }
 
@@ -95,6 +100,10 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
         private set
     var recent by mutableStateOf<List<GhActivity>>(emptyList())
         private set
+    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /** 主人启用了 GitHub 插件; 停用时服务端接口 404, 各处入口隐藏。记在本地, 下次打开先按上次的显示。 */
+    var enabled by mutableStateOf(!prefs.getBoolean(KEY_OFF, false))
+        private set
     val details = mutableStateMapOf<String, GhDetail>()
     val mine = GithubMine(context, scope)
     val branches = GithubBranches(context, scope)
@@ -126,7 +135,9 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
         io {
             // 先显示上次的列表, 服务端有变化再替换
             var latest: List<GhRepo>? = null
-            val err = ApiCache.get(context, CACHE_REPOS, listOf(Constants.GITHUB_REPOS_PATH)) { body, _ ->
+            val err = ApiCache.get(context, CACHE_REPOS, listOf(Constants.GITHUB_REPOS_PATH), onCode = { code ->
+                if (code != 0) scope.launch(Dispatchers.Main) { applyEnabled(code != HTTP_NOT_FOUND) }
+            }) { body, _ ->
                 val list = body.optJSONArray("repos")?.let { objects(it).map(::repo) }?.sortedByDescending { it.active } ?: return@get
                 latest = list
                 withContext(Dispatchers.Main) {
@@ -185,6 +196,23 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
         if (!stuck || now - autoSyncAt < CI_STALE_MS) return
         autoSyncAt = now
         sync { }
+    }
+
+    private fun applyEnabled(on: Boolean) {
+        if (enabled == on) return
+        enabled = on
+        prefs.edit().putBoolean(KEY_OFF, !on).apply()
+    }
+
+    /** 收到 hengxin666.github 的 plugin_update: 停用或撤销就隐藏, 否则重新拉一次 (成功即显示)。只在主线程调用。 */
+    fun onPlugin(change: String) {
+        if (change in PLUGIN_OFF) return applyEnabled(false)
+        refresh(withRecent = true)
+    }
+
+    /** 上次是停用状态时, 连上服务端问一次: 别的设备可能已经重新启用。 */
+    fun probeIfOff() {
+        if (!enabled) refresh()
     }
 
     /** 页面可见期间登记, 离开时注销; repo 非空表示详情页。 */

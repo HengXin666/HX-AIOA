@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.AppConfig
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.link.BatteryLog
+import com.hengxin.aioa.link.DebugReport
 import com.hengxin.aioa.link.LinkLog
 import com.hengxin.aioa.link.LinkService
 import com.hengxin.aioa.link.LinkStats
@@ -35,6 +37,9 @@ data class ProxyView(
     val errors: List<String> = emptyList(),
     val subStatus: String = "",
     val linkLog: List<String> = emptyList(),
+    // 调试页: 今天的建连统计与近 24 小时耗电
+    val today: List<String> = emptyList(),
+    val battery: List<String> = emptyList(),
 )
 
 class SettingsModel(app: Application) : AndroidViewModel(app) {
@@ -202,7 +207,17 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun loadProxy(): ProxyView {
+    var debugOn by mutableStateOf(DebugReport.enabled(app))
+        private set
+
+    fun setDebug(on: Boolean) {
+        DebugReport.setEnabled(app, on)
+        debugOn = on
+    }
+
+    private fun loadProxy(): ProxyView = loadProxyBase().copy(today = DebugReport.today(app), battery = BatteryLog.summary(app))
+
+    private fun loadProxyBase(): ProxyView {
         val errors = ProxyCore.recentErrors(app, MAX_ERRORS)
         val log = listOfNotNull(LinkStats.summary(app)) + LinkLog.recent(app, MAX_LOG_LINES)
         val sub = Subscription.status(app)?.let { "${LinkLog.clock(it.at)} ${it.text}" }.orEmpty()

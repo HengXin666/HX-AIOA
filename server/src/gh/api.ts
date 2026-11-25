@@ -10,18 +10,17 @@ import {
   PATH_GH_RULES,
   PATH_GH_SUB,
   PATH_GH_TOKEN,
-  TODO_SYNC_TOPIC,
   parseGhIssueInput,
   parseGhIssuePatch,
   parseGhRules,
-  type ChatSyncFrame,
   type GhIssue,
   type GhStatus,
 } from "@hx-aioa/protocol";
 import { CODE_FORBIDDEN, DELETE, ERR_FORBIDDEN, GET, PATCH, POST, PUT } from "../constants";
 import { type Core, OWNER, type ReqCtx, ROOM, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson } from "../http";
-import { canWriteTodos } from "../plugins/api";
+import { canWriteTodos, syncTodos } from "../plugins/api-todos";
+import { ghGated } from "./gate";
 import { gh } from "./client";
 import { syncTodoIssues } from "./todo-sync";
 
@@ -124,7 +123,7 @@ async function getIssue(c: ReqCtx): Promise<Response> {
 async function linkTodo(core: Core, c: ReqCtx, todo: { channel: string; id: string }, repo: string, n: number): Promise<void> {
   if (!canWriteTodos(core, c.who, todo.channel)) return;
   const out = core.todos.upsert(todo.channel, [{ id: todo.id, repo, issue: n }]);
-  if (typeof out !== "string" && out.length) core.sockets.toAllClients({ t: "chat_sync", topic: TODO_SYNC_TOPIC, channel: todo.channel } satisfies ChatSyncFrame);
+  if (typeof out !== "string" && out.rev) syncTodos(core, todo.channel, out.rev);
 }
 
 async function createIssue(c: ReqCtx): Promise<Response> {
@@ -179,18 +178,18 @@ function room(handler: (c: ReqCtx) => Promise<Response>) {
 }
 
 export const GH_ROUTES: Route[] = [
-  route(GET, PATH_GH, OWNER, status),
-  route(PUT, PATH_GH_TOKEN, OWNER, putToken),
-  route(DELETE, PATH_GH_TOKEN, OWNER, delToken),
-  route(POST, PATH_GH_DEVICE, OWNER, device),
-  route(POST, PATH_GH_DEVICE_POLL, OWNER, poll),
-  route(GET, PATH_GH_REPOS, OWNER, repos),
-  route(PUT, PATH_GH_RULES, OWNER, rules),
-  route(PUT, PATH_GH_AGENT, OWNER, grant),
-  route(GET, PATH_GH_ISSUES, ROOM, room(listIssues)),
-  route(POST, PATH_GH_ISSUES, ROOM, room(createIssue)),
-  route(GET, PATH_GH_ISSUE, ROOM, room(getIssue)),
-  route(PATCH, PATH_GH_ISSUE, ROOM, room(patchIssue)),
-  route(POST, PATH_GH_COMMENTS, ROOM, room(comment)),
-  route(POST, PATH_GH_SUB, ROOM, room(addSub)),
+  route(GET, PATH_GH, OWNER, ghGated(status)),
+  route(PUT, PATH_GH_TOKEN, OWNER, ghGated(putToken)),
+  route(DELETE, PATH_GH_TOKEN, OWNER, ghGated(delToken)),
+  route(POST, PATH_GH_DEVICE, OWNER, ghGated(device)),
+  route(POST, PATH_GH_DEVICE_POLL, OWNER, ghGated(poll)),
+  route(GET, PATH_GH_REPOS, OWNER, ghGated(repos)),
+  route(PUT, PATH_GH_RULES, OWNER, ghGated(rules)),
+  route(PUT, PATH_GH_AGENT, OWNER, ghGated(grant)),
+  route(GET, PATH_GH_ISSUES, ROOM, ghGated(room(listIssues))),
+  route(POST, PATH_GH_ISSUES, ROOM, ghGated(room(createIssue))),
+  route(GET, PATH_GH_ISSUE, ROOM, ghGated(room(getIssue))),
+  route(PATCH, PATH_GH_ISSUE, ROOM, ghGated(room(patchIssue))),
+  route(POST, PATH_GH_COMMENTS, ROOM, ghGated(room(comment))),
+  route(POST, PATH_GH_SUB, ROOM, ghGated(room(addSub))),
 ];

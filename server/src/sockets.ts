@@ -19,6 +19,8 @@ export type Attachment = {
   // 人的连接: 账号 id; member 为子号, 只收自己所在群的消息
   uid?: string;
   member?: boolean;
+  // 安卓后台常驻连接: 不推 presence
+  bg?: boolean;
   // role=chat (CLI 长连): 能读的群 (通配) 与显示名
   reads?: string[];
   name?: string;
@@ -72,7 +74,7 @@ export class Sockets {
     });
   }
 
-  /** 某把 key 的 CLI 长连。 */
+  /** 某把 key 的 CLI 长连 (群 Agent 收 guide 帧, 插件 Agent 收指令更新)。 */
   chatSockets(keyId: string): WebSocket[] {
     return this.all().filter((ws) => {
       const a = attOf(ws);
@@ -80,12 +82,12 @@ export class Sockets {
     });
   }
 
-  /** 发给看得到这个群的人: 主人的连接都收, 子号只在群成员里时收。 */
+  /** 发给看得到这个群的人 (只用于 presence): 主人的连接都收, 子号只在群成员里时收, 安卓后台连接不收。 */
   toChannel(members: Set<string>, frame: unknown): void {
     const text = JSON.stringify(frame);
     for (const ws of this.clients()) {
       const a = attOf(ws);
-      if (a.proto !== PROTO_V1 || (a.member && !(a.uid && members.has(a.uid)))) continue;
+      if (a.proto !== PROTO_V1 || a.bg || (a.member && !(a.uid && members.has(a.uid)))) continue;
       trySend(ws, text);
     }
   }

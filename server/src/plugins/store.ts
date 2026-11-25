@@ -1,4 +1,4 @@
-import { GH_PLUGIN_ID, PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall } from "@hx-aioa/protocol";
+import { PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall } from "@hx-aioa/protocol";
 import { todoGuide } from "./todo-guide";
 
 type Row = { id: string; body: string };
@@ -44,15 +44,20 @@ export class PluginStore {
     this.all().delete(id);
   }
 
+  /** 升级前装好的插件: 用存下的模板拼一份最小清单, 放进白名单用。 */
+  // 旧格式的 base 插件 (GitHub 授权) 没有 Agent, 不在这里拼, 由内置插件迁移接手
+  legacy(): { install: PluginInstall; prompt: string; name: string; job?: PluginJob }[] {
+    return [...this.all().values()].filter((s) => !s.install.base);
+  }
+
   job(id: string): PluginJob | undefined {
     return this.all().get(id)?.job;
   }
 
   /** 专属指令里的 "插件任务" 一节: 模板替换占位符, 再附上待办接口。 */
-  promptFor(id: string, base: string, channel: string, title: string): string | undefined {
+  // gh: 清单声明了 GitHub issue 服务且主人启用了 GitHub 授权 (usesGh), 指令里多一节 issue 接口
+  promptFor(id: string, base: string, channel: string, title: string, gh = false): string | undefined {
     const s = this.all().get(id);
-    // 声明了 gh 依赖且 GitHub 授权插件已装, 指令里多一节 issue 接口
-    const gh = !!s?.install.deps?.includes(GH_PLUGIN_ID) && this.all().has(GH_PLUGIN_ID);
     return s ? renderTask(s.name, s.prompt, base, channel, title, gh) : undefined;
   }
 }

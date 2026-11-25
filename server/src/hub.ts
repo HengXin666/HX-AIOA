@@ -6,10 +6,10 @@ import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
 import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
-import { PluginStore } from "./plugins/store";
 import { TodoStore } from "./plugins/todos";
 import { TranslateStore } from "./translate/store";
-import { GhService, syncTodoIssues } from "./gh/service";
+import { GhService } from "./gh/service";
+import { pluginParts } from "./plugins/seed";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -40,7 +40,6 @@ import { HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from
 import { Accounts, type Session } from "./accounts/service";
 import { verifyPassword } from "./accounts/crypto";
 import { messageInput } from "./api-events";
-import { cfUsage } from "./api-cf";
 import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
@@ -67,12 +66,14 @@ import {
   TIMER_PROMPT_PREFIX,
   UNKNOWN_DEVICE,
   OWNER_NAME,
+  BG_DEVICE_PREFIX,
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
 import { joinPage } from "./join-page";
 import { authorOf } from "./room-access";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
+import { halfHourly } from "./cron";
 import { buildOverview } from "./group";
 import { chatInput } from "./chat";
 import { ChatStore } from "./chat-store";
@@ -93,10 +94,6 @@ import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
 import { Timers } from "./timers";
 const TERM_SOURCE = "终端";
-const CF_SOURCE = "CF 额度";
-const KEY_CF_ALERT = "cf_alert_day";
-const CF_ALERT_RATIO = 0.8;
-const PCT = 100;
 const ROUTE_SELF: RouteInfo = { action: "silent", channels: ["ws"], reason: "本人发送" };
 const ROUTE_ROOM: RouteInfo = { action: "push", channels: ["ws"], reason: "群聊" };
 
@@ -136,7 +133,7 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), plugins: new PluginStore(sql), mail: new MailStore(sql), todos: new TodoStore(sql), tr: new TranslateStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -172,17 +169,6 @@ export class Hub extends DurableObject<Env> {
   // RPC (每天的清理 cron): 删掉消息已不在的邮件索引
   async mailPrune(): Promise<number> {
     return this.core.mail.prune();
-  }
-
-  // RPC (cron 每 30 分钟): 任一额度用到 80% 时提醒一次, 每天最多一条
-  async cfCheck(): Promise<void> {
-    const u = await cfUsage(this.env);
-    const hot = (u.items ?? []).filter((i) => i.used >= i.limit * CF_ALERT_RATIO);
-    if (!hot.length || !u.day || (await this.ctx.storage.get<string>(KEY_CF_ALERT)) === u.day) return;
-    await this.ctx.storage.put(KEY_CF_ALERT, u.day);
-    const text = `今天 (UTC) 的 CF 免费额度已用超过 80%: ${hot.map((i) => `${i.label} ${Math.round((i.used / i.limit) * PCT)}%`).join(", ")}`;
-    const input = messageInput({ text });
-    if (typeof input !== "string") await this.core.pipeline.fromInput(input, { source: { id: CF_SOURCE, name: CF_SOURCE }, sourceInfo: null });
   }
 
   // 终端开关记一条消息到 "终端" 群: 打开时按规则提醒, 关闭时静默
@@ -284,6 +270,7 @@ export class Hub extends DurableObject<Env> {
     const uid = role === "client" ? authorOf(this.core, who) : undefined;
     if (uid) att.uid = uid;
     if (!who.owner && who.member) att.member = true;
+    if (device.startsWith(BG_DEVICE_PREFIX)) att.bg = true;
     server.serializeAttachment(att);
 
     const head = this.core.store.head();
@@ -301,7 +288,7 @@ export class Hub extends DurableObject<Env> {
       this.core.presence.listenerChanged(listen.reads);
     }
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
-    this.core.presence.snapshot((f) => sendFrame(server, f));
+    if (!att.bg) this.core.presence.snapshot((f) => sendFrame(server, f));
     if (att.member) {
       if (uid && Number.isFinite(since)) {
         const grps = this.core.rooms.roomsOf(uid).map((m) => m.grp);
@@ -322,13 +309,9 @@ export class Hub extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  // Worker 的 scheduled cron 通过 RPC 调用, 没配 token 时什么也不做
-  async githubSync(): Promise<GithubSyncResult | null> {
-    return this.core.github.sync();
-  }
-
-  async todoIssueSync(): Promise<number> {
-    return syncTodoIssues(this.core);
+  // RPC (cron 每 30 分钟): GitHub 回填, 待办 issue 同步, CF 额度检查合成一次 DO 请求
+  async halfHourly(): Promise<GithubSyncResult | null> {
+    return halfHourly(this.core, this.ctx.storage);
   }
 
   private mayConnect(who: Principal, role: StreamRole, device: string): boolean {

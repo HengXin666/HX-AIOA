@@ -1,7 +1,9 @@
-import { TODO_SYNC_TOPIC, type ChatSyncFrame, type RouteInfo, type TodoGh, type TodoItem, type TodoState } from "@hx-aioa/protocol";
+import { type RouteInfo, type TodoGh, type TodoItem, type TodoState } from "@hx-aioa/protocol";
 import { messageInput } from "../api-events";
 import type { Core } from "../core";
+import { syncTodos } from "../plugins/api-todos";
 import { graphql } from "./client";
+import { ghOn } from "./gate";
 
 // GitHub issue -> 待办状态: 关闭 = 已完成; 有评论 = 进行中; 重新打开 = 回到待进行。挂起由人定, 同步不动它
 const CHUNK = 40;
@@ -73,12 +75,12 @@ async function notice(core: Core, channel: string, text: string): Promise<void> 
 
 /** 同步关联的 issue; only 给定时只同步这些 (repo#number, 小写)。返回有变化的条目数。 */
 export async function syncTodoIssues(core: Core, only?: Set<string>): Promise<number> {
-  if (!core.gh.auth()) return 0;
+  if (!ghOn(core) || !core.gh.auth()) return 0;
   const hits = core.todos.linked().filter((h) => !only || only.has(`${h.item.repo!.toLowerCase()}#${h.item.issue}`));
   if (!hits.length) return 0;
   const token = await core.gh.token();
   const now = Date.now();
-  const touched = new Set<string>();
+  const touched = new Map<string, number>();
   let changed = 0;
   for (let i = 0; i < hits.length; i += CHUNK) {
     const chunk = hits.slice(i, i + CHUNK);
@@ -90,19 +92,20 @@ export async function syncTodoIssues(core: Core, only?: Set<string>): Promise<nu
       const state = nextState(h.item.state, h.item.gh, gh);
       const same = h.item.gh && JSON.stringify({ ...h.item.gh, synced: 0 }) === JSON.stringify({ ...gh, synced: 0 });
       if (same && !state) continue;
-      core.todos.setGh(h.grp, h.item.id, gh, state, now);
-      touched.add(h.grp);
+      const r = core.todos.setGh(h.grp, h.item.id, gh, state, now);
+      if (!r?.rev) continue;
+      touched.set(h.grp, Math.max(touched.get(h.grp) ?? 0, r.rev));
       changed += 1;
       if (state === "done") await notice(core, h.grp, `${h.item.repo}#${h.item.issue} 已关闭, 待办 "${h.item.title}" 自动完成`);
     }
   }
-  for (const channel of touched) core.sockets.toAllClients({ t: "chat_sync", topic: TODO_SYNC_TOPIC, channel } satisfies ChatSyncFrame);
+  for (const [channel, rev] of touched) syncTodos(core, channel, rev);
   return changed;
 }
 
 /** 打开待办时顺手同步, 最多 5 分钟一次, 不挡请求。 */
 export function maybeSync(core: Core): void {
-  if (!core.gh.auth() || Date.now() - last < SYNC_GAP) return;
+  if (!ghOn(core) || !core.gh.auth() || Date.now() - last < SYNC_GAP) return;
   last = Date.now();
   syncTodoIssues(core).catch((e) => console.error("待办 issue 同步失败:", e));
 }

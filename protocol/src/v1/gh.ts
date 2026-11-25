@@ -1,7 +1,10 @@
 import { API_V1 } from "./constants";
 
-// GitHub 授权 (base 插件 gh): 主人授权一次, 令牌只在服务端; 别的插件和获准的 Agent 通过服务端代办 issue 操作
-export const GH_PLUGIN_ID = "gh";
+// GitHub 授权 (无 Agent 插件 hengxin666.gh, 旧 id gh): 主人授权一次, 令牌只在服务端; 别的插件和获准的 Agent 通过服务端代办 issue 操作
+export const GH_PLUGIN_ID = "hengxin666.gh";
+export const GH_LEGACY_ID = "gh";
+// 插件清单在 requires / optional 里声明这个服务, 它的 Agent 默认可以经服务端代办 issue
+export const GH_SERVICE = "service:gh.issues";
 export const GH_AUTH_KINDS = ["oauth", "pat"] as const;
 export type GhAuthKind = (typeof GH_AUTH_KINDS)[number];
 export const GH_MAX_OPS = 50;

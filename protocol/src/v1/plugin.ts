@@ -1,5 +1,9 @@
 import { API_V1 } from "./constants";
 import type { Space } from "./space";
+import type { PluginAllow } from "./plugin-api";
+import { PLUGIN_API_LEGACY, checkExtras, isPluginId, type PluginExtras } from "./plugin-v2";
+
+export { isPluginId };
 
 // 插件 = 一个群 + 一个 Agent (提示词模板) + 一份工作台布局, 不在设备上执行任何代码
 // 市场是仓库里的 plugins/ 目录: index.json 列出插件, 每个插件一个目录 (plugin.json, 介绍, 提示词)
@@ -35,10 +39,12 @@ export type PluginManifest = PluginEntry & {
   base?: boolean;
   deps?: PluginDep[];
   group: { title: string };
-  // interval: 建议的定时 (秒); task: 一句话任务, 写进接入语, 详细规则在专属指令里
-  agent: { name: string; schedule?: string; interval?: number; task?: string };
+  // interval: 建议的定时 (秒); task: 一句话任务, 写进接入语, 详细规则在专属指令里; api 2 可以不要 Agent (只启用, 不安装)
+  agent?: PluginAgent;
   space?: Space;
-};
+} & PluginExtras;
+
+export type PluginAgent = { name: string; schedule?: string; interval?: number; task?: string };
 
 export type PluginInstall = {
   id: string;
@@ -61,9 +67,10 @@ export type PluginInstall = {
 export type PluginSettings = { auto: boolean };
 
 // 市场列表: 每项带本机安装状态; error 为拉取市场失败的原因 (已安装的照常返回)
-export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall })[]; error?: string };
+// allowed: 管理员放行的版本; 没放行的也列出来, 方便管理员放行
+export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall; allowed?: PluginAllow })[]; error?: string };
 // task: 插件的任务提示词 (已代入群和服务地址, 不含密钥), 可单独复制给任何 Agent; 未安装时按默认群预览
-export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; task?: string };
+export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; allowed?: PluginAllow; task?: string; admin?: boolean };
 // 安装结果, 只返回这一次: prompt 是一段接入语 (文档链接, 定时任务, 密钥), 整段复制给任何 Agent; key 另给一份方便单独复制
 export type PluginInstalled = { install: PluginInstall; prompt: string; key: string };
 
@@ -136,7 +143,6 @@ export const PATH_EXT_MD = `${API_V1}/ext/todos.md`;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const ID_RE = /^[\w.:-]{1,64}$/;
 export const isRepoName = (v: unknown): v is string => typeof v === "string" && /^[\w.-]{1,39}\/[\w.-]{1,100}$/.test(v);
-export const isPluginId = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,31}$/.test(v);
 
 // 单条待办的增量: 只校验出现的字段, 新建时由服务端要求 title
 export function parseTodoInput(raw: unknown): TodoInput | string {
@@ -182,17 +188,22 @@ export function parseTodoInput(raw: unknown): TodoInput | string {
 // 市场的 plugin.json: 字段不全或格式不对就不让装
 export function parseManifest(raw: unknown): PluginManifest | string {
   if (!isObj(raw)) return "plugin.json 必须是对象";
-  if (!isPluginId(raw.id)) return "id 只能是小写字母数字和 -";
+  if (!isPluginId(raw.id)) return "id 只能是 <GitHub 登录名>.<名字> (旧插件为小写字母数字和 -)";
   for (const k of ["name", "summary", "version", "readme", "prompt"] as const) {
     if (typeof raw[k] !== "string" || !raw[k]) return `缺少 ${k}`;
   }
   if (!/^[\w.-]+\.(md|html)$/.test(raw.readme as string)) return "readme 必须是插件目录里的 .md 或 .html 文件";
   if (!/^[\w.-]+\.md$/.test(raw.prompt as string)) return "prompt 必须是插件目录里的 .md 文件";
   if (raw.deps !== undefined && !(Array.isArray(raw.deps) && raw.deps.every((d) => isObj(d) && isPluginId(d.id)))) return "deps 是 [{ id, optional }]";
-  // base 插件不建群不带 Agent, 补上占位免得各处判空
-  if (raw.base === true) return { ...raw, group: { title: String(raw.name) }, agent: { name: "" } } as unknown as PluginManifest;
+  // base 插件 (旧格式) 不建群不带 Agent: 补上群标题, 不补 Agent, 按无 Agent 插件处理 (只启用不安装)
+  if (raw.base === true) return { ...raw, group: { title: String(raw.name) } } as unknown as PluginManifest;
   if (!isObj(raw.group) || typeof raw.group.title !== "string" || !raw.group.title) return "缺少 group.title";
-  if (!isObj(raw.agent) || typeof raw.agent.name !== "string" || !raw.agent.name) return "缺少 agent.name";
+  // 旧清单 (api 1) 就是 "群 + Agent", 必须有 Agent; api 2 的 Agent 可选
+  if (raw.agent !== undefined || (raw.api ?? PLUGIN_API_LEGACY) === PLUGIN_API_LEGACY) {
+    if (!isObj(raw.agent) || typeof raw.agent.name !== "string" || !raw.agent.name) return "缺少 agent.name";
+  }
   if (raw.space !== undefined && !isObj(raw.space)) return "space 必须是工作台布局对象";
+  const extra = checkExtras(raw);
+  if (extra) return extra;
   return raw as unknown as PluginManifest;
 }

@@ -47,7 +47,7 @@ export function agentBootstrap(base: string, title: string, key: string, job?: {
   // 插件总带定时; 向导里只写了任务没选定时的, 就只交代任务
   // 带了任务但没定时的, 只交代任务
   const ask = job?.interval
-    ? `然后每 ${job.interval} 秒: ${task}`
+    ? `然后每 ${job.interval} 秒: ${task} 两次之间用 hxaioa watch --once --timeout ${job.interval} 代替 sleep 等待: 有新消息或插件更新会提前醒来; 每轮建一次长连算 1 次请求, 等待期间不再产生请求。`
     : job
       ? `然后: ${task} 结果用 hxaioa send 发到这个群。`
       : "之后我在你这边布置的任务, 结果用 hxaioa send 发到这个群。";

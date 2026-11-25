@@ -1,4 +1,5 @@
 import { API_V1, feedTagsOf, HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type GuideFrame, type RouteInfo } from "@hx-aioa/protocol";
+import { usesGh } from "./gh/gate";
 import { agentGuide } from "./agent-prompt";
 import { baseOf, saveAgents } from "./api-chats";
 import { messageInput } from "./api-events";
@@ -15,13 +16,13 @@ const SWITCHING = 101;
 // 拉指令 / 报到本身不触发 "请更新" 通知
 const QUIET_PATHS = [PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS];
 // 这些接口改的东西会进专属指令 (群资料, Agent, 插件, GitHub 授权)
-const GUIDE_INPUTS = [`${API_V1}/chats/`, `${API_V1}/plugins`, `${API_V1}/gh/`];
+const GUIDE_INPUTS = [`${API_V1}/chats/`, `${API_V1}/plugins`, `${API_V1}/plugin-allow`, `${API_V1}/gh/`];
 
 /** 专属指令: 插件 Agent 带插件提示词, 信息流群带 feed 格式。 */
 export function guideFor(core: Core, base: string, channel: string, agent: ChatAgent) {
   const meta = core.chats.chat(channel);
   const title = meta?.title || channel;
-  const plugin = agent.plugin ? core.plugins.promptFor(agent.plugin, base, channel, title) : undefined;
+  const plugin = agent.plugin ? core.plugins.promptFor(agent.plugin, base, channel, title, usesGh(core, agent.plugin)) : undefined;
   return agentGuide(base, channel, title, agent, plugin, meta?.view, feedTagsOf(meta).tags);
 }
 

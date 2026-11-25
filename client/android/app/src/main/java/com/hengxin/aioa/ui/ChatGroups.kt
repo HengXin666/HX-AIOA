@@ -398,14 +398,14 @@ class ChatGroups(
     private fun channelOf(key: String): String? = if (key == MessageDb.MEMO_GROUP) null else key
 
     /** 新消息已入库后调用: 正在看的群直接追加并标已读, 群列表重算; 墓碑替换或删掉原消息。 */
-    fun onMessage(msg: ServerFrame.Msg) {
+    fun onMessage(msg: ServerFrame.Msg, read: Boolean = true) {
         val key = msg.groupKey()
         msg.cid?.let { cid -> pending.removeAll { it.cid == cid } }
         if (open == key) messages.removeAll { it.replacedBy(msg) }
         if (replyTo?.replacedBy(msg) == true) replyTo = null
         if (open == key && msg.deleted != MessageDb.DELETE_MODE && messages.none { it.seq == msg.seq }) {
             messages.add(msg)
-            markRead(key, msg.seq)
+            if (read) markRead(key, msg.seq)
         }
         reload()
     }

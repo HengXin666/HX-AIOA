@@ -25,7 +25,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     PLUGINS("插件市场", "puzzle"),
     SERVER("服务端", "server"),
     PROXY("代理", "plug"),
-    LINK_LOG("连接日志", "file-text"),
+    LINK_LOG("调试模式", "file-text"),
     NOTIFY("通知设置", "bell"),
     APPEARANCE("外观", "palette"),
     SYSTEM("系统权限", "shield-check"),

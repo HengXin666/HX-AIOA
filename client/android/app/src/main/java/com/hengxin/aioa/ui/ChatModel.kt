@@ -76,6 +76,8 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
 
     fun resume() {
+        stopJob?.cancel()
+        visible = true
         NotifyKit.clearMessages(getApplication<Application>())
         viewModelScope.launch {
             val (history, readSeq) = withContext(Dispatchers.IO) { db.recent(Constants.HISTORY_PAGE) to db.readSeq() }
@@ -98,10 +100,21 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         }
     }
 
+    // 切走后连接多留一会儿: 短时间切回来不必重新建连, 也不会闪 "连接中"
+    private var stopJob: Job? = null
+    // 界面不可见时 (保留连接期间) 收到的消息只入库, 不算已读, 不弹横幅
+    @Volatile
+    private var visible = false
+
     fun pause() {
+        visible = false
         groups.flushRead()
-        socket.stop()
-        online = false
+        stopJob?.cancel()
+        stopJob = viewModelScope.launch {
+            delay(Constants.UI_LINGER_MS)
+            socket.stop()
+            online = false
+        }
         // 下次打开时重新计算分隔线
         loaded = false
     }
@@ -127,6 +140,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     override fun onStatus(online: Boolean) {
         this.online = online
         if (online) metrics.onOnline() else terms.onOffline()
+        if (online) github.probeIfOff()
         if (online) groups.refreshOpen()
         if (online) CrashLog.take(getApplication())?.let { send(CRASH_TITLE + FENCE + "\n" + it + "\n" + FENCE) }
     }
@@ -135,6 +149,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
         if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
+        if (frame is ServerFrame.PluginUpdate) return if (frame.id == Constants.GITHUB_PLUGIN) github.onPlugin(frame.change) else Unit
         if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
@@ -171,13 +186,13 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     }
 
     private fun accept(frame: ServerFrame.Msg) {
-        if (frame.seq > lastSeq && frame.deleted == null) maybeBanner(frame)
+        if (visible && frame.seq > lastSeq && frame.deleted == null) maybeBanner(frame)
         socket.send(Frames.ack(frame.seq))
         merge(listOf(frame))
         viewModelScope.launch(Dispatchers.IO) {
             db.insert(frame)
-            db.markRead(frame.seq)
-            withContext(Dispatchers.Main) { groups.onMessage(frame) }
+            if (visible) db.markRead(frame.seq)
+            withContext(Dispatchers.Main) { groups.onMessage(frame, visible) }
         }
     }
 
