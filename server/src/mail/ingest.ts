@@ -21,6 +21,7 @@ import {
 import { htmlToText, writeEvent } from "../api-events";
 import type { Core, Principal } from "../core";
 import { EventStore } from "../store";
+import { applyRules } from "./rules";
 
 // 列表摘要与 HTML 卡片的上限, 与普通消息一致
 const MAX_SUMMARY = 500;
@@ -54,7 +55,11 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   if (summary) data.summary = summary;
   const source: SourceRef = { id: MAIL_SOURCE_PREFIX + vendor, name: vendor, type: "email", icon: MAIL_ICON };
   const key = input.messageId?.trim();
-  await keepBody(core, data, input.html, text, key ? EventStore.dedupeOf({ source, dedupeKey: key }) : null);
+  const dedupe = key ? EventStore.dedupeOf({ source, dedupeKey: key }) : null;
+  // 规则转发过的信重投直接忽略 (转完删掉的也不复活); 已有的信重投只覆盖, 不再触发规则
+  if (dedupe && core.mail.forwarded(dedupe)) return { id: "", delivered: 0 };
+  const fresh = !dedupe || !core.store.byDedupe(dedupe);
+  await keepBody(core, data, input.html, text, dedupe);
   // 冒充的信不响铃, 即使带验证码
   const priority = code && !input.spoof ? "need_me" : "worth_reading";
   const ev: EventInput = { kind: "event", channel: MAIL_CHANNEL, priority, data };
@@ -66,6 +71,7 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const saved = core.store.get(r.id);
   if (saved) core.mail.add({ ev: saved.id, ts: saved.ts, account: to, vendor, frm: from, subj: subject, cat: category });
   ensureMailChat(core);
+  if (saved && fresh && (await applyRules(core, saved)) && dedupe) core.mail.markForwarded(dedupe);
   return r;
 }
 

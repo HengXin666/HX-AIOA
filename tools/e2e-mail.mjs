@@ -102,6 +102,32 @@ const byFrom = await call("GET", `${V1}/mail?q=${encodeURIComponent("vercel.com"
 check("关键词搜发件人", byFrom.data.messages?.some((m) => m.id === hm.data.id), byFrom.data);
 check("关键词里的 % 不当通配", (await call("GET", `${V1}/mail?q=%25`)).data.messages?.length === 0);
 
+// 显示偏好, 转发, 自动转发规则
+const FWD = `mailfwd-${RUN}`;
+await call("PATCH", `${V1}/chats/${encodeURIComponent(FWD)}`, { title: "邮件转发测试" });
+const p0 = await call("GET", `${V1}/mail/prefs`);
+check("偏好默认只放行白名单", p0.status === 200 && p0.data.images === "known", p0.data);
+const p1 = await call("PUT", `${V1}/mail/prefs`, { images: "known", senders: { "Devpost.com": { images: "show" } } });
+check("偏好保存", p1.status === 200 && p1.data.senders["devpost.com"]?.images === "show" && (await call("GET", `${V1}/mail/prefs`)).data.senders["devpost.com"]?.images === "show", p1.data);
+check("偏好校验", (await call("PUT", `${V1}/mail/prefs`, { images: "maybe" })).status === 400);
+const fw = await call("POST", `${V1}/mail/${hm.data.id}/forward`, { channel: FWD });
+const fmsgs = (await call("GET", `${V1}/chats/${encodeURIComponent(FWD)}/messages?since=0`)).data.messages ?? [];
+const fm = fmsgs.find((m) => m.id === fw.data.id);
+check("手动转进群", fw.status === 200 && fm && fm.source.type === "user" && fm.data.summary?.includes(`HTML 信 ${RUN}`) && fm.data.summary?.includes("hi@vercel.com") && fm.data.file && fm.fwd?.channel === "mail", fm ?? fw.data);
+check("转到不存在的群 404", (await call("POST", `${V1}/mail/${hm.data.id}/forward`, { channel: `nope-${RUN}` })).status === 404);
+const rr = await call("PUT", `${V1}/mail/rules`, { rules: [{ channel: FWD, domain: "sentry.io", subject: `告警 ${RUN}`, keep: false }] });
+check("规则保存", rr.status === 200 && rr.data.rules.length === 1 && rr.data.rules[0].keep === false, rr.data);
+const al = await call("POST", `${V1}/mail`, { from: "noreply@sentry.io", to: ACC_A, subject: `告警 ${RUN} 新错误`, text: "TypeError at line 3", messageId: `<s-${RUN}@sentry>` });
+await call("POST", `${V1}/mail`, { from: "noreply@sentry.io", to: ACC_A, subject: `周报 ${RUN}`, text: "weekly", messageId: `<w-${RUN}@sentry>` });
+const after = (await call("GET", `${V1}/chats/${encodeURIComponent(FWD)}/messages?since=0`)).data.messages ?? [];
+check("规则自动转发, 不命中的不转", after.filter((m) => m.data?.summary?.includes("TypeError")).length === 1 && !after.some((m) => m.data?.summary?.includes(`周报 ${RUN}`)), after.map((m) => m.data?.summary?.slice(0, 40)));
+const kept = await call("GET", `${V1}/mail?q=${encodeURIComponent(`告警 ${RUN}`)}`);
+check("keep=false 转完从邮件列表删掉", kept.data.messages?.length === 0 && al.status === 200, kept.data);
+await call("POST", `${V1}/mail`, { from: "noreply@sentry.io", to: ACC_A, subject: `告警 ${RUN} 新错误`, text: "TypeError at line 3", messageId: `<s-${RUN}@sentry>` });
+const again2 = (await call("GET", `${V1}/chats/${encodeURIComponent(FWD)}/messages?since=0`)).data.messages ?? [];
+check("同一封重投不重复转", again2.filter((m) => m.data?.summary?.includes("TypeError")).length === 1);
+await call("PUT", `${V1}/mail/rules`, { rules: [] });
+
 const eml = [`From: Cloudflare <noreply@notify.cloudflare.com>`, `To: ${ACC_A}`, `Subject: cf ${RUN}`, `Message-ID: <cf-${RUN}@cf>`, "Content-Type: text/plain", "", "hello from email routing", ""].join("\r\n");
 const r = await fetch(`${server}/cdn-cgi/handler/email?from=noreply%40notify.cloudflare.com&to=${encodeURIComponent(ACC_A)}`, { method: "POST", body: eml, headers: { "user-agent": UA } }).catch(() => null);
 if (r && r.status < 300) {

@@ -20,6 +20,7 @@ export * from "./v1/files";
 export * from "./v1/plugin";
 export * from "./v1/gh";
 export * from "./v1/mail";
+export * from "./v1/mail-rules";
 export * from "./v1/term";
 export * from "./v1/presence";
 import { parseTermFrame, type TermFrame } from "./v1/term";

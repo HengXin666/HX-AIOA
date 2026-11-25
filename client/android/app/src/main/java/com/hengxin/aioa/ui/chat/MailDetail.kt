@@ -4,7 +4,6 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,10 +45,9 @@ import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.pressable
 import kotlinx.coroutines.launch
 
-private const val BODY_HTML = "html"
 private val VIA_LABEL = mapOf("cf" to "Cloudflare 邮件路由", "hx-email" to "HX-Email", "api" to "接口推送")
 
-/** 一串信的详情: 当前这封的主题, 发件人, 收件信息, 正文; 下面是同主题的其它信, 底部操作栏。 */
+/** 一串信的详情: 主题, 发件人, 收件信息, 原文内嵌; 下面是同主题的其它信, 底部操作栏 (转进群, 交给 Agent)。 */
 @Composable
 fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
     val c = Aioa.colors
@@ -57,21 +55,15 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
     val scope = rememberCoroutineScope()
     var cur by remember(t.key) { mutableStateOf(t.head.id) }
     val m = t.items.firstOrNull { it.id == cur } ?: t.head
-    var full by remember { mutableStateOf<String?>(null) }
-    var fetching by remember { mutableStateOf(false) }
+    var link by remember { mutableStateOf<String?>(null) }
+    var forward by remember { mutableStateOf<Boolean?>(null) }
+    var settings by remember { mutableStateOf(false) }
     BackHandler(onBack = back)
-    fun original() {
-        if (fetching || m.body == null) return
-        fetching = true
-        scope.launch {
-            s.api.body(m.id).onSuccess { full = it }.onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
-            fetching = false
-        }
-    }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).pressable(back), contentAlignment = Alignment.Center) { Icon("chevron-left", c.text, 24.dp) }
-            Text(if (t.items.size > 1) "${m.vendor} · ${t.items.size} 封" else m.vendor, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (t.items.size > 1) "${m.vendor} · ${t.items.size} 封" else m.vendor, Modifier.weight(1f), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.size(44.dp).clip(CircleShape).pressable { settings = true }, contentAlignment = Alignment.Center) { Icon("sliders-horizontal", c.textSecondary, 20.dp) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().background(c.surface).padding(MAIL_PAD.dp)) {
@@ -91,23 +83,16 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
                         Icon("copy", c.accent, 16.dp)
                     }
                 }
-                Column(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                    SelectionContainer { Text(m.summary.ifEmpty { "(没有正文摘要)" }, color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
-                    if (m.body != null) {
-                        Row(Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceAlt).pressable(::original).padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon("file-text", c.text, 15.dp)
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (fetching) "加载中..." else if (m.body == BODY_HTML) "查看原文" else "查看全文", color = c.text, fontSize = 13.sp)
-                        }
-                    }
-                }
             }
+            MailBody(m, s) { link = it }
             if (t.items.size > 1) Others(t, m.id) { cur = it; s.seen.set(t.items.filter { x -> x.id == it }, true) }
             Spacer(Modifier.height(24.dp))
         }
-        ActionBar(m, s, ::original) { scope.launch { s.remove(MailThread(t.key, listOf(m))) }; if (t.items.size == 1) back() }
+        ActionBar(m, s, { forward = it }) { scope.launch { s.remove(MailThread(t.key, listOf(m))) }; if (t.items.size == 1) back() }
     }
-    full?.let { HtmlViewer(it, m.subject) { full = null } }
+    link?.let { LinkSheet(it, m.spoof) { link = null } }
+    forward?.let { agent -> ForwardSheet(m, s, agent) { forward = null } }
+    if (settings) MailPrefsSheet(s) { settings = false }
 }
 
 @Composable
@@ -174,15 +159,16 @@ private fun Others(t: MailThread, cur: String, pick: (String) -> Unit) {
 }
 
 @Composable
-private fun ActionBar(m: MailItem, s: MailState, original: () -> Unit, delete: () -> Unit) {
+private fun ActionBar(m: MailItem, s: MailState, forward: (Boolean) -> Unit, delete: () -> Unit) {
     val c = Aioa.colors
     @Suppress("UNUSED_VARIABLE") val v = s.seen.version
     val unread = s.seen.unread(m)
     Column(Modifier.fillMaxWidth().background(c.surface)) {
         HorizontalDivider(color = c.border, thickness = 0.5.dp)
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            if (m.body != null) Action("file-text", "原文", original)
             Action(if (unread) "mail-open" else "mail", if (unread) "标为已读" else "标为未读") { s.seen.set(listOf(m), unread) }
+            Action("send", "转进群") { forward(false) }
+            Action("bot", "交给 Agent") { forward(true) }
             Action("trash-2", "删除", delete)
         }
     }
