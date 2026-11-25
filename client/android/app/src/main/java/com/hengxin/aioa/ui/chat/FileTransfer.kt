@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.hengxin.aioa.config.ConfigStore
+import com.hengxin.aioa.config.TgBots
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.net.Net
 import com.hengxin.aioa.proto.FileRef
@@ -25,6 +26,8 @@ object FileTransfer {
     private const val FILES_API = "api/v1/files"
     private const val LINK = "link"
     private const val COMMIT = "commit"
+    private const val QUERY_DIRECT = "direct"
+    private const val KEY_DIRECT = "direct"
     private const val CHUNK_TRIES = 3
     private const val RETRY_SEC = 2L
     private const val RETRY_MAX_SEC = 60L
@@ -90,6 +93,15 @@ object FileTransfer {
             cached(context, f)?.let { return@runCatching it }
             val out = target(context, f)
             out.parentFile?.mkdirs()
+            // TG 直连: 存了 Bot 令牌就带 direct=1 换地址, 服务端给了分片清单 (主人且开了直连) 就从 TG 并发拉
+            if (TgBots.any(context)) {
+                val r = Api.call(context, "GET", listOf(FILES_API, f.id, LINK), query = mapOf(QUERY_DIRECT to "1"))
+                val body = r.body ?: error(r.error ?: "文件不存在或已删除")
+                body.optJSONObject(KEY_DIRECT)?.let { d ->
+                    TgDirect.download(context, f, d, absolute(context, body.getString("url")), out, progress)
+                    return@runCatching out
+                }
+            }
             val tmp = File(out.path + ".part")
             if (tmp.length() > f.size) tmp.delete()
             var relinked = false

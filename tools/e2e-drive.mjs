@@ -72,6 +72,23 @@ ok(res.status === 200 && sha(got) === sha(big), "从 Drive 直链下载一致");
 const ranged = await fetch(l.body.url, { headers: { range: `bytes=${MB}-${MB + 9}` } });
 ok(ranged.status === 206 && Buffer.compare(Buffer.from(await ranged.arrayBuffer()), big.subarray(MB, MB + 10)) === 0, "Drive 直链支持 Range");
 
+// TG 直连: 主人开了 direct 才给分片清单; 用清单里的 Bot 走 getFile 下载 (这里是 mock-tg)
+const TG = process.env.TG ?? "http://127.0.0.1:28887";
+const BOTS = { 111: "111:AAA", 222: "222:BBB" };
+let dl = await api("GET", `/api/v1/files/${bigId}/link?direct=1`);
+ok(dl.status === 200 && !dl.body.direct, "没开 direct 时不给分片清单");
+await api("PATCH", "/api/v1/settings", { storage: { direct: true } });
+dl = await api("GET", `/api/v1/files/${bigId}/link?direct=1`);
+const dir = dl.body.direct;
+ok(dir && dir.size === big.length && dir.chunks.length >= 1 && dir.chunks.every((c) => BOTS[c.bot] && c.fileId), `开了 direct 后给分片清单 ${dir?.chunks.length} 片`);
+const parts = [];
+for (const ch of dir.chunks) {
+  const tok = BOTS[ch.bot];
+  const gf = await (await fetch(`${TG}/bot${tok}/getFile`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ file_id: ch.fileId }) })).json();
+  parts.push(Buffer.from(await (await fetch(`${TG}/file/bot${tok}/${gf.result.file_path}`)).arrayBuffer()));
+}
+ok(sha(Buffer.concat(parts)) === sha(big), "按清单直连 TG 拼出的文件一致");
+await api("PATCH", "/api/v1/settings", { storage: { direct: false } });
 u = await api("GET", "/api/v1/files");
 ok(u.body.byStore.cfd.count === 1 && u.body.byStore.cfd.bytes === big.length && u.body.byStore.r2.count === 1, `分后端用量 ${JSON.stringify(u.body.byStore)}`);
 

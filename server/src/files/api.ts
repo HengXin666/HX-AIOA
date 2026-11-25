@@ -5,6 +5,7 @@ import {
   FILE_CHUNKED_MAX_BYTES,
   FILE_MAX_BYTES,
   FILE_NAME_MAX,
+  FILE_QUERY_DIRECT,
   FILE_UPLOAD_TTL_MS,
   type FileCreated,
   type FileLink,
@@ -129,7 +130,12 @@ async function link(c: ReqCtx): Promise<Response> {
   c.core.files.touch(row.id);
   if (row.store === "cfd") {
     try {
-      return json((await c.core.files.driveLink(row)) satisfies FileLink | null);
+      const l = (await c.core.files.driveLink(row)) as FileLink;
+      // TG 直连只给主人, 且要主人在存储设置里开了 direct; 其他情况忽略这个参数, 照常给直链
+      if (c.url.searchParams.get(FILE_QUERY_DIRECT) === "1" && c.who.owner && row.ext && storageOf(await c.core.config.settings()).direct) {
+        l.direct = await c.core.files.manifest(row.ext);
+      }
+      return json(l satisfies FileLink);
     } catch (e) {
       if (e instanceof DriveError) return fail(e.status === 404 ? 404 : 502, e.message, e.status === 404 ? CODE_NOT_FOUND : CODE_UNAVAILABLE);
       return fail(503, (e as Error).message, CODE_UNAVAILABLE);

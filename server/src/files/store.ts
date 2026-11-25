@@ -1,4 +1,4 @@
-import { FILE_ID_PREFIX, FILE_MAX_BYTES, type Envelope, type FileRef, type FileStoreKind, type FileUsage, FILES_TOTAL_MAX_BYTES, type StorageSettings } from "@hx-aioa/protocol";
+import { FILE_ID_PREFIX, FILE_MAX_BYTES, type Envelope, type FileRef, type FileStoreKind, type FileDirect, type FileUsage, FILES_TOTAL_MAX_BYTES, type StorageSettings } from "@hx-aioa/protocol";
 import { randomId } from "../auth";
 import type { Drive } from "./drive";
 
@@ -233,6 +233,12 @@ export class FileStore {
       await this.drive.remove(r.ext);
     }
     this.links.delete(r.id);
+  }
+
+  /** Drive 文件的分片清单 (TG 直连用)。 */
+  async manifest(ext: string): Promise<FileDirect> {
+    if (!this.drive) throw new Error("服务端还没接入 HX-CF-Drive");
+    return this.drive.manifest(ext);
   }
 
   /** 字节写完后回报: 以后端实际大小为准; cfd 同时记下 Drive 节点 id。行已被删返回 false。 */

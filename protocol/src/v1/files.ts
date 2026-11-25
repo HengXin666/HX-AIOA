@@ -12,7 +12,15 @@ export type FileChunks = { size: number; count: number };
 export type FileCreated = { file: FileRef; upload: string; expires: number; chunks?: FileChunks };
 export type FileChunkReceipt = { receipt: string };
 export type FileCommitRequest = { receipts: string[] };
-export type FileLink = { url: string; expires: number };
+/**
+ * TG 直连 (主人设备, 设置里开了 storage.direct): 换地址时带 ?direct=1, Drive 上的文件多给分片清单。
+ * 手机用自己保存的 Bot 令牌按 bot 对上, getFile 后从 TG 并发下载每片, 按 chunkSize 写到对应偏移;
+ * 某片的 Bot 令牌手机上没有, 或 file_id 失效时, 只这一片用 url 加 Range 从 Drive 取。
+ */
+export type FileDirectChunk = { bot: string; fileId: string; size: number };
+export type FileDirect = { size: number; chunkSize: number; chunks: FileDirectChunk[] };
+export type FileLink = { url: string; expires: number; direct?: FileDirect };
+export const FILE_QUERY_DIRECT = "direct";
 // 存储后端: r2 = 本部署的 R2 桶; cfd = HX-CF-Drive (字节在 TG 私有频道)
 export const FILE_STORES = ["r2", "cfd"] as const;
 export type FileStoreKind = (typeof FILE_STORES)[number];

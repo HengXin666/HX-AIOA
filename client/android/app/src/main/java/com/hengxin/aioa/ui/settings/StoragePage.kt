@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.hengxin.aioa.config.TgBots
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Chip
 import com.hengxin.aioa.kit.Text
@@ -73,6 +74,14 @@ fun StoragePage(owner: Boolean, onBack: (() -> Unit)?) {
                     }
                 }
                 val ready = body.optJSONObject("ready")
+                if (ready?.optBoolean(STORE_CFD) == true) {
+                    DirectGroup(body.optJSONObject(KEY_STORAGE)?.optBoolean("direct") == true) { patch ->
+                        scope.launch {
+                            error = withContext(Dispatchers.IO) { saveRoute(context, patch) }
+                            reload++
+                        }
+                    }
+                }
                 if (ready?.optBoolean(STORE_R2) == true && ready.optBoolean(STORE_CFD)) {
                     MigrateGroup(body.optJSONObject(KEY_STORAGE)?.optInt("coldDays") ?: 0, { reload++ }) { patch ->
                         scope.launch {
@@ -147,6 +156,46 @@ private fun RouteGroup(body: JSONObject, save: (JSONObject) -> Unit) {
             SwitchRow("R2 满了改走 Drive", s.optString("onFull") == STORE_CFD, "关闭时 R2 满了拒收新文件") {
                 save(JSONObject().put("onFull", if (it) STORE_CFD else "reject"))
             }
+        }
+    }
+}
+
+/**
+ * TG 直连 (主人): 服务端开关 + 本机 Bot 令牌。令牌只存本机 (Keystore 加密), 不上传;
+ * 开了以后下载 Drive 上的文件时从 TG 并发拉, 某片没有令牌或 file_id 失效时这一片走 Drive。
+ */
+@Composable
+private fun DirectGroup(on: Boolean, save: (JSONObject) -> Unit) {
+    val context = LocalContext.current
+    var bots by remember { mutableStateOf(TgBots.summary(context)) }
+    var input by remember { mutableStateOf("") }
+    var msg by remember { mutableStateOf("") }
+    SettingsGroup("TG 直连", "Bot 令牌只存在这台手机 (系统密钥库加密), 等于这个 Bot 的全部权限; 手机丢了请在 BotFather 重置令牌并更新 Drive 后台。") {
+        SwitchRow("从 TG 直接下载 Drive 上的文件", on, "字节不经过 Worker, 多片并发; 走 App 的代理") { save(JSONObject().put("direct", it)) }
+        RowDivider(false)
+        InfoRow("本机 Bot 令牌", if (bots.isEmpty()) "没有" else bots.joinToString(", "))
+        RowDivider(false)
+        InputRow("令牌", input, "123456:ABC..., 多个用逗号分开", secret = true) { input = it }
+        RowDivider(false)
+        ActionRow("保存令牌 (覆盖原来的)", "check", enabled = input.isNotBlank()) {
+            val err = TgBots.save(context, input.split(',', '\n', ' '))
+            msg = err ?: "已保存"
+            if (err == null) {
+                input = ""
+                bots = TgBots.summary(context)
+            }
+        }
+        if (bots.isNotEmpty()) {
+            RowDivider(false)
+            ActionRow("清除本机令牌", "trash-2", danger = true) {
+                TgBots.save(context, emptyList())
+                bots = emptyList()
+                msg = "已清除"
+            }
+        }
+        if (msg.isNotEmpty()) {
+            RowDivider(false)
+            NoteRow(msg)
         }
     }
 }

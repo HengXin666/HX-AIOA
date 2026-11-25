@@ -1,3 +1,4 @@
+import type { FileDirect } from "@hx-aioa/protocol";
 import type { Env } from "../env";
 
 const API = "/api/v1";
@@ -79,6 +80,14 @@ export class Drive {
   async commit(ticket: string, receipts: string[]): Promise<NodeOut> {
     const r = await this.json<{ node: NodeOut }>("/uploads/commit", { ticket, receipts });
     return { id: r.node.id, size: r.node.size };
+  }
+
+  /** 分片清单: 每片的 Bot, TG file_id, 大小 (Drive v0.3.1 起)。 */
+  async manifest(id: string): Promise<FileDirect> {
+    const res = await this.fetcher.fetch(new Request(`${this.origin}${API}/fs/manifest?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${this.token}` } }));
+    if (!res.ok) throw new DriveError(res.status, `Drive ${res.status}`);
+    const m = await res.json<FileDirect>();
+    return { size: m.size, chunkSize: m.chunkSize, chunks: m.chunks.map((c) => ({ bot: c.bot, fileId: c.fileId, size: c.size })) };
   }
 
   /** 签名直链, 绑定本令牌: 令牌被吊销后 60 秒内失效。 */
