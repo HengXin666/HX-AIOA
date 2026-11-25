@@ -1,6 +1,8 @@
 import {
   FILE_DEFAULT_MIME,
   FILE_LINK_TTL_MS,
+  FILE_CHUNK_TTL_MS,
+  FILE_CHUNKED_MAX_BYTES,
   FILE_MAX_BYTES,
   FILE_NAME_MAX,
   FILE_UPLOAD_TTL_MS,
@@ -8,6 +10,7 @@ import {
   type FileLink,
   type FileRef,
   PATH_FILE,
+  PATH_FILE_COMMIT,
   PATH_FILE_LINK,
   PATH_FILES,
   type Scope,
@@ -19,7 +22,7 @@ import { ApiFail, fail, json, readJson } from "../http";
 import { authorOf, rank, roleIn } from "../room-access";
 import { DriveError } from "./drive";
 import { storageOf } from "./storage";
-import { ticketPath } from "./ticket";
+import { chunkPath, ticketPath } from "./ticket";
 
 const SEND_SCOPE: Scope = "messages:send";
 const MIME_RE = /^[\w.+-]+\/[\w.+-]+$/;
@@ -65,7 +68,7 @@ async function create(c: ReqCtx): Promise<Response> {
   const size = typeof b?.size === "number" ? Math.floor(b.size) : -1;
   const mime = typeof b?.mime === "string" && MIME_RE.test(b.mime) ? b.mime.toLowerCase() : FILE_DEFAULT_MIME;
   if (!name || name.includes("/")) return fail(400, "需要文件名 (不含 /)", CODE_BAD_REQUEST);
-  if (size < 0 || size > FILE_MAX_BYTES) return fail(413, `单个文件上限 ${FILE_MAX_BYTES / 1024 / 1024} MB`, CODE_BAD_REQUEST);
+  if (size < 0 || size > FILE_CHUNKED_MAX_BYTES) return fail(413, `单个文件上限 ${FILE_CHUNKED_MAX_BYTES / 1024 / 1024 / 1024} GB`, CODE_BAD_REQUEST);
   const grp = uploadGroup(c.core, c.who, typeof b?.channel === "string" ? b.channel : undefined);
   const store = c.core.files.pick(size, storageOf(await c.core.config.settings()));
   if (Array.isArray(store)) {
@@ -73,11 +76,48 @@ async function create(c: ReqCtx): Promise<Response> {
     return fail(status, msg, status === STATUS_QUOTA ? CODE_QUOTA : status === 503 ? CODE_UNAVAILABLE : CODE_BAD_REQUEST);
   }
   const file = c.core.files.create(grp, name, size, mime, uploaderOf(c.core, c.who), store);
+  if (size > FILE_MAX_BYTES) return chunked(c, file, mime);
   const expires = Date.now() + FILE_UPLOAD_TTL_MS;
   let upload = await ticketPath(c.core.env, "up", file.id, expires, size, store);
   // Drive 里的文件名带上原名, 方便在 Drive 后台认; 不签名, 只影响显示
   if (store === "cfd") upload += `&n=${encodeURIComponent(name)}`;
   return json({ file, upload, expires } satisfies FileCreated);
+}
+
+/** 超过单次请求上限的文件 (只会是 cfd): 向 Drive 申请分片票据, 客户端按片传, 最后提交。 */
+async function chunked(c: ReqCtx, file: FileRef, mime: string): Promise<Response> {
+  try {
+    const t = await c.core.files.startChunked(file.id, file.name, file.size, mime);
+    const expires = Date.now() + FILE_CHUNK_TTL_MS;
+    const upload = await chunkPath(c.core.env, file.id, expires, file.size, t.ticket);
+    return json({ file, upload, expires, chunks: { size: t.chunkSize, count: t.chunkCount } } satisfies FileCreated);
+  } catch (e) {
+    await c.core.files.remove(file.id);
+    return driveFail(e);
+  }
+}
+
+function driveFail(e: unknown): Response {
+  if (!(e instanceof DriveError)) return fail(503, (e as Error).message, CODE_UNAVAILABLE);
+  const res = fail(e.status === 429 || e.status === 503 ? e.status : e.status === 400 ? 400 : 502, e.message, CODE_UNAVAILABLE);
+  if (e.retryAfter) res.headers.set("retry-after", e.retryAfter);
+  return res;
+}
+
+/** 分片上传完成: 上传者 (或主人) 交全部回执。 */
+async function commit(c: ReqCtx): Promise<Response> {
+  const row = c.core.files.row(decodeURIComponent(c.params[0] ?? ""));
+  if (!row || row.done) return fail(404, "文件不存在, 已删除或已经提交", CODE_NOT_FOUND);
+  if (!c.who.owner && row.by !== uploaderOf(c.core, c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const b = (await readJson(c.req)) as Record<string, unknown> | undefined;
+  const receipts = b?.receipts;
+  if (!Array.isArray(receipts) || !receipts.length || !receipts.every((x) => typeof x === "string")) return fail(400, "需要 receipts (字符串数组)");
+  try {
+    const ref = await c.core.files.commit(row.id, receipts as string[]);
+    return ref ? json({ file: ref }) : fail(410, "文件已被删除", CODE_NOT_FOUND);
+  } catch (e) {
+    return driveFail(e);
+  }
 }
 
 async function link(c: ReqCtx): Promise<Response> {
@@ -111,5 +151,6 @@ export const FILE_ROUTES: Route[] = [
   route(POST, PATH_FILES, ROOM, create),
   route(GET, PATH_FILES, ROOM, async (c) => (c.who.owner ? json(c.core.files.usage(storageOf(await c.core.config.settings()))) : fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN))),
   route(GET, PATH_FILE_LINK, ROOM, link),
+  route(POST, PATH_FILE_COMMIT, ROOM, commit),
   route(DELETE, PATH_FILE, ROOM, remove),
 ];

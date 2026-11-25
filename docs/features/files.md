@@ -28,12 +28,13 @@
 - 安卓下载: 没下完的 `.part` 留着, 下次带 `Range` 接着下; 一次响应没给全时继续按 `Range` 拉剩下的; 地址返回 403 / 404 / 410 (过期, 文件换了后端) 时重新换一次地址, 只重试一次。
 - 引用计数: 每条带附件的消息 +1, 撤回 / 删除 -1, 降到 0 立即从 R2 删除; 清空群时群里的文件一起删; 传了没发出去的文件每天清理一次。
 - 安全: 文件和 API 同源, 下载响应带 `nosniff` 与 `Content-Security-Policy: sandbox` (PDF 除外), 上传的 html / svg 打开后脚本不执行; 上传时的 Content-Type 只收合法的 `type/subtype`。
-- 上限: 单个文件 95 MB (Worker 请求体上限 100 MB), R2 总量 8 GB (R2 免费 10 GB); Drive 不设总量上限。
+- 上限: 走 R2 的单个文件 95 MB (Worker 请求体上限 100 MB); 超过的只能走 Drive, 分片上传, 单个文件 4 GB; R2 总量 8 GB (R2 免费 10 GB), Drive 不设总量上限。
 
 ## 接口
 
 1. `POST /api/v1/files` `{ name, size, mime?, channel? }` → `{ file: FileRef, upload, expires }`。主人可传任意群 (默认备忘); 成员只能传自己所在的群; Agent 只能传自己的群。
 2. `PUT {upload}`, 请求体为文件字节, 必须带 `Content-Length` 且不大于登记的大小。
+   超过 95 MB 时登记结果多一个 `chunks: { size, count }`: 第 i 片 (从 0 开始) `PUT {upload}&i=<i>`, 回 `{ receipt }`; 全部传完后 `POST /api/v1/files/{id}/commit { receipts }` (按序号排好, 上传者或主人)。分片票据 24 小时有效, 里面带着 Drive 的上传票据, Worker 收到分片直接转给 Drive, 不唤醒 DO。安卓每片最多试 3 次, 429 / 503 按 `Retry-After` 等; 分片上传的大文件不拷进本机缓存。
 3. 发消息时带上 `file: <id>`: 长连接 `send` 帧, 或 `POST /api/v1/messages`。文件必须已传完, 且是发送者能读的群里的。只发文件时正文写 `[文件] 名字`。
 4. `GET /api/v1/files/{id}/link` → `{ url, expires }`, 能读这个群的人才能换; `GET {url}` 下载, 支持 `Range`。
 5. `DELETE /api/v1/files/{id}`: 主人, 上传者或群管理员。`GET /api/v1/files` (主人): 总用量。
@@ -44,10 +45,9 @@
 
 部署流程会先确保桶存在 (`wrangler r2 bucket create`)。部署 token 没有 R2 编辑权限时去掉绑定照常部署, R2 不可用。仓库 secret `CFD_TOKEN` 配了才同步到 Worker; 两个后端都没有时文件接口返回 503。
 
-本机联调: Drive 仓库里起 `mock-tg` 与 `wrangler dev`, 再在 `server/` 起 `wrangler dev --var CFD_TOKEN:<受限令牌> --var CFD_ORIGIN:<Drive 本机地址>`, 两个 dev 进程会自动连上 Service Binding, 然后跑 `node tools/e2e-drive.mjs` (17 项)。
+本机联调: Drive 仓库里起 `mock-tg` 与 `wrangler dev`, 再在 `server/` 起 `wrangler dev --var CFD_TOKEN:<受限令牌> --var CFD_ORIGIN:<Drive 本机地址>`, 两个 dev 进程会自动连上 Service Binding, 然后跑 `node tools/e2e-drive.mjs` (26 项, 含 96 MB 分片上传)。
 
 ## 以后
 
-- 超过 95 MB 的文件: 走 Drive 分片上传 (安卓分片), 见 #88 分期 2。
 - 迁移任务 (R2 与 Drive 之间搬文件, 冷迁移), 见 #88 分期 3。
 - 主人设备直连 TG 拉取, 见 #88 分期 4。

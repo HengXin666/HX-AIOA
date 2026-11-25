@@ -60,6 +60,27 @@ export class Drive {
     return { id: r.data.node.id, size: r.data.node.size };
   }
 
+  /** 分片上传第 1 步: 申请 Drive 的上传票据 (24 小时), 返回片大小与片数。 */
+  async init(dir: string, name: string, size: number, mime: string): Promise<{ ticket: string; chunkSize: number; chunkCount: number }> {
+    const r = await this.json<{ done?: boolean; ticket?: string; chunkSize?: number; chunkCount?: number }>("/uploads", { path: dir, name, size, mime });
+    if (r.done || !r.ticket || !r.chunkSize || !r.chunkCount) throw new DriveError(502, "Drive 没有返回上传票据");
+    return { ticket: r.ticket, chunkSize: r.chunkSize, chunkCount: r.chunkCount };
+  }
+
+  /** 第 2 步: 传一片, 字节流式转给 Drive, 返回 Drive 签发的回执。 */
+  async chunk(ticket: string, i: number, len: number, body: ReadableStream): Promise<string> {
+    const fixed = new FixedLengthStream(len);
+    void body.pipeTo(fixed.writable).catch(() => undefined);
+    const q = new URLSearchParams({ ticket, i: String(i) });
+    return (await this.call<{ receipt: string }>("PUT", `/uploads/chunk?${q}`, fixed.readable, { "content-length": String(len) })).receipt;
+  }
+
+  /** 第 3 步: 交全部回执, 返回 Drive 的文件节点。 */
+  async commit(ticket: string, receipts: string[]): Promise<NodeOut> {
+    const r = await this.json<{ node: NodeOut }>("/uploads/commit", { ticket, receipts });
+    return { id: r.node.id, size: r.node.size };
+  }
+
   /** 签名直链, 绑定本令牌: 令牌被吊销后 60 秒内失效。 */
   async link(id: string, ttlSec = DAY_SEC): Promise<string> {
     return (await this.json<{ url: string }>("/fs/link", { id, expiresIn: ttlSec })).url;

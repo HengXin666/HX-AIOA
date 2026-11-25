@@ -16,6 +16,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -23,6 +24,10 @@ import java.io.File
 object FileTransfer {
     private const val FILES_API = "api/v1/files"
     private const val LINK = "link"
+    private const val COMMIT = "commit"
+    private const val CHUNK_TRIES = 3
+    private const val RETRY_SEC = 2L
+    private const val RETRY_MAX_SEC = 60L
     private const val DIR = "att"
     private const val CHUNK = 64 * 1024
     private const val HTTP_PARTIAL = 206
@@ -60,9 +65,16 @@ object FileTransfer {
             val r = Api.call(context, "POST", listOf(FILES_API), body)
             val made = r.body ?: error(r.error ?: "登记失败")
             val ref = FileRef.parse(made.optJSONObject("file")) ?: error("登记失败")
-            val put = Request.Builder().url(absolute(context, made.getString("upload"))).put(stream(context, uri, size, mime, progress)).build()
-            Net.client(context).newCall(put).execute().use { if (!it.isSuccessful) error(errorOf(it.body?.string(), it.code)) }
-            runCatching { copy(context, uri, target(context, ref)) }
+            val upload = absolute(context, made.getString("upload"))
+            val chunks = made.optJSONObject("chunks")
+            if (chunks == null) {
+                val put = Request.Builder().url(upload).put(stream(context, uri, 0, size, mime) { progress(it.toFloat() / size) }).build()
+                Net.client(context).newCall(put).execute().use { if (!it.isSuccessful) error(errorOf(it.body?.string(), it.code)) }
+                runCatching { copy(context, uri, target(context, ref)) }
+            } else {
+                uploadChunks(context, uri, ref, upload, chunks.getLong("size"), chunks.getInt("count"), mime, progress)
+                // 超过 95 MB 的不拷进本机缓存 (太占空间), 要看时再下载
+            }
             ref
         }
     }
@@ -169,22 +181,69 @@ object FileTransfer {
         context.contentResolver.openInputStream(uri)?.use { i -> to.outputStream().use { i.copyTo(it) } }
     }
 
-    private fun stream(context: Context, uri: Uri, size: Long, mime: String, progress: (Float) -> Unit) = object : RequestBody() {
+    /**
+     * 分片上传 (超过 95 MB, 服务端转给 Drive): 逐片 PUT 到 `upload&i=<序号>`, 收齐回执后提交。
+     * 每片最多试 3 次; 429 / 503 按 Retry-After 等 (最多 60 秒), 其他 4xx 直接失败。
+     */
+    private fun uploadChunks(context: Context, uri: Uri, ref: FileRef, upload: String, chunkSize: Long, count: Int, mime: String, progress: (Float) -> Unit) {
+        val receipts = JSONArray()
+        for (i in 0 until count) {
+            val off = i * chunkSize
+            val len = minOf(chunkSize, ref.size - off)
+            receipts.put(putChunk(context, uri, "$upload&i=$i", off, len, mime) { progress((off + it).toFloat() / ref.size) })
+        }
+        val r = Api.call(context, "POST", listOf(FILES_API, ref.id, COMMIT), JSONObject().put("receipts", receipts))
+        if (r.body == null) error(r.error ?: "提交失败")
+    }
+
+    private fun putChunk(context: Context, uri: Uri, url: String, off: Long, len: Long, mime: String, progress: (Long) -> Unit): String {
+        var last = ""
+        repeat(CHUNK_TRIES) { attempt ->
+            val req = Request.Builder().url(url).put(stream(context, uri, off, len, mime, progress)).build()
+            val wait = runCatching {
+                Net.client(context).newCall(req).execute().use { res ->
+                    val text = res.body?.string()
+                    if (res.isSuccessful) return JSONObject(text.orEmpty()).getString("receipt")
+                    last = errorOf(text, res.code)
+                    when {
+                        res.code == 429 || res.code == 503 -> (res.header("Retry-After")?.toLongOrNull() ?: RETRY_SEC).coerceAtMost(RETRY_MAX_SEC)
+                        res.code in 400..499 -> error(last)
+                        else -> RETRY_SEC
+                    }
+                }
+            }.getOrElse { e ->
+                if (e is IllegalStateException) throw e
+                last = "网络错误: ${e.message ?: e.javaClass.simpleName}"
+                RETRY_SEC
+            }
+            if (attempt < CHUNK_TRIES - 1) Thread.sleep(wait * 1000)
+        }
+        error(last)
+    }
+
+    /** 文件的 [offset, offset + length) 一段作为请求体; progress 报这一段已写出的字节数。 */
+    private fun stream(context: Context, uri: Uri, offset: Long, length: Long, mime: String, progress: (Long) -> Unit) = object : RequestBody() {
         override fun contentType(): MediaType? = mime.toMediaTypeOrNull()
 
-        override fun contentLength(): Long = size
+        override fun contentLength(): Long = length
 
         override fun writeTo(sink: BufferedSink) {
             val input = context.contentResolver.openInputStream(uri) ?: error("读不了这个文件")
             input.use {
+                var skipped = 0L
+                while (skipped < offset) {
+                    val n = it.skip(offset - skipped)
+                    if (n <= 0) error("读不了这个文件")
+                    skipped += n
+                }
                 val buf = ByteArray(CHUNK)
                 var done = 0L
-                while (true) {
-                    val n = it.read(buf)
-                    if (n < 0) break
+                while (done < length) {
+                    val n = it.read(buf, 0, minOf(buf.size.toLong(), length - done).toInt())
+                    if (n < 0) error("文件比登记的小")
                     sink.write(buf, 0, n)
                     done += n
-                    progress(done.toFloat() / size)
+                    progress(done)
                 }
             }
         }

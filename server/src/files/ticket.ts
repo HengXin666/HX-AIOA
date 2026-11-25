@@ -1,4 +1,4 @@
-import { FILE_QUERY_EXPIRES, FILE_QUERY_TICKET, type FileStoreKind, PATH_FILE_DATA } from "@hx-aioa/protocol";
+import { FILE_QUERY_EXPIRES, FILE_QUERY_TICKET, type FileStoreKind, PATH_FILE_CHUNK, PATH_FILE_DATA } from "@hx-aioa/protocol";
 import { hmac, safeEqual } from "../auth";
 import type { Env } from "../env";
 
@@ -18,6 +18,29 @@ export async function ticketPath(env: Env, verb: TicketVerb, id: string, exp: nu
   if (verb === "up") q.set("s", String(size));
   if (store !== "r2") q.set(QUERY_STORE, store);
   return `${PATH_FILE_DATA.replace("{id}", encodeURIComponent(id))}?${q}`;
+}
+
+const QUERY_DRIVE = "d";
+const chunkText = (id: string, exp: number, size: number, drive: string) => `file:ck:${id}:${exp}:${size}:${drive}`;
+
+/**
+ * 分片上传地址 (相对路径, 客户端再加 &i=<序号>)。Drive 的上传票据签进去一起带着, Worker 收到分片直接转给 Drive, 不唤醒 DO。
+ * 序号不签: 每片的长度和归属由 Drive 的票据校验, 回执也由 Drive 签发。
+ */
+export async function chunkPath(env: Env, id: string, exp: number, size: number, drive: string): Promise<string> {
+  const sig = await hmac(secretOf(env), chunkText(id, exp, size, drive));
+  const q = new URLSearchParams({ [FILE_QUERY_TICKET]: sig, [FILE_QUERY_EXPIRES]: String(exp), s: String(size), [QUERY_DRIVE]: drive });
+  return `${PATH_FILE_CHUNK.replace("{id}", encodeURIComponent(id))}?${q}`;
+}
+
+/** 校验分片票据, 返回 Drive 的上传票据; 无效返回 null。 */
+export async function checkChunk(env: Env, id: string, url: URL, now = Date.now()): Promise<string | null> {
+  const sig = url.searchParams.get(FILE_QUERY_TICKET) ?? "";
+  const exp = Number(url.searchParams.get(FILE_QUERY_EXPIRES));
+  const size = Number(url.searchParams.get("s"));
+  const drive = url.searchParams.get(QUERY_DRIVE) ?? "";
+  if (!sig || !drive || !Number.isFinite(exp) || exp < now || !Number.isFinite(size)) return null;
+  return safeEqual(sig, await hmac(secretOf(env), chunkText(id, exp, size, drive))) ? drive : null;
 }
 
 /** 校验票据; 返回登记的大小 (下载票据为 0) 与后端, 无效返回 null。 */

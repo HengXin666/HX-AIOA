@@ -1,12 +1,13 @@
-import { PATH_FILE_DATA } from "@hx-aioa/protocol";
+import { PATH_FILE_CHUNK, PATH_FILE_DATA } from "@hx-aioa/protocol";
 import { HUB_NAME } from "../constants";
 import type { Env } from "../env";
 import { json } from "../http";
 import { Drive, DriveError } from "./drive";
 import { driveDir, driveName } from "./store";
-import { checkTicket } from "./ticket";
+import { checkChunk, checkTicket } from "./ticket";
 
 const DATA_RE = new RegExp(`^${PATH_FILE_DATA.replace("{id}", "([^/]+)")}$`);
+const CHUNK_RE = new RegExp(`^${PATH_FILE_CHUNK.replace("{id}", "([^/]+)")}$`);
 const QUERY_NAME = "n";
 // 内容不会变 (同一 id 只写一次), 客户端与浏览器可以放心缓存到票据过期
 const CACHE = "private, max-age=86400, immutable";
@@ -19,6 +20,8 @@ const err = (status: number, error: string) => json({ error }, status);
 
 /** 字节读写只经过 Worker, 不唤醒 DO (上传完成时回报一次); 不是这个路径返回 null。 */
 export async function fileData(req: Request, env: Env, url: URL): Promise<Response | null> {
+  const ck = CHUNK_RE.exec(url.pathname);
+  if (ck) return req.method === "PUT" ? chunk(req, env, url, decodeURIComponent(ck[1] ?? "")) : err(405, "只支持 PUT");
   const m = DATA_RE.exec(url.pathname);
   if (!m) return null;
   const id = decodeURIComponent(m[1] ?? "");
@@ -47,6 +50,35 @@ async function upload(req: Request, env: Env, url: URL, id: string): Promise<Res
   return json({ ok: true, size: obj.size });
 }
 
+function driveErr(e: DriveError): Response {
+  const res = json({ error: e.message }, e.status === 429 || e.status === 503 || e.status === 400 ? e.status : 502);
+  if (e.retryAfter) res.headers.set("retry-after", e.retryAfter);
+  return res;
+}
+
+/** 分片上传的一片: 票据里带着 Drive 的上传票据, 原样转给 Drive, 回执交给客户端自己存; 不唤醒 DO。 */
+async function chunk(req: Request, env: Env, url: URL, id: string): Promise<Response> {
+  // 提前拒绝时先丢掉请求体, 否则连接会被重置, 客户端复用这条连接的下一个请求跟着失败
+  const reject = (status: number, msg: string) => {
+    void req.body?.cancel().catch(() => undefined);
+    return err(status, msg);
+  };
+  const ticket = await checkChunk(env, id, url);
+  if (ticket === null) return reject(403, "上传地址无效或已过期");
+  const i = Number(url.searchParams.get("i"));
+  const len = Number(req.headers.get("content-length"));
+  if (!Number.isInteger(i) || i < 0) return reject(400, "需要片序号 i");
+  if (!req.body || !Number.isFinite(len) || len <= 0) return reject(411, "需要 Content-Length");
+  const drive = Drive.from(env);
+  if (!drive) return reject(503, "服务端还没接入 HX-CF-Drive");
+  try {
+    return json({ receipt: await drive.chunk(ticket, i, len, req.body) });
+  } catch (e) {
+    if (e instanceof DriveError) return driveErr(e);
+    throw e;
+  }
+}
+
 /** 登记到 Drive 的文件: 字节流式转给 Drive, 回报 Drive 节点 id; Drive 限流 / 忙时把状态码和 Retry-After 原样给客户端。 */
 async function toDrive(body: ReadableStream, env: Env, url: URL, id: string, len: number, type: string | undefined): Promise<Response> {
   const drive = Drive.from(env);
@@ -56,9 +88,7 @@ async function toDrive(body: ReadableStream, env: Env, url: URL, id: string, len
     node = await drive.upload(driveDir(), driveName(id, url.searchParams.get(QUERY_NAME) ?? "file"), len, type ?? "application/octet-stream", body);
   } catch (e) {
     if (!(e instanceof DriveError)) throw e;
-    const res = json({ error: e.message }, e.status === 429 || e.status === 503 ? e.status : 502);
-    if (e.retryAfter) res.headers.set("retry-after", e.retryAfter);
-    return res;
+    return driveErr(e);
   }
   const hub = env.HUB.get(env.HUB.idFromName(HUB_NAME));
   if (!(await hub.fileDone(id, node.size, node.id))) {

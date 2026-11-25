@@ -22,7 +22,12 @@ async function api(method, path, body) {
 }
 const abs = (u) => (u.startsWith("http") ? u : A + u);
 const sha = (b) => createHash("sha256").update(b).digest("hex");
-const driveTree = async () => (await (await fetch(`${D}/api/v1/admin/stats`, { headers: { authorization: `Bearer ${ADMIN}` } })).json()).blobs;
+// 长时间空闲后 wrangler dev 会关掉 keep-alive 连接, Node 复用旧连接时偶尔 ECONNRESET; 这只是测试客户端的问题, 重试一次
+async function driveTree() {
+  const get = () => fetch(`${D}/api/v1/admin/stats`, { headers: { authorization: `Bearer ${ADMIN}` } });
+  const r = await get().catch((e) => (e?.cause?.code === "ECONNRESET" ? get() : Promise.reject(e)));
+  return (await r.json()).blobs;
+}
 
 async function upload(name, buf) {
   const c = await api("POST", "/api/v1/files", { name, size: buf.length, mime: "application/octet-stream" });
@@ -86,6 +91,40 @@ ok((await api("GET", `/api/v1/files/${bigId}/link`)).status === 404, "删除后�
 await api("PATCH", "/api/v1/settings", { storage: { large: "off" } });
 r = await api("POST", "/api/v1/files", { name: "x.bin", size: 2 * MB });
 ok(r.status === 413, `large=off 时拒收: ${r.body.error}`);
+
+// 8. 超过 95 MB: 分片传到 Drive (路由必须是 large=cfd), R2 路由拒收
+await api("PATCH", "/api/v1/settings", { storage: { large: "r2", threshold: 20 * MB } });
+r = await api("POST", "/api/v1/files", { name: "huge.bin", size: 96 * MB });
+ok(r.status === 413, `大文件走 R2 时超过 95 MB 拒收: ${r.body.error}`);
+await api("PATCH", "/api/v1/settings", { storage: { large: "cfd" } });
+const huge = randomBytes(96 * MB + 5);
+const c = await api("POST", "/api/v1/files", { name: "huge.bin", size: huge.length, mime: "application/octet-stream" });
+ok(c.status === 200 && c.body.chunks?.count >= 2, `登记返回分片 ${JSON.stringify(c.body.chunks)}`);
+const receipts = [];
+for (let i = 0; i < c.body.chunks.count; i++) {
+  const part = huge.subarray(i * c.body.chunks.size, Math.min(huge.length, (i + 1) * c.body.chunks.size));
+  const pr = await fetch(abs(`${c.body.upload}&i=${i}`), { method: "PUT", body: part });
+  const pj = await pr.json();
+  if (pr.status !== 200) ok(false, `第 ${i} 片 ${pr.status} ${JSON.stringify(pj)}`);
+  receipts.push(pj.receipt);
+}
+ok(receipts.length === c.body.chunks.count, `${receipts.length} 片都拿到回执`);
+const bad = await fetch(abs(c.body.upload.replace(/([?&]d=)[^&]+/, "$1x") + "&i=0"), { method: "PUT", body: huge.subarray(0, 10) });
+ok(bad.status === 403, "改了票据里的 Drive 票据无效");
+const before2 = await api("GET", `/api/v1/files/${c.body.file.id}/link`);
+ok(before2.status === 404, "提交前换不了地址");
+const cm = await api("POST", `/api/v1/files/${c.body.file.id}/commit`, { receipts });
+ok(cm.status === 200 && cm.body.file.size === huge.length, `提交完成 ${JSON.stringify(cm.body.file)}`);
+const again = await api("POST", `/api/v1/files/${c.body.file.id}/commit`, { receipts });
+ok(again.status === 404, "重复提交被拒");
+l = await api("GET", `/api/v1/files/${c.body.file.id}/link`);
+let have = Buffer.alloc(0);
+while (have.length < huge.length) {
+  const rr = await fetch(l.body.url, { headers: have.length ? { range: `bytes=${have.length}-` } : {} });
+  have = Buffer.concat([have, Buffer.from(await rr.arrayBuffer())]);
+}
+ok(sha(have) === sha(huge), "分片文件下载一致");
+ok((await api("DELETE", `/api/v1/files/${c.body.file.id}`)).status === 200 && (await driveTree()).n === 0, "分片文件删除后 Drive 清空");
 await api("PATCH", "/api/v1/settings", { storage: null });
 
 console.log(`\n全部通过: ${n} 项`);

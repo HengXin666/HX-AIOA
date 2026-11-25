@@ -40,6 +40,9 @@ export const PATH_FILE = `${API_V1}/files/{id}`;
 export const PATH_FILE_LINK = `${API_V1}/files/{id}/link`;
 // 字节上传 / 下载: Worker 凭票据直接读写 R2
 export const PATH_FILE_DATA = `${API_V1}/files/{id}/data`;
+// 分片上传 (超过 95 MB, 走 Drive): 字节由 Worker 凭票据转给 Drive; 全部传完后提交
+export const PATH_FILE_CHUNK = `${API_V1}/files/{id}/chunk`;
+export const PATH_FILE_COMMIT = `${API_V1}/files/{id}/commit`;
 
 export const QUERY_KIND = "kind";
 export const QUERY_BEFORE = "before";

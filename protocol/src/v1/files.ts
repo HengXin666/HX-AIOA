@@ -4,7 +4,14 @@
 
 export type FileRef = { id: string; name: string; size: number; mime: string };
 export type FileCreateRequest = { name: string; size: number; mime?: string; channel?: string };
-export type FileCreated = { file: FileRef; upload: string; expires: number };
+/**
+ * 登记结果。没有 chunks 时把整个文件 PUT 到 upload; 有 chunks 时 (超过 95 MB, 只有 Drive 能收) 按 chunks.size 切片,
+ * 第 i 片 PUT 到 `${upload}&i=<i>` (从 0 开始), 每片回一个 receipt, 全部传完后 POST /files/{id}/commit { receipts } (按序号排好)。
+ */
+export type FileChunks = { size: number; count: number };
+export type FileCreated = { file: FileRef; upload: string; expires: number; chunks?: FileChunks };
+export type FileChunkReceipt = { receipt: string };
+export type FileCommitRequest = { receipts: string[] };
 export type FileLink = { url: string; expires: number };
 // 存储后端: r2 = 本部署的 R2 桶; cfd = HX-CF-Drive (字节在 TG 私有频道)
 export const FILE_STORES = ["r2", "cfd"] as const;
@@ -42,8 +49,12 @@ export type FileUsage = {
 };
 
 export const FILE_ID_PREFIX = "f_";
-// Worker 免费计划单次请求体上限 100MB, 留出余量
+// Worker 免费计划单次请求体上限 100MB, 留出余量; 超过的只能分片传到 Drive
 export const FILE_MAX_BYTES = 95 * 1024 * 1024;
+// 分片上传 (只走 Drive) 的单文件上限; Drive 一片约 19 MB, 4 GB 约 216 片, 一次提交就能带全部回执
+export const FILE_CHUNKED_MAX_BYTES = 4 * 1024 * 1024 * 1024;
+// 分片上传的票据给 24 小时 (与 Drive 的上传票据一致), 慢网络也传得完
+export const FILE_CHUNK_TTL_MS = 24 * 3600_000;
 // R2 免费 10GB, 留 2GB 余量给别的桶
 export const FILES_TOTAL_MAX_BYTES = 8 * 1024 * 1024 * 1024;
 export const FILE_NAME_MAX = 200;

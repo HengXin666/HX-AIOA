@@ -1,4 +1,4 @@
-import { FILE_ID_PREFIX, type Envelope, type FileRef, type FileStoreKind, type FileUsage, FILES_TOTAL_MAX_BYTES, type StorageSettings } from "@hx-aioa/protocol";
+import { FILE_ID_PREFIX, FILE_MAX_BYTES, type Envelope, type FileRef, type FileStoreKind, type FileUsage, FILES_TOTAL_MAX_BYTES, type StorageSettings } from "@hx-aioa/protocol";
 import { randomId } from "../auth";
 import type { Drive } from "./drive";
 
@@ -14,6 +14,8 @@ export type FileRow = {
   refs: number;
   store: FileStoreKind;
   ext: string | null;
+  // 分片上传进行中: Drive 的上传票据, 提交后清空
+  up: string | null;
 };
 
 // 上传后一直没被消息引用的文件, 过这么久就清掉
@@ -46,6 +48,7 @@ export class FileStore {
     const cols = sql.exec<{ name: string }>("PRAGMA table_info(file)").toArray().map((c) => c.name);
     if (!cols.includes("store")) sql.exec("ALTER TABLE file ADD COLUMN store TEXT NOT NULL DEFAULT 'r2'");
     if (!cols.includes("ext")) sql.exec("ALTER TABLE file ADD COLUMN ext TEXT");
+    if (!cols.includes("up")) sql.exec("ALTER TABLE file ADD COLUMN up TEXT");
     sql.exec("CREATE INDEX IF NOT EXISTS file_grp ON file (grp)");
     sql.exec("CREATE INDEX IF NOT EXISTS file_orphan ON file (refs, created)");
   }
@@ -81,6 +84,7 @@ export class FileStore {
       if (s.onFull !== "cfd") return [507, "R2 文件总量已满, 先清理旧文件, 或在存储设置里改走 Drive"];
       k = "cfd";
     }
+    if (k === "r2" && size > FILE_MAX_BYTES) return [413, `超过 ${FILE_MAX_BYTES / 1048576} MB 的文件只能分片传到 Drive, 请在存储设置里把大文件改走 Drive`];
     if (!this.ready(k)) return [503, k === "r2" ? "服务端还没绑定 R2 文件桶" : "服务端还没接入 HX-CF-Drive"];
     return k;
   }
@@ -136,6 +140,27 @@ export class FileStore {
     const url = await this.drive.link(r.ext, LINK_TTL_MS / 1000);
     this.links.set(r.id, { url, at: now });
     return { url, expires: now + LINK_TTL_MS };
+  }
+
+  /** 分片上传: 向 Drive 申请上传票据并记在行上, 提交时用。 */
+  async startChunked(id: string, name: string, size: number, mime: string): Promise<{ ticket: string; chunkSize: number; chunkCount: number }> {
+    if (!this.drive) throw new Error("服务端还没接入 HX-CF-Drive");
+    const t = await this.drive.init(driveDir(), driveName(id, name), size, mime);
+    this.sql.exec("UPDATE file SET up = ? WHERE id = ?", t.ticket, id);
+    return t;
+  }
+
+  /** 分片上传完成: 把回执交给 Drive, 记下节点。行已被删时把 Drive 里刚建的文件删掉, 返回 null。 */
+  async commit(id: string, receipts: string[]): Promise<FileRef | null> {
+    const r = this.row(id);
+    if (!r?.up || !this.drive) return null;
+    const node = await this.drive.commit(r.up, receipts);
+    if (!this.done(id, node.size, node.id)) {
+      await this.drive.remove(node.id);
+      return null;
+    }
+    this.sql.exec("UPDATE file SET up = NULL WHERE id = ?", id);
+    return { id, name: r.name, size: node.size, mime: r.mime };
   }
 
   /** 字节写完后回报: 以后端实际大小为准; cfd 同时记下 Drive 节点 id。行已被删返回 false。 */
