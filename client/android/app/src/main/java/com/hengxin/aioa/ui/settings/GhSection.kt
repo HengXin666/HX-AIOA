@@ -58,7 +58,11 @@ fun GhSection() {
         InfoRow("账号", s.auth.login)
         RowDivider()
         InfoRow("方式", if (s.auth.kind == "pat") "令牌" else "设备码授权")
-        s.auth.expires?.let { RowDivider(); InfoRow("令牌到期", time(it) + " (自动续期)") }
+        s.auth.expires?.let {
+            RowDivider()
+            InfoRow("令牌到期", time(it) + if (s.auth.renewable) " (自动续期)" else " (不能自动续期)")
+            if (!s.auth.renewable) NoteRow(if (it < System.currentTimeMillis()) "已过期, 请重新授权。" else "部署没配 GH_CLIENT_SECRET, 到期后要重新授权, 到期前 2 小时会发提醒。", c.danger)
+        }
         RowDivider()
         ActionRow("撤销授权", "trash-2", danger = true) { scope.launch { api.revoke().onSuccess { repos = null; reload(false) }.onFailure { error = it.message } } }
     }

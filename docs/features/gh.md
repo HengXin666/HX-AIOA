@@ -16,7 +16,8 @@
 | 粘贴令牌 | `PUT /api/v1/gh/token { "token": "github_pat_..." }`, 建议 fine-grained, 只给 Issues 读写。 |
 
 - 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或停用并清除 (`?purge=1`) 即删除。
-- GitHub App 的过期令牌在剩 5 分钟时自动续期, 需要 `GH_CLIENT_SECRET`; 没配就到期后重新授权。
+- 会过期的令牌 (GitHub App, 或 OAuth App 开了 "用户令牌过期", 设备码拿到的令牌 8 小时过期) 在剩 5 分钟时自动续期, 需要 `GH_CLIENT_SECRET`: 在仓库 Actions Secrets 填 `AIOA_GH_CLIENT_SECRET`, 部署时同步。也可以在应用设置里关掉令牌过期。
+- 不能续期时 `GET` 返回的 `auth.renewable` 为 false, App 标红; 到期前 2 小时 (cron) 给主人发一条系统消息, 每个到期时间只发一次。
 
 ## 仓库范围
 

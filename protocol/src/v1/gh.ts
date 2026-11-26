@@ -9,7 +9,8 @@ export const GH_AUTH_KINDS = ["oauth", "pat"] as const;
 export type GhAuthKind = (typeof GH_AUTH_KINDS)[number];
 export const GH_MAX_OPS = 50;
 
-export type GhAuth = { login: string; kind: GhAuthKind; since: number; expires?: number };
+// renewable: 到期前服务端能自动续期 (有 refresh token 且部署配了 GH_CLIENT_SECRET); 有 expires 而不能续期时到期要重新授权
+export type GhAuth = { login: string; kind: GhAuthKind; since: number; expires?: number; renewable?: boolean };
 // 仓库范围的快捷规则; repos 手动加, deny 手动排除, 优先级 deny > repos > 规则
 export type GhRules = { pushedDays?: number; public?: boolean; private?: boolean; repos?: string[]; deny?: string[] };
 export type GhRepo = { repo: string; private: boolean; pushed: number; allowed: boolean };

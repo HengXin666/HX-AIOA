@@ -138,6 +138,17 @@ jobs:
           fi
           printf '%s' "$AIOA_GH_CLIENT_ID" | npx wrangler secret put GH_CLIENT_ID
 
+      # 可选: 仓库 secret AIOA_GH_CLIENT_SECRET 同步为 GH_CLIENT_SECRET。应用开了 "用户令牌过期" 时, 设备码拿到的令牌 8 小时过期, 要它才能自动续期
+      - name: 同步 GitHub 续期密钥
+        env:
+          AIOA_GH_CLIENT_SECRET: ${{ secrets.AIOA_GH_CLIENT_SECRET }}
+        run: |
+          if [ -z "$AIOA_GH_CLIENT_SECRET" ]; then
+            echo "未配置 AIOA_GH_CLIENT_SECRET, 跳过, 会过期的 GitHub 授权到期后要重新授权"
+            exit 0
+          fi
+          printf '%s' "$AIOA_GH_CLIENT_SECRET" | npx wrangler secret put GH_CLIENT_SECRET
+
       # 可选: 配置了 AZURE_TRANSLATOR_KEY secret 时同步微软翻译密钥 (区域资源另配 AZURE_TRANSLATOR_REGION)
       - name: 同步翻译密钥
         env:

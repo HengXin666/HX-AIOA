@@ -56,7 +56,11 @@ export class GhService {
     const s = this.store.secret();
     if (!s) return undefined;
     const { token: _t, refresh: _r, refreshExpires: _e, ...auth } = s;
-    return auth;
+    return s.expires ? { ...auth, renewable: this.renewable(s) } : auth;
+  }
+
+  private renewable(s: GhSecret): boolean {
+    return !!(s.refresh && this.env.GH_CLIENT_ID && this.env.GH_CLIENT_SECRET) && (!s.refreshExpires || s.refreshExpires > Date.now());
   }
 
   async token(): Promise<string> {
