@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
             val theme by PluginTheme.flow.collectAsState()
             val pluginRev by PluginEvents.rev.collectAsState()
             LaunchedEffect(pluginRev, chat.online) { if (chat.configured && chat.online) PluginTheme.refresh(this@MainActivity) }
+            // 打开 App 连上时顺带把调试模式攒下的失败记录发到群里 (#111)
+            LaunchedEffect(chat.online) { if (chat.online) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.hengxin.aioa.link.DebugForward.flush(this@MainActivity) } }
             val appearance = prefs.resolve(isSystemInDarkTheme()).copy(theme = theme)
             AioaTheme(appearance) {
                 MaterialTheme(colorScheme = materialScheme(Aioa.colors, appearance.dark)) {

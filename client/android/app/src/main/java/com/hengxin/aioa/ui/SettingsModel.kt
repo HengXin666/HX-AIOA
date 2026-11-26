@@ -135,6 +135,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
 
     // 打开设置页或手动刷新时按需拉起内核, 不用之后由 :link 空闲停掉
     fun refreshProxy() {
+        loadHttpLog()
         viewModelScope.launch {
             proxy = withContext(Dispatchers.IO) { loadProxy() }
             if (!proxy.running && withContext(Dispatchers.IO) { ProxyDemand.ensure(app) }) {
@@ -215,6 +216,31 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         debugOn = on
     }
 
+    // 调试模式里可单独开关的两项监听 (#111)
+    var httpOn by mutableStateOf(com.hengxin.aioa.link.DebugForward.httpOn(app))
+        private set
+    var forwardOn by mutableStateOf(com.hengxin.aioa.link.DebugForward.forwardOn(app))
+        private set
+    var forwardGroup by mutableStateOf(com.hengxin.aioa.link.DebugForward.group(app))
+        private set
+    var httpLog by mutableStateOf(emptyList<String>())
+        private set
+
+    fun setHttp(on: Boolean) {
+        com.hengxin.aioa.link.DebugForward.setHttp(app, on)
+        httpOn = on
+    }
+
+    fun setForward(on: Boolean, group: String = forwardGroup) {
+        com.hengxin.aioa.link.DebugForward.setForward(app, on, group)
+        forwardOn = on
+        forwardGroup = group
+    }
+
+    fun loadHttpLog() {
+        httpLog = com.hengxin.aioa.link.DebugForward.httpRecent(app, HTTP_LOG_LINES)
+    }
+
     private fun loadProxy(): ProxyView = loadProxyBase().copy(today = DebugReport.today(app), battery = BatteryLog.summary(app))
 
     private fun loadProxyBase(): ProxyView {
@@ -231,6 +257,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val HTTP_LOG_LINES = 100
         const val POLL_TIMES = 40
         const val POLL_STEP_MS = 1000L
         const val MS_PER_SEC = 1000L
