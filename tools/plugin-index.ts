@@ -27,7 +27,8 @@ export function checkIndex(entries: IndexEntry[], ms: PluginManifest[], errors: 
 /** 基线 (PR 的目标分支, 或 push 前的提交) 里的清单; 没有基线或文件新建时返回 null。 */
 function baseManifest(base: string, dir: string, root: string): { version: string } | null {
   try {
-    return JSON.parse(execFileSync("git", ["show", `${base}:${root}/${dir}/plugin.json`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })) as { version: string };
+    // 在市场目录里跑 git, 市场目录可以是别的仓库 (索引仓库的 CI 从 HX-AIOA 调这个脚本)
+    return JSON.parse(execFileSync("git", ["show", `${base}:./${dir}/plugin.json`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })) as { version: string };
   } catch {
     return null;
   }
@@ -35,7 +36,7 @@ function baseManifest(base: string, dir: string, root: string): { version: strin
 
 function changedSince(base: string, dir: string, root: string): boolean {
   try {
-    execFileSync("git", ["diff", "--quiet", base, "--", `${root}/${dir}`], { stdio: "ignore" });
+    execFileSync("git", ["diff", "--quiet", base, "--", dir], { cwd: root, stdio: "ignore" });
     return false;
   } catch {
     return true;

@@ -1,0 +1,47 @@
+name: check
+
+# 索引仓库 CI: 用 HX-AIOA 的市场检查脚本校验本仓库, 检查内嵌清单是否同步
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  # 可以改成自己的维护者列表 (GitHub 登录名, 逗号分隔)
+  MAINTAINERS: hengxin666
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: index
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: HengXin666/HX-AIOA
+          path: aioa
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: aioa
+      - name: 改动的插件目录与升版本基线
+        working-directory: index
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "BASE=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+            echo "PR_AUTHOR=${{ github.event.pull_request.user.login }}" >> "$GITHUB_ENV"
+            dirs=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | awk -F/ 'NF>1{print $1}' | sort -u | paste -sd, -)
+            echo "CHANGED=$dirs" >> "$GITHUB_ENV"
+          fi
+      # 脚本在 HX-AIOA 里跑 (依赖它的 node_modules), 市场目录指向本仓库
+      - name: 市场检查
+        working-directory: aioa
+        run: node --import tsx tools/check-plugins.ts ../index
+      - name: 内嵌清单是否同步
+        working-directory: aioa
+        run: |
+          node --import tsx tools/build-index.ts ../index
+          git -C ../index diff --exit-code index.json || (echo "index.json 没同步, 本地跑 build-index 后再提交" && exit 1)
