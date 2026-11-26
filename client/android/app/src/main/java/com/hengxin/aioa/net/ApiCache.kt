@@ -9,10 +9,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import java.io.File
 
 /** 缓存优先: 先拿磁盘上的上一份立刻显示, 再带 ETag 去服务端问, 没变 (304) 就不动。 */
 object ApiCache {
+    private const val UPLOAD_TIMEOUT_SEC = 60L
+    private const val UPLOAD_TRIES = 2
+
     private const val DIR = "api-cache"
     private const val ETAG = "ETag"
     private const val IF_NONE_MATCH = "If-None-Match"
@@ -103,11 +107,20 @@ object ApiCache {
             .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
             .put(data.toRequestBody(mime.toMediaType()))
             .build()
-        return runCatching {
-            Net.client(context).newCall(req).execute().use { res ->
-                val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()
-                if (res.isSuccessful) ApiReply(json ?: JSONObject(), null) else ApiReply(null, json?.optString("error") ?: "上传失败 (HTTP ${res.code})")
-            }
-        }.getOrElse { ApiReply(null, "网络错误: ${it.message}") }
+        // 上传走代理或弱网时 OkHttp 默认 10 秒写超时不够 (#110 群头像上传超时), 放宽并在超时时重试一次
+        val client = Net.client(context).newBuilder()
+            .writeTimeout(UPLOAD_TIMEOUT_SEC, TimeUnit.SECONDS).readTimeout(UPLOAD_TIMEOUT_SEC, TimeUnit.SECONDS).build()
+        var last: ApiReply? = null
+        repeat(UPLOAD_TRIES) {
+            last = runCatching {
+                client.newCall(req).execute().use { res ->
+                    val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()
+                    if (res.isSuccessful) ApiReply(json ?: JSONObject(), null)
+                    else ApiReply(null, json?.optString("error")?.ifEmpty { null } ?: "上传失败 (HTTP ${res.code})", res.code)
+                }
+            }.getOrElse { ApiReply(null, ErrKind.describe(it)) }
+            if (last?.kind != ErrKind.TIMEOUT) return last!!
+        }
+        return last!!
     }
 }

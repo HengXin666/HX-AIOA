@@ -130,7 +130,7 @@ fun ChatScreen(model: ChatModel) {
     CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (dir.metas[open]?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(model, open) { g.close() }
         val err = g.error ?: dir.error
-        if (err != null) Text(err, Modifier.fillMaxWidth().clickable { g.clearError() }.padding(horizontal = PAD, vertical = 4.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+        if (err != null) ErrorNote(err, Modifier.fillMaxWidth().padding(horizontal = PAD, vertical = 4.dp), onDismiss = { g.clearError() })
         // 进群设置再回来时停在原来的位置; 换群或退出群后是新的一页
         if (dir.metas[open]?.isMail == true) {
             KeepState("chat:mail:${g.visit}") { MailView(g.messages.lastOrNull()?.seq, Modifier.weight(1f)) }

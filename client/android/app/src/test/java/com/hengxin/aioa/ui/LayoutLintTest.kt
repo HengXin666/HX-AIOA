@@ -10,13 +10,17 @@ import kotlin.test.assertTrue
  */
 class LayoutLintTest {
     private val root = File("src/main/java")
+    private companion object { const val MIN_FILES = 50 }
 
     // 一个 Row 的直接子项里同时有 weight(fill = false) 和 Spacer(weight): 两个 weight 平分剩余宽度,
     // 前者用不满的那份空出来, 右边的东西 (时间, 按钮) 就不贴右
     @Test
     fun rowHasNoHalfWeightSpacer() {
         val bad = mutableListOf<String>()
-        root.walk().filter { it.extension == "kt" }.forEach { f ->
+        val files = root.walk().filter { it.extension == "kt" }.toList()
+        // 工作目录不对时一个文件都扫不到, 别让检查空跑通过
+        assertTrue(files.size > MIN_FILES, "没扫到源码: ${root.absolutePath}")
+        files.forEach { f ->
             val src = f.readText()
             rows(src).forEach { (at, body) ->
                 val direct = flatten(body)

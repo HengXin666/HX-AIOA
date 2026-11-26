@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.ui.chat.Avatars
 import com.hengxin.aioa.ui.chat.rememberAvatarPicker
+import com.hengxin.aioa.net.ErrKind
 import com.hengxin.aioa.ui.chat.ChatAgent
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.DIGEST_DAILY
@@ -77,11 +78,16 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     var dialog by remember { mutableStateOf<GsDialog?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
-    val pickAvatar = rememberAvatarPicker({ dir.error = it }) { bytes ->
+    // 上传失败时留着裁好的图, 错误条上点 "重试" 不用重新选图
+    var failed by remember { mutableStateOf<ByteArray?>(null) }
+    val upload: suspend (ByteArray) -> Unit = { bytes ->
         busy = "正在上传头像..."
-        Avatars.upload(context, bytes).onSuccess { dir.setAvatar(group, it) }.onFailure { dir.error = "头像上传失败: ${it.message}" }
+        dir.error = null
+        Avatars.upload(context, bytes).onSuccess { failed = null; dir.setAvatar(group, it) }.onFailure { failed = bytes; dir.error = "头像上传失败. ${it.message}" }
         busy = null
     }
+    val pickAvatar = rememberAvatarPicker({ dir.error = it }) { upload(it) }
+    val retryScope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
@@ -94,7 +100,10 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 }
                 Text(meta?.title ?: group, Modifier.padding(top = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(busy ?: if (manage) "点头像更换 · channel: $group" else "channel: $group", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                dir.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+                dir.error?.let { e ->
+                    val retry = failed?.let { b -> { retryScope.launch { upload(b) }; Unit } }
+                    ErrorNote(e, Modifier.padding(top = 6.dp), kind = ErrKind.guess(e.substringAfter(". ")), onRetry = retry, onDismiss = { dir.error = null })
+                }
             }
             Card {
                 ValueRow("群名称", (meta?.title ?: group) + if (manage) "  ›" else "") { if (manage) dialog = GsDialog.Rename }
