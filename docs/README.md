@@ -74,7 +74,8 @@
 | [ui-spec/README.md](design/ui-spec/README.md) | 安卓 UI 与交互规范 (对齐 HX-UI 2), 页面关系图 `sitemap.svg`, 可点原型 `prototype.html` (#121) |
 | [ui-spec/home-spaces.md](design/ui-spec/home-spaces.md) | 新总览: ChatGPT 式侧栏, 空间切换, 插件的空间与区块怎么挂 (#121) |
 | [ui-spec/hx-ui-sync.md](design/ui-spec/hx-ui-sync.md) | 安卓端如何跟随 HX-UI: 令牌导出, 组件对照, 版本锁定 (#121) |
-| [agent-gui.md](design/agent-gui.md) | Agent GUI 草案: 手机与电脑驱动 Claude Code / Codex / DSH, 工作模式与审批模式, 架构图与界面草图 (#126) |
+| [agent-gui.md](design/agent-gui.md) | Agent GUI 方案: 全部 ACP, 探针多路代理, 直连 (本机 / 局域网 / CF Tunnel) 不占 Worker 与 DO, 审批模式, 实时统计 (#126) |
+| [agent-gui-ui.md](design/agent-gui-ui.md) | Agent GUI 界面方案: 桌面工作台, 手机工作 / 审批模式, 原型图 3-desktop.svg 4-mobile.svg (#126) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`

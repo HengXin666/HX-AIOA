@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1060" viewBox="0 0 1720 1060">
+<defs></defs>
+<rect width="100%" height="100%" fill="#f4f5f7"/>
+<text x="30" y="40" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" fill="#1f2430" font-weight="bold" text-anchor="start">Agent 工作台 · 桌面原型 (#126)</text>
+<text x="30" y="64" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#5d6778" font-weight="normal" text-anchor="start">深色取 ChatGPT 配色, 令牌按 ui-spec。粉色圆点编号对应右侧说明。</text>
+<rect x="30" y="84" width="1380" height="950" rx="14" fill="#212121" stroke="none" stroke-width="1"/>
+<rect x="30" y="84" width="264" height="950" rx="14" fill="#171717" stroke="none" stroke-width="1"/>
+<rect x="280" y="84" width="14" height="950" rx="0" fill="#171717" stroke="none" stroke-width="1"/>
+<rect x="44" y="98" width="236" height="40" rx="10" fill="#2F2F2F" stroke="none" stroke-width="1"/>
+<circle cx="60" cy="118" r="4" fill="#42C070"/>
+<text x="72" y="123" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#ECECEC" font-weight="bold" text-anchor="start">hx-pc</text>
+<rect x="194" y="106" width="42.0" height="22" rx="11.0" fill="#2b3a2f" stroke="none" stroke-width="1"/>
+<text x="215.0" y="120.96" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#42C070" font-weight="normal" text-anchor="middle">本机</text>
+<rect x="44" y="148" width="236" height="34" rx="8" fill="#262626" stroke="none" stroke-width="1"/>
+<text x="56" y="170" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">搜索会话   Ctrl K</text>
+<rect x="44" y="192" width="236" height="34" rx="8" fill="#ECECEC" stroke="none" stroke-width="1"/>
+<text x="162.0" y="213.68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#171717" font-weight="bold" text-anchor="middle">+ 新会话</text>
+<text x="48" y="252" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#F5AE39" font-weight="bold" text-anchor="start">需要你</text>
+<rect x="96" y="238" width="26.16" height="20" rx="10.0" fill="#4a3a1a" stroke="none" stroke-width="1"/>
+<text x="109.08" y="251.96" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#F5AE39" font-weight="normal" text-anchor="middle">2</text>
+<rect x="44" y="262" width="236" height="44" rx="8" fill="#2a2620" stroke="none" stroke-width="1"/>
+<circle cx="58" cy="277" r="4" fill="#F5AE39"/>
+<text x="70" y="282" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">修头像上传进度</text>
+<text x="70" y="298" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">要运行命令 · 2 分钟</text>
+<rect x="44" y="312" width="236" height="44" rx="8" fill="#2a2620" stroke="none" stroke-width="1"/>
+<circle cx="58" cy="327" r="4" fill="#F5AE39"/>
+<text x="70" y="332" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">DSH 夜间备份</text>
+<text x="70" y="348" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">计划待批</text>
+<text x="48" y="384" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="bold" text-anchor="start">HX-AIOA</text>
+<rect x="44" y="394" width="236" height="44" rx="8" fill="#2F2F2F" stroke="none" stroke-width="1"/>
+<circle cx="58" cy="409" r="4" fill="#F5AE39"/>
+<text x="70" y="414" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">修头像上传进度</text>
+<text x="70" y="430" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">Claude · 3 分钟前</text>
+<text x="272" y="430" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#42C070" font-weight="normal" text-anchor="end">+123 -7</text>
+<circle cx="58" cy="457" r="4" fill="#4BA3F7"/>
+<text x="70" y="462" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">Agent GUI 原型</text>
+<text x="70" y="478" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">Codex · 3 分钟前</text>
+<text x="272" y="478" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#42C070" font-weight="normal" text-anchor="end">+48 -2</text>
+<circle cx="58" cy="505" r="4" fill="#42C070"/>
+<text x="70" y="510" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">整理 docs</text>
+<text x="70" y="526" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">DSH · 3 分钟前</text>
+<text x="272" y="526" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#42C070" font-weight="normal" text-anchor="end">+12 -3</text>
+<circle cx="58" cy="553" r="4" fill="#6b6b6b"/>
+<text x="70" y="558" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">CF 额度页拆分</text>
+<text x="70" y="574" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">Claude · 3 分钟前</text>
+<text x="272" y="574" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#42C070" font-weight="normal" text-anchor="end"></text>
+<text x="48" y="608" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="bold" text-anchor="start">hxoa</text>
+<circle cx="58" cy="633" r="4" fill="#6b6b6b"/>
+<text x="70" y="638" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="normal" text-anchor="start">mkdir 递归</text>
+<text x="70" y="654" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">Claude · 昨天</text>
+<text x="48" y="1012" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">设置: Agent 实例 · 设备 · 路线</text>
+<circle cx="282" cy="114" r="10" fill="#E85D9E"/>
+<text x="282" y="118" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<text x="318" y="118" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#ECECEC" font-weight="bold" text-anchor="start">修头像上传进度</text>
+<rect x="444" y="100" width="138.07999999999998" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="513.04" y="117.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="middle">Claude Code (订阅)</text>
+<rect x="588.0799999999999" y="100" width="87.2" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="631.68" y="117.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="middle">Sonnet 4.x</text>
+<rect x="681.28" y="100" width="151.51999999999998" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="757.04" y="117.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">分支 oa_3 · worktree</text>
+<rect x="930" y="98" width="132" height="30" rx="15" fill="#353535" stroke="none" stroke-width="1"/>
+<rect x="932" y="100" width="64" height="26" rx="13" fill="#ECECEC" stroke="none" stroke-width="1"/>
+<text x="964" y="118" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#171717" font-weight="bold" text-anchor="middle">工作</text>
+<text x="1029" y="118" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">审批</text>
+<circle cx="1066" cy="112" r="10" fill="#E85D9E"/>
+<text x="1066" y="116" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<rect x="554" y="158" width="380" height="46" rx="16" fill="#2F2F2F" stroke="none" stroke-width="1"/>
+<text x="570" y="186" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#ECECEC" font-weight="normal" text-anchor="start">安卓头像上传加实时进度, 切后台也继续传</text>
+<rect x="334" y="220" width="600" height="32" rx="8" fill="#262626" stroke="none" stroke-width="1"/>
+<text x="346" y="241" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">读 6 个文件 · 改 3 个 · 运行 1 条命令 · 1 分 12 秒</text>
+<circle cx="948" cy="236" r="10" fill="#E85D9E"/>
+<text x="948" y="240" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<rect x="352" y="260" width="20" height="20" rx="5" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="362" y="274" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#9B9B9B" font-weight="bold" text-anchor="middle">R</text>
+<text x="380" y="275" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">读取 AvatarUploads.kt x3</text>
+<text x="934" y="275" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end"></text>
+<rect x="352" y="286" width="20" height="20" rx="5" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="362" y="300" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#9B9B9B" font-weight="bold" text-anchor="middle">E</text>
+<text x="380" y="301" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">编辑 Net.kt</text>
+<text x="934" y="301" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+18 -2</text>
+<rect x="352" y="312" width="20" height="20" rx="5" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="362" y="326" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#9B9B9B" font-weight="bold" text-anchor="middle">E</text>
+<text x="380" y="327" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">编辑 TransferService.kt</text>
+<text x="934" y="327" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+41 -5</text>
+<rect x="352" y="338" width="582" height="92" rx="8" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<rect x="353" y="344" width="580" height="20" rx="0" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<text x="362" y="358" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">  val body = file.asRequestBody(type)</text>
+<rect x="353" y="364" width="580" height="20" rx="0" fill="#3b2224" stroke="none" stroke-width="1"/>
+<text x="362" y="378" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">- client.newCall(req).execute()</text>
+<rect x="353" y="384" width="580" height="20" rx="0" fill="#1f3326" stroke="none" stroke-width="1"/>
+<text x="362" y="398" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">+ val counted = CountingBody(body) { onProgress(it) }</text>
+<rect x="353" y="404" width="580" height="20" rx="0" fill="#1f3326" stroke="none" stroke-width="1"/>
+<text x="362" y="418" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">+ client.newCall(req.withBody(counted)).execute()</text>
+<text x="334" y="456" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">思考了 6 秒  ›</text>
+<text x="334" y="483.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#ECECEC" font-weight="normal" text-anchor="start">计数请求体已经接上, 进度每 2% 回调一次, 和文件传输一致。现在跑单测确认没有回归。</text>
+<rect x="334" y="520" width="300" height="86" rx="10" fill="#262626" stroke="none" stroke-width="1"/>
+<text x="348" y="542" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="bold" text-anchor="start">计划</text>
+<circle cx="648" cy="534" r="10" fill="#E85D9E"/>
+<text x="648" y="538" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">4</text>
+<rect x="348" y="554" width="11" height="11" rx="2" fill="#42C070" stroke="none" stroke-width="1"/>
+<text x="366" y="564" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="start">计数请求体 CountingBody</text>
+<rect x="348" y="572" width="11" height="11" rx="2" fill="#42C070" stroke="none" stroke-width="1"/>
+<text x="366" y="582" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="start">前台服务 TransferService</text>
+<rect x="348" y="590" width="11" height="11" rx="2" fill="#262626" stroke="#9B9B9B" stroke-width="1"/>
+<text x="366" y="600" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">单测与真机验证</text>
+<rect x="334" y="704" width="600" height="124" rx="12" fill="#2a2620" stroke="#7a5a1e" stroke-width="1.2"/>
+<text x="350" y="728" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#F5AE39" font-weight="bold" text-anchor="start">要运行命令</text>
+<rect x="438" y="713" width="53.0" height="20" rx="10.0" fill="#20362a" stroke="none" stroke-width="1"/>
+<text x="464.5" y="726.96" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#42C070" font-weight="normal" text-anchor="middle">低风险</text>
+<text x="918" y="728" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="end">还有 1 个</text>
+<rect x="350" y="740" width="568" height="28" rx="6" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<text x="360" y="759" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">./gradlew :app:testDebugUnitTest</text>
+<text x="350" y="786" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">client/android · 不联网 · 只写工作区</text>
+<rect x="350" y="794" width="126" height="26" rx="8" fill="#ECECEC" stroke="none" stroke-width="1"/>
+<text x="413.0" y="811.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#171717" font-weight="bold" text-anchor="middle">允许一次 Enter</text>
+<rect x="484" y="794" width="170" height="26" rx="8" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="569.0" y="811.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="bold" text-anchor="middle">总是允许 Shift+Enter</text>
+<rect x="662" y="794" width="96" height="26" rx="8" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="710.0" y="811.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#FC5855" font-weight="bold" text-anchor="middle">拒绝 Esc</text>
+<text x="918" y="812" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="end">或直接打字 = 拒绝并说明</text>
+<circle cx="948" cy="722" r="10" fill="#E85D9E"/>
+<text x="948" y="726" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">5</text>
+<rect x="334" y="842" width="600" height="110" rx="18" fill="#2F2F2F" stroke="none" stroke-width="1"/>
+<text x="352" y="872" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">继续说点什么, 运行中可以插话或排队</text>
+<rect x="348" y="914" width="26.72" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="361.36" y="931.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">+</text>
+<rect x="380.72" y="914" width="93.44" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="427.44000000000005" y="931.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">权限: 需审批</text>
+<rect x="480.16" y="914" width="123.19999999999999" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="541.76" y="931.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">Sonnet · 思考 中</text>
+<rect x="609.36" y="914" width="57.44" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="638.08" y="931.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">/ 命令</text>
+<rect x="672.8" y="914" width="57.44" height="26" rx="13.0" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="701.52" y="931.32" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="middle">@ 文件</text>
+<rect x="848" y="912" width="72" height="30" rx="8" fill="#ECECEC" stroke="none" stroke-width="1"/>
+<text x="884.0" y="931.68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#171717" font-weight="bold" text-anchor="middle">停止</text>
+<circle cx="948" cy="862" r="10" fill="#E85D9E"/>
+<text x="948" y="866" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">6</text>
+<circle cx="344" cy="966" r="7" fill="none" stroke="#3A3A3A" stroke-width="3"/>
+<path d="M344,959 A7,7 0 0 1 351.0,966.4" fill="none" stroke="#7989FF" stroke-width="3" stroke-linecap="round"/>
+<text x="358" y="970" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">上下文 26% (53k / 200k)  ·  约 61 tok/s  ·  缓存命中 82%  ·  $0.04</text>
+<circle cx="948" cy="966" r="10" fill="#E85D9E"/>
+<text x="948" y="970" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">7</text>
+<rect x="664" y="514" width="270" height="150" rx="10" fill="#353535" stroke="#3A3A3A" stroke-width="1"/>
+<text x="678" y="508" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#9B9B9B" font-weight="normal" text-anchor="start">悬停统计条时</text>
+<text x="678" y="538" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">上下文</text>
+<text x="920" y="538" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">53,120 / 200,000</text>
+<text x="678" y="559" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">本轮输入 / 输出</text>
+<text x="920" y="559" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">41.2k / 3.1k</text>
+<text x="678" y="580" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">缓存读 / 写</text>
+<text x="920" y="580" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">33.8k / 2.0k</text>
+<text x="678" y="601" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">本轮用时 (活跃输出)</text>
+<text x="920" y="601" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">1:12 (51 s)</text>
+<text x="678" y="622" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">tok/s</text>
+<text x="920" y="622" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">约 61 (轮末校准)</text>
+<text x="678" y="643" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">累计费用</text>
+<text x="920" y="643" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="end">$0.04</text>
+<rect x="1010" y="144" width="386" height="876" rx="12" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<rect x="1022" y="156" width="59.0" height="28" rx="14.0" fill="#2F2F2F" stroke="none" stroke-width="1"/>
+<text x="1051.5" y="174.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="middle">改动 3</text>
+<rect x="1087.0" y="156" width="45.0" height="28" rx="14.0" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<text x="1109.5" y="174.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="middle">文件</text>
+<rect x="1138.0" y="156" width="45.0" height="28" rx="14.0" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<text x="1160.5" y="174.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="middle">终端</text>
+<rect x="1189.0" y="156" width="45.0" height="28" rx="14.0" fill="#1b1b1b" stroke="none" stroke-width="1"/>
+<text x="1211.5" y="174.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#9B9B9B" font-weight="normal" text-anchor="middle">计划</text>
+<circle cx="1382" cy="170" r="10" fill="#E85D9E"/>
+<text x="1382" y="174" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">8</text>
+<text x="1026" y="216" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="bold" text-anchor="start">本轮改动</text>
+<text x="1038" y="240" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">Net.kt</text>
+<text x="1380" y="240" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+18 -2</text>
+<text x="1038" y="264" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">AvatarUploads.kt</text>
+<text x="1380" y="264" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+64</text>
+<text x="1038" y="288" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">TransferService.kt</text>
+<text x="1380" y="288" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+41 -5</text>
+<text x="1026" y="320" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="bold" text-anchor="start">会话里改过的</text>
+<text x="1038" y="344" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">Frames.kt</text>
+<text x="1380" y="344" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+3</text>
+<text x="1026" y="376" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="bold" text-anchor="start">全部未提交</text>
+<text x="1038" y="400" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#ECECEC" font-weight="normal" text-anchor="start">4 个文件</text>
+<text x="1380" y="400" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#42C070" font-weight="normal" text-anchor="end">+126 -7</text>
+<rect x="1026" y="422" width="110" height="30" rx="8" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="1081.0" y="441.68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="bold" text-anchor="middle">提交...</text>
+<rect x="1144" y="422" width="140" height="30" rx="8" fill="#353535" stroke="none" stroke-width="1"/>
+<text x="1214.0" y="441.68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#ECECEC" font-weight="bold" text-anchor="middle">回退到某一轮</text>
+<rect x="1022" y="470" width="362" height="300" rx="8" fill="#141414" stroke="none" stroke-width="1"/>
+<text x="1034" y="492" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" fill="#9B9B9B" font-weight="normal" text-anchor="start">终端 · client/android</text>
+<text x="1034" y="520" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">$ ./gradlew :app:testDebugUnitTest</text>
+<text x="1034" y="540" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">&gt; Task :app:compileDebugKotlin</text>
+<text x="1034" y="560" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#ECECEC" font-weight="normal" text-anchor="start" xml:space="preserve">&gt; Task :app:testDebugUnitTest</text>
+<text x="1034" y="580" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#42C070" font-weight="normal" text-anchor="start" xml:space="preserve">AvatarUploadsTest &gt; progress PASSED</text>
+<text x="1034" y="600" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#42C070" font-weight="normal" text-anchor="start" xml:space="preserve">CountingBodyTest &gt; counts PASSED</text>
+<text x="1034" y="620" font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="12" fill="#42C070" font-weight="normal" text-anchor="start" xml:space="preserve">BUILD SUCCESSFUL in 41s</text>
+<text x="1034" y="754" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#9B9B9B" font-weight="normal" text-anchor="start">标签可拖出成浮窗 · Alt+S 左右互换</text>
+<circle cx="1444" cy="96" r="10" fill="#E85D9E"/>
+<text x="1444" y="100" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<text x="1462" y="101" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">左栏</text>
+<text x="1462" y="120.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">主机 + 路线标签 (本机 / 局域网 / 隧</text>
+<text x="1462" y="139.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  道 / 中继)。"需要你" 置顶。会话按</text>
+<text x="1462" y="158.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  项目分组, 状态点: 黄 等你, 蓝 运</text>
+<text x="1462" y="176.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  行, 绿 完成。</text>
+<circle cx="1444" cy="209.0" r="10" fill="#E85D9E"/>
+<text x="1444" y="213.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<text x="1462" y="214.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">顶栏</text>
+<text x="1462" y="233.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">会话标题, Agent 实例, 模型, 分支 / </text>
+<text x="1462" y="252.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  worktree; 工作 / 审批 一键切换。</text>
+<circle cx="1444" cy="284.5" r="10" fill="#E85D9E"/>
+<text x="1444" y="288.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<text x="1462" y="289.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">工作组</text>
+<text x="1462" y="309.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">一轮里的工具调用折叠成一行; 同文件连</text>
+<text x="1462" y="327.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  读合并 xN; 编辑就地红绿 diff; 命</text>
+<text x="1462" y="346.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  令输出展开才订阅。</text>
+<circle cx="1444" cy="378.75" r="10" fill="#E85D9E"/>
+<text x="1444" y="382.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">4</text>
+<text x="1462" y="383.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">计划</text>
+<text x="1462" y="403.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">ACP plan 实时勾选。</text>
+<circle cx="1444" cy="435.5" r="10" fill="#E85D9E"/>
+<text x="1444" y="439.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">5</text>
+<text x="1462" y="440.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">审批卡</text>
+<text x="1462" y="460.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">贴在输入框上方不滚走。Enter / Shift</text>
+<text x="1462" y="478.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  +Enter / Esc; 直接打字 = 拒绝并</text>
+<text x="1462" y="497.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  把话带给 Agent。</text>
+<circle cx="1444" cy="529.75" r="10" fill="#E85D9E"/>
+<text x="1444" y="533.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">6</text>
+<text x="1462" y="534.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">输入框</text>
+<text x="1462" y="554.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">附件 (加号), 常驻权限模式 (用 Agent</text>
+<text x="1462" y="573.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">   公布的名字), 模型与思考深度面板,</text>
+<text x="1462" y="591.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">   / 命令, @ 文件; 运行中: 停止, 插</text>
+<text x="1462" y="610.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  话, 排队。</text>
+<circle cx="1444" cy="642.75" r="10" fill="#E85D9E"/>
+<text x="1444" y="646.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">7</text>
+<text x="1462" y="647.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">统计条</text>
+<text x="1462" y="667.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">上下文环, tok/s (约 = 估算, 轮末校</text>
+<text x="1462" y="686.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  准), 缓存命中, 费用; 悬停看明细。</text>
+<text x="1462" y="704.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  全走直连, 不占 CF。</text>
+<circle cx="1444" cy="737.0" r="10" fill="#E85D9E"/>
+<text x="1444" y="741.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle">8</text>
+<text x="1462" y="742.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">右栏</text>
+<text x="1462" y="761.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">改动三段 + 提交 / 回退到某轮 (check</text>
+<text x="1462" y="780.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  point), 文件, 探针 PTY 终端, 计</text>
+<text x="1462" y="799.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#3d4450" font-weight="normal" text-anchor="start">  划。</text>
+</svg>
