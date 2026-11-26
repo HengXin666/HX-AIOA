@@ -236,7 +236,7 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         forwardOn = on
     }
 
-    fun setForwardGroup(group: String) {
+    fun changeForwardGroup(group: String) {
         com.hengxin.aioa.link.DebugForward.setGroup(app, group)
         forwardGroup = group
     }

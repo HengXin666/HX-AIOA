@@ -171,7 +171,7 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
             RowDivider()
             SwitchRow("失败转发到群", model.forwardOn, onChange = model::setForward)
             RowDivider()
-            InputRow("转发到的群", model.forwardGroup, DebugForward.DEFAULT_GROUP, onChange = model::setForwardGroup)
+            InputRow("转发到的群", model.forwardGroup, DebugForward.DEFAULT_GROUP, onChange = model::changeForwardGroup)
             RowDivider()
             ActionRow(TEXT_REFRESH, ICON_REFRESH, onClick = model::refreshProxy)
         }
