@@ -92,7 +92,7 @@
 | 插件 | 门控 | 数据 |
 | --- | --- | --- |
 | `hengxin666.github` (GitHub 接入) | 主人没启用时: `/api/v1/github/*` 404 (云 Agent 的 key 也是), `POST /api/v1/hooks/github/...` 404 不入库, cron 不回填 | 现有 `gh_*` 表, 不进 pdata; 主人停用带 `?purge=1` 时清空 |
-| `hengxin666.hxoa` (hxoa 接入) | 主人没启用时: `/api/v1/hxoa/*` 404 | `hxoa` 表 (接入与令牌); 主人停用带 `?purge=1` 时清空 |
+| `hengxin666.hxoa` (hxoa 接入, 清单在主人私有源, #124) | 主人没启用时: `/api/v1/hxoa/*` 404 | `hxoa` 表 (接入与令牌); 主人停用带 `?purge=1` 时清空 |
 | `hengxin666.todo` (待办) | 按调用者自己的账号 (个人归属), 见下文 | pdata |
 | `hengxin666.gh` (GitHub 授权, 旧 id `gh`) | 主人没启用时: `/api/v1/gh/*` 404, 待办 issue 同步不跑, 专属指令不带 issue 一节; 提供 `service:gh.issues`, 声明了它的插件 (待办) 的 Agent 默认可用 | `gh` 表 (加密令牌, 规则, Agent 开关, 操作记录); 主人停用带 `?purge=1` 时清空 |
 
@@ -202,5 +202,5 @@
 ## 验证
 
 - 单元: `npm test` (清单, 冲突检测, 内核, pdata, 逐扩展点契约 `plugin-ext-contract.test.ts`, 开发插件, 握手档位)。
-- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。GitHub 授权与待办关联: `tools/e2e-gh-todo.mjs`。开发模式与握手: `tools/e2e-plugin-dev.mjs`。hxoa 管理 (打真实 hxoa 2.4.1+, 需 `HXOA_BASE` / `HXOA_ADMIN` / `HXOA_DIR`): `tools/e2e-hxoa-plugin.mjs`。线上版 (插件体系之前) 升级: 同一个 `--persist-to` 目录先用旧版跑 `AIOA_PHASE=seed tools/e2e-upgrade-main.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次)。
+- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。GitHub 授权与待办关联: `tools/e2e-gh-todo.mjs`。开发模式与握手: `tools/e2e-plugin-dev.mjs`。hxoa 管理 (打真实 hxoa 2.4.1+, 需 `HXOA_BASE` / `HXOA_ADMIN` / `HXOA_DIR`, `AIOA_MARKET_ROOT` 指私有插件仓库的本地克隆): `tools/e2e-hxoa-plugin.mjs`。线上版 (插件体系之前) 升级: 同一个 `--persist-to` 目录先用旧版跑 `AIOA_PHASE=seed tools/e2e-upgrade-main.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次)。
 - 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`)。

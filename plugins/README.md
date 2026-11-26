@@ -82,7 +82,7 @@ API 密钥: <密钥>
 
 ## 内置插件 (L2a)
 
-`hengxin666.github` (GitHub 接入) 的代码随服务端部署发布 (要用 `GITHUB_TOKEN` 和服务端子请求), 清单也打进部署, 没有 Agent 和群。管理员放行, 主人启用后 GitHub 接口, webhook 入库, 定时回填才生效; 门控与数据见 `docs/api/github.md`。改它的清单要同时改 `index.json` 的版本, 并重新部署服务端。`hengxin666.hxoa` (hxoa 管理, #97, #104) 同理: 管理令牌存服务端, 接口见 `docs/api/hxoa.md`。
+`hengxin666.github` (GitHub 接入) 的代码随服务端部署发布 (要用 `GITHUB_TOKEN` 和服务端子请求), 清单也打进部署, 没有 Agent 和群。管理员放行, 主人启用后 GitHub 接口, webhook 入库, 定时回填才生效; 门控与数据见 `docs/api/github.md`。改它的清单要同时改 `index.json` 的版本, 并重新部署服务端。`hengxin666.hxoa` (hxoa 管理, #97, #104) 的代码同样随服务端部署, 管理令牌存服务端, 接口见 `docs/api/hxoa.md`; 它的清单, 介绍与提示词已搬到主人的私有源 `HengXin666/aioa-private-plugins` (#124), 改清单去那边升版本。
 
 ## 新增插件
 

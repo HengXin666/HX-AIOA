@@ -5,7 +5,7 @@ import { dirname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 // hxoa 管理插件 (hengxin666.hxoa, #104) 端到端, 打真实的 hxoa 服务端 (2.4.1+):
 // 放行 -> 启用 -> 工作区令牌被拒 -> 错管理令牌被拒 -> 接入 -> 列表在线 (不含令牌) -> 状态 -> 选目录 -> 新建文件夹 -> 加工作区 -> 改开关 -> 发连接令牌 (状态里没有密钥) -> 连接提示 -> 删令牌 -> 删工作区 -> 停用 404 -> purge
-// 本机起静态服务充当市场 (仓库 plugins/ 目录), 服务端用 --var PLUGIN_MARKET 指过来
+// 本机起静态服务充当市场, 服务端用 --var PLUGIN_MARKET 指过来; 清单已搬到主人私有源 (#124), AIOA_MARKET_ROOT 指它的本地克隆
 // 环境变量: AIOA_SERVER, AIOA_TOKEN (主人), HXOA_BASE, HXOA_ADMIN (hxoa 面板 远程管理 里建的管理令牌), HXOA_DIR (hxoa 那台机器上可以建测试文件夹的目录), AIOA_MARKET_PORT (默认 8797)
 const { AIOA_SERVER: server, AIOA_TOKEN: token, HXOA_BASE: hxBase, HXOA_ADMIN: hxAdmin, HXOA_DIR: hxDir } = process.env;
 if (!server || !token || !hxBase || !hxAdmin || !hxDir) {
@@ -13,7 +13,7 @@ if (!server || !token || !hxBase || !hxAdmin || !hxDir) {
   process.exit(1);
 }
 const PORT = Number(process.env.AIOA_MARKET_PORT ?? 8797);
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "plugins");
+const ROOT = process.env.AIOA_MARKET_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), "..", "plugins");
 const V1 = "/api/v1";
 const ID = "hengxin666.hxoa";
 const ALLOW = `${V1}/plugin-allow/${ID}`;
