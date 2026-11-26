@@ -76,14 +76,15 @@ async function detail(c: ReqCtx): Promise<Response> {
   const uid = viewer(c);
   const id = pluginId(c);
   const row = c.core.kernel.get(id);
-  // 开发插件不在市场里: 用它的快照; 别人的开发插件当作不存在
-  const devRow = row?.meta.dev ? (row.meta.by === uid ? row : null) : undefined;
-  if (devRow === null) return notFound();
-  const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, true));
+  // 开发插件不在市场里: 开发者自己用它的快照; 别人看到的是市场内容 (没有就 404), 不暴露开发插件
+  const own = row?.meta.dev ? row.meta.by === uid : true;
+  const devRow = row?.meta.dev && own ? row : undefined;
+  // 只有管理员绕过市场缓存, 免得子号打开详情放大对市场的请求
+  const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, isAdmin(c.who)));
   const readme = devRow ? (devRow.readme ?? "") : await c.core.market.file(id, manifest.readme);
   if (c.who.owner) await autoUpgrade(c.core, id);
   const installed = c.who.owner ? c.core.plugins.get(id) : undefined;
-  const allow = row?.meta;
+  const allow = own ? row?.meta : undefined;
   const base = baseOf(c.url);
   const channel = installed?.channel ?? pluginChannel(id);
   const title = c.core.chats.chat(channel)?.title || manifest.group.title;

@@ -35,6 +35,7 @@ test("开发插件: 只有开发者看得到, 用得了; 不参与别人的冲�
   const k = new PluginKernel(new AllowStore(sql));
   const theme = { permissions: [PERM_REPLACE], contributes: { "core.theme.base": [{ id: "d.x.t" }] } };
   k.put(row("d.x", theme, true));
+  k.setDevMode(ADMIN, true);
   assert.ok(k.setEnabled(ADMIN, "d.x", true));
   assert.ok(!k.setEnabled(BOB, "d.x", true), "别人不能启用");
   assert.deepEqual(k.visible(BOB).map((a) => a.id), []);
@@ -55,4 +56,25 @@ test("开发模式开关存库, 重启后还在", () => {
   assert.ok(new PluginKernel(new AllowStore(sql)).devMode(ADMIN));
   k.setDevMode(ADMIN, false);
   assert.ok(!new PluginKernel(new AllowStore(sql)).devMode(ADMIN));
+});
+
+test("开发插件的 pipeline 先后不影响别人", () => {
+  const k = new PluginKernel(new AllowStore(memSql()));
+  const pipe = (id: string, c: Record<string, unknown>) => row(id, { contributes: { "push.route": [{ id: `${id}.r`, ...c }] } });
+  k.put(pipe("m.a", {}));
+  k.put(pipe("m.b", {}));
+  k.put({ ...pipe("d.x", { after: ["m.b.r"], before: ["m.a.r"] }), meta: { ...pipe("d.x", {}).meta, dev: true } });
+  k.setDevMode(ADMIN, true);
+  for (const u of [ADMIN, BOB]) for (const p of ["m.a", "m.b"]) k.setEnabled(u, p, true);
+  k.setEnabled(ADMIN, "d.x", true);
+  assert.deepEqual(k.contributions(BOB, "push.route").map((e) => e.plugin), ["m.a", "m.b"], "别人的顺序不受开发插件的边影响");
+  assert.deepEqual(k.contributions(ADMIN, "push.route").map((e) => e.plugin), ["m.b", "d.x", "m.a"]);
+});
+
+test("开发者关掉开发模式后开发插件不能再启用", () => {
+  const k = new PluginKernel(new AllowStore(memSql()));
+  k.put(row("d.y", {}, true));
+  assert.ok(!k.setEnabled(ADMIN, "d.y", true), "没开开发模式");
+  k.setDevMode(ADMIN, true);
+  assert.ok(k.setEnabled(ADMIN, "d.y", true));
 });

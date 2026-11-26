@@ -8,8 +8,7 @@ export const QUERY_PROTOCOL = "pv";
 export const PROTOCOL_WINDOW = 2;
 // 有安全漏洞必须拒绝的客户端协议版本; 只在这里加
 export const PROTOCOL_BLOCKED: readonly number[] = [];
-// 低于底线时被拒绝的 WebSocket 关闭码 / HTTP 状态
-export const CLOSE_BLOCKED = 4426;
+// 有安全漏洞被拒绝时流与 /compat 返回的 HTTP 状态
 export const STATUS_BLOCKED = 426;
 
 export const COMPAT_LEVELS = ["ok", "update", "floor", "blocked"] as const;

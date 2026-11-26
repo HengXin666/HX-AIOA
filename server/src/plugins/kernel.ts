@@ -115,10 +115,17 @@ export class PluginKernel {
     return this.list().filter((a) => !a.dev || a.by === uid);
   }
 
-  /** 这个账号能不能用 (启用, 改选): 已放行, 且不是别人的开发插件。 */
-  usable(uid: string, id: string): boolean {
-    const m = this.get(id)?.meta;
+  // 不是别人的开发插件 (不查库)
+  private mine(uid: string, id: string): boolean {
+    const m = this.allow.get(id)?.meta;
     return !!m && (!m.dev || m.by === uid);
+  }
+
+  /** 这个账号能不能用 (启用, 改选): 已放行, 且不是别人的开发插件; 开发插件还要开发者仍开着开发模式。 */
+  usable(uid: string, id: string): boolean {
+    this.load();
+    if (!this.mine(uid, id)) return false;
+    return !this.allow.get(id)!.meta.dev || this.devMode(uid);
   }
 
   /** 开发模式开关存在 flag 表里, 只在开发接口用到时读。 */
@@ -134,8 +141,9 @@ export class PluginKernel {
   /** 把 next 换进白名单 (或去掉 drop) 后整体能否共存 (不写入)。 */
   check(next?: AllowRow, drop?: string): CheckResult {
     this.load();
-    // 开发插件只影响开发者自己, 不参与别人的冲突与预算; 检查它自己时才放进来
-    const rows = new Map([...this.allow].filter(([, r]) => !r.meta.dev));
+    // 开发插件只影响开发者自己, 不参与别人的冲突与预算; 检查开发插件时带上同一开发者的其它开发插件
+    const dev = next?.meta.dev ? next.meta.by : null;
+    const rows = new Map([...this.allow].filter(([, r]) => !r.meta.dev || r.meta.by === dev));
     if (next) rows.set(next.meta.id, next);
     if (drop) rows.delete(drop);
     const defaults: Record<string, string> = {};
@@ -243,8 +251,9 @@ export class PluginKernel {
       const p = this.pick(uid, point);
       return all.filter((e) => e.plugin === p);
     }
-    // pipeline 先在白名单全集上排序再过滤, 中间某个没启用也不丢传递的先后
-    return (card === "pipeline" ? ordered(all) : all).filter((e) => this.isEnabled(uid, e.plugin));
+    // pipeline 先在这个账号看得到的全集上排序再过滤, 中间某个没启用也不丢传递的先后; 别人的开发插件不参与排序
+    const seen = all.filter((e) => this.mine(uid, e.plugin));
+    return (card === "pipeline" ? ordered(seen) : seen).filter((e) => this.isEnabled(uid, e.plugin));
   }
 
   /** 这个账号上某服务由哪个插件提供。 */

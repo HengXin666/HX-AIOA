@@ -66,6 +66,7 @@
 | `hengxin666.todo` (待办) | 按调用者自己的账号 (个人归属), 见下文 | pdata |
 | `hengxin666.gh` (GitHub 授权, 旧 id `gh`) | 主人没启用时: `/api/v1/gh/*` 404, 待办 issue 同步不跑, 专属指令不带 issue 一节; 提供 `service:gh.issues`, 声明了它的插件 (待办) 的 Agent 默认可用 | `gh` 表 (加密令牌, 规则, Agent 开关, 操作记录); 主人停用带 `?purge=1` 时清空 |
 
+- 内置插件清单补 `"server": true` 后各升了一个补丁版本 (待办 2.1.1, GitHub 接入 1.0.1, GitHub 授权 2.0.1, hxoa 接入 1.0.1); 已迁移的部署快照还是旧版本, 管理员会看到 "可更新", 重新放行即可, 不放行也照常工作。
 - 升级迁移: 每个内置插件第一次唤醒时若不在白名单, 用打包的清单放进白名单并为主人启用 (`by: "升级迁移"`), 只做一次, 之后撤销或停用都不会被改回。GitHub 授权只在升级前装过旧 base 插件 `gh` 时迁移, 并删掉旧安装记录。
 - cron 每 30 分钟一次 RPC (`Hub.halfHourly`, `server/src/cron.ts`) 做完 CF 额度检查, 待办 issue 同步, GitHub 回填, 各项按配置与启用状态跳过。
 - GitHub 数据属于整个部署 (一个 `GITHUB_TOKEN`), 所以只看主人的启用状态; 子号启用它没有作用。
@@ -81,7 +82,12 @@
 | PUT | `/api/v1/plugin-dev/{id}` | `{ "manifest": {...}, "prompt"?: "...", "readme"?: "..." }` 装上或换版本 (要先开开发模式); 对白名单做冲突检测, 自动为本账号启用; 主人装过它的 Agent 时立即换上新提示词并推给 Agent 长连 (秒级生效) |
 | DELETE | `/api/v1/plugin-dev/{id}` | 撤掉 |
 
-开发插件在白名单里带 `dev: true`, `by` 是开发者; 不参与别人的冲突检测与每日预算。
+开发插件在白名单里带 `dev: true`, `by` 是开发者; 不参与别人的冲突检测, 预算与 pipeline 排序 (检查时只带上同一开发者的其它开发插件)。
+
+- id 必须是带命名空间的新 id, 不能是旧别名 (`todo`, `gh`), 不能占用已放行或市场里已有的 id。
+- 第一次上传时为开发者启用; 之后重新上传只换版本, 不改启用状态。开发者关掉开发模式后不能再启用。
+- 主人可以用 `DELETE /api/v1/plugin-allow/{id}` 撤掉任何人的开发插件 (开发者被降级或删除后留下的也能清)。别人打开同 id 的详情看到的是市场内容, 不暴露开发插件。
+- 主人给自己的开发插件装 Agent 时, 群, Agent 与工作台和普通安装一样建在共用库里, 群成员看得到; "只有开发者看得到" 指市场列表, 详情, 启用与数据。
 
 本地上传: `AIOA_SERVER=... AIOA_TOKEN=<管理员 access token> node tools/plugin-dev.mjs <插件目录>` (加 `--off` 撤掉)。
 
@@ -96,9 +102,9 @@
 | `ok` | 同版本, 比服务端新, 或没带 pv (老客户端) | 照常 |
 | `update` | 在窗口内但低于服务端 | 提示建议更新, 照常能用 |
 | `floor` | 低于窗口 | 照常连, 新功能 (插件市场等) 灰掉, 提示更新 |
-| `blocked` | 在 `PROTOCOL_BLOCKED` 里 (只因安全漏洞) | 流与 `/compat` 返回 426 `client_blocked` |
+| `blocked` | 在 `PROTOCOL_BLOCKED` 里 (只因安全漏洞) | 流与 `/compat` 返回 426 `client_blocked`; 其它 HTTP 接口不拦 (名单目前为空) |
 
-启动不等更新: 档位只影响提示与新功能, 不阻塞连接。
+启动不等更新: 档位只影响提示与新功能, 不阻塞连接。`/compat` 需要登录 (与其它接口同一套凭证)。
 
 ## 插件数据 pdata
 
@@ -124,6 +130,7 @@
 - 数据: 每个账号下集合 `items`, 一行一条, id = `<群>:<待办 id>`, body `{ channel, title, note?, state, prio, src?, created, repo?, issue?, parent?, gh?, doneAt? }`, 更新时间用行的 `updated`。state 为 open / hold / doing / done (dropped 是旧数据)。除了集合声明的类型, 服务端还校验 state / prio / repo / issue / parent 取值与 id 前缀 (`checkTodoBody`)。`doneAt` (进入 done 的时间) 与 `gh` (GitHub 同步状态) 由服务端维护: 不管经旧接口还是 pdata 写, 都按上一版补齐, 客户端写的不算 (`normTodo`)。
 - 升级: Hub 唤醒时一次性把旧 `todo` 表搬进 pdata, 并把白名单, 启用, 单选, 安装记录, 群里 Agent 的 `plugin` 字段中的 `todo` 改成新 id; 白名单快照补上 v2 数据声明, 版本号不变, 管理员放行 2.0.0 后整份换掉。没装过插件但用过待办接口 (库里有待办) 的部署, 用打包的清单放行并为主人启用, 只做一次; 迁移拼出的清单没有工作台, 手动重新应用时保留原工作台。Agent 密钥照用, 专属指令的待办说明换成 pdata 接口 (版本变化会提示 Agent 重拉)。
 - 旧接口 `/api/v1/chats/{channel}/todos` 转发到 pdata, 保留一个大版本后删除; 启用判断与读写的数据都是调用者自己的账号 (子号要自己启用, 能看这个群就能改自己的待办), Agent 与外部接入的 key 由主人发放, 算主人账号。卸载 (停用) 待办后, 该账号的外部接入与 MCP 一起 404。关联 issue 的同步只跑主人的待办 (GitHub 授权归主人)。写入同时推 `pdata_sync` 与旧客户端认的 `chat_sync` (`topic: todos`); 经 pdata 改主人的待办也会推 `chat_sync`。
+
 旧接口一览:
 
 | 方法 | 路径 | 权限 | 说明 |

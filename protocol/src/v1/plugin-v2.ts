@@ -18,6 +18,8 @@ const MAX_LIST = 64;
 const LEGACY_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const NS_ID = /^[a-z0-9](?:[a-z0-9-]{0,38})\.[a-z0-9][a-z0-9-]{0,31}$/;
 export const isPluginId = (v: unknown): v is string => typeof v === "string" && (LEGACY_ID.test(v) || NS_ID.test(v));
+/** 带命名空间的新 id (<GitHub 登录名>.<名字>); 开发插件只能用这种。 */
+export const isNsPluginId = (v: unknown): v is string => typeof v === "string" && NS_ID.test(v);
 export const pluginNamespace = (id: string): string | null => (id.includes(".") ? id.split(".")[0]! : null);
 
 export type Cardinality = "single" | "multiple" | "layered" | "pipeline";

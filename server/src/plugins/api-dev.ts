@@ -3,11 +3,12 @@ import {
   PATH_PLUGIN_DEV,
   PATH_PLUGIN_DEV_MODE,
   isL2a,
-  isPluginId,
+  isNsPluginId,
   parseManifest,
+  resolvePluginId,
   type PluginDevInput,
 } from "@hx-aioa/protocol";
-import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, PUT } from "../constants";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, CODE_PLUGIN_CONFLICT, DELETE, ERR_NO_RESOURCE, GET, PUT } from "../constants";
 import { type Core, ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, pathParam, readJson } from "../http";
 import { teardown } from "./api";
@@ -30,8 +31,8 @@ function view(c: ReqCtx, uid: string): Response {
   return json({ on: c.core.kernel.devMode(uid), plugins: mine(c.core, uid) });
 }
 
-/** 撤掉一个开发插件: 白名单, 启用, 主人装的 Agent 与工作台一起; pdata 保留, 同 id 再装能接上。 */
-async function drop(core: Core, uid: string, id: string): Promise<void> {
+/** 撤掉一个开发插件: 白名单, 启用, 主人装的 Agent 与工作台一起; pdata 保留, 同 id 再装能接上。主人撤别人的也走这里。 */
+export async function dropDev(core: Core, uid: string, id: string): Promise<void> {
   core.kernel.revoke(id);
   await teardown(core, id);
   pushPlugin(core, id, "revoked", { uid });
@@ -41,7 +42,7 @@ async function setMode(c: ReqCtx): Promise<Response> {
   const body = (await readJson(c.req)) as { on?: unknown } | undefined;
   const uid = dev(c);
   if (typeof body?.on !== "boolean") return fail(400, "需要 { \"on\": true | false }");
-  if (!body.on) for (const a of mine(c.core, uid)) await drop(c.core, uid, a.id);
+  if (!body.on) for (const a of mine(c.core, uid)) await dropDev(c.core, uid, a.id);
   c.core.kernel.setDevMode(uid, body.on);
   return view(c, uid);
 }
@@ -60,20 +61,25 @@ async function put(c: ReqCtx): Promise<Response> {
   const id = pathParam(c.params, 0);
   const m = parseManifest(body?.manifest);
   if (typeof m === "string") return fail(400, m);
-  if (m.id !== id || !isPluginId(id)) return fail(400, "路径里的 id 与清单不一致");
+  if (m.id !== id) return fail(400, "路径里的 id 与清单不一致");
+  // 旧 id (todo, gh) 会被别名解析成新 id, 开发插件只收带命名空间的新 id
+  if (!isNsPluginId(id) || resolvePluginId(id) !== id) return fail(400, "开发插件的 id 要写成 <GitHub 登录名>.<名字>");
   if (m.server || isL2a(id)) return fail(400, "开发模式不能装带服务端代码的插件");
   const prompt = text(body?.prompt, "prompt");
   const readme = text(body?.readme, "readme");
   const old = c.core.kernel.get(id)?.meta;
-  if (old && !(old.dev && old.by === uid)) return fail(409, `${id} 已被放行或别人在开发, 换一个 id`, CODE_CONFLICT);
+  if (old && !(old.dev && old.by === uid)) return fail(409, `${id} 已被占用, 换一个 id`, CODE_CONFLICT);
+  // 不占市场里已有的 id, 免得挡住别人放行和查看; 市场连不上时不拦
+  if (!old && (await c.core.market.index().catch(() => [])).some((p) => p.id === id)) return fail(409, `市场里已有 ${id}, 换一个 id`, CODE_CONFLICT);
   const row = { meta: { id, version: m.version, name: m.name, by: uid, at: Date.now(), dev: true as const }, manifest: m, prompt, readme };
   const result = c.core.kernel.check(row);
-  if (result.conflicts.length) return fail(409, `${id} 与白名单冲突`, "plugin_conflict", { conflicts: result.conflicts });
+  if (result.conflicts.length) return fail(409, `${id} 与白名单冲突`, CODE_PLUGIN_CONFLICT, { conflicts: result.conflicts });
   c.core.kernel.put(row);
-  c.core.kernel.setEnabled(uid, id, true);
+  // 只在第一次上传时启用; 开发者自己停用后再上传不再打开
+  if (!old) c.core.kernel.setEnabled(uid, id, true);
   pushPlugin(c.core, id, old ? "updated" : "allowed", { uid, version: m.version });
-  // 主人装过它的 Agent: 换上新提示词并推给 Agent 长连, 秒级生效 (L3 热更新)
-  await autoUpgrade(c.core, id);
+  // 主人装过它的 Agent: 换上新提示词并推给 Agent 长连, 秒级生效 (L3 热更新); 安装只属于主人
+  if (uid === c.core.users.ownerId()) await autoUpgrade(c.core, id);
   return json({ allow: c.core.kernel.get(id)!.meta });
 }
 
@@ -82,7 +88,7 @@ async function remove(c: ReqCtx): Promise<Response> {
   const id = pathParam(c.params, 0);
   const row = c.core.kernel.get(id)?.meta;
   if (!row?.dev || row.by !== uid) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
-  await drop(c.core, uid, id);
+  await dropDev(c.core, uid, id);
   return json({ ok: true });
 }
 

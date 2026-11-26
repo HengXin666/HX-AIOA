@@ -39,11 +39,12 @@ function setup(point: Point, defaults?: string[]) {
 
 const ids = (k: InstanceType<typeof PluginKernel>, u: string, p: Point) => k.contributions(u, p).map((e) => e.plugin).sort();
 
+// 写死的清单: 协议里新加扩展点而这里没补, 下面这条就失败
+const POINTS: Point[] = ["commands", "widgets", "settings", "collections", "push.route", "message.beforeSend", "core.theme.base", "core.chat.renderer", "core.push.transport"];
+
 test("契约表覆盖全部扩展点: 新加扩展点必须在这里补测试", () => {
   assert.deepEqual(Object.keys(EXT_POINTS).sort(), [...POINTS].sort());
 });
-
-const POINTS = Object.keys(EXT_POINTS) as Point[];
 
 for (const point of POINTS) {
   const card = cardOf(point);

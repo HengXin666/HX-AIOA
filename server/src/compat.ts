@@ -18,5 +18,5 @@ export function blocked(url: URL): Response | null {
 }
 
 export const COMPAT_ROUTES: Route[] = [
-  route(GET, PATH_COMPAT, ROOM, async (c) => json(compatFor(c.url) ?? compatOf(undefined, PROTOCOL_VERSION))),
+  route(GET, PATH_COMPAT, ROOM, async (c) => blocked(c.url) ?? json(compatFor(c.url) ?? compatOf(undefined, PROTOCOL_VERSION))),
 ];

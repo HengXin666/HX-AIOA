@@ -125,6 +125,10 @@ try {
   check("扩展点生效贡献: 启用的插件的命令", cmds.status === 200 && cmds.data.card === "multiple" && cmds.data.items.some((i) => i.id === "e2e.notes.add" && i.plugin === NOTES), cmds.data);
   const badPoint = await api("GET", `${V1}/plugin-contrib/nope`);
   check("没有的扩展点 404", badPoint.status === 404, badPoint.data);
+  const inMarket = await api("PUT", `${V1}/plugin-dev/e2e.theme-a`, { manifest: { ...(await manifest()), id: "e2e.theme-a" } });
+  check("不能占用市场里已有的 id", inMarket.status === 409, inMarket.data);
+  const alias = await api("PUT", `${V1}/plugin-dev/todo`, { manifest: { ...(await manifest()), id: "todo" } });
+  check("不能用旧别名当 id", alias.status === 400, alias.data);
   const taken = await api("PUT", `${V1}/plugin-dev/${NOTES}`, { manifest: { ...(await manifest()), id: NOTES } });
   check("不能占用已放行的 id", taken.status === 409, taken.data);
   const shadow = await api("PUT", `${V1}/plugin-allow/${DEV}`, {});
@@ -154,6 +158,14 @@ try {
     check("admin 子号能开开发模式", ad.status === 200 && ad.data.on === true, ad.data);
     const other = await call(A, "PUT", `${V1}/plugin-dev/${DEV}`, { manifest: await manifest() });
     check("别人开发中的 id 不能占", other.status === 409, other.data);
+    const AID = `e2e.adm${RUN}`;
+    const mineA = await call(A, "PUT", `${V1}/plugin-dev/${AID}`, { manifest: await manifest({ id: AID }) });
+    check("admin 子号装自己的开发插件", mineA.status === 200, mineA.data);
+    const ownerSees = await api("GET", `${V1}/plugins/${AID}`);
+    check("主人打开别人的开发插件 404 (市场里没有)", ownerSees.status === 404 || ownerSees.status === 502, ownerSees.data);
+    const cleaned = await api("DELETE", `${V1}/plugin-allow/${AID}`);
+    const gone = await call(A, "GET", `${V1}/plugin-dev`);
+    check("主人能撤掉别人的开发插件", cleaned.status === 200 && !gone.data.plugins?.some((p) => p.id === AID), [cleaned.data, gone.data]);
     await call(A, "PUT", `${V1}/plugin-dev`, { on: false });
   } else check("建 admin 子号", false);
 

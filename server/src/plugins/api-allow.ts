@@ -18,17 +18,17 @@ import {
   type PluginContribView,
   type PluginManifest,
 } from "@hx-aioa/protocol";
-import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PUT } from "../constants";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_PLUGIN_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import type { AllowRow } from "./allow-store";
 import { L2A, purgeL2a } from "./l2a";
+import { dropDev } from "./api-dev";
 import { teardown } from "./api";
 import { pushPlugin } from "./notify";
 import { CODE_NOT_ALLOWED, autoUpgrade } from "./update";
 import { acctOf, isAdmin } from "./who";
 
-const CODE_PLUGIN_CONFLICT = "plugin_conflict";
 const QUERY_PURGE = "purge";
 
 const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
@@ -72,7 +72,7 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   const body = ((await readJson(c.req)) ?? {}) as PluginAllowInput;
   const by = admin(c);
   const id = pluginParam(c);
-  if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 正在开发模式下使用, 先在开发模式里删掉`, CODE_CONFLICT);
+  if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 被一个开发插件占用, 主人可以先撤销它`, CODE_CONFLICT);
   // 放行是管理员主动操作, 绕过市场缓存
   const manifest = await c.core.market.manifest(id, true);
   if (manifest.server && !isL2a(id)) return fail(409, `${id} 带服务端代码, 要先合进仓库并部署后才能放行`, CODE_NEEDS_DEPLOY);
@@ -97,7 +97,13 @@ async function deleteAllow(c: ReqCtx): Promise<Response> {
   admin(c);
   const id = pluginParam(c);
   const row = c.core.kernel.get(id);
-  if (!row || row.meta.dev) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+  if (!row) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+  // 开发插件: 只有主人能撤别人的 (开发者被降级或删除后留下的也能清)
+  if (row.meta.dev) {
+    if (!c.who.owner) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+    await dropDev(c.core, row.meta.by, id);
+    return json({ ok: true });
+  }
   // 去掉它之后白名单也要能共存: 比如它是某单选扩展点的默认, 或别的插件依赖它提供的服务
   const after = c.core.kernel.check(undefined, id);
   if (after.conflicts.length) return fail(409, `撤销 ${id} 后白名单会冲突, 先给其它提供者指定默认或撤销依赖它的插件`, CODE_PLUGIN_CONFLICT, { conflicts: after.conflicts });
