@@ -1,0 +1,14 @@
+{
+  "id": "e2e.servercode",
+  "name": "带服务端代码",
+  "summary": "e2e 用: 这次部署里没有它的代码",
+  "version": "1.0.0",
+  "author": "e2e",
+  "readme": "README.md",
+  "prompt": "prompt.md",
+  "group": { "title": "服务端代码" },
+  "api": "2",
+  "server": true,
+  "engines": { "aioa": "^2" },
+  "permissions": ["net:example.com"]
+}

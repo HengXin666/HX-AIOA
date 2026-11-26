@@ -8,6 +8,9 @@ object Constants {
     const val QUERY_TOKEN = "token"
     const val QUERY_DEVICE = "device"
     const val QUERY_SINCE = "since"
+    // 握手: 带上 App 按哪个协议大版本写的, 服务端在 welcome 里给出兼容档位
+    const val QUERY_PROTOCOL = "pv"
+    const val PROTOCOL_VERSION = 2
 
     const val DEVICE_PREFIX = "android"
     // 点通知打开对应的群

@@ -12,7 +12,8 @@
 | [connectors.md](api/connectors.md) | 各来源适配器的字段映射, 去重与分组 |
 | [spaces.md](api/spaces.md) | 工作台布局与组件 |
 | [github.md](api/github.md) | GitHub 页面接口 |
-| [plugins.md](api/plugins.md) | 插件白名单, 账号启用, 单选扩展点改选, 插件数据 pdata |
+| [plugins.md](api/plugins.md) | 插件市场与安装, 白名单, 账号启用, 单选改选, 开发模式, 服务端插件 (L2a), 握手三档, 插件数据 pdata, 待办插件 |
+| [rules.md](api/rules.md) | 规则引擎: 匹配顺序, 动作, 降噪 |
 
 ## 功能 `features/`
 

@@ -197,6 +197,7 @@ class LinkSocket(
             builder.addPathSegment(Constants.WS_PATH)
         } else {
             builder.addPathSegments(Constants.STREAM_PATH).addQueryParameter(Constants.QUERY_ROLE, Constants.ROLE_CLIENT)
+                .addQueryParameter(Constants.QUERY_PROTOCOL, Constants.PROTOCOL_VERSION.toString())
         }
         val url = builder
             .addQueryParameter(Constants.QUERY_TOKEN, Auth.bearer(context, config))

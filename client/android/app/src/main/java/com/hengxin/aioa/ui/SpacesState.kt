@@ -1,6 +1,7 @@
 package com.hengxin.aioa.ui
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -43,6 +44,9 @@ private const val KEY_ID = "id"
 private const val KEY_BODY = "body"
 private const val KEY_STATE = "state"
 private const val KEY_TODOS_SYNC = "todos-sync"
+private const val HTTP_CONFLICT = 409
+private const val CHANGE_DISABLED = "disabled"
+private const val CHANGE_REVOKED = "revoked"
 
 private fun JSONObject.optPositive(k: String): Long? = optLong(k).takeIf { it > 0 }
 
@@ -187,9 +191,25 @@ class SpacesState(
             val cur = todoLock.withLock { todoRows[id] } ?: return@io pullTodos()
             val body = JSONObject(cur.optJSONObject(KEY_BODY)?.toString() ?: "{}").also(edit)
             val put = JSONObject().put("ver", cur.optInt("ver")).put(KEY_BODY, body)
-            call(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", put)
+            val err = callErr(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", put)
+            // 版本冲突不提示 (重拉即可), 其它错误 (如 id 太长, 没启用) 告诉用户, 不再悄悄吞掉
+            if (err != null && err.first != HTTP_CONFLICT) withContext(Dispatchers.Main) { Toast.makeText(context, "待办没保存: ${err.second}", Toast.LENGTH_SHORT).show() }
             pullTodos()
         }
+    }
+
+    /** 待办插件停用或被撤销: 丢掉本地副本 (下次启用从头拉); 重新启用或换版本就补拉一次。 */
+    fun onPlugin(id: String, change: String) {
+        if (id != Constants.TODO_PLUGIN) return
+        if (change == CHANGE_DISABLED || change == CHANGE_REVOKED) {
+            io {
+                todoLock.withLock {
+                    todoRows.clear()
+                    todoRev = 0L
+                }
+                withContext(Dispatchers.Main) { for (ch in todoAsked) todos[ch] = emptyList() }
+            }
+        } else if (todoAsked.isNotEmpty()) pullTodos()
     }
 
     /** 立即按 GitHub 同步关联的 issue, 再增量拉。 */
@@ -235,6 +255,22 @@ class SpacesState(
         val b = runCatching { config.server.toHttpUrl().newBuilder() }.getOrNull() ?: return null
         segments.forEachIndexed { i, s -> if (i == 0) b.addPathSegments(s) else b.addPathSegment(s) }
         return b.build()
+    }
+
+    /** 写入用: 成功返回 null, 失败返回 (状态码, 服务端给的原因)。 */
+    private fun callErr(url: HttpUrl?, method: String, body: JSONObject): Pair<Int, String>? {
+        val config = ConfigStore.load(context) ?: return 0 to "未配置服务端"
+        val target = url ?: return 0 to "地址无效"
+        val req = Request.Builder().url(target)
+            .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
+            .method(method, body.toString().toRequestBody(JSON_TYPE.toMediaType()))
+            .build()
+        return runCatching {
+            Net.client(context).newCall(req).execute().use { res ->
+                if (res.isSuccessful) null
+                else res.code to (runCatching { JSONObject(res.body?.string().orEmpty()).optString("error") }.getOrNull()?.ifEmpty { null } ?: "HTTP ${res.code}")
+            }
+        }.getOrElse { 0 to (it.message ?: "网络错误") }
     }
 
     private fun call(url: HttpUrl?, method: String, body: JSONObject?): JSONObject? {

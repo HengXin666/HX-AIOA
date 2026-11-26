@@ -152,7 +152,14 @@ async function batch(c: ReqCtx): Promise<Response> {
       continue;
     }
     if (row.deleted === true) channels.push(channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body));
-    const r = row.deleted === true ? c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver) : c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, ver, fixBody(c, t, id, row.body));
+    let r;
+    // 某一行抛错也只记在这一行, 前面写成的照常推送
+    try {
+      r = row.deleted === true ? c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver) : c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, ver, fixBody(c, t, id, row.body));
+    } catch (e) {
+      out.items.push({ id, error: e instanceof Error ? e.message : String(e) });
+      continue;
+    }
     if ("error" in r) out.items.push({ id, error: r.error });
     else if ("conflict" in r) out.items.push({ id, conflict: r.conflict });
     else {

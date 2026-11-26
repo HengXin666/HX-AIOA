@@ -59,11 +59,11 @@
 | P2 白名单, 账号启用 (内存 Set), 单选改选, `plugin_update` 推送 | 已实现; 安装期间被撤销会回滚, 未做通用安装锁 |
 | P3 pdata (乐观锁, 墓碑, 增量, 配额, 批量写) | 已实现; rev 由最大 rev 推出, 只在清除时记下限, 每次写入不多写计数行 |
 | P4 Agent 长连收到更新秒级醒来 | 已实现 (`hxaioa watch --once`) |
-| P5 扩展点注册表, 服务, 事件总线, 可撤销注册 | 内核已实现并有单测; 逐扩展点的契约测试未做 |
+| P5 扩展点注册表, 服务, 事件总线, 可撤销注册 | 已实现; 每个扩展点有契约测试 (`server/test/plugin-ext-contract.test.ts`, 新加扩展点不补测试会失败); 客户端读生效贡献走 `GET /plugin-contrib/{point}`。核心功能 (主题, 推送路由) 改成内置插件未做, 等有第二个提供者时再拆 |
 | 现有两个插件迁移 | 待办 #101 已实现: `todo` → `hengxin666.todo` (api 2, 数据在 pdata 的 `items`), 旧 id 作别名, 群与工作台沿用 `plugin-todo`; 一次性迁移在 Hub 唤醒时一个事务里做完, 旧待办接口转发到 pdata 保留一个大版本; 旧接口按调用者账号判断启用。GitHub 接入 #102 已实现: 内置插件 `hengxin666.github`, 清单 `agent` 可选, 主人启用状态门控接口 / webhook / cron (内存判断), 停用 `purge` 清 `gh_*` 表, 升级迁移为主人启用; 安卓按启用状态显示入口, 收 `plugin_update` 刷新。合并主线后第三个: GitHub 授权 (旧 base 插件 `gh`, 主线 #98) 迁为无 Agent 内置插件 `hengxin666.gh`, 提供 `service:gh.issues`, 待办清单 `optional` 声明它; 待办 pdata 行补上主线的 repo / issue / parent / gh / doneAt 与 hold 状态 |
-| 客户端处理 `plugin_update` / `pdata_sync` 自动刷新 | 待办组件 (Web, 安卓) 已按 `pdata_sync` 增量刷新; 其它界面未做 (安卓只有放行界面, 进页面时刷新) |
-| 管理员 (admin 子号) 的市场列表与安装, 账号启用界面 | 未做, 目前只有接口 |
-| L2a 服务端插件代码, 握手三档, 支持窗口, 开发模式 | 未做 |
+| 客户端处理 `plugin_update` / `pdata_sync` 自动刷新 | 安卓: 待办组件按 `pdata_sync` 增量刷新, 停用或撤销待办清空本地副本; 插件市场与详情收到 `plugin_update` 重拉; GitHub 入口按启用显示。Web 端未做 (Web 客户端未开始) |
+| 管理员 (admin 子号) 的市场列表与安装, 账号启用界面 | 安卓已做: 主人与子号都能看市场; 管理员放行 / 撤销 (高危权限单独确认); 每个账号自己启用 (高危权限单独确认), 单选改选; 安装 Agent 只有主人 (群与 Agent 归主人) |
+| L2a 服务端插件代码, 握手三档, 支持窗口, 开发模式 | 已实现: 清单 `server: true` + `L2A_PLUGINS` 登记, 放行没部署的返回 `plugin_needs_deploy` (白名单变化不自动触发部署, 新代码走 PR + 部署); 握手 `pv` 与 `welcome.compat` 四档, 窗口 2 个大版本; 开发模式 `/plugin-dev` (只 L0 / L1 / L3, 只开发者自己可见)。详见 `docs/api/plugins.md` |
 
 ## 3. 运行时 (主 Hub 内)
 

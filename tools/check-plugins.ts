@@ -2,7 +2,7 @@
 // 用法: node --import tsx tools/check-plugins.ts [市场目录]; 环境变量 PR_AUTHOR + CHANGED (改动的插件目录, 逗号分隔) 时校验命名空间
 import { existsSync, readdirSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { PLUGIN_DAILY_BUDGET, PROTOCOL_VERSION, checkPlugins, dailyRequests, parseManifest, pluginNamespace, type PluginManifest } from "@hx-aioa/protocol";
+import { PLUGIN_DAILY_BUDGET, PROTOCOL_VERSION, checkPlugins, dailyRequests, isL2a, parseManifest, pluginNamespace, type PluginManifest } from "@hx-aioa/protocol";
 
 const root = process.argv[2] ?? "plugins";
 // 维护者可以动任何命名空间 (含旧 id 的插件)
@@ -30,6 +30,8 @@ for (const dir of readdirSync(root, { withFileTypes: true }).filter((d) => d.isD
     const ns = pluginNamespace(m.id);
     if (ns !== author) errors.push(`${m.id}: 命名空间必须是 PR 作者的 GitHub 登录名 ${author}`);
   }
+  // 带服务端代码的插件必须编进部署 (L2A_PLUGINS), 反过来编进去的也必须声明
+  if ((m.server === true) !== isL2a(m.id)) errors.push(`${m.id}: "server": true 与服务端 L2A_PLUGINS 不一致`);
   ms.push(m);
 }
 

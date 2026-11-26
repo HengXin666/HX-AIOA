@@ -15,6 +15,7 @@ import {
 } from "./task";
 import type { UserPublic } from "./api";
 import type { ChatAgentMe } from "./presence";
+import type { Compat } from "./compat";
 
 // v1 流 (/api/v1/stream) 在旧帧之外新增的帧
 export type ActFrame = { t: "act" } & UserActionInput;
@@ -60,6 +61,8 @@ export type StreamWelcome = {
   // 断线太久 (since 早于已清理的墓碑) 时为 true: 本地 seq < floor 的缓存可能漏了删除, 应丢掉后重拉
   resync?: boolean;
   floor?: number;
+  // 客户端带了协议版本 (pv) 时给出握手档位
+  compat?: Compat;
 };
 
 export type StreamServerFrame =

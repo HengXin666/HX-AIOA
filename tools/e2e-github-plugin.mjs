@@ -74,7 +74,7 @@ check("升级迁移: 已在白名单", seeded.status === 200 && seeded.data.allo
 await api("DELETE", ALLOW);
 check("撤销后接口 404", (await api("GET", REPOS)).status === NOT_FOUND);
 const allowed = await api("PUT", ALLOW, {});
-check("从市场放行", allowed.status === 200 && allowed.data.allow.version === "1.0.0" && allowed.data.allow.risky?.includes("net:api.github.com"), allowed.data);
+check("从市场放行", allowed.status === 200 && allowed.data.allow.version === "1.0.1" && allowed.data.allow.risky?.includes("net:api.github.com"), allowed.data);
 check("放行但没启用时接口 404", (await api("GET", REPOS)).status === NOT_FOUND);
 const install = await api("POST", `${V1}/plugins/${ID}/install`);
 check("没有 Agent 的插件不能安装", install.status === 400, install.data);

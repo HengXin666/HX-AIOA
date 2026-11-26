@@ -5,6 +5,11 @@ export const PATH_PLUGIN_ALLOW_LIST = `${API_V1}/plugin-allow`;
 export const PATH_PLUGIN_ALLOW = `${API_V1}/plugin-allow/{id}`;
 export const PATH_PLUGIN_ENABLED = `${API_V1}/plugins/{id}/enabled`;
 export const PATH_PLUGIN_CHOICE = `${API_V1}/plugin-choice/{point}`;
+// 本账号在某扩展点上实际生效的贡献 (single 已裁决, pipeline 已排序), 客户端按它渲染命令, 组件, 主题
+export const PATH_PLUGIN_CONTRIB = `${API_V1}/plugin-contrib/{point}`;
+// 开发模式: 管理员在自己账号上装本地插件, 只允许 L0 / L1 / L3 (不带服务端代码)
+export const PATH_PLUGIN_DEV_MODE = `${API_V1}/plugin-dev`;
+export const PATH_PLUGIN_DEV = `${API_V1}/plugin-dev/{id}`;
 export const PATH_PDATA_COLL = `${API_V1}/pdata/{plugin}/{coll}`;
 export const PATH_PDATA_ITEM = `${API_V1}/pdata/{plugin}/{coll}/{id}`;
 
@@ -16,7 +21,8 @@ export const MAX_PDATA_BATCH = 50;
 export const PDATA_ID_RE = /^[\w.:-]{1,64}$/;
 
 // 白名单里的一项: 每个插件只放一个版本; defaults 为它被指定为默认提供者的扩展点或服务
-export type PluginAllow = { id: string; version: string; name: string; by: string; at: number; defaults?: string[]; risky?: string[] };
+// dev: 开发模式下管理员 by 自己装的本地插件, 只有他看得到, 只能他启用
+export type PluginAllow = { id: string; version: string; name: string; by: string; at: number; defaults?: string[]; risky?: string[]; dev?: true };
 // PUT /plugin-allow/{id} 的请求体: 不写 version 就放行市场当前版本
 export type PluginAllowInput = { version?: string; defaults?: string[] };
 export type PluginAllowView = {
@@ -26,7 +32,16 @@ export type PluginAllowView = {
   choices: Record<string, string>;
   budget: { total: number; limit: number };
   admin: boolean;
+  // 这次部署编进去的服务端插件 (L2a)
+  server: string[];
+  // 本账号开没开开发模式 (只有管理员能开)
+  dev: boolean;
 };
+export type PluginContribView = { point: string; card: string; items: ({ plugin: string } & Record<string, unknown>)[] };
+// PUT /plugin-dev 开关开发模式; 关掉时本账号的开发插件全部撤掉
+export type PluginDevMode = { on: boolean };
+// PUT /plugin-dev/{id}: 本地插件目录里的清单, 提示词模板与介绍原文
+export type PluginDevInput = { manifest: unknown; prompt?: string; readme?: string };
 
 export const PLUGIN_CHANGES = ["allowed", "revoked", "enabled", "disabled", "updated"] as const;
 export type PluginChange = (typeof PLUGIN_CHANGES)[number];

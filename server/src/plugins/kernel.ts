@@ -15,6 +15,7 @@ import {
 import type { AllowRow, AllowStore } from "./allow-store";
 
 export const HOST_ENGINE = `${PROTOCOL_VERSION}.0.0`;
+const DEV_FLAG = "dev:";
 export type Entry = { plugin: string; c: Contribution };
 export type Listener = (uid: string, payload: unknown, from: string) => void;
 type Undo = () => void;
@@ -109,10 +110,32 @@ export class PluginKernel {
     return this.allow.get(id);
   }
 
+  /** 这个账号看得到的白名单: 别人的开发插件不算。 */
+  visible(uid: string | null): PluginAllow[] {
+    return this.list().filter((a) => !a.dev || a.by === uid);
+  }
+
+  /** 这个账号能不能用 (启用, 改选): 已放行, 且不是别人的开发插件。 */
+  usable(uid: string, id: string): boolean {
+    const m = this.get(id)?.meta;
+    return !!m && (!m.dev || m.by === uid);
+  }
+
+  /** 开发模式开关存在 flag 表里, 只在开发接口用到时读。 */
+  devMode(uid: string): boolean {
+    return this.store.flag(DEV_FLAG + uid);
+  }
+
+  setDevMode(uid: string, on: boolean): void {
+    if (on) this.store.setFlag(DEV_FLAG + uid);
+    else this.store.clearFlag(DEV_FLAG + uid);
+  }
+
   /** 把 next 换进白名单 (或去掉 drop) 后整体能否共存 (不写入)。 */
   check(next?: AllowRow, drop?: string): CheckResult {
     this.load();
-    const rows = new Map(this.allow);
+    // 开发插件只影响开发者自己, 不参与别人的冲突与预算; 检查它自己时才放进来
+    const rows = new Map([...this.allow].filter(([, r]) => !r.meta.dev));
     if (next) rows.set(next.meta.id, next);
     if (drop) rows.delete(drop);
     const defaults: Record<string, string> = {};
@@ -167,7 +190,7 @@ export class PluginKernel {
   /** 账号启用 / 停用; 没放行的不让开。返回是否有变化。 */
   setEnabled(uid: string, id: string, on: boolean): boolean {
     this.load();
-    if (on && !this.allow.has(id)) return false;
+    if (on && !this.usable(uid, id)) return false;
     const s = this.setOf(uid);
     if (s.has(id) === on) return false;
     this.store.setEnabled(uid, id, on);

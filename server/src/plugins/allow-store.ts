@@ -3,7 +3,8 @@ import type { PluginAllow, PluginManifest } from "@hx-aioa/protocol";
 // 放行时的快照: 清单与提示词模板都存下, 安装与更新只用快照, 不再看市场当前版本
 export const PLUGIN_FLAG_DDL = "CREATE TABLE IF NOT EXISTS plugin_flag (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
 
-export type AllowRow = { meta: PluginAllow; manifest: PluginManifest; prompt: string };
+// readme: 只有开发插件存介绍原文 (它不在市场里)
+export type AllowRow = { meta: PluginAllow; manifest: PluginManifest; prompt: string; readme?: string };
 type Body = { body: string };
 const SEEDED = "seeded";
 type Enable = { uid: string; id: string };
@@ -34,6 +35,10 @@ export class AllowStore {
 
   setFlag(k: string): void {
     this.sql.exec("INSERT OR REPLACE INTO plugin_flag (k, v) VALUES (?, ?)", k, "1");
+  }
+
+  clearFlag(k: string): void {
+    this.sql.exec("DELETE FROM plugin_flag WHERE k = ?", k);
   }
 
   allows(): AllowRow[] {

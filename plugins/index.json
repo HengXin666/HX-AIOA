@@ -4,7 +4,7 @@
       "id": "hengxin666.todo",
       "name": "点子待办",
       "summary": "在群里随手丢想法, Agent 整理成待办, 并对值得做的点子写可行性分析; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "icon": "list-checks",
       "tags": [
         "待办",
@@ -17,7 +17,7 @@
       "id": "hengxin666.gh",
       "name": "GitHub 授权",
       "summary": "授权一次 GitHub, 令牌只存在服务端; 别的插件和你允许的 Agent 通过服务端操作 issue。",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "icon": "github",
       "tags": [
         "GitHub",
@@ -30,7 +30,7 @@
       "id": "hengxin666.github",
       "name": "GitHub 接入",
       "summary": "关注仓库的 PR, Issue, CI 与本人动态: webhook 实时入库, 有 GITHUB_TOKEN 时每 30 分钟回填; 云 Agent 也能用 events:read 的 key 读。",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "icon": "github",
       "tags": [
         "GitHub",
@@ -42,7 +42,7 @@
       "id": "hengxin666.hxoa",
       "name": "hxoa 接入",
       "summary": "接入一台或多台 hxoa 服务端 (远程工作区): 在 App 的服务器页看在线状态与 worker 分支, 浏览文件, 跑命令。令牌只存在服务端。",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "icon": "terminal",
       "tags": [
         "hxoa",
