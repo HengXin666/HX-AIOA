@@ -21,7 +21,9 @@ async function add(c: ReqCtx): Promise<Response> {
 
 function remove(c: ReqCtx): Response {
   if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  return c.core.market.removeSource(pathParam(c.params, 0)) ? json({ ok: true }) : fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+  const id = pathParam(c.params, 0);
+  if (c.core.market.isPrivate(id) && !c.who.owner) return fail(403, "私有源只有主人能移除", CODE_FORBIDDEN);
+  return c.core.market.removeSource(id) ? json({ ok: true }) : fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 }
 
 /** 手动刷新: 各源强制重拉索引 (出错的源也立刻重试), 清掉文件缓存。 */

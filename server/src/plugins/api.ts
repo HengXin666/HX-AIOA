@@ -25,6 +25,7 @@ import { type Core, OWNER, ROOM, type ReqCtx, type Route, route } from "../core"
 import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { TODO_ROUTES } from "./api-todos";
 import { usesGh } from "../gh/gate";
+import { privatePlugin } from "./private";
 import { acctOf, isAdmin } from "./who";
 import { L2A } from "./l2a";
 import { renderTask } from "./store";
@@ -64,7 +65,7 @@ async function list(c: ReqCtx): Promise<Response> {
   const extra = (id: string) => ({ ...(installed.has(id) ? { installed: installed.get(id)! } : {}), ...(allow.has(id) ? { allowed: allow.get(id)! } : {}), ...(on(id) ? { enabled: true as const } : {}) });
   // 市场里没有 (连不上, 源被移除, 下架) 的放行与已安装插件也要列出来, 照样能看能撤能卸
   const leftover = (have: Set<string>) =>
-    [...new Set([...installed.keys(), ...allow.keys()])].filter((id) => !allow.get(id)?.dev && !have.has(id) && (c.who.owner || !c.core.market.isPrivate(allow.get(id)?.source))).map((id) => {
+    [...new Set([...installed.keys(), ...allow.keys()])].filter((id) => !allow.get(id)?.dev && !have.has(id) && (c.who.owner || !privatePlugin(c.core, id))).map((id) => {
       const a = allow.get(id);
       const i = installed.get(id);
       const m = c.core.kernel.get(id)?.manifest;
@@ -74,7 +75,8 @@ async function list(c: ReqCtx): Promise<Response> {
   let error: string | undefined;
   try {
     // 私有源的插件只给主人看
-    index = (await c.core.market.index()).filter((p) => !allow.get(p.id)?.dev && (c.who.owner || !c.core.market.isPrivate(p.source)));
+    const priv = c.core.market.privateSources();
+    index = (await c.core.market.index()).filter((p) => !allow.get(p.id)?.dev && (c.who.owner || !(p.source && priv.has(p.source))));
     error = c.core.market.errors().join("; ") || undefined;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
@@ -97,6 +99,8 @@ async function detail(c: ReqCtx): Promise<Response> {
   const foreign = !!row?.meta.dev && row.meta.by !== uid && c.who.owner;
   const devRow = row?.meta.dev && own ? row : undefined;
   // 市场里没了 (源被移除或下架) 但还在白名单: 用放行时存下的快照, 免得撤不掉也卸不了
+  // 私有插件先拦再拉, 不让子号或别的管理员的请求用到主人的令牌
+  if (!c.who.owner && !devRow && privatePlugin(c.core, id, (await c.core.market.sourceOf(id).catch(() => undefined))?.id)) throw new ApiFail(404, CODE_NOT_FOUND, `市场里没有 ${id}`);
   let snap = devRow;
   let fresh: { m: PluginManifest; src: MarketSource } | undefined;
   if (!snap) {
@@ -109,7 +113,6 @@ async function detail(c: ReqCtx): Promise<Response> {
   }
   // 放行时的源和现在市场里的不是同一个 (换源): 也显示快照, 不把别人的内容挂在 "已放行" 旁边
   if (!snap && row && !row.meta.dev && (row.meta.source ?? OFFICIAL_SOURCE) !== fresh!.src.id) snap = row;
-  if (!c.who.owner && c.core.market.isPrivate(fresh?.src.id ?? row?.meta.source)) throw new ApiFail(404, CODE_NOT_FOUND, `市场里没有 ${id}`);
   const gone = !!snap && !devRow;
   const manifest = snap?.manifest ?? fresh!.m;
   const src = snap ? undefined : fresh!.src;

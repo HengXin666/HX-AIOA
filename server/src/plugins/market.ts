@@ -60,8 +60,10 @@ async function readCapped(res: Response, max: number, name: string): Promise<str
 async function fetchText(url: string, max: number, token?: string): Promise<string> {
   const name = url.split("/").slice(-2).join("/");
   const headers: Record<string, string> = { "User-Agent": UA, ...(token ? { Authorization: `token ${token}` } : {}) };
-  const res = await fetch(url, { headers }).catch(() => null);
+  // 带令牌时不跟随跳转, 免得令牌被带到别的主机
+  const res = await fetch(url, { headers, redirect: token ? "manual" : "follow" }).catch(() => null);
   if (!res) throw new ApiFail(502, CODE_MARKET, "插件市场暂时连不上");
+  if (token && res.status >= 300 && res.status < 400) throw new ApiFail(502, CODE_MARKET, `${name} 要求跳转, 私有源不跟随`);
   // 跟随跳转后必须还是 https (本机开发源除外, 它本来就是 http)
   if (res.url && !res.url.startsWith("https://") && new URL(res.url).origin !== new URL(url).origin) throw new ApiFail(502, CODE_MARKET, `${name} 跳转到了非 https 地址`);
   if (res.status === 404) throw new ApiFail(404, CODE_NOT_FOUND, `市场里没有 ${name}`);
@@ -122,7 +124,11 @@ export class Market {
 
   /** 私有源 (主人的私有仓库) 的插件只给主人看和用。 */
   isPrivate(sourceId: string | undefined): boolean {
-    return !!sourceId && this.store.sources().some((s) => s.id === sourceId && s.private);
+    return !!sourceId && this.privateSources().has(sourceId);
+  }
+
+  privateSources(): Set<string> {
+    return new Set(this.store.sources().filter((s) => s.private).map((s) => s.id));
   }
 
   errors(): string[] {
@@ -136,7 +142,7 @@ export class Market {
 
   /**
    * 加一个源: 依次试候选目录的 index.json (最多两次请求), 第一个能解析的就是。
-   * 公开读不到 (404) 的 GitHub 仓库, 主人加时再用 GitHub 授权试一遍, 读到了就记为私有源。
+   * 公开读全是 404 的 GitHub 仓库, 主人加时再用 GitHub 授权试一遍, 读到了就记为私有源。
    */
   async addSource(link: string, owner = false): Promise<MarketSource> {
     // 本机 http 只在官方源本身指向本机时放行 (本地开发与 e2e)
@@ -146,10 +152,13 @@ export class Market {
     if (third.length >= MAX_SOURCES) throw new ApiFail(400, CODE_BAD_REQUEST, `第三方源最多 ${MAX_SOURCES} 个`);
     if (p.id === OFFICIAL_SOURCE || third.some((s) => s.id === p.id)) throw new ApiFail(409, CODE_CONFLICT, "这个源已经加过了");
     let last = "";
+    let missing = true;
     const tries = p.candidates.map((url) => ({ url }) as { url: string; private?: true });
     // 只有主人能用私有源: 令牌是主人的, 不能让别的管理员借它读主人的私有仓库
     if (owner && p.github) tries.push(...p.candidates.map((url) => ({ url, private: true as const })));
     for (const t of tries) {
+      // 公开读有非 404 的失败 (网络, 格式) 就不再用令牌试, 报公开读的原因
+      if (t.private && !missing) break;
       try {
         const text = await this.get(t, PLUGIN_INDEX_FILE, MAX_INDEX_TEXT);
         const idx = parseIndex(text);
@@ -162,7 +171,10 @@ export class Market {
         await this.merged().catch(() => []);
         return this.sources().find((s) => s.id === src.id)!;
       } catch (e) {
-        last = e instanceof Error ? e.message : String(e);
+        if (!t.private) {
+          last = e instanceof Error ? e.message : String(e);
+          missing &&= e instanceof ApiFail && e.status === 404;
+        } else if (!(e instanceof ApiFail && e.status === 404)) last = `${last}; 用 GitHub 授权读也失败: ${e instanceof Error ? e.message : String(e)}`;
       }
     }
     throw new ApiFail(400, CODE_BAD_REQUEST, `没找到能用的 index.json: ${last}`);

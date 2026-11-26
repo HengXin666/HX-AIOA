@@ -2,6 +2,7 @@ import type { PDataSyncFrame, PluginChange, PluginUpdateFrame } from "@hx-aioa/p
 import { PROTO_V1 } from "../constants";
 import type { Core } from "../core";
 import { attOf, sendFrame } from "../sockets";
+import { privatePlugin } from "./private";
 
 /**
  * 插件变化推给界面连接: uid 为空发给所有人 (白名单变化), 否则只发给该账号; 安卓后台连接不发。
@@ -9,7 +10,8 @@ import { attOf, sendFrame } from "../sockets";
  */
 export function pushPlugin(core: Core, id: string, change: PluginChange, opts: { uid?: string; version?: string; keyId?: string } = {}): void {
   const frame: PluginUpdateFrame = { t: "plugin_update", id, change, ...(opts.version ? { version: opts.version } : {}) };
-  toAccount(core, opts.uid, frame);
+  // 私有插件的白名单变化只推给主人
+  toAccount(core, opts.uid ?? (privatePlugin(core, id) ? core.users.ownerId() : undefined), frame);
   if (!opts.keyId) return;
   const guide: PluginUpdateFrame = { ...frame, guide: opts.version ?? change };
   for (const ws of core.sockets.chatSockets(opts.keyId)) sendFrame(ws, guide);
