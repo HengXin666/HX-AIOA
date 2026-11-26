@@ -52,6 +52,13 @@ enum class HxInputSize(val key: String) {
     Lg("lg"),
 }
 
+/** HX-UI track 的 size。 */
+enum class HxTrackSize(val key: String) {
+    Sm("sm"),
+    Default("default"),
+    Lg("lg"),
+}
+
 /** HX-UI sidebarMenuButton 的 variant。 */
 enum class HxSidebarMenuButtonVariant(val key: String) {
     Default("default"),

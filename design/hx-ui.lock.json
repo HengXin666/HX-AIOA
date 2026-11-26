@@ -3,7 +3,7 @@
   "skin": "ink",
   "source": "https://github.com/HengXin666/HX-UI/releases/download/v2.3.0/hx-ui-2.3.0.tgz",
   "sha256": {
-    "tokens.json": "26ca692abb56a6065612145201e3bcc3dc6d56f8a016136592ead222dd162f82",
-    "components.json": "f1a86ff003797b0164703545523198056bdc806231466dace03a25b87ebd4795"
+    "tokens.json": "e19144542fbe20a6692960173c5315362d42a13082c36f78de78ea5a2c7490f9",
+    "components.json": "d5c344a0e334d459adac37e09dd3c614ac8c9f3abfe9a07862472dbec06673e1"
   }
 }

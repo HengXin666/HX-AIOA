@@ -61,6 +61,16 @@
         "size": "default"
       }
     },
+    "track": {
+      "size": [
+        "sm",
+        "default",
+        "lg"
+      ],
+      "default": {
+        "size": "default"
+      }
+    },
     "sidebarMenuButton": {
       "variant": [
         "default",

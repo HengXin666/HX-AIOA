@@ -115,7 +115,7 @@ object HxUi {
         input = Color(0xFF373737),
         ring = Color(0xFF4D4D4D),
         brand = Color(0xFFFFFFFF),
-        brandForeground = Color(0xFFFAFAFA),
+        brandForeground = Color(0xFF000000),
         brandSoft = Color(0x1AFFFFFF),
         chart1 = Color(0xFFFFFFFF),
         chart2 = Color(0xFF00B9B2),
