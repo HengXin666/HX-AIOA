@@ -53,7 +53,8 @@ fun rememberNow(): Long {
 // 看板, 总览精简视图, 重点待办共用的一行待办 (勾选框或折叠箭头, 标题, 截止倒计时等元信息)
 private const val INDENT = 22
 private val PILL = RoundedCornerShape(50)
-private const val CHIP_ALPHA = 0.12f
+// 选中态与标签的底色透明度, 待办各页共用
+internal const val CHIP_ALPHA = 0.12f
 private const val PRIO_URGENT = 1
 
 @Composable

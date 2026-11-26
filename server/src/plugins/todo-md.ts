@@ -1,8 +1,9 @@
 import type { TodoItem, TodoState } from "@hx-aioa/protocol";
+import { DEFAULT_TZ_MIN } from "./todo-plan";
 
 // 给外部 AI 看的待办: 按创建日期分天, 天里按仓库, 父子缩进
 export const STATE_TEXT: Record<TodoState, string> = { open: "待进行", hold: "挂起", doing: "进行中", done: "已完成", dropped: "已放弃" };
-const TZ_OFFSET = 8 * 3_600_000;
+const TZ_OFFSET = DEFAULT_TZ_MIN * 60_000;
 const NO_REPO = "未关联仓库";
 const finished = (t: TodoItem) => t.state === "done" || t.state === "dropped";
 

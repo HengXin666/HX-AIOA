@@ -123,3 +123,43 @@ test("提醒文案: 提前量与当地时间", () => {
   assert.equal(ahead(1440), "1 天");
   assert.equal(localTime(JAN31, 0), "01-31 01:00");
 });
+
+test("周期: 按月逐期推, 31 号在短月落月底, 下一期回到 31 号", () => {
+  let b = { ...base, due: JAN31, every: { unit: "month" as const, n: 1, tz: 480 } };
+  const seen: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    b = normTodo(b, { ...b, state: "done" }, b.due - MIN) as typeof b;
+    seen.push(localTime(b.due));
+  }
+  assert.deepEqual(seen, ["02-28 09:00", "03-31 09:00", "04-30 09:00"]);
+  assert.equal(b.every.day, 31);
+  // 新建时就是完成的不推
+  assert.equal(normTodo(null, { ...b, state: "done" }).state, "done");
+});
+
+test("GitHub 同步: 关联了已关闭 issue 的周期待办不跟着完成推期", () => {
+  const sql = memSql();
+  const store = new TodoStore(sql, new PDataStore(sql), () => OWNER, (fn) => fn());
+  store.upsert(CH, [{ id: "t-1", title: "周报", repo: "o/r", issue: 3, due: JAN31, every: { unit: "week", n: 1 } }]);
+  const gh = { state: "closed" as const, comments: 0, synced: 1 };
+  store.setGh(CH, "t-1", gh, "done");
+  store.setGh(CH, "t-1", { ...gh, synced: 2 }, "done");
+  const t = store.get(CH, "t-1")!;
+  assert.equal(t.state, "open");
+  assert.equal(t.due, JAN31);
+  assert.equal(t.runs, undefined);
+});
+
+test("提醒: 写入时提醒时刻已过的不补发", async () => {
+  const sql = memSql();
+  const pdata = new PDataStore(sql);
+  const storage = fakeStorage();
+  const sent: string[] = [];
+  const remind = new TodoRemind(pdata, new Timers(storage), storage, async (d) => void sent.push(d.id), () => true);
+  storage.kv.set("todo_remind_last", 0);
+  const now = Date.now();
+  pdata.put(OWNER, TODO_PLUGIN, TODO_COLL, `${CH}:old`, 0, { ...base, due: now - 10 * MIN, remind: 0 }, now);
+  pdata.put(OWNER, TODO_PLUGIN, TODO_COLL, `${CH}:soon`, 0, { ...base, due: now + MIN, remind: 0 }, now);
+  assert.equal(await remind.fire(now + 2 * MIN), 1);
+  assert.deepEqual(sent, [`${CH}:soon`]);
+});

@@ -18,9 +18,8 @@ const val NO_REPO = "未关联仓库"
 private const val DAY_FMT = "yyyy-MM-dd"
 private const val SHORT_FMT = "MM-dd"
 private const val TIME_FMT = "HH:mm"
-private const val DAY_MS = 86_400_000L
+internal const val DAY_MS = 86_400_000L
 private const val HOUR_MS = 3_600_000L
-private const val MIN_MS = 60_000L
 private const val WEEK_DAYS = 7
 /** 新建时可选的分区; 用过的自定义分区也会出现在选项里。 */
 val PRESET_AREAS = listOf("生活", "开发", "工作", "学习")
@@ -110,29 +109,35 @@ fun repoName(repo: String) = repo.substringAfter('/')
 private val REPO_COLORS = listOf(0xFF2F6BFF, 0xFF12A150, 0xFFD97706, 0xFF8250DF, 0xFFDB2777, 0xFF0891B2, 0xFF65A30D)
 fun repoColor(repo: String): Color = if (repo == NO_REPO) Color(0xFF9CA3AF) else Color(REPO_COLORS[Math.floorMod(repo.hashCode(), REPO_COLORS.size)])
 
-/** 父待办: parent 字段优先, 其次 GitHub 的父 issue。 */
-private fun parentOf(r: TodoRow, byId: Map<String, TodoRow>, byIssue: Map<String, TodoRow>): TodoRow? =
-    r.parent?.let(byId::get) ?: if (r.ghParent != null && r.repo != null) byIssue["${r.repo}#${r.ghParent}"] else null
-
 // 未完成在前, 星标在前, 截止近的在前, 再按优先级和新旧
 private val ORDER = compareBy<TodoRow> { it.finished }.thenBy { !it.star }.thenBy { it.due ?: Long.MAX_VALUE }.thenBy { it.prio }.thenByDescending { it.created }
 
+// 看全部群时不同群的待办 id 可能相同, 一律带群区分
+private fun TodoRow.uid() = "$channel:$id"
+
+/** 父待办: parent 字段优先 (同群), 其次 GitHub 的父 issue。 */
+private fun parentOf(r: TodoRow, byId: Map<String, TodoRow>, byIssue: Map<String, TodoRow>): TodoRow? =
+    r.parent?.let { byId["${r.channel}:$it"] } ?: if (r.ghParent != null && r.repo != null) byIssue["${r.repo}#${r.ghParent}"] else null
+
 /** 筛选后的森林: 父不在结果里的子待办升为根。 */
 fun forest(rows: List<TodoRow>): List<TodoNode> {
-    val byId = rows.associateBy { it.id }
+    val byId = rows.associateBy { it.uid() }
     val byIssue = rows.filter { it.repo != null && it.issue != null }.associateBy { "${it.repo}#${it.issue}" }
     val kids = HashMap<String, MutableList<TodoRow>>()
     val roots = ArrayList<TodoRow>()
     for (r in rows) {
-        val p = parentOf(r, byId, byIssue)?.takeIf { it.id != r.id }
-        if (p != null) kids.getOrPut(p.id) { ArrayList() }.add(r) else roots.add(r)
+        val p = parentOf(r, byId, byIssue)?.takeIf { it.uid() != r.uid() }
+        if (p != null) kids.getOrPut(p.uid()) { ArrayList() }.add(r) else roots.add(r)
     }
     val seen = HashSet<String>()
     fun node(r: TodoRow): TodoNode {
-        seen.add(r.id)
-        return TodoNode(r, kids[r.id].orEmpty().filter { it.id !in seen }.sortedWith(ORDER).map(::node))
+        seen.add(r.uid())
+        return TodoNode(r, kids[r.uid()].orEmpty().filter { it.uid() !in seen }.sortedWith(ORDER).map(::node))
     }
-    return roots.sortedWith(ORDER).map(::node)
+    // 成环的 (互为父子) 没有根, 补成根, 一条都不丢
+    val out = roots.sortedWith(ORDER).mapTo(ArrayList(), ::node)
+    for (r in rows.sortedWith(ORDER)) if (r.uid() !in seen) out.add(node(r))
+    return out
 }
 
 private fun repoKey(r: TodoRow) = r.repo ?: NO_REPO
@@ -190,7 +195,7 @@ fun countdown(due: Long, now: Long = System.currentTimeMillis()): Pair<String, B
     val abs = kotlin.math.abs(left)
     val d = abs / DAY_MS
     val h = (abs % DAY_MS) / HOUR_MS
-    val m = (abs % HOUR_MS) / MIN_MS
+    val m = (abs % HOUR_MS) / MINUTE_MS
     val span = when {
         d > 0 -> if (h > 0 && d < WEEK_DAYS) "$d 天 $h 小时" else "$d 天"
         h > 0 -> if (m > 0) "$h 小时 $m 分" else "$h 小时"

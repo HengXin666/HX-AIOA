@@ -99,8 +99,11 @@ export const MAX_TODO_REMIND = 43_200;
 export const MAX_TODO_EVERY = 365;
 export const TODO_EVERY_UNITS = ["day", "week", "month", "year"] as const;
 export type TodoEveryUnit = (typeof TODO_EVERY_UNITS)[number];
-// tz 是写入端的时区偏移 (分钟, 东为正), 按月 / 年推下一期时按当地日历算; 不填按 +8
-export type TodoEvery = { unit: TodoEveryUnit; n: number; tz?: number };
+// tz 是写入端的时区偏移 (分钟, 东为正), 按月 / 年推下一期时按当地日历算, 不填按 +8;
+// day 是按月 / 年时锚定的日 (31 号在短月落到月底, 下个月回到 31 号), 不填时第一次推期由服务端记下
+export type TodoEvery = { unit: TodoEveryUnit; n: number; tz?: number; day?: number };
+// 截止时间上限 (JS Date 能表示的最大毫秒数)
+export const MAX_TODO_DUE = 8.64e15;
 
 export type TodoItem = {
   id: string;
@@ -225,7 +228,7 @@ export function planError(k: string, v: unknown): string | null {
     case "area":
       return typeof v === "string" && v.trim() && v.length <= MAX_TODO_AREA ? null : `area 为 1 到 ${MAX_TODO_AREA} 字`;
     case "due":
-      return typeof v === "number" && Number.isInteger(v) && v > 0 ? null : "due 是毫秒时间戳";
+      return typeof v === "number" && Number.isInteger(v) && v > 0 && v <= MAX_TODO_DUE ? null : "due 是毫秒时间戳";
     case "remind":
       return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_TODO_REMIND ? null : `remind 是提前的分钟数 (0 到 ${MAX_TODO_REMIND})`;
     case "alarm":
@@ -236,7 +239,8 @@ export function planError(k: string, v: unknown): string | null {
       if (!isObj(v) || !(TODO_EVERY_UNITS as readonly unknown[]).includes(e.unit)) return `every.unit 只能是 ${TODO_EVERY_UNITS.join("/")}`;
       if (!(Number.isInteger(e.n) && (e.n as number) >= 1 && (e.n as number) <= MAX_TODO_EVERY)) return `every.n 为 1 到 ${MAX_TODO_EVERY}`;
       if (e.tz !== undefined && !(Number.isInteger(e.tz) && Math.abs(e.tz as number) <= 14 * 60)) return "every.tz 是时区偏移分钟数";
-      return Object.keys(v).every((x) => ["unit", "n", "tz"].includes(x)) ? null : "every 只能有 unit, n, tz";
+      if (e.day !== undefined && !(Number.isInteger(e.day) && (e.day as number) >= 1 && (e.day as number) <= 31)) return "every.day 是 1 到 31";
+      return Object.keys(v).every((x) => ["unit", "n", "tz", "day"].includes(x)) ? null : "every 只能有 unit, n, tz, day";
     }
     default:
       return null;

@@ -7,8 +7,12 @@ export const TIMER_TODO = "todo_remind";
 const KEY_LAST = "todo_remind_last";
 // 停机或休眠太久错过的提醒: 超过 6 小时就不补发了, 免得一次冒出一堆过时的
 const STALE_MS = 6 * 3_600_000;
+// 写入时提醒时刻已经过去的不发 (留一分钟给 "马上到点" 的); 发送失败 5 分钟后重试
+const EDIT_GRACE_MS = 60_000;
+const RETRY_MS = 5 * 60_000;
+const PLAN_FIELDS = ["due", "remind"];
 
-export type Due = { acct: string; id: string; body: TodoBody; at: number };
+export type Due = { acct: string; id: string; body: TodoBody; at: number; updated: number };
 export type RemindPost = (d: Due) => Promise<void>;
 
 /**
@@ -45,18 +49,20 @@ export class TodoRemind {
     return now;
   }
 
-  private rows(): Due[] {
-    return this.pdata.allLive(TODO_PLUGIN, TODO_COLL).flatMap(({ acct, item }) => {
+  // 该提醒的行: 有提醒时刻, 晚于上次提醒到的位置, 且写入时还没过 (新建时就过了的不补), 账号启用着
+  private rows(last: number): Due[] {
+    return this.pdata.allWith(TODO_PLUGIN, TODO_COLL, PLAN_FIELDS).flatMap(({ acct, item }) => {
       const body = item.body as TodoBody;
       const at = fireAt(body);
-      return at === null ? [] : [{ acct, id: item.id, body, at }];
+      if (at === null || at <= Math.max(last, item.updated - EDIT_GRACE_MS) || !this.enabled(acct)) return [];
+      return [{ acct, id: item.id, body, at, updated: item.updated }];
     });
   }
 
   async plan(): Promise<number | null> {
     const last = await this.last();
     let next = Infinity;
-    for (const d of this.rows()) if (d.at > last && d.at < next && this.enabled(d.acct)) next = d.at;
+    for (const d of this.rows(last)) if (d.at < next) next = d.at;
     const want = Number.isFinite(next) ? next : undefined;
     // 和已挂的一样就不写, 冷启动也不多一次写入
     if ((await this.timers.get(TIMER_TODO)) === want) return want ?? null;
@@ -68,9 +74,9 @@ export class TodoRemind {
   /** 闹钟到了: 发 (上次, 现在] 之间的提醒; 返回发了几条。 */
   async fire(now = Date.now()): Promise<number> {
     const last = await this.last();
-    const due = this.rows().filter((d) => d.at > last && d.at <= now && this.enabled(d.acct));
-    await this.storage.put(KEY_LAST, now);
+    const due = this.rows(last).filter((d) => d.at <= now);
     let sent = 0;
+    let failedAt: number | null = null;
     for (const d of due.sort((a, b) => a.at - b.at)) {
       if (now - d.at > STALE_MS) continue;
       try {
@@ -78,9 +84,13 @@ export class TodoRemind {
         sent++;
       } catch (e) {
         console.error("待办提醒发送失败:", d.id, e);
+        failedAt ??= d.at;
       }
     }
-    await this.plan();
+    // 有发失败的: 只推进到它之前, 过一会儿重发 (成功过的同一次提醒按去重键覆盖, 不会多一条)
+    await this.storage.put(KEY_LAST, failedAt === null ? now : failedAt - 1);
+    if (failedAt !== null) await this.timers.set(TIMER_TODO, now + RETRY_MS);
+    else await this.plan();
     return sent;
   }
 }

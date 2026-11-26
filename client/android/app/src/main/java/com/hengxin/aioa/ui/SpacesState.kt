@@ -85,10 +85,10 @@ internal fun todoRow(o: JSONObject): Pair<String, TodoRow>? {
     )
 }
 
-/** 待办里 App 能改的计划字段写进行 body; null 的删掉 (服务端按缺省处理)。 */
+/** 编辑面板能改的字段写进行 body; null 的删掉 (服务端按缺省处理)。状态不在这里写, 免得盖掉编辑期间 Agent 或 GitHub 同步改的。 */
 internal fun planInto(body: JSONObject, r: TodoRow) {
     fun opt(k: String, v: Any?) { if (v == null) body.remove(k) else body.put(k, v) }
-    body.put("title", r.title).put("prio", r.prio).put(KEY_STATE, r.state)
+    body.put("title", r.title).put("prio", r.prio)
     opt("note", r.note)
     opt("area", r.area)
     opt("due", r.due)
@@ -96,7 +96,9 @@ internal fun planInto(body: JSONObject, r: TodoRow) {
     opt("alarm", r.alarm.takeIf { it && r.due != null })
     opt("star", r.star.takeIf { it })
     val tz = java.util.TimeZone.getDefault().getOffset(r.due ?: System.currentTimeMillis()) / TodoRow.MINUTE_MS.toInt()
-    opt("every", r.everyUnit?.takeIf { r.due != null }?.let { JSONObject().put("unit", it).put("n", r.everyN).put("tz", tz) })
+    // 按月 / 年的锚定日取截止那天 (31 号在短月落月底, 下个月回到 31 号)
+    val day = r.due?.let { java.util.Calendar.getInstance().apply { timeInMillis = it }.get(java.util.Calendar.DAY_OF_MONTH) }
+    opt("every", r.everyUnit?.takeIf { r.due != null }?.let { u -> JSONObject().put("unit", u).put("n", r.everyN).put("tz", tz).also { if (u == "month" || u == "year") it.put("day", day) } })
 }
 
 /** 工作台的界面状态: 布局来自 space_update 帧, 用户的排序与尺寸 PUT 到服务端, 打开时取一次服务端解析好的当前值。 */
@@ -212,7 +214,7 @@ class SpacesState(
         if (fresh && row.channel in todos) todos[row.channel] = todos[row.channel].orEmpty() + row.copy(created = now, updated = now)
         if (!fresh) return patchTodo(row.channel, row) { planInto(it, row) }
         io {
-            val body = JSONObject().put("channel", row.channel).put("created", now).also { planInto(it, row) }
+            val body = JSONObject().put("channel", row.channel).put("created", now).put(KEY_STATE, row.state).also { planInto(it, row) }
             val err = callErr(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", JSONObject().put("ver", 0).put(KEY_BODY, body))
             if (err != null) toast("待办没保存: ${err.second}")
             pullTodos()

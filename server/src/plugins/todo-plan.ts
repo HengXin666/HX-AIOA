@@ -9,14 +9,20 @@ export const DEFAULT_TZ_MIN = 480;
 // 防止异常数据死循环: 最多往后推这么多期
 const MAX_STEPS = 5000;
 
-/** 一期之后的时刻: 天和周是固定长度; 月和年按当地日历加, 月底 (31 号) 落到短月的最后一天。 */
+/** 当地日历的几号 (按周期自带的时区)。 */
+export const localDay = (ts: number, e: TodoEvery): number => new Date(ts + (e.tz ?? DEFAULT_TZ_MIN) * MIN_MS).getUTCDate();
+
+/**
+ * 一期之后的时刻: 天和周是固定长度; 月和年按当地日历加, 落在 e.day (锚定日, 没有就用当前的日),
+ * 短月没有那一天就落到月底, 下一期又回到锚定日 (1-31 → 2-28 → 3-31)。
+ */
 export function addEvery(ts: number, e: TodoEvery): number {
   if (e.unit === "day") return ts + e.n * DAY_MS;
   if (e.unit === "week") return ts + e.n * WEEK_DAYS * DAY_MS;
   const off = (e.tz ?? DEFAULT_TZ_MIN) * MIN_MS;
   const d = new Date(ts + off);
   const months = e.unit === "month" ? e.n : e.n * MONTHS_PER_YEAR;
-  const day = d.getUTCDate();
+  const day = e.day ?? d.getUTCDate();
   const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1, d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds()));
   const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
   target.setUTCDate(Math.min(day, last));
@@ -30,9 +36,11 @@ export function nextDue(due: number, e: TodoEvery, now: number): number {
   return next;
 }
 
-/** 周期待办完成一期: 回到 open, due 推到下一期, 记 runs 与 lastDone。 */
+/** 周期待办完成一期: 回到 open, due 推到下一期, 记 runs 与 lastDone; 按月 / 年的第一次推期记下锚定日。 */
 export function rollTodo(b: TodoBody, now: number): TodoBody {
-  const out: TodoBody = { ...b, state: "open", due: nextDue(b.due!, b.every!, now), runs: (b.runs ?? 0) + 1, lastDone: now };
+  const every = b.every!;
+  const anchored = every.unit === "month" || every.unit === "year" ? { ...every, day: every.day ?? localDay(b.due!, every) } : every;
+  const out: TodoBody = { ...b, every: anchored, state: "open", due: nextDue(b.due!, anchored, now), runs: (b.runs ?? 0) + 1, lastDone: now };
   delete out.doneAt;
   return out;
 }

@@ -25,6 +25,7 @@ const TODO_FIELDS = {
   area: { type: "string", description: "分区: 生活 / 开发 / 工作 等短词" },
   due: { type: "integer", description: "截止时间, 毫秒时间戳" },
   remind: { type: "integer", description: "截止前几分钟提醒, 0 为到点 (要先有 due)" },
+  alarm: { type: "boolean", description: "到点手机按闹钟持续响铃 (要先有 remind)" },
   star: { type: "boolean", description: "重点, 显示在总览" },
   every: { type: "object", description: "周期 {unit: day/week/month/year, n: 每几个单位, tz: 时区偏移分钟}, 完成后自动排下一期 (要先有 due)" },
 };

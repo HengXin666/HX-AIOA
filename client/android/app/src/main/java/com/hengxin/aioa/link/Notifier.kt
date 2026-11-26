@@ -36,9 +36,15 @@ class Notifier(private val context: Context, private val db: MessageDb) {
     /** v1 事件; msg 是它写进消息库的样子。loud 为 false 时 (安静路由, 已恢复) 只更新已有通知。 */
     fun event(ev: Envelope, msg: ServerFrame.Msg, loud: Boolean) {
         if (events.recover(ev)) return
-        // 待办提醒: 本地闹钟已挂或已响过的同一次提醒不再弹 (断网时本地先响, 服务端消息补到群里)
-        val todoKey = ev.dedupeKey?.takeIf { ev.source.id == Constants.SOURCE_TODO_REMIND }
-        if (todoKey != null && TodoAlarms.handled(context, todoKey)) return
+        // 待办提醒: 本地闹钟先响过的不再弹; 推送先到就由推送提醒, 并撤掉本地还没响的同一次闹钟
+        val todoKey = ev.dedupeKey?.takeIf { ev.source.id.startsWith(Constants.SOURCE_TODO_REMIND) }
+        if (todoKey != null) {
+            if (loud && TodoAlarms.consume(context, todoKey)) {
+                val alarm = ev.source.id.endsWith(TODO_ALARM_SUFFIX)
+                TodoNotify.post(context, TodoAlarmPlan(todoKey, ev.ts, ev.channel.orEmpty(), ev.title, ev.summary ?: ev.markdown.orEmpty(), alarm))
+            }
+            return
+        }
         val task = ev.task
         when {
             task != null -> events.task(task, ev.source.name, loud)
@@ -114,3 +120,6 @@ class Notifier(private val context: Context, private val db: MessageDb) {
         const val HISTORY_SCAN = 200
     }
 }
+
+// 服务端给设了闹钟的待办提醒加的来源后缀, 与 server/src/plugins/todo-notice.ts 一致
+private const val TODO_ALARM_SUFFIX = ":alarm"

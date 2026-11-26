@@ -51,7 +51,6 @@ import com.hengxin.aioa.ui.SpacesState
 private const val PAD = 14
 private val CARD = RoundedCornerShape(14.dp)
 private val PILL = RoundedCornerShape(50)
-private const val CHIP_ALPHA = 0.12f
 
 /**
  * 待办看板 (群里的 "待办" 页与总览全屏看板同一个): 分区 / 截止 / 日期 / 仓库 四个维度, 父子树可折叠, 默认藏已完成。

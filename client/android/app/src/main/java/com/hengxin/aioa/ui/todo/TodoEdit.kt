@@ -38,6 +38,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.TodoRow
@@ -58,7 +62,6 @@ import java.util.TimeZone
 import androidx.compose.material3.Text as M3Text
 
 private val CHIP = RoundedCornerShape(50)
-private const val CHIP_ALPHA = 0.12f
 private val REMINDS = listOf(null to "不提醒", 0 to "到点", 5 to "5 分钟", 15 to "15 分钟", 30 to "30 分钟", 60 to "1 小时", 1440 to "1 天")
 private const val DEFAULT_REMIND = 15
 private const val MAX_EVERY = 365
@@ -98,9 +101,11 @@ fun TodoEdit(start: TodoRow, areas: List<String>, fresh: Boolean, close: () -> U
             }
             Label("截止")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("今晚 18:00", false) { r = r.copy(due = at(0, EVENING)) }
-                Chip("明早 9:00", false) { r = r.copy(due = at(1, MORNING)) }
-                Chip("下周一 9:00", false) { r = r.copy(due = nextMonday()) }
+                val evening = at(0, EVENING)
+                // 过了 18 点就是明天 18:00, 文案跟着变
+                Chip(if (dayOf(evening) == dayOf(System.currentTimeMillis())) "今天 18:00" else "明天 18:00", false) { r = withDue(r, evening) }
+                Chip("明天 9:00", false) { r = withDue(r, at(1, MORNING)) }
+                Chip("下周一 9:00", false) { r = withDue(r, nextMonday()) }
                 Chip(r.due?.let { dueText(it) } ?: "选日期时间", r.due != null, "calendar-days") { picking = true }
                 if (r.due != null) Chip("清除", false, "x") { r = r.copy(due = null, remind = null, alarm = false, everyUnit = null) }
             }
@@ -134,8 +139,11 @@ fun TodoEdit(start: TodoRow, areas: List<String>, fresh: Boolean, close: () -> U
             }
         }
     }
-    if (picking) DueDialog(r.due, { picking = false }) { r = r.copy(due = it, remind = r.remind ?: DEFAULT_REMIND.takeIf { r.due == null }) }
+    if (picking) DueDialog(r.due, { picking = false }) { r = withDue(r, it) }
 }
+
+/** 设截止: 第一次设时默认提前 15 分钟提醒, 改时间不动已选的提醒。 */
+private fun withDue(r: TodoRow, due: Long) = r.copy(due = due, remind = if (r.due == null) r.remind ?: DEFAULT_REMIND else r.remind)
 
 private const val TITLE_MAX = 200
 private const val NOTE_MAX = 2000
@@ -182,12 +190,18 @@ private fun Permissions(alarm: Boolean) {
     val context = LocalContext.current
     var bump by remember { mutableStateOf(0) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { bump++ }
+    // 从系统设置开完权限回来时重查
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) bump++ }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
     val missing = remember(alarm, bump) { missingPermissions(context, alarm) }
     missing.forEach { (text, open) ->
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warning.copy(alpha = CHIP_ALPHA)).clickable {
             if (open == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
             else open?.let { runCatching { context.startActivity(it) } }
-            bump++
         }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon("bell", c.warning, 14.dp)
             M3Text(text, Modifier.padding(start = 6.dp).weight(1f), color = c.text, fontSize = 12.sp)

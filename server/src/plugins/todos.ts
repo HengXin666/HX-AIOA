@@ -21,7 +21,8 @@ export function normTodo(prev: TodoBody | null, next: TodoBody, now = Date.now()
   if (prev?.gh && prev.repo === out.repo && prev.issue === out.issue) out.gh = prev.gh;
   else delete out.gh;
   // 周期待办刚完成: 推到下一期 (回到 open, 不留 doneAt), 免得每期都手动新建
-  if (out.state === DONE && prev?.state !== DONE && out.every && out.due) return rollTodo(out, now);
+  // 新建时就是完成的不推 (导入旧数据, 或建错了)
+  if (out.state === DONE && prev && prev.state !== DONE && out.every && out.due) return rollTodo(out, now);
   return out;
 }
 
@@ -101,6 +102,8 @@ export class TodoStore {
     const cur = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, rid);
     const old = live(cur);
     if (!cur || !old) return null;
+    // 周期待办不跟 issue 状态走: 关闭的 issue 每轮同步都会 "完成" 一次, 把截止一期期往后推
+    if (old.every) state = undefined;
     const body = { ...normTodo(old, { ...old, ...(state ? { state } : {}) }, now), gh };
     if (JSON.stringify(old) === JSON.stringify(body)) return { item: todoOf(cur)!, rev: 0 };
     // 同步状态不算主人或 Agent 的改动: 只改 gh 时保留原 updated

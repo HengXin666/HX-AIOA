@@ -38,7 +38,6 @@ import com.hengxin.aioa.kit.TodoRow
 import com.hengxin.aioa.ui.SpacesState
 import com.hengxin.aioa.kit.Text as KitText
 
-private const val CHIP_ALPHA = 0.12f
 private const val FOCUS_LIMIT = 5
 private const val ALL = "全部"
 

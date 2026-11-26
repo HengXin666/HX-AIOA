@@ -123,10 +123,11 @@ export class PDataStore {
       .map(toItem);
   }
 
-  /** 某插件集合在所有账号下的有效行 (待办提醒排程用); 总量受每账号行数上限约束。 */
-  allLive(plugin: string, coll: string): { acct: string; item: PDataItem }[] {
+  /** 某插件集合在所有账号下, body 里 fields 都有值的有效行 (待办提醒排程用, 先在库里筛掉不相关的行)。 */
+  allWith(plugin: string, coll: string, fields: string[]): { acct: string; item: PDataItem }[] {
+    const has = fields.map(() => " AND json_extract(body, ?) IS NOT NULL").join("");
     return this.sql
-      .exec<Row & { acct: string }>("SELECT acct, id, ver, rev, updated, deleted, body FROM pdata WHERE plugin = ? AND coll = ? AND deleted = 0", plugin, coll)
+      .exec<Row & { acct: string }>(`SELECT acct, id, ver, rev, updated, deleted, body FROM pdata WHERE plugin = ? AND coll = ? AND deleted = 0${has}`, plugin, coll, ...fields.map((f) => `$.${f}`))
       .toArray()
       .map((r) => ({ acct: r.acct, item: toItem(r) }));
   }

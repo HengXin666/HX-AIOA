@@ -74,6 +74,7 @@ async function channelOf(cfg, v) {
   return (cfg.me ?? (await whoami(cfg))).channel;
 }
 
+const EVERY_LABEL = { day: "天", week: "周", month: "个月", year: "年" };
 const STATE_LABEL = { open: "待进行", hold: "挂起", doing: "进行中", done: "已完成", dropped: "已完成" };
 // 一行一条: [状态] P优先级 id 标题 (repo#issue) <- 父 | note
 function todoLine(t) {
@@ -82,7 +83,7 @@ function todoLine(t) {
   const note = t.note ? ` | ${t.note.replace(/\s+/g, " ").slice(0, 80)}` : "";
   // 分区, 截止 (东八区), 周期, 星标 (#105)
   const due = t.due ? ` 截止 ${new Date(t.due + 8 * 3_600_000).toISOString().slice(5, 16).replace("T", " ")}` : "";
-  const plan = `${t.star ? " ★" : ""}${t.area ? ` {${t.area}}` : ""}${due}${t.every ? ` 每${t.every.n}${t.every.unit}` : ""}`;
+  const plan = `${t.star ? " ★" : ""}${t.area ? ` {${t.area}}` : ""}${due}${t.every ? ` 每${t.every.n}${EVERY_LABEL[t.every.unit] ?? t.every.unit}` : ""}`;
   return `[${STATE_LABEL[t.state] ?? t.state}] P${t.prio ?? 2} ${t.id} ${t.title}${plan}${issue}${parent}${note}`;
 }
 

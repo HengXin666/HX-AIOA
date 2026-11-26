@@ -17,6 +17,7 @@ import {
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, POST, PUT } from "../constants";
 import { ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson, pathParam } from "../http";
+import { canRead } from "../api-chats";
 import { legacyTodoSync } from "./api-todos";
 import { pushPData } from "./notify";
 import { checkBody } from "./pdata";
@@ -75,17 +76,22 @@ function touched(c: ReqCtx, t: Target, rev: number, channels: (string | undefine
 }
 // 写之前: 新内容 (有的话) 与库里现有的行都要在范围内, 免得把别的群的待办改到本群或反过来
 function scoped(c: ReqCtx, t: Target, id: string, next?: unknown): boolean {
+  // 子号的待办要在自己看得到的群里: 到点提醒会以系统身份发进这个群
+  if (next !== undefined && t.plugin === TODO_PLUGIN && !c.who.owner && c.who.member && !canRead(c.core, c.who, channelOf(next) ?? "")) return false;
   if (!t.scope) return true;
   if (next !== undefined && !inScope(t, next)) return false;
   const prev = c.core.pdata.get(t.acct, t.plugin, t.coll.id, id);
   return !prev || !!prev.deleted || inScope(t, prev.body);
 }
 
-// 待办的 doneAt 与 gh 由服务端维护 (见 normTodo), 其他插件原样写
+// 待办的 doneAt, gh, 周期推期由服务端维护 (见 normTodo), 改完再校验一次; 其他插件原样写
 function fixBody(c: ReqCtx, t: Target, id: string, body: unknown): unknown {
   if (t.plugin !== TODO_PLUGIN) return body;
   const prev = c.core.pdata.get(t.acct, t.plugin, t.coll.id, id);
-  return normTodo(prev && !prev.deleted ? (prev.body as TodoBody) : null, body as TodoBody);
+  const out = normTodo(prev && !prev.deleted ? (prev.body as TodoBody) : null, body as TodoBody);
+  const err = checkTodoBody(id, out);
+  if (err) throw new ApiFail(400, CODE_BAD_REQUEST, err);
+  return out;
 }
 // 行所在的群是否在 key 的白名单里; 不是待办或不限范围时恒为真
 const inScope = (t: Target, body: unknown): boolean => !t.scope || (t.scope as string[]).some((p) => globMatch(p, channelOf(body) ?? ""));

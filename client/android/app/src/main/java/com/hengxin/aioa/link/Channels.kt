@@ -36,12 +36,11 @@ object Channels {
     private fun channel(context: Context, id: String, @StringRes name: Int, @StringRes desc: Int, importance: Int) =
         NotificationChannel(id, context.getString(name), importance).apply { description = context.getString(desc) }
 
-    // 闹钟: 系统闹钟铃声, 按闹钟音量响, 勿扰模式下按闹钟规则放行
+    // 闹钟: 系统闹钟铃声, 按闹钟音量响; 勿扰模式下是否放行由用户在系统渠道设置里开
     private fun alarm(c: NotificationChannel) = c.apply {
         enableVibration(true)
         vibrationPattern = Constants.VIBRATE_PATTERN
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        setBypassDnd(true)
         setSound(
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
             AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build(),

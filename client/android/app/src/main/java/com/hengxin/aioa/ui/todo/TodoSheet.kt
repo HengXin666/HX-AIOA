@@ -82,7 +82,7 @@ fun TodoSheet(r: TodoRow, all: List<TodoRow>, close: () -> Unit, setState: (Stri
                 }
                 Field("issue", "${r.repo}#${r.issue} · $st", "external-link") { Browser.open(context, "$GITHUB${r.repo}/issues/${r.issue}") }
             } else r.repo?.let { Field("仓库", it) }
-            val parent = r.parent?.let { p -> all.find { it.id == p } } ?: r.ghParent?.let { n -> all.find { it.repo == r.repo && it.issue == n } }
+            val parent = r.parent?.let { p -> all.find { it.id == p && it.channel == r.channel } } ?: r.ghParent?.let { n -> all.find { it.repo == r.repo && it.issue == n } }
             parent?.let { Field("父任务", it.title) }
             r.note?.let { Text(it, color = c.textSecondary, fontSize = 13.sp, lineHeight = 19.sp) }
             if (r.issue != null) Text("issue 关闭后自动完成, 有评论自动变进行中; 这里手动改不会动 GitHub。", color = c.textSecondary, fontSize = 12.sp)
@@ -99,7 +99,6 @@ fun TodoSheet(r: TodoRow, all: List<TodoRow>, close: () -> Unit, setState: (Stri
     }
 }
 
-private const val DAY_MS = 86_400_000L
 
 /** 交给手机自带的时钟 App 定一个闹钟 (不弹它的界面); 没有时钟 App 时提示。 */
 private fun setSystemAlarm(context: Context, at: Long, title: String) {
@@ -197,7 +196,7 @@ private fun Label(text: String) = Text(text, Modifier.padding(top = 8.dp), color
 @Composable
 private fun SheetChip(label: String, on: Boolean, dot: Color, onClick: () -> Unit) {
     val c = Aioa.colors
-    Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) c.accent.copy(alpha = 0.12f) else c.surfaceAlt).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) c.accent.copy(alpha = CHIP_ALPHA) else c.surfaceAlt).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.foundation.layout.Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(2.dp)).background(dot).padding(4.dp))
         Text(label, color = if (on) c.accent else c.text, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
         if (on) Icon("check", c.accent, 14.dp, Modifier.padding(start = 4.dp))
