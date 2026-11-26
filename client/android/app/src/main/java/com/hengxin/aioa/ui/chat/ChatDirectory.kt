@@ -119,6 +119,13 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
 
     fun setDigest(channel: String, kind: String?) = patch(channel, JSONObject().put("digest", kind ?: JSONObject.NULL)) { it.copy(digest = kind) }
 
+    /** 头像传完后保存: 在应用级作用域里调, 页面或 ViewModel 已不在也能存上; 返回错误信息, 成功为 null。 */
+    suspend fun saveAvatar(channel: String, id: String): String? {
+        val r = withContext(Dispatchers.IO) { Api.call(context, PATCH, listOf(CHATS, channel), JSONObject().put("avatar", id)) }
+        if (r.error == null) metas[channel]?.let { applyMetas(metas + (channel to it.copy(avatar = id))) }
+        return r.error
+    }
+
     fun setAvatar(channel: String, id: String?) = patch(channel, JSONObject().put("avatar", id ?: JSONObject.NULL)) { it.copy(avatar = id) }
 
     /** 已读位置同步给其它设备; 只前进。 */

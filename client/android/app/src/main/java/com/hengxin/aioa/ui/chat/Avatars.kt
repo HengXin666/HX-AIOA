@@ -99,8 +99,9 @@ object Avatars {
         bytes
     }
 
-    suspend fun upload(context: Context, data: ByteArray): Result<String> = withContext(Dispatchers.IO) {
-        val r = ApiCache.upload(context, listOf(PATH), data, MIME)
+    /** 进度与后台续传见 [AvatarUploads], 页面不直接调这里。 */
+    suspend fun upload(context: Context, data: ByteArray, onProgress: ((Long, Long) -> Unit)? = null): Result<String> = withContext(Dispatchers.IO) {
+        val r = ApiCache.upload(context, listOf(PATH), data, MIME, onProgress)
         r.body?.optString("id")?.ifEmpty { null }?.let { Result.success(it) } ?: Result.failure(com.hengxin.aioa.net.ApiFailure(r.error ?: "上传失败", r.kind ?: com.hengxin.aioa.net.ErrKind.OTHER))
     }
 }

@@ -17,6 +17,7 @@
 | ACCESS_NETWORK_STATE | 普通 | 断网 / 切网时重连长连接 | 安装即有 | 保留 |
 | POST_NOTIFICATIONS | 运行时 (13+) | 新消息, Agent 确认, 告警 | **每次冷启动都在 onCreate 里申请** | 改: 登录成功后, 或第一次进群 / 打开通知设置时, 先说明再申请; 拒绝两次后只在系统权限页给入口 |
 | FOREGROUND_SERVICE + FOREGROUND_SERVICE_SPECIAL_USE | 普通 (14+ 要类型) | `:link` 进程长连接 (specialUse, 已写说明) | 安装即有 | 保留; 侧载不受商店审核影响, 上架需换方案 (FCM / 厂商推送) |
+| FOREGROUND_SERVICE_DATA_SYNC | 普通 (14+ 要类型) | 头像上传期间的 `TransferService` (界面进程, 传完即停, 通知显示进度, #125) | 安装即有; 只在用户点上传时起服务 | 保留; 头像最多 60KB, 不值得为 14+ 的 RUN_USER_INITIATED_JOBS 分版本, 大文件仍按第 2 节 |
 | RECEIVE_BOOT_COMPLETED | 普通 | 开机 / 更新后拉起长连接 | 安装即有 | 保留 |
 | WAKE_LOCK | 普通 | 收消息时短暂保持 CPU | 安装即有 | 保留, 确认都有超时 |
 | REQUEST_IGNORE_BATTERY_OPTIMIZATIONS | 特殊 | 加电池白名单, 后台不断线 | 系统权限页手动点; MIUI 跳省电策略页 | 保留 |

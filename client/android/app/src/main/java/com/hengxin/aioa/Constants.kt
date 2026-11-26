@@ -58,6 +58,7 @@ object Constants {
     const val NOTIFY_ID_ALERT = 4
     const val NOTIFY_ID_AGENT = 5
     const val NOTIFY_ID_EVENT = 6
+    const val NOTIFY_ID_TRANSFER = 7
     const val GROUP_MESSAGE = "com.hengxin.aioa.group.MESSAGE"
     const val GROUP_ALERT = "com.hengxin.aioa.group.ALERT"
     const val GROUP_AGENT = "com.hengxin.aioa.group.AGENT"
