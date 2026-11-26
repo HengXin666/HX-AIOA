@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.DropMenu
-import com.hengxin.aioa.kit.HomeComposer
 import com.hengxin.aioa.kit.HomeShell
 import com.hengxin.aioa.kit.HomeSidebar
 import com.hengxin.aioa.kit.HomeSpace
@@ -109,7 +108,6 @@ fun HomeDemo(start: String = "daily", drawer: Float = 0f, menu: Boolean = false,
                 }
                 Spacer(Modifier.height(16.dp))
             }
-            HomeComposer("记个点子, 或让 Agent 去做…")
         }
         DropMenu(menuOpen, DEMO_MENU, { menuOpen = false }, { menuOpen = false }, offset = IntOffset(0, barPx), header = { MenuHeader() })
         SpaceSwitcher(switchOpen, DEMO_SPACES, space, { space = it; switchOpen = false }, { switchOpen = false }, { switchOpen = false }, IntOffset(0, barPx))
