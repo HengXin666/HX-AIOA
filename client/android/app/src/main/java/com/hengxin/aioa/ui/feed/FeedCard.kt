@@ -83,7 +83,7 @@ fun FeedItemCard(it: FeedItem, marks: FeedMarks, modifier: Modifier = Modifier, 
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val site = it.site
-                if (site != null) MailAvatar(site, site, 18.dp)
+                if (site != null) MailAvatar(site, site, 22.dp, fill = true)
                 Text(site ?: it.source, Modifier.weight(1f, fill = false), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (it.kind != TAG_OTHER) SoftTag(LocalFeedTags.current.labelOf(it.kind), kindColor(it.kind))
                 st?.let { s -> SoftTag(STATUS_LABEL.getValue(s), statusColor(s)) }

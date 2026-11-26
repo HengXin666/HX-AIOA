@@ -113,11 +113,13 @@ private fun ThreadRow(t: MailThread, unread: Boolean, onClick: () -> Unit) {
         }
         MailAvatar(m.from, m.name ?: m.vendor, AVATAR.dp)
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(m.name ?: m.from, Modifier.weight(1f, fill = false), color = c.text, fontSize = 15.sp, fontWeight = bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (t.items.size > 1) CountBadge(t.items.size)
-                Spacer(Modifier.weight(1f))
-                Text(mailTime(context, m.ts), color = if (unread) c.accent else c.textSecondary, fontSize = 12.sp)
+            // 名字和计数占满左边, 时间固定在最右 (原来名字和 Spacer 两个 weight 平分剩余宽度, 名字长时时间不贴右)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(m.name ?: m.from, Modifier.weight(1f, fill = false), color = c.text, fontSize = 15.sp, fontWeight = bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (t.items.size > 1) CountBadge(t.items.size)
+                }
+                Text(mailTime(context, m.ts), Modifier.padding(start = 8.dp), color = if (unread) c.accent else c.textSecondary, fontSize = 12.sp, maxLines = 1)
             }
             Text(m.subject, color = c.text, fontSize = 14.sp, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             if (m.summary.isNotEmpty()) Text(m.summary, color = c.textSecondary, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
