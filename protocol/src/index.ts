@@ -25,6 +25,7 @@ export * from "./v1/plugin-api";
 export * from "./v1/plugin-todo";
 export * from "./v1/plugin-hxoa";
 export * from "./v1/plugin-l2a";
+export * from "./v1/plugin-market";
 export * from "./v1/semver";
 export * from "./v1/mail";
 export * from "./v1/mail-rules";

@@ -20,6 +20,7 @@ object LinkLog {
             runCatching {
                 val file = file(context)
                 file.appendText("${clock(System.currentTimeMillis())} $event\n")
+                DebugForward.onLinkEvent(context, event)
                 if (file.length() > TRIM_AT_BYTES) file.writeText(file.readLines().takeLast(KEEP_LINES).joinToString("\n", postfix = "\n"))
             }
         }

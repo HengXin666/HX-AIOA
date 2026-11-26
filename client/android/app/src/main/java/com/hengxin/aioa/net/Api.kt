@@ -10,7 +10,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /** 一次 REST 调用的结果: 成功时 body 非空, 失败时 error 是给人看的原因。 */
-class ApiReply(val body: JSONObject?, val error: String?)
+class ApiReply(val body: JSONObject?, val error: String?, val code: Int = 0) {
+    /** 失败的分类; 成功时为 null。 */
+    val kind: ErrKind? get() = if (error == null) null else if (code > 0) ErrKind.of(code) else ErrKind.guess(error)
+}
 
 /** 带 token 调服务端 REST 接口, 失败时带回服务端的中文报错。只能在后台线程调用。 */
 object Api {
@@ -40,8 +43,8 @@ object Api {
             Net.client(context).newCall(req).execute().use { res ->
                 val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()
                 if (res.isSuccessful) ApiReply(json ?: JSONObject(), null)
-                else ApiReply(null, json?.optString("error")?.ifEmpty { null } ?: "请求失败 (HTTP ${res.code})")
+                else ApiReply(null, json?.optString("error")?.ifEmpty { null } ?: "请求失败 (HTTP ${res.code})", res.code)
             }
-        }.getOrElse { ApiReply(null, "网络错误: ${it.message ?: it.javaClass.simpleName}") }
+        }.getOrElse { ApiReply(null, ErrKind.describe(it)) }
     }
 }

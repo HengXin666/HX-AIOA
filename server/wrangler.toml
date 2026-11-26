@@ -57,4 +57,4 @@ zone_name = "woa.qzz.io"
 # GITHUB_TOKEN          可选, GitHub 只读 fine-grained token, 用于 GitHub 页面回填
 # CFD_TOKEN             可选, HX-CF-Drive 受限令牌 (根目录 /aioa, read+write), 大文件走 TG 时需要
 # GH_CLIENT_ID          可选, GitHub 授权插件的设备码流程 (OAuth App 或开了 Device Flow 的 GitHub App)
-# GH_CLIENT_SECRET      可选, 只用于 GitHub App 过期令牌的自动续期
+# GH_CLIENT_SECRET      可选, 会过期的 GitHub 令牌自动续期要它 (没配就用到 GitHub 拒绝为止)

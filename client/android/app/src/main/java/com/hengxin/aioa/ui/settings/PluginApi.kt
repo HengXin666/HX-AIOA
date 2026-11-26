@@ -32,6 +32,8 @@ data class PluginEntry(
     val dev: Boolean = false,
     // 别人的开发插件: 只有主人看得到, 只能撤
     val foreign: Boolean = false,
+    // 第三方市场源的名字; 官方源为 null
+    val sourceName: String? = null,
 ) {
     val mine get() = installed != null || enabled
 
@@ -50,6 +52,8 @@ data class PluginDetail(
     val agentless: Boolean = false, val enabled: Boolean = false,
     val owner: Boolean = true, val deploy: Boolean = false, val risky: List<String> = emptyList(),
     val singles: List<String> = emptyList(), val choices: Map<String, String> = emptyMap(),
+    // 第三方插件的内容摘要; gone: 市场里已没有, 显示的是放行时的快照
+    val digest: String? = null, val gone: Boolean = false,
 )
 
 /** 市场列表页: 条目 + 我是不是管理员 / 主人 + 拉市场的报错。 */
@@ -76,6 +80,7 @@ class PluginApi(private val context: Context) {
         m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL).put(KEY_ALLOWED, b.optJSONObject(KEY_ALLOWED) ?: JSONObject.NULL)
         // 开发插件的标记在白名单项里, 清单本身没有
         m.put(KEY_DEV, b.optJSONObject(KEY_ALLOWED)?.optBoolean(KEY_DEV) == true).put(KEY_FOREIGN, b.optBoolean(KEY_FOREIGN))
+        b.optString("source").ifEmpty { null }?.let { m.put(KEY_SOURCE_NAME, it) }
         val agent = m.optJSONObject("agent")
         // 启用状态与单选改选在白名单视图里
         val view = Api.call(context, GET, listOf(PATH_ALLOW)).body
@@ -85,6 +90,7 @@ class PluginApi(private val context: Context) {
             entry(m), b.optString("readme"), b.optString("readmeType") == "html", agent?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, b.optBoolean(KEY_ADMIN), agent == null, on,
             owner = b.optBoolean(KEY_OWNER, true), deploy = b.optBoolean("deploy"), risky = strings(m.optJSONArray("permissions")).filter(::isRisky),
             singles = singles(m), choices = choices,
+            digest = b.optString("digest").ifEmpty { null }, gone = b.optBoolean("gone"),
         )
     }
 
@@ -119,8 +125,9 @@ class PluginApi(private val context: Context) {
     }
 
     /** 管理员放行市场当前版本 (已放行的就是换成新版); 有冲突时服务端返回原因。 */
-    suspend fun allow(id: String): Result<Unit> = io {
-        val r = Api.call(context, PUT, listOf(PATH_ALLOW, id), JSONObject())
+    suspend fun allow(id: String, digest: String? = null): Result<Unit> = io {
+        // 第三方插件带上详情给的摘要, 服务端核对放行的就是看过的那份
+        val r = Api.call(context, PUT, listOf(PATH_ALLOW, id), JSONObject().apply { digest?.let { put("digest", it) } })
         if (r.body == null) error(r.error ?: FAILED)
     }
 
@@ -166,6 +173,7 @@ class PluginApi(private val context: Context) {
             enabled = o.optBoolean(KEY_ENABLED),
             dev = o.optBoolean(KEY_DEV),
             foreign = o.optBoolean(KEY_FOREIGN),
+            sourceName = o.optString(KEY_SOURCE_NAME).ifEmpty { null },
             allowed = o.optJSONObject(KEY_ALLOWED)?.let { a ->
                 val risky = a.optJSONArray("risky")
                 PluginAllowed(a.optString("version"), (0 until (risky?.length() ?: 0)).mapNotNull { risky?.optString(it) })
@@ -202,6 +210,7 @@ class PluginApi(private val context: Context) {
         private const val KEY_OWNER = "owner"
         private const val KEY_DEV = "dev"
         private const val KEY_FOREIGN = "foreign"
+        private const val KEY_SOURCE_NAME = "sourceName"
         private const val SINGLE_PREFIX = "core."
         private const val PERM_DATA_OWN = "data:own"
         private const val PERM_PUSH = "push:send"

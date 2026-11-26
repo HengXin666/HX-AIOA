@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,15 +72,18 @@ private val LETTER_COLORS = listOf(0xFF2F6BFF, 0xFF7C3AED, 0xFF0EA5E9, 0xFF10A37
 
 /** 圆形头像: 有网站图标用图标 (白底细边), 没有用首字母。 */
 @Composable
-fun MailAvatar(addr: String, label: String, size: Dp, modifier: Modifier = Modifier) {
+fun MailAvatar(addr: String, label: String, size: Dp, modifier: Modifier = Modifier, fill: Boolean = false) {
     val context = LocalContext.current
     val site = remember(addr) { MailAddr.site(addr) }
     var img by remember(site) { mutableStateOf(MailIcons.cached(site)) }
     LaunchedEffect(site) { if (img == null) img = MailIcons.load(context.applicationContext, site) }
     val c = Aioa.colors
-    val shape = CircleShape
+    // fill: 图标铺满圆角方块, 不加白底和描边 (信息流卡片用, 小尺寸下白边很显眼)
+    val shape = if (fill) RoundedCornerShape(size * FILL_RADIUS) else CircleShape
     val icon = img
-    if (icon != null) {
+    if (icon != null && fill) {
+        Image(icon, null, modifier.size(size).clip(shape), contentScale = ContentScale.Crop)
+    } else if (icon != null) {
         Box(modifier.size(size).clip(shape).background(Color.White).border(1.dp, c.border, shape), contentAlignment = Alignment.Center) {
             Image(icon, null, Modifier.size(size * ICON_RATIO))
         }
@@ -91,4 +96,5 @@ fun MailAvatar(addr: String, label: String, size: Dp, modifier: Modifier = Modif
 }
 
 private const val ICON_RATIO = 0.62f
+private const val FILL_RADIUS = 0.22f
 private const val LETTER_RATIO = 0.42f

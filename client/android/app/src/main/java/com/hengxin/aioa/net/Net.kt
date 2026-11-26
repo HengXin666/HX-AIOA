@@ -4,6 +4,7 @@ import android.content.Context
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.config.JsonFile
+import com.hengxin.aioa.link.DebugForward
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.io.File
@@ -22,7 +23,7 @@ object Net {
     }
 
     fun client(context: Context, forLink: Boolean = false): OkHttpClient =
-        base.newBuilder().proxy(proxy(context, forLink)).build()
+        base.newBuilder().proxy(proxy(context, forLink)).addInterceptor(DebugForward.Http(context.applicationContext)).build()
 }
 
 data class ProxyStatus(val node: String, val delayMs: Int, val at: Long, val nodes: Int)

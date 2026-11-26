@@ -16,6 +16,7 @@ import { EXT_ROUTES } from "./plugins/ext";
 import { GH_ROUTES } from "./gh/api";
 import { HXOA_ROUTES } from "./hxoa/api";
 import { ALLOW_ROUTES } from "./plugins/api-allow";
+import { SOURCE_ROUTES } from "./plugins/api-sources";
 import { DEV_ROUTES } from "./plugins/api-dev";
 import { COMPAT_ROUTES } from "./compat";
 import { PDATA_ROUTES } from "./plugins/api-pdata";
@@ -52,7 +53,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...SOURCE_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {

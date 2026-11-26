@@ -95,6 +95,8 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             }
         }
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
+        e.sourceName?.let { SettingsGroup { NoteRow("来自第三方市场源 $it, 内容由源的作者维护, 放行前看清它要的权限。", c.textSecondary) } }
+        if (d.gone) SettingsGroup { NoteRow("市场里已经没有这个插件, 这里是放行时存下的版本, 可以撤销或卸载。", c.textSecondary) }
         val installed = e.installed
         val p = prompt
         if (p != null) Handoff(p)
@@ -110,7 +112,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                 }
             }
         } else AllowGroup(d, busy || limited) { act ->
-            if (act && d.risky.isNotEmpty()) { risky = ACT_ALLOW } else { perform { if (act) api.allow(id) else api.revoke(id) } }
+            if (act && d.risky.isNotEmpty()) { risky = ACT_ALLOW } else { perform { if (act) api.allow(id, d.digest) else api.revoke(id) } }
         }
         if (e.foreign) {
             Paragraph("这是别人的开发插件, 只能撤掉, 不能启用或安装。", c.textSecondary, BODY_SP)
@@ -168,7 +170,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
     }
     risky?.let { act ->
         RiskyDialog(d?.entry?.name.orEmpty(), if (act == ACT_ALLOW) "放行" else "启用", d?.risky.orEmpty(), { risky = null }) {
-            perform { if (act == ACT_ALLOW) api.allow(id) else api.setEnabled(id, true) }
+            perform { if (act == ACT_ALLOW) api.allow(id, d?.digest) else api.setEnabled(id, true) }
         }
     }
     if (confirm) {

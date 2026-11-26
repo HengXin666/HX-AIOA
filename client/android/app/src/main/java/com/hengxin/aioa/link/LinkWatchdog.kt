@@ -47,6 +47,8 @@ class LinkWatchdog(
             val tried = interval
             socket.check(tried - SKIP_SLACK_MS) { result -> onAlarmResult(result, tried, wake) }
             onWake()
+            // 搭这次唤醒把攒下的调试失败记录发出去, 不另外唤醒
+            if (DebugForward.forwardOn(context)) Thread { runCatching { DebugForward.flush(context) } }.start()
         }
     }
 

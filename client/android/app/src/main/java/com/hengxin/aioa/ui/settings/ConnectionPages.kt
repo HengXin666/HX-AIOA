@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.settings
 
+import com.hengxin.aioa.link.DebugForward
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -163,10 +164,23 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
     val view = model.proxy
     val log = view.linkLog
     SettingsPageFrame(SettingsPage.LINK_LOG.title, onBack) {
-        SettingsGroup(footer = "开启后后台连接每收到一帧都记一行 (类型, 后台是否用得到), 用来找是什么在频繁唤醒手机。统计与耗电采样不论开关都在记, 不额外唤醒。") {
-            SwitchRow("详细记录", model.debugOn, onChange = model::setDebug)
+        SettingsGroup(footer = "每项单独开关。收帧: 后台连接每收到一帧记一行, 找是什么在频繁唤醒手机。请求: 每个 HTTP 请求记方法, 路径, 状态, 耗时。失败转发: 失败的请求和长连接断线攒起来, 搭后台看门狗唤醒时发到下面的群; 外部地址只记主机名。统计与耗电采样不论开关都在记, 不额外唤醒。") {
+            SwitchRow("记录收帧", model.debugOn, onChange = model::setDebug)
+            RowDivider()
+            SwitchRow("记录请求", model.httpOn, onChange = model::setHttp)
+            RowDivider()
+            SwitchRow("失败转发到群", model.forwardOn, onChange = model::setForward)
+            RowDivider()
+            InputRow("转发到的群", model.forwardGroup, DebugForward.DEFAULT_GROUP, onChange = model::changeForwardGroup)
             RowDivider()
             ActionRow(TEXT_REFRESH, ICON_REFRESH, onClick = model::refreshProxy)
+        }
+        if (model.httpOn) SettingsGroup("最近的请求 (最新在前)", "长连接建连也是一次请求 (101)。经常 4xx / 5xx 或耗时很长的路径就是要查的。") {
+            if (model.httpLog.isEmpty()) NoteRow("暂无记录", c.textSecondary)
+            model.httpLog.forEachIndexed { i, line ->
+                if (i > 0) RowDivider(false)
+                NoteRow(line, mono = true)
+            }
         }
         SettingsGroup("今天的连接", "\"App 打开时\" 指当时界面在前台。界面连接只在打开 App 时存在, 切走后保留 90 秒。") {
             view.today.forEachIndexed { i, line ->

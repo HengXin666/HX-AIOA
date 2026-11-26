@@ -48,6 +48,12 @@ plugins/
 
 api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa watch`)。市场 CI (`npm run check:plugins`) 按 "全部放进白名单" 做冲突检测, 并估算每天请求, 合计超过 5 万不让合并。
 
+市场 CI 还检查 (`tools/plugin-index.ts`):
+
+- `index.json`: 不重复, 每条都有目录, `name` / `summary` / `icon` / `author` 齐全, 版本与清单一致。
+- 升版本: 插件目录有任何改动就必须升 `version` (与 `index.json` 一起改), 不能倒退; 否则已装的部署收不到更新。
+- 依赖: `requires` 不能成环; 每个插件只带上它依赖的提供者 (取满足范围的最高版本) 也要能单独装上, 不冲突; `optional` 的提供者版本不满足时提示。报告里列出依赖表。
+
 模板占位符: `{{channel}}` 群 channel, `{{title}}` 群标题, `{{base}}` 服务地址。`prompt.md` 与 `space` 里都能用。
 
 ## 安装后的专属指令
@@ -82,4 +88,8 @@ API 密钥: <密钥>
 
 1. 新建 `plugins/<id>/`, 写好上面三个文件。
 2. 在 `index.json` 里加一项。
-3. 推到 main 后, 市场最多 5 分钟内能看到 (服务端缓存); 管理员放行后各账号才能安装。
+3. 推到 main 后, 市场最多 30 分钟内能看到 (服务端缓存; 管理员打开详情或在市场源页刷新会立即重拉); 管理员放行后各账号才能安装。改了清单后跑 `npm run build:index` 同步内嵌清单。
+
+## 第三方市场与索引仓库
+
+部署的管理员可以在 App 里加别的 GitHub 仓库作市场源 (接口见 `docs/api/plugins.md` 的 "市场源")。想把多个市场的稳定版本收在一起, 用 `templates/plugin-index/` 新建一个索引仓库: 作者把插件目录 PR 进去, CI 用本仓库的检查脚本校验, 各部署只加这一个源。

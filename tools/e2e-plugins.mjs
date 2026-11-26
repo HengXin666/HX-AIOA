@@ -30,6 +30,7 @@ let failed = 0;
 // 模拟市场发新版: 设了就改写版本号, 并在提示词末尾加标记
 let bumped = null;
 const BUMP_MARK = "<!-- e2e 新版 -->";
+const BUMP_WAIT = 11_000;
 
 const market = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(req.url ?? "/")).replace(/^(\.\.[/\\])+/, "");
@@ -103,6 +104,8 @@ check("重复安装被拒", again.status === 409, again.data);
 // 更新: 市场出新版不会自己装, 管理员放行新版才换; 关了自动更新的要手动
 const guideOld = await call(key, "GET", `${V1}/chat-agent/guide`);
 bumped = "9.9.9";
+// 服务端 10 秒内拉过的索引算最新, 等过这个窗口再看
+await new Promise((r) => setTimeout(r, BUMP_WAIT));
 const pinned = await api("GET", `${V1}/plugins/${ID}`);
 check("市场出新版不自动装", pinned.data?.installed?.version === entry?.version && pinned.data.manifest.version === "9.9.9", pinned.data?.installed);
 const re = await api("PUT", ALLOW, {});
@@ -113,6 +116,8 @@ check("更新后密钥照用, 专属指令换了版本", guideNew.status === 200
 const autoOff = await api("PATCH", `${V1}/plugins/${ID}`, { auto: false });
 check("关闭自动更新", autoOff.status === 200 && autoOff.data.install.auto === false, autoOff.data);
 bumped = "9.9.10";
+// 服务端 10 秒内拉过的索引算最新, 等过这个窗口再看
+await new Promise((r) => setTimeout(r, BUMP_WAIT));
 await api("PUT", ALLOW, {});
 const held = await api("GET", `${V1}/plugins/${ID}`);
 check("关了自动更新就停在旧版", held.data?.installed?.version === "9.9.9" && held.data.allowed?.version === "9.9.10", held.data?.installed);

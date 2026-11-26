@@ -37,6 +37,12 @@ const market = createServer(async (req, res) => {
   try {
     let text = await readFile(join(ROOT, path), "utf8");
     if (bumped && path.startsWith(`/${NOTES}/`) && path.endsWith(".json")) text = text.replace(/"version": "[^"]+"/g, `"version": "${bumped}"`);
+    // 索引里的版本跟着改, 服务端要求索引与清单版本一致
+    if (bumped && path === "/index.json") {
+      const idx = JSON.parse(text);
+      for (const p of idx.plugins) if (p.id === NOTES) p.version = bumped;
+      text = JSON.stringify(idx);
+    }
     res.end(text);
   } catch {
     res.statusCode = 404;

@@ -21,7 +21,6 @@ import { type Core, OWNER, type ReqCtx, ROOM, type Route, route } from "../core"
 import { ApiFail, fail, json, readJson } from "../http";
 import { canWriteTodos, syncTodos } from "../plugins/api-todos";
 import { ghGated } from "./gate";
-import { gh } from "./client";
 import { syncTodoIssues } from "./todo-sync";
 
 const p = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
@@ -89,11 +88,11 @@ async function grant(c: ReqCtx): Promise<Response> {
 }
 
 // Agent 和主人共用的 issue 代理: 先查权限和仓库范围, 再用服务端令牌调 GitHub, 每次都记一笔
-async function guard(c: ReqCtx): Promise<{ token: string; repo: string }> {
+async function guard(c: ReqCtx): Promise<{ repo: string }> {
   if (!c.core.gh.canUse(c.core, c.who)) throw new ApiFail(403, CODE_FORBIDDEN, "这个 Agent 没有 GitHub 权限, 请主人在 GitHub 授权插件里打开");
   const repo = repoOf(c);
   await c.core.gh.ensureRepo(repo);
-  return { token: await c.core.gh.token(), repo };
+  return { repo };
 }
 
 async function run<T>(c: ReqCtx, repo: string, op: string, issue: number | undefined, fn: () => Promise<T>): Promise<T> {
@@ -108,15 +107,15 @@ async function run<T>(c: ReqCtx, repo: string, op: string, issue: number | undef
 }
 
 async function listIssues(c: ReqCtx): Promise<Response> {
-  const { token, repo } = await guard(c);
+  const { repo } = await guard(c);
   const state = c.url.searchParams.get("state") === "closed" ? "closed" : c.url.searchParams.get("state") === "all" ? "all" : "open";
-  const body = (await gh(token, `/repos/${repo}/issues?state=${state}&per_page=${ISSUE_LIMIT}`)).body as RawIssue[];
+  const body = (await c.core.gh.call(`/repos/${repo}/issues?state=${state}&per_page=${ISSUE_LIMIT}`)).body as RawIssue[];
   return json({ issues: body.filter((r) => !r.pull_request).map((r) => issueOf(repo, r)) });
 }
 
 async function getIssue(c: ReqCtx): Promise<Response> {
-  const { token, repo } = await guard(c);
-  const r = (await gh(token, `/repos/${repo}/issues/${numOf(c)}`)).body as RawIssue & { body?: string };
+  const { repo } = await guard(c);
+  const r = (await c.core.gh.call(`/repos/${repo}/issues/${numOf(c)}`)).body as RawIssue & { body?: string };
   return json({ issue: issueOf(repo, r), body: r.body ?? "" });
 }
 
@@ -129,10 +128,10 @@ async function linkTodo(core: Core, c: ReqCtx, todo: { channel: string; id: stri
 async function createIssue(c: ReqCtx): Promise<Response> {
   const input = parseGhIssueInput(await readJson(c.req));
   if (typeof input === "string") return fail(400, input);
-  const { token, repo } = await guard(c);
+  const { repo } = await guard(c);
   const r = await run(c, repo, "建 issue", undefined, async () => {
-    const created = (await gh(token, `/repos/${repo}/issues`, { method: POST, body: { title: input.title, body: input.body ?? "", ...(input.labels ? { labels: input.labels } : {}) } })).body as RawIssue;
-    if (input.parent) await gh(token, `/repos/${repo}/issues/${input.parent}/sub_issues`, { method: POST, body: { sub_issue_id: created.id } });
+    const created = (await c.core.gh.call(`/repos/${repo}/issues`, { method: POST, body: { title: input.title, body: input.body ?? "", ...(input.labels ? { labels: input.labels } : {}) } })).body as RawIssue;
+    if (input.parent) await c.core.gh.call(`/repos/${repo}/issues/${input.parent}/sub_issues`, { method: POST, body: { sub_issue_id: created.id } });
     return created;
   });
   if (input.todo) await linkTodo(c.core, c, input.todo, repo, r.number);
@@ -142,10 +141,10 @@ async function createIssue(c: ReqCtx): Promise<Response> {
 async function patchIssue(c: ReqCtx): Promise<Response> {
   const patch = parseGhIssuePatch(await readJson(c.req));
   if (typeof patch === "string") return fail(400, patch);
-  const { token, repo } = await guard(c);
+  const { repo } = await guard(c);
   const n = numOf(c);
   const op = patch.state === "closed" ? "关 issue" : patch.state === "open" ? "重开 issue" : "改 issue";
-  const r = await run(c, repo, op, n, async () => (await gh(token, `/repos/${repo}/issues/${n}`, { method: PATCH, body: patch })).body as RawIssue);
+  const r = await run(c, repo, op, n, async () => (await c.core.gh.call(`/repos/${repo}/issues/${n}`, { method: PATCH, body: patch })).body as RawIssue);
   if (patch.state) await syncTodoIssues(c.core, new Set([`${repo.toLowerCase()}#${n}`])).catch(() => 0);
   return json({ issue: issueOf(repo, r) });
 }
@@ -153,9 +152,9 @@ async function patchIssue(c: ReqCtx): Promise<Response> {
 async function comment(c: ReqCtx): Promise<Response> {
   const b = (await readJson(c.req)) as { body?: unknown } | undefined;
   if (typeof b?.body !== "string" || !b.body.trim()) return fail(400, "需要 { \"body\": \"评论\" }");
-  const { token, repo } = await guard(c);
+  const { repo } = await guard(c);
   const n = numOf(c);
-  await run(c, repo, "评论 issue", n, () => gh(token, `/repos/${repo}/issues/${n}/comments`, { method: POST, body: { body: b.body } }));
+  await run(c, repo, "评论 issue", n, () => c.core.gh.call(`/repos/${repo}/issues/${n}/comments`, { method: POST, body: { body: b.body } }));
   await syncTodoIssues(c.core, new Set([`${repo.toLowerCase()}#${n}`])).catch(() => 0);
   return json({ ok: true });
 }
@@ -163,11 +162,11 @@ async function comment(c: ReqCtx): Promise<Response> {
 async function addSub(c: ReqCtx): Promise<Response> {
   const b = (await readJson(c.req)) as { issue?: unknown } | undefined;
   if (!(typeof b?.issue === "number" && Number.isInteger(b.issue) && b.issue > 0)) return fail(400, "需要 { \"issue\": 子 issue 号 }");
-  const { token, repo } = await guard(c);
+  const { repo } = await guard(c);
   const n = numOf(c);
   await run(c, repo, `挂子 issue #${b.issue}`, n, async () => {
-    const child = (await gh(token, `/repos/${repo}/issues/${b.issue}`)).body as RawIssue;
-    return gh(token, `/repos/${repo}/issues/${n}/sub_issues`, { method: POST, body: { sub_issue_id: child.id } });
+    const child = (await c.core.gh.call(`/repos/${repo}/issues/${b.issue}`)).body as RawIssue;
+    return c.core.gh.call(`/repos/${repo}/issues/${n}/sub_issues`, { method: POST, body: { sub_issue_id: child.id } });
   });
   return json({ ok: true });
 }

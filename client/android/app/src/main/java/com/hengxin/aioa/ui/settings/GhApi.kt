@@ -8,7 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 对应协议 GhStatus 等: 授权情况, 仓库规则, Agent 开关, 操作记录。 */
-data class GhAuth(val login: String, val kind: String, val since: Long, val expires: Long?)
+data class GhAuth(val login: String, val kind: String, val since: Long, val expires: Long?, val renewable: Boolean = false)
 data class GhRules(val pushedDays: Int? = null, val public: Boolean = false, val private: Boolean = false, val repos: List<String> = emptyList(), val deny: List<String> = emptyList())
 data class GhRepo(val repo: String, val private: Boolean, val pushed: Long, val allowed: Boolean)
 data class GhAgent(val keyId: String, val name: String, val channel: String, val allowed: Boolean, val dep: Boolean)
@@ -63,7 +63,7 @@ class GhApi(private val context: Context) {
         val a = b.optJSONObject("auth")
         val r = b.optJSONObject("rules") ?: JSONObject()
         return GhStatus(
-            auth = a?.let { GhAuth(it.optString("login"), it.optString("kind"), it.optLong("since"), it.optLong("expires").takeIf { e -> e > 0 }) },
+            auth = a?.let { GhAuth(it.optString("login"), it.optString("kind"), it.optLong("since"), it.optLong("expires").takeIf { e -> e > 0 }, it.optBoolean("renewable")) },
             rules = GhRules(r.optInt("pushedDays").takeIf { it > 0 }, r.optBoolean("public"), r.optBoolean("private"), strs(r.optJSONArray("repos")), strs(r.optJSONArray("deny"))),
             device = b.optBoolean("device"),
             agents = objs(b.optJSONArray("agents")).map { GhAgent(it.optString("keyId"), it.optString("name"), it.optString("channel"), it.optBoolean("allowed"), it.optBoolean("dep")) },
