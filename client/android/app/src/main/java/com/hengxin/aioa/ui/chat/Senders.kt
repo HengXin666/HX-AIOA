@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,14 +31,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
  * 发送者头像 (#123): 主人给来源 (sid) 设的图片头像, 服务端存, chat_sync senders 时重拉;
  * 没设的系统来源 (system:*) 画内置图标, 其余字母头像。
  */
+/** 一个登记过的系统发送者 (#128)。 */
+data class SenderInfo(val sid: String, val name: String, val alias: String?, val avatar: String?, val icon: String?, val last: Long) {
+    val display: String get() = alias ?: name
+}
+
 object Senders {
-    private val avatars = mutableStateMapOf<String, String>()
+    private val metas = mutableStateMapOf<String, SenderInfo>()
     const val PATH = "api/v1/senders"
     const val CACHE = "senders"
     const val TOPIC = "senders"
@@ -51,69 +58,100 @@ object Senders {
         "system:cf" to "gauge",
     )
     private const val SYSTEM_ICON = "bell"
+    private const val TERMINAL = "终端"
 
-    fun avatarOf(sid: String?): String? = sid?.let { avatars[it] }
+    /** 最近出现的在前。 */
+    fun list(): List<SenderInfo> = metas.values.sortedByDescending { it.last }
 
-    fun all(): Set<String> = avatars.values.toSet()
+    fun avatarOf(sid: String?): String? = sid?.let { metas[it]?.avatar }
 
-    fun iconOf(sid: String?): String? = sid?.takeIf { it.startsWith(SYSTEM_PREFIX) }?.let { s -> ICONS.firstOrNull { s.startsWith(it.first) }?.second ?: SYSTEM_ICON }
+    fun aliasOf(sid: String?): String? = sid?.let { metas[it]?.alias }
+
+    fun all(): Set<String> = metas.values.mapNotNull { it.avatar }.toSet()
+
+    fun iconOf(sid: String?): String? = when {
+        sid == null -> null
+        sid == TERMINAL -> "terminal"
+        sid == "system" -> "layers"
+        sid.startsWith(SYSTEM_PREFIX) -> ICONS.firstOrNull { sid.startsWith(it.first) }?.second ?: SYSTEM_ICON
+        else -> null
+    }
 
     fun apply(body: JSONObject?) {
         val arr = body?.optJSONArray("senders") ?: return
-        val next = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.associate { it.optString("sid") to it.optString("avatar") }.filter { it.key.isNotEmpty() && it.value.isNotEmpty() }
-        avatars.keys.filter { it !in next }.forEach { avatars.remove(it) }
-        next.forEach { (k, v) -> if (avatars[k] != v) avatars[k] = v }
+        val next = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { o ->
+            SenderInfo(
+                o.optString("sid"), o.optString("name").ifEmpty { o.optString("sid") },
+                o.optString("alias").ifEmpty { null }, o.optString("avatar").ifEmpty { null },
+                o.optString("icon").ifEmpty { null }, o.optLong("last"),
+            )
+        }.filter { it.sid.isNotEmpty() }.associateBy { it.sid }
+        metas.keys.filter { it !in next }.forEach { metas.remove(it) }
+        next.forEach { (k, v) -> if (metas[k] != v) metas[k] = v }
     }
 
-    fun setLocal(sid: String, avatar: String?) {
-        if (avatar == null) avatars.remove(sid) else avatars[sid] = avatar
+    fun setLocal(sid: String, change: (SenderInfo) -> SenderInfo) {
+        metas[sid]?.let { metas[sid] = change(it) }
     }
 }
 
 /** 消息里的发送者头像: 主人设的图片 > 系统来源图标 > 字母头像。 */
 @Composable
-fun SenderAvatar(msg: ServerFrame.Msg, size: Dp, modifier: Modifier = Modifier) {
-    val sid = msg.sid
+fun SenderAvatar(msg: ServerFrame.Msg, size: Dp, modifier: Modifier = Modifier) = SenderFace(msg.sid, Names.of(msg), size, modifier)
+
+@Composable
+fun SenderFace(sid: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
     val avatar = Senders.avatarOf(sid)
     val icon = Senders.iconOf(sid)
     when {
-        avatar != null -> ChatAvatar(Names.of(msg), avatar, size, modifier)
-        icon != null -> Box(modifier.size(size).background(colorOf(sid ?: msg.src), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, Color.White, size * ICON_RATIO) }
-        else -> LetterAvatar(Names.of(msg), size, modifier)
+        avatar != null -> ChatAvatar(name, avatar, size, modifier)
+        icon != null -> Box(modifier.size(size).background(colorOf(sid ?: name), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, Color.White, size * ICON_RATIO) }
+        else -> LetterAvatar(name, size, modifier)
     }
 }
 
 private const val ICON_RATIO = 0.55f
 
-/** 点发送者头像: 主人可以换成图片或恢复默认; 上传与保存交给 ChatDirectory。 */
+/** 改系统发送者的名字和头像 (消息里点头像, 或系统发送者页点一行)。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SenderAvatarSheet(msg: ServerFrame.Msg, dir: ChatDirectory, close: () -> Unit) {
-    val sid = msg.sid ?: return close()
+fun SenderEditSheet(sid: String, fallbackName: String, dir: ChatDirectory, close: () -> Unit) {
+    val info = Senders.list().find { it.sid == sid }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(info?.alias ?: "") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pick = rememberAvatarPicker({ error = it }) { bytes ->
         busy = true
         error = dir.setSenderAvatar(sid, bytes)
         busy = false
-        if (error == null) close()
     }
     ModalBottomSheet(close) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SenderAvatar(msg, 44.dp)
+                SenderFace(sid, info?.display ?: fallbackName, 48.dp, Modifier.clickable { if (!busy) pick() })
                 Column(Modifier.padding(start = 12.dp)) {
-                    Text(Names.of(msg), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text(sid, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    Text(info?.display ?: fallbackName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (info?.alias != null) "$sid · 默认名 ${info.name}" else sid, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 }
             }
-            Text("这个发送者在所有群里的头像都会换掉, 其它设备同步。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-            SheetRow(if (busy) "正在上传..." else "从相册选图片") { if (!busy) pick() }
-            if (Senders.avatarOf(sid) != null) SheetRow("恢复默认") { dir.clearSenderAvatar(sid); close() }
+            if (info == null) {
+                Text("这个发送者还没登记 (不是系统发送者), 只能看。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+            } else {
+                OutlinedTextField(name, { name = it.take(NAME_MAX) }, Modifier.fillMaxWidth(), label = { Text("名字 (留空用默认名 ${info.name})") }, singleLine = true)
+                SheetRow("保存名字") {
+                    scope.launch { error = dir.renameSender(sid, name.trim().ifEmpty { null }); if (error == null) close() }
+                }
+                SheetRow(if (busy) "正在上传..." else "换头像") { if (!busy) pick() }
+                if (info.avatar != null) SheetRow("头像恢复默认") { dir.clearSenderAvatar(sid) }
+                Text("所有群里这个发送者都会换掉, 其它设备同步; 改名后新消息按新名字发。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            }
             error?.let { Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
+
+private const val NAME_MAX = 32
 
 @Composable
 private fun SheetRow(label: String, onClick: () -> Unit) {

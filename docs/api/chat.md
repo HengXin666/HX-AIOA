@@ -56,7 +56,7 @@
 
 - `PUT /api/v1/avatars` (母号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。
 - `GET /api/v1/avatars/{id}` → 图片, `Cache-Control: immutable`, 客户端按 id 永久缓存。
-- 发送者头像 (#123): `GET /api/v1/senders` → `{ senders: [{ sid, avatar, updated }] }` (设过头像的来源); `PUT /api/v1/senders/{sid}` (母号) `{ "avatar": "<头像 id>" | null }`, 变了推 `chat_sync` topic `senders`。没设头像的 `system:*` 来源客户端用内置图标。
+- 系统发送者 (#123 #128): 服务端自己发言用的来源 (`system`, `system:*`, `终端`) 第一次发言时自动登记。`GET /api/v1/senders` → `{ senders: [{ sid, name, icon, alias, avatar, first, last, updated }] }` (第一次请求时补登历史消息里的); `PATCH` (或 `PUT`) `/api/v1/senders/{sid}` (母号) `{ "alias": "名字" | null, "avatar": "<头像 id>" | null }`, 没登记的 404, 改了推 `chat_sync` topic `senders`。改了名的新消息 `source.name` 直接是别名; 客户端旧消息也按别名显示, 没设头像的用内置图标。安卓入口: 我的 → 管理 → 系统发送者。
 - 没有所属群的系统通知 (CF 额度, GitHub 授权到期) 发进 `system` 群 ("系统通知"), 发送者按用途命名 (指令更新, GitHub 同步, GitHub 授权, 待办提醒, CF 额度)。
 - 群头像写进群资料 `avatar`; 本人头像写进设置 `avatar`。
 

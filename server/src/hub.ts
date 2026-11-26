@@ -82,6 +82,7 @@ import { toMsgFrame } from "./legacy";
 import { MetricRouter, isProbe } from "./metrics";
 import { Pipeline } from "./pipeline";
 import { Registry } from "./registry";
+import { SenderStore } from "./senders";
 import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
 import { EventStore, groupOf } from "./store";
 import { RoomStore } from "./rooms";
@@ -119,7 +120,7 @@ export class Hub extends DurableObject<Env> {
     });
     this.timers = new Timers(ctx.storage);
     const files = new FileStore(sql, env.FILES, Drive.from(env));
-    const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers, files);
+    const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers, files, new SenderStore(sql));
     const spaces = new Spaces(ctx.storage);
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
     const registry = new Registry(sql);

@@ -15,5 +15,5 @@ object Names {
         next.forEach { (id, name) -> if (name.isNotEmpty() && names[id] != name) names[id] = name }
     }
 
-    fun of(msg: ServerFrame.Msg): String = if (msg.mine) Me.label else msg.sid?.let { names[it] } ?: msg.src
+    fun of(msg: ServerFrame.Msg): String = if (msg.mine) Me.label else Senders.aliasOf(msg.sid) ?: msg.sid?.let { names[it] } ?: msg.src
 }
