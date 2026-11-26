@@ -38,6 +38,7 @@ private const val TICK_SECONDS = (TICK_MS / 1000).toInt()
 
 /** 画廊里的页面, 每个页面是一组用 mock 数据驱动的组件。 */
 enum class Page(val title: String, val content: @Composable () -> Unit) {
+    HOME("新总览", { HomeDemo() }),
     OVERVIEW("总览", { Overview() }),
     FEED("三层总览", { FeedOverview() }),
     AGENT("Agent", { AgentStates() }),

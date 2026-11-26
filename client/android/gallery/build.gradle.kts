@@ -30,3 +30,13 @@ tasks.register<JavaExec>("screenshots") {
     systemProperty("java.awt.headless", "true")
     maxHeapSize = "768m"
 }
+
+// 新总览各状态截图: ./gradlew :gallery:homeShots -PdesktopOnly=true, 输出在 gallery/build/home-shots
+tasks.register<JavaExec>("homeShots") {
+    group = "verification"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.hengxin.aioa.gallery.HomeShotKt")
+    args(layout.buildDirectory.dir("home-shots").get().asFile.path)
+    systemProperty("java.awt.headless", "true")
+    maxHeapSize = "1g"
+}
