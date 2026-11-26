@@ -177,7 +177,9 @@ export class Market {
         } else if (!(e instanceof ApiFail && e.status === 404)) last = `${last}; 用 GitHub 授权读也失败: ${e instanceof Error ? e.message : String(e)}`;
       }
     }
-    throw new ApiFail(400, CODE_BAD_REQUEST, `没找到能用的 index.json: ${last}`);
+    // GitHub 对无效令牌读私有仓库也回 404, 分不出 "没有" 和 "没权限"
+    const hint = owner && p.github && missing ? "; 如果是私有仓库, 先确认 GitHub 授权有效 (插件市场里的 GitHub 授权)" : "";
+    throw new ApiFail(400, CODE_BAD_REQUEST, `没找到能用的 index.json: ${last}${hint}`);
   }
 
   removeSource(id: string): boolean {
