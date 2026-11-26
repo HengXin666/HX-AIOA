@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HX-AIOA 安卓 · 交互原型与 UI 规范</title>
+<!-- 由 gen.py 从 prototype.src.html + pages.json 生成, 不要直接改 prototype.html -->
+<style>
+:root{
+  --bg:#FDFDFD;--fg:#0E0F12;--card:#FFFFFF;--muted:#F3F4F5;--muted-fg:#666970;--accent:#EFF0F3;--border:#E3E4E7;
+  --primary:#17181B;--on-primary:#FFFFFF;--brand:#5D67EE;--brand-soft:rgba(93,103,238,.12);--danger:#DF2225;--success:#16A356;--warning:#F09C17;--info:#1289E7;
+  --scrim:rgba(14,15,18,.38);--shadow-soft:0 1px 2px rgba(0,0,0,.04),0 4px 16px -4px rgba(0,0,0,.08);--shadow-float:0 2px 6px rgba(0,0,0,.05),0 24px 48px -12px rgba(0,0,0,.18);
+  --r-sm:8px;--r-md:10px;--r-lg:12px;--r-xl:16px;--r-2xl:22px;
+  --ease-out:cubic-bezier(.22,1,.36,1);--dur-fast:150ms;--dur-base:250ms;--dur-slow:500ms;
+  --font:"Geist",-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+}
+.dark{
+  --bg:#090A0C;--fg:#F4F5F6;--card:#111114;--muted:#1C1D20;--muted-fg:#9B9EA6;--accent:#222428;--border:rgba(255,255,255,.09);
+  --primary:#F1F2F3;--on-primary:#111114;--brand:#7989FF;--brand-soft:rgba(121,137,255,.16);--danger:#FC5855;--success:#42C070;--warning:#F5AE39;--info:#4BA3F7;
+  --scrim:rgba(0,0,0,.55);--shadow-soft:0 1px 2px rgba(0,0,0,.3),0 4px 16px -4px rgba(0,0,0,.4);--shadow-float:0 2px 6px rgba(0,0,0,.3),0 24px 48px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--fg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.wrap{display:grid;grid-template-columns:430px 1fr;gap:32px;max-width:1500px;margin:0 auto;padding:28px 28px 60px}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}}
+h1{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.lead{color:var(--muted-fg);font-size:13px;margin:4px 0 18px}
+.lead b{color:var(--fg);font-weight:560}
+/* ---------- 手机 ---------- */
+.phone-col{position:sticky;top:20px;align-self:start}
+.phone{width:390px;height:800px;border-radius:44px;border:10px solid #0E0F12;background:var(--bg);position:relative;overflow:hidden;box-shadow:var(--shadow-float)}
+.status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.screen-host{position:absolute;inset:30px 0 0 0;overflow:hidden}
+.screen{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;transition:transform var(--dur-base) var(--ease-out),opacity var(--dur-base) var(--ease-out)}
+.screen.enter{transform:translateX(100%)}
+.screen.under{transform:translateX(-22%);opacity:.6}
+.screen.leave{transform:translateX(100%)}
+.screen.fade{opacity:0}
+.appbar{height:52px;display:flex;align-items:center;gap:4px;padding:0 8px;flex:none}
+.appbar .t{font-size:17px;font-weight:600;letter-spacing:-.01em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar.root{padding:0 16px}.appbar.root .t{font-size:22px}
+.icon-btn{width:40px;height:40px;border-radius:999px;display:grid;place-items:center}
+.icon-btn:active{background:var(--accent)}
+.body{flex:1;overflow:auto;padding:4px 16px 24px}
+.body::-webkit-scrollbar{width:0}
+.nav{height:64px;flex:none;display:flex;border-top:1px solid var(--border);background:var(--card)}
+.nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--muted-fg);position:relative}
+.nav button.on{color:var(--fg);font-weight:560}
+.nav button.on .pill{background:var(--brand-soft)}
+.nav .pill{width:52px;height:28px;border-radius:999px;display:grid;place-items:center;transition:background var(--dur-fast)}
+.nav .badge{position:absolute;top:7px;left:calc(50% + 8px);min-width:16px;height:16px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;line-height:16px;padding:0 4px}
+/* 卡片 / 行 */
+.sec{margin-top:16px}
+.sec-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted-fg);margin:0 4px 8px}
+.sec-h .more{margin-left:auto;font-weight:500;font-size:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:52px;padding:10px 14px;width:100%;text-align:left}
+.row+.row{border-top:1px solid var(--border)}
+.row:active{background:var(--accent)}
+.row .ic{width:32px;height:32px;border-radius:var(--r-md);background:var(--muted);display:grid;place-items:center;flex:none}
+.row .tx{flex:1;min-width:0}
+.row .l{font-size:15px;font-weight:500;line-height:1.3}
+.row .s{font-size:12px;color:var(--muted-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .v{font-size:13px;color:var(--muted-fg)}
+.row .chev{color:var(--muted-fg)}
+.kind{font-size:10px;padding:1px 6px;border-radius:999px;background:var(--muted);color:var(--muted-fg);white-space:nowrap}
+.kind.sheet{background:var(--brand-soft);color:var(--brand)}.kind.dialog{border:1px dashed var(--muted-fg);background:none}
+.kind.full{border:1px dashed var(--danger);color:var(--danger);background:none}.kind.go{background:#FEF6E8;color:#B86E00}
+.live{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted-fg)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);position:relative}
+.dot.live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--success);opacity:.5;animation:ping 1.6s var(--ease-out) infinite}
+.dot.near{background:var(--warning)}
+@keyframes ping{from{transform:scale(.6);opacity:.7}to{transform:scale(1.5);opacity:0}}
+.hero{border-radius:var(--r-xl);background:var(--card);border:1px solid var(--border);padding:14px}
+.hero .big{font-size:28px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sk{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--muted),var(--accent),var(--muted));background-size:200% 100%;animation:sh 1.4s linear infinite;margin:8px 0}
+@keyframes sh{to{background-position:-200% 0}}
+.note{font-size:12px;color:var(--muted-fg);padding:10px 4px}
+.warnbar{margin:8px 0;padding:10px 12px;border-radius:var(--r-lg);background:rgba(223,34,37,.08);color:var(--danger);font-size:12px}
+/* 叠层 */
+.scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity var(--dur-base) var(--ease-out)}
+.scrim.on{opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:78%;background:var(--card);border-radius:var(--r-2xl) var(--r-2xl) 0 0;box-shadow:var(--shadow-float);transform:translateY(100%);transition:transform var(--dur-base) var(--ease-out);display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:8px auto 4px;flex:none}
+.sheet .st{font-size:17px;font-weight:600;padding:6px 20px 2px}
+.sheet .ss{font-size:12px;color:var(--muted-fg);padding:0 20px 8px}
+.sheet .sb{overflow:auto;padding:4px 12px 20px}
+.dialog{position:absolute;left:28px;right:28px;top:50%;background:var(--card);border-radius:var(--r-2xl);padding:20px;box-shadow:var(--shadow-float);transform:translateY(-50%) scale(.96);opacity:0;transition:all var(--dur-fast) var(--ease-out)}
+.dialog.on{transform:translateY(-50%);opacity:1}
+.dialog h3{font-size:17px;font-weight:600}
+.dialog p{font-size:14px;color:var(--muted-fg);margin:6px 0 16px}
+.actions{display:flex;justify-content:flex-end;gap:8px}
+.btn{height:36px;padding:0 16px;border-radius:var(--r-md);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--primary);color:var(--on-primary)}
+.btn.brand{background:var(--brand);color:#fff}
+.btn.secondary{background:var(--muted)}
+.btn.ghost:hover{background:var(--accent)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.outline{border:1px solid var(--border);background:var(--card)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn:active{transform:scale(.97)}
+.toast{position:absolute;left:16px;right:16px;bottom:80px;background:var(--primary);color:var(--on-primary);border-radius:var(--r-lg);padding:12px 14px;font-size:13px;display:flex;align-items:center;gap:12px;transform:translateY(20px);opacity:0;transition:all var(--dur-base) var(--ease-out);pointer-events:none}
+.toast.on{transform:none;opacity:1;pointer-events:auto}
+.toast b{margin-left:auto;color:var(--brand);font-weight:600}
+.banner{position:absolute;left:10px;right:10px;top:6px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-float);padding:10px 12px;display:flex;gap:10px;align-items:center;transform:translateY(-130%);transition:transform var(--dur-base) var(--ease-out);z-index:30}
+.banner.on{transform:none}
+.reconnect{background:rgba(240,156,23,.14);color:#9A5B00;font-size:12px;padding:6px 16px;display:none}
+.dark .reconnect{color:var(--warning)}
+.reconnect.on{display:block}
+/* 控制条 */
+.ctl{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;width:390px}
+.seg{display:inline-flex;background:var(--muted);border-radius:var(--r-md);padding:3px;gap:2px}
+.seg button{height:28px;padding:0 10px;border-radius:7px;font-size:12px;color:var(--muted-fg)}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:var(--shadow-soft);font-weight:560}
+.stack{margin-top:14px;width:390px;font-size:12px;border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 12px;background:var(--card)}
+.stack code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);padding:1px 5px;border-radius:5px}
+/* 右侧 */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tabs button{padding:10px 12px;font-size:14px;color:var(--muted-fg);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--fg);border-color:var(--fg);font-weight:560}
+.pane{display:none}.pane.on{display:block}
+.pane h2{font-size:17px;font-weight:600;margin:26px 0 10px;letter-spacing:-.01em}
+.pane h2:first-child{margin-top:0}
+.pane p,.pane li{font-size:13.5px;color:var(--muted-fg)}
+.pane li{margin:4px 0 4px 18px}
+.pane li b,.pane p b{color:var(--fg);font-weight:560}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;color:var(--muted-fg);font-weight:600}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--border);vertical-align:-2px;margin-right:6px}
+.svgbox{overflow:auto;border:1px solid var(--border);border-radius:var(--r-xl);background:#FDFDFD;max-height:80vh}
+.svgbox svg{display:block}
+.svgbox .n{cursor:pointer}.svgbox .n:hover rect{filter:brightness(.97)}
+.demo{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:var(--r-xl);margin:8px 0}
+.chip{height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.switch{width:40px;height:24px;border-radius:12px;background:var(--brand);position:relative}
+.switch::after{content:"";position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+.switch.off{background:var(--border)}.switch.off::after{left:3px;right:auto}
+.empty{text-align:center;padding:26px 10px;color:var(--muted-fg);font-size:13px}
+.empty .ei{width:44px;height:44px;border-radius:14px;background:var(--muted);display:grid;place-items:center;margin:0 auto 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone-col">
+    <h1>安卓交互原型</h1>
+    <p class="lead">全部页面都能点: <b>子页</b>右侧推入, <b>抽屉</b>底部升起, <b>对话框</b>居中。用下方 <b>返回键</b> 或 Esc 体验统一返回规则。</p>
+    <div class="phone" id="phone">
+      <div class="status"><span id="clock">9:41</span><span class="live"><span class="dot live" id="linkdot"></span><span id="linktext">已连接</span></span></div>
+      <div class="screen-host" id="host"></div>
+    </div>
+    <div class="ctl">
+      <button class="btn primary sm" id="back">◁ 返回键</button>
+      <div class="seg" id="mode"><button data-v="light" class="on">浅色</button><button data-v="dark">深色</button></div>
+      <button class="btn outline sm" id="msg">模拟新消息</button>
+      <button class="btn outline sm" id="drop">模拟断线</button>
+    </div>
+    <div class="stack" id="stack"></div>
+  </div>
+
+  <div>
+    <div class="tabs" id="rtabs">
+      <button data-p="map" class="on">页面关系</button><button data-p="rules">交互规范</button><button data-p="tokens">令牌</button><button data-p="kit">组件</button>
+    </div>
+    <div class="pane on" id="p-map">
+      <p>点图里任意节点, 左边手机直接跳到那一页 (带上它的上级)。绿点秒级推送, 橙点进页拉取 + 推送失效, 红 ! 表示现状不符合规范。</p>
+      <div class="svgbox" id="svgbox"><!--SITEMAP_SVG--></div>
+    </div>
+    <div class="pane" id="p-rules">
+      <h2>四种容器, 只用这四种</h2>
+      <table>
+        <tr><th>容器</th><th>什么时候用</th><th>样子</th><th>返回</th></tr>
+        <tr><td><b>栏根页</b></td><td>五个底部栏的首页</td><td>大标题 22, 底栏可见</td><td>非总览回总览; 总览退出</td></tr>
+        <tr><td><b>子页</b></td><td>有自己的列表 / 表单 / 还能往下走</td><td>右侧推入, 盖住底栏, 标题栏 52 + 返回箭头</td><td>退一级; 根部交给来源栏</td></tr>
+        <tr><td><b>底部抽屉</b></td><td>预览一条东西, 快捷操作, 选一个</td><td>圆角 22, 拖手柄, 最高 78%; 内容多可上拉全屏</td><td>关闭抽屉</td></tr>
+        <tr><td><b>对话框</b></td><td>只做确认, 或 1-2 项短输入</td><td>居中, 圆角 22, 按钮右对齐: 次要在左, 主要在右</td><td>等于取消</td></tr>
+      </table>
+      <p>禁止: 全屏 Dialog 叠全屏 Dialog (终端这种沉浸式除外), 抽屉叠抽屉, 对话框里放列表。长按菜单在手机上一律用操作抽屉, 不用 DropdownMenu。</p>
+      <h2>导航</h2>
+      <li>页面里的跳转用 <b>go</b> (记来源), 点底栏用 <b>select</b> (清来源)。再点当前栏: 回到栏根页并滚到顶。</li>
+      <li>任何页面都有深链 <b>hxaioa://页面 id</b>, 通知, 横幅, 分享进来都走同一个入口, 返回链路与手点一致。</li>
+      <li>支持预测性返回 (manifest 开 enableOnBackInvokedCallback), 子页跟手滑出, 抽屉跟手下沉。</li>
+      <li>宽屏 ≥ 840dp: 左侧导航栏, 列表 + 详情双栏; 子页在右栏打开, 不推整屏。</li>
+      <h2>反馈与状态</h2>
+      <li><b>加载 / 空 / 错误</b>三态顺序固定: 有缓存先显示缓存 + 顶部细进度; 无缓存骨架屏; 空态一句话 + 一个动作; 错误按类型给 "重试 / 去设置"。</li>
+      <li><b>提示</b>统一底部 Snackbar (离底栏 16), 删除类操作带 "撤销" 5 秒, 不再弹 Toast。</li>
+      <li><b>危险操作</b>: 可撤销的直接做 + 撤销; 不可撤销的才用对话框确认, 主按钮红色并写清后果。</li>
+      <li><b>未保存修改</b>: 返回先问 "放弃修改?"。</li>
+      <li><b>实时</b>: 秒级数据旁边放绿点; 断线时全局顶部出现 "正在重连" 条, 实时数据变灰并显示 "更新于 x 前"。</li>
+      <h2>手势与触控</h2>
+      <li>点按区域 ≥ 48dp; 行高 52 (双行 60); 列表行可左滑出操作 (已读, 免打扰, 删除)。</li>
+      <li>下拉刷新只放在 "进页拉取" 的页面; 秒级推送的页面不放。</li>
+      <li>动效时长 150 / 250 / 500, 缓动 ease-out (0.22, 1, 0.36, 1); 系统开了减弱动效就只淡入淡出。</li>
+      <h2>插件替换</h2>
+      <li>所有页面只能用组件库 (client/android/ui) 里的容器与组件, 不直接用 material3 的 AlertDialog / ModalBottomSheet / Toast。</li>
+      <li>主题插件 (core.theme.base) 只换令牌; 要换整个组件, 写插件注册到对应扩展点, 并通过同一组截图检查。</li>
+    </div>
+    <div class="pane" id="p-tokens">
+      <h2>颜色 (对齐 HX-UI 2, 由 OKLCH 换算)</h2>
+      <table id="colors"><tr><th>令牌</th><th>浅色</th><th>深色</th><th>用在</th></tr></table>
+      <h2>字号</h2>
+      <table>
+        <tr><th>档</th><th>字号 / 行高</th><th>字重</th><th>用在</th></tr>
+        <tr><td>display</td><td>28 / 34</td><td>600, 字距 -0.02em</td><td>总览大数字</td></tr>
+        <tr><td>title-lg</td><td>22 / 28</td><td>600</td><td>栏根页标题</td></tr>
+        <tr><td>title</td><td>17 / 24</td><td>600</td><td>子页标题, 抽屉 / 对话框标题</td></tr>
+        <tr><td>body</td><td>15 / 22</td><td>400 / 500</td><td>列表主文字, 消息正文</td></tr>
+        <tr><td>body-sm</td><td>13 / 18</td><td>400</td><td>说明, 次要值</td></tr>
+        <tr><td>caption</td><td>12 / 16</td><td>400 / 600</td><td>时间, 分组标题, 标签</td></tr>
+        <tr><td>micro</td><td>11 / 14</td><td>500</td><td>底栏文字, 角标 (最小, 不再用 10)</td></tr>
+      </table>
+      <p>现状: 代码里写死了 12 种字号 (10-26sp, 共 253 处), 统一后只留上面 7 档。</p>
+      <h2>圆角 / 间距 / 阴影 / 动效</h2>
+      <table>
+        <tr><th>类</th><th>令牌</th></tr>
+        <tr><td>圆角</td><td>sm 8 (标签, 输入框内件) · md 10 (按钮, 图标底) · lg 12 (小卡片, 提示条) · xl 16 (卡片, 列表组) · 2xl 22 (抽屉, 对话框) · pill</td></tr>
+        <tr><td>间距</td><td>4 · 8 · 12 · 16 · 24 · 32; 页边距 16, 组间 16, 卡内 14</td></tr>
+        <tr><td>阴影</td><td>soft (卡片悬浮), float (抽屉, 对话框, 横幅); 平铺卡片只用 1px 描边, 不加阴影</td></tr>
+        <tr><td>动效</td><td>fast 150 (按压, 对话框) · base 250 (推页, 抽屉) · slow 500 (数字滚动); ease-out</td></tr>
+        <tr><td>控件高</td><td>按钮 36 (小 32) · 输入框 44 · 行 52 / 60 · 标题栏 52 · 底栏 64</td></tr>
+      </table>
+      <p>现状: 圆角写死 10 种 (2-16dp), 默认 16 与 HX-UI 的 12 不一致; 色值写死 26 处。</p>
+    </div>
+    <div class="pane" id="p-kit">
+      <h2>按钮</h2>
+      <div class="demo"><button class="btn primary">主要</button><button class="btn brand">强调</button><button class="btn secondary">次要</button><button class="btn outline">描边</button><button class="btn ghost">幽灵</button><button class="btn danger">删除</button><button class="btn primary sm">小号</button></div>
+      <p>一屏最多一个强调按钮; 对话框主按钮在右。</p>
+      <h2>列表行 (设置与列表的唯一写法)</h2>
+      <div class="card" style="max-width:420px">
+        <div class="row"><div class="ic">🔔</div><div class="tx"><div class="l">通知设置</div></div><span class="v">已开启</span><span class="chev">›</span></div>
+        <div class="row"><div class="ic">🌙</div><div class="tx"><div class="l">深色模式</div><div class="s">跟随系统</div></div><span class="switch"></span></div>
+        <div class="row"><div class="ic">⚡</div><div class="tx"><div class="l">长连接</div><div class="s">更新于 3 秒前</div></div><span class="live"><span class="dot live"></span>实时</span></div>
+      </div>
+      <h2>分段, 标签, 状态</h2>
+      <div class="demo"><div class="seg"><button class="on">全部</button><button>有效</button><button>收藏</button></div><span class="chip on">开发</span><span class="chip">日常</span><span class="kind sheet">抽屉</span><span class="live"><span class="dot live"></span>秒级</span><span class="live"><span class="dot near"></span>分钟级</span></div>
+      <h2>三态</h2>
+      <div class="grid2" style="max-width:640px">
+        <div class="card" style="padding:14px"><div class="sk" style="width:60%"></div><div class="sk"></div><div class="sk" style="width:80%"></div></div>
+        <div class="card"><div class="empty"><div class="ei">📭</div>还没有待办<br><button class="btn secondary sm" style="margin-top:10px">在群里丢个想法</button></div></div>
+      </div>
+      <h2>提示</h2>
+      <div class="demo" style="background:var(--primary);color:var(--on-primary);max-width:420px">已删除 1 个群 <b style="margin-left:auto;color:var(--brand)">撤销</b></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = /*PAGES_JSON*/null;
+const ICON = {gauge:"M12 14l4-4M3.3 19a10 10 0 1 1 17.4 0", "message-circle":"M7.9 20A9 9 0 1 0 4 16.1L2 22Z", activity:"M22 12h-4l-3 9L9 3l-3 9H2", server:"M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01", user:"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", back:"M15 18l-6-6 6-6", more:"M12 13h.01M19 13h.01M5 13h.01", search:"M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"};
+const svg = (k, s=20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]||ICON.more}"/></svg>`;
+const KIND = {page:"子页", sheet:"抽屉", dialog:"对话框", full:"全屏 · 待改", go:"跨栏", activity:"独立界面", block:"区块"};
+const byId = {}, parent = {}, tabOf = {};
+(function index(){
+  const walk = (n, p, tab) => { byId[n.id] = n; if (p) parent[n.id] = p.id; tabOf[n.id] = tab; (n.kids||[]).forEach(k => walk(k, n, tab)); };
+  DATA.tabs.forEach(t => { t.t = "tab"; walk(t, null, t.id); });
+  DATA.boot.forEach(b => { byId[b.id] = b; tabOf[b.id] = "overview"; });
+})();
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ---------- 导航模型: 栏 + 来源路径 + 子页栈 + 叠层栈 (与 TabNav 一致) ----------
+let S = {tab: "overview", trail: [], pages: [], overlays: []};
+const host = document.getElementById("host");
+
+function rtDot(rt){ return rt === "live" ? '<span class="live"><span class="dot live"></span>实时</span>' : rt === "near" ? '<span class="live"><span class="dot near"></span></span>' : ""; }
+function row(n){
+  const kind = n.t === "page" ? "" : `<span class="kind ${n.t}">${KIND[n.t]||""}</span>`;
+  const sub = n.t === "go" ? `→ ${byId[n.to].label}${n.sub ? " · " + n.sub : ""}` : (n.sub || "");
+  return `<button class="row" data-open="${n.id}"><div class="tx"><div class="l">${esc(n.label)}${n.warn ? ' <span style="color:var(--danger)">!</span>' : ""}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>${kind}${rtDot(n.rt)}<span class="chev">›</span></button>`;
+}
+function blockCard(b){
+  const kids = b.kids || [];
+  const hero = `<div class="hero"><div style="display:flex;align-items:center;gap:8px"><b style="font-weight:600">${esc(b.label)}</b>${rtDot(b.rt)}</div><div class="note" style="padding:4px 0 0">${esc(b.sub||"")}</div></div>`;
+  if (!kids.length) return `<div class="sec">${hero}</div>`;
+  return `<div class="sec"><div class="sec-h">${esc(b.label)} ${rtDot(b.rt)}${b.sub ? `<span class="more">${esc(b.sub)}</span>` : ""}</div><div class="card">${kids.map(row).join("")}</div></div>`;
+}
+function rootBody(tab){
+  let h = "";
+  if (tab.id === "overview") h += `<div class="grid2 sec"><div class="hero"><div class="note" style="padding:0">需要我</div><div class="big">3</div></div><div class="hero"><div class="note" style="padding:0">进行中任务</div><div class="big">2</div></div></div>`;
+  if (tab.id === "me") h += `<div class="sec"><button class="card row" data-open="me-account" style="border:1px solid var(--border)"><div class="ic" style="width:44px;height:44px;border-radius:14px">🦊</div><div class="tx"><div class="l">Heng_Xin</div><div class="s">aioa.example · 主人</div></div><span class="live"><span class="dot live"></span>在线</span><span class="chev">›</span></button></div>`;
+  const kids = tab.kids.filter(k => !(tab.id === "me" && k.id === "me-account"));
+  const loose = kids.filter(k => k.t !== "block");
+  if (loose.length) h += `<div class="sec"><div class="card">${loose.map(row).join("")}</div></div>`;
+  kids.filter(k => k.t === "block").forEach(b => h += blockCard(b));
+  return h;
+}
+function pageBody(n){
+  let h = "";
+  if (n.warn) h += `<div class="warnbar">规范: ${esc(n.warn)}</div>`;
+  if (n.sub) h += `<div class="note">${esc(n.sub)}</div>`;
+  const kids = n.kids || [];
+  if (kids.length) h += `<div class="sec"><div class="card">${kids.map(row).join("")}</div></div>`;
+  h += `<div class="sec"><div class="sec-h">内容${rtDot(n.rt)}</div><div class="card" style="padding:14px"><div class="sk" style="width:55%"></div><div class="sk"></div><div class="sk" style="width:75%"></div></div></div>`;
+  return h;
+}
+function screenHTML(n, isRoot){
+  const title = n.label;
+  const bar = isRoot
+    ? `<div class="appbar root"><div class="t">${esc(title)}</div><button class="icon-btn">${svg("search")}</button><button class="icon-btn">${svg("more")}</button></div>`
+    : `<div class="appbar"><button class="icon-btn" data-back>${svg("back")}</button><div class="t">${esc(title)}</div><button class="icon-btn">${svg("more")}</button></div>`;
+  const body = isRoot ? rootBody(n) : pageBody(n);
+  const nav = isRoot ? `<div class="nav">${DATA.tabs.map(t => `<button data-tab="${t.id}" class="${t.id === S.tab ? "on" : ""}"><span class="pill">${svg(t.icon, 20)}</span>${t.label}${t.id === "chat" ? '<span class="badge">3</span>' : ""}</button>`).join("")}</div>` : "";
+  return `${bar}<div class="reconnect ${offline ? "on" : ""}">未连接服务端, 正在重连 · 数据更新于 2 分钟前</div><div class="body">${body}</div>${nav}`;
+}
+function overlayHTML(n){
+  const kids = n.kids || [];
+  if (n.t === "dialog") return `<div class="scrim" data-close></div><div class="dialog"><h3>${esc(n.label)}</h3><p>${esc(n.sub || "这里只放一句说明或 1-2 个输入框。")}</p>${kids.length ? `<div class="card" style="margin-bottom:14px">${kids.map(row).join("")}</div>` : ""}<div class="actions"><button class="btn ghost" data-close>取消</button><button class="btn ${/删除|清空|移除/.test(n.label) ? "danger" : "primary"}" data-ok>确定</button></div></div>`;
+  return `<div class="scrim" data-close></div><div class="sheet"><div class="handle"></div><div class="st">${esc(n.label)}</div>${n.sub ? `<div class="ss">${esc(n.sub)}</div>` : ""}${n.warn ? `<div class="warnbar" style="margin:0 16px 8px">规范: ${esc(n.warn)}</div>` : ""}<div class="sb">${kids.length ? `<div class="card">${kids.map(row).join("")}</div>` : '<div class="sk" style="width:60%"></div><div class="sk"></div><div class="sk" style="width:80%"></div>'}</div></div>`;
+}
+let offline = false;
+
+function render(anim){
+  const prev = [...host.children].filter(p => p.classList.contains("screen"));
+  host.querySelectorAll("[data-ov]").forEach(o => o.remove());
+  // 底层: 栏根页或最上面的子页
+  const top = S.pages.length ? byId[S.pages[S.pages.length - 1]] : byId[S.tab];
+  const el = document.createElement("div");
+  el.className = "screen";
+  el.innerHTML = screenHTML(top, !S.pages.length);
+  host.appendChild(el);
+  if (anim === "push") { el.classList.add("enter"); prev.forEach(p => p.classList.add("under")); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("enter"))); }
+  else if (anim === "pop") { const old = prev[prev.length - 1]; if (old) { host.appendChild(old); el.classList.add("under"); requestAnimationFrame(() => { old.classList.add("leave"); el.classList.remove("under"); }); } }
+  else if (anim === "fade") { el.classList.add("fade"); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("fade"))); }
+  setTimeout(() => prev.forEach(p => p.remove()), 260);
+  // 叠层
+  S.overlays.forEach((id, i) => {
+    const o = document.createElement("div");
+    o.style.cssText = "position:absolute;inset:0;z-index:" + (10 + i);
+    o.dataset.ov = id;
+    o.innerHTML = overlayHTML(byId[id]);
+    host.appendChild(o);
+    const fresh = anim === "overlay" && i === S.overlays.length - 1;
+    const on = () => o.querySelectorAll(".scrim,.sheet,.dialog").forEach(x => x.classList.add("on"));
+    fresh ? requestAnimationFrame(() => requestAnimationFrame(on)) : on();
+  });
+  drawStack();
+}
+function drawStack(){
+  const t = byId[S.tab].label;
+  const next = S.overlays.length ? `关闭「${byId[S.overlays.at(-1)].label}」` : S.pages.length ? (S.pages.length > 1 ? `回到「${byId[S.pages.at(-2)].label}」` : `回到「${t}」栏根页`) : S.trail.length ? `回到来源栏「${byId[S.trail.at(-1)].label}」` : S.tab !== "overview" ? "回到「总览」" : "退出 App";
+  document.getElementById("stack").innerHTML =
+    `栏 <code>${t}</code> · 来源 <code>${S.trail.map(x => byId[x].label).join(" → ") || "无"}</code><br>子页 <code>${S.pages.map(x => byId[x].label).join(" › ") || "无"}</code> · 叠层 <code>${S.overlays.map(x => byId[x].label).join(" › ") || "无"}</code><br>按返回键将: <b>${next}</b>`;
+}
+function chainTo(id){ const c = []; for (let x = id; x && byId[x].t !== "tab"; x = parent[x]) c.unshift(x); return c; }
+function open(id){
+  const n = byId[id]; if (!n) return;
+  if (n.t === "go") { go(n.to); return; }
+  if (n.t === "block") { toast(`「${n.label}」是根页上的区块`); return; }
+  if (n.t === "activity") { toast(`打开独立界面: ${n.label}`); return; }
+  if (n.t === "sheet" || n.t === "dialog") { S.overlays.push(id); render("overlay"); return; }
+  // page / full: 从叠层里点进子页时, 先收起叠层
+  S.overlays = []; S.pages.push(id); render("push");
+}
+function go(tab){ if (tab === S.tab) return; const i = S.trail.indexOf(tab); S.trail = i >= 0 ? S.trail.slice(0, i) : [...S.trail, S.tab].slice(-8); S.tab = tab; S.pages = []; S.overlays = []; render("fade"); }
+function select(tab){ if (tab === S.tab) { S.pages = []; S.overlays = []; render("fade"); return; } S = {tab, trail: [], pages: [], overlays: []}; render("fade"); }
+function back(){
+  if (S.overlays.length) { const id = S.overlays.pop(); const o = host.querySelector(`[data-ov="${id}"]`); if (o) { o.querySelectorAll(".on").forEach(x => x.classList.remove("on")); setTimeout(() => o.remove(), 250); } drawStack(); return; }
+  if (S.pages.length) { S.pages.pop(); render("pop"); return; }
+  if (S.trail.length) { S.tab = S.trail.pop(); render("fade"); return; }
+  if (S.tab !== "overview") { S.tab = "overview"; render("fade"); return; }
+  toast("再按一次退出");
+}
+function jump(id){ // 从关系图直达: 按路径重建
+  const n = byId[id]; if (!n) return;
+  if (n.t === "tab") { select(id); return; }
+  const tab = tabOf[id]; S = {tab, trail: [], pages: [], overlays: []};
+  chainTo(id).forEach(x => { const k = byId[x]; if (k.t === "page" || k.t === "full") { S.overlays = []; S.pages.push(x); } else if (k.t === "sheet" || k.t === "dialog") S.overlays.push(x); });
+  render("fade");
+  if (n.t === "go") go(n.to);
+}
+let tt;
+function toast(text, action){
+  let t = host.querySelector(".toast"); if (!t) { t = document.createElement("div"); t.className = "toast"; host.appendChild(t); }
+  t.style.zIndex = 50; t.innerHTML = esc(text) + (action ? `<b>${action}</b>` : ""); t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2200);
+}
+host.addEventListener("click", e => {
+  const o = e.target.closest("[data-open]"); if (o) return open(o.dataset.open);
+  const t = e.target.closest("[data-tab]"); if (t) return select(t.dataset.tab);
+  if (e.target.closest("[data-back]") || e.target.closest("[data-close]")) return back();
+  if (e.target.closest("[data-ok]")) { back(); toast("已完成", "撤销"); }
+});
+document.getElementById("back").onclick = back;
+document.addEventListener("keydown", e => { if (e.key === "Escape") back(); });
+document.getElementById("mode").onclick = e => { const b = e.target.closest("button"); if (!b) return; document.documentElement.classList.toggle("dark", b.dataset.v === "dark"); [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b)); };
+document.getElementById("msg").onclick = () => {
+  let b = host.querySelector(".banner"); if (!b) { b = document.createElement("div"); b.className = "banner"; host.appendChild(b); }
+  b.innerHTML = `<div class="ic" style="width:32px;height:32px;border-radius:10px;background:var(--muted);display:grid;place-items:center">💬</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">点子待办</div><div style="font-size:12px;color:var(--muted-fg)">イデア: 已建 issue #121</div></div>`;
+  b.onclick = () => { b.classList.remove("on"); go("chat"); open("ch-room"); };
+  requestAnimationFrame(() => b.classList.add("on")); setTimeout(() => b.classList.remove("on"), 3500);
+};
+document.getElementById("drop").onclick = e => { offline = !offline; e.target.textContent = offline ? "恢复连接" : "模拟断线"; document.getElementById("linkdot").className = offline ? "dot near" : "dot live"; document.getElementById("linktext").textContent = offline ? "重连中" : "已连接"; host.querySelectorAll(".reconnect").forEach(r => r.classList.toggle("on", offline)); };
+document.getElementById("rtabs").onclick = e => { const b = e.target.closest("button"); if (!b) return; [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "p-" + b.dataset.p)); };
+document.getElementById("svgbox").addEventListener("click", e => { const g = e.target.closest("[data-id]"); if (g && g.dataset.id) jump(g.dataset.id); });
+// 颜色表
+const COLORS = [["background","#FDFDFD","#090A0C","页面底"],["card","#FFFFFF","#111114","卡片, 抽屉"],["muted","#F3F4F5","#1C1D20","区块底, 图标底"],["muted-fg","#666970","#9B9EA6","次要文字"],["accent","#EFF0F3","#222428","按压, 悬停"],["border","#E3E4E7","白 9%","描边, 分隔线"],["primary","#17181B","#F1F2F3","主按钮, 选中"],["brand","#5D67EE","#7989FF","强调, 选中底栏, 链接 (可换)"],["danger","#DF2225","#FC5855","删除, 错误"],["success","#16A356","#42C070","在线, 实时"],["warning","#F09C17","#F5AE39","重连中, 分钟级"],["info","#1289E7","#4BA3F7","提示"]];
+document.getElementById("colors").insertAdjacentHTML("beforeend", COLORS.map(([n,l,d,u]) => `<tr><td><code>${n}</code></td><td><span class="sw" style="background:${l}"></span>${l}</td><td><span class="sw" style="background:${d.startsWith("#") ? d : "rgba(255,255,255,.09)"}"></span>${d}</td><td>${u}</td></tr>`).join(""));
+setInterval(() => { const d = new Date(); document.getElementById("clock").textContent = d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); }, 10000);
+render();
+</script>
+</body>
+</html>

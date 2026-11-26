@@ -1,6 +1,6 @@
 # 安卓端返回路径
 
-返回键 (含手势返回) 一律 "退一级, 回到你来的地方"。这份表是全部入口的清单, 加新页面或新跳转时同步改这里, 并在 `app/src/test/.../TabNavTest.kt` 补用例。
+返回键 (含手势返回) 一律 "退一级, 回到你来的地方"。这份表是全部入口的清单, 加新页面或新跳转时同步改这里, 并在 `app/src/test/.../TabNavTest.kt` 补用例, 同时改 `docs/design/ui-spec/pages.json` 并运行 `gen.py` 更新页面关系图与原型 (规范见 `docs/design/ui-spec/README.md`, #121)。
 
 ## 三层, 从里到外
 
