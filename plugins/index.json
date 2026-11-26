@@ -40,9 +40,9 @@
     },
     {
       "id": "hengxin666.hxoa",
-      "name": "hxoa 接入",
-      "summary": "接入一台或多台 hxoa 服务端 (远程工作区): 在 App 的服务器页看在线状态与 worker 分支, 浏览文件, 跑命令。令牌只存在服务端。",
-      "version": "1.0.0",
+      "name": "hxoa 管理",
+      "summary": "在手机上管理一台或多台 hxoa (需 2.4.0+): 工作区增删改, 选目录与新建文件夹, 连接令牌, 一键复制连接提示。管理令牌只存在服务端。",
+      "version": "2.0.0",
       "icon": "terminal",
       "tags": [
         "hxoa",
