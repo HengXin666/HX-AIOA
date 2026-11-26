@@ -25,8 +25,8 @@ const DEFAULT_MS = 20_000;
 // 合并要跑 git, 多等一会儿
 const MERGE_MS = 60_000;
 const ID_BYTES = 6;
-const ADMIN = "/admin/v1";
-const LEGACY = "这是旧版存的工作区令牌, 管不了工作区。请删掉, 在 hxoa 面板 远程管理 里建管理令牌后重新接入 (需要 hxoa 2.4.0+)";
+const ADMIN = "/v1/admin";
+const LEGACY = "这是旧版存的工作区令牌, 管不了工作区。请删掉, 在 hxoa 面板 远程管理 里建管理令牌后重新接入 (需要 hxoa 2.4.1+)";
 
 type Row = { id: string; name: string; base: string; token: string; at: number; kind: string };
 type Obj = Record<string, unknown>;
@@ -76,7 +76,7 @@ export function toState(v: Obj): HxoaState {
   };
 }
 
-/** hxoa 管理: 每条 = 名字 + 服务地址 + 管理令牌 (密文); 操作都由服务端带令牌转给 hxoa 的 /admin/v1/*。 */
+/** hxoa 管理: 每条 = 名字 + 服务地址 + 管理令牌 (密文); 操作都由服务端带令牌转给 hxoa 的 /v1/admin/*。 */
 export class HxoaService {
   constructor(
     private readonly env: Env,
@@ -125,7 +125,7 @@ export class HxoaService {
     }
     if (!res.ok || !body || body.ok === false) {
       const msg = body && typeof body.error === "string" ? body.error : text.slice(0, 200);
-      const hint = res.status === 404 && !body ? " (hxoa 版本低于 2.4.0?)" : "";
+      const hint = res.status === 404 && !body ? " (hxoa 版本低于 2.4.1?)" : "";
       throw new ApiFail([400, 401, 403, 404, 409, 429].includes(res.status) ? res.status : 502, HXOA_CODE, `hxoa ${res.status}: ${msg}${hint}`);
     }
     return body;

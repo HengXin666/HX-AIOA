@@ -2,7 +2,7 @@ import { API_V1 } from "./constants";
 
 // hxoa 管理 (无 Agent 的内置插件 hengxin666.hxoa, #104): 用 hxoa 的管理令牌 (hxadm_) 远程管理一台或多台 hxoa 服务端,
 // 相当于把 hxoa 面板搬进 App: 工作区增删改, 选目录 / 新建文件夹, 连接令牌, 一键复制连接提示。
-// 管理令牌只存在服务端 (加密), 客户端只拿到名字和地址; 只有主人能用。需要 hxoa 2.4.0+。
+// 管理令牌只存在服务端 (加密), 客户端只拿到名字和地址; 只有主人能用。需要 hxoa 2.4.1+。
 export const HXOA_PLUGIN = "hengxin666.hxoa";
 export const HXOA_MAX_CONNS = 20;
 export const HXOA_ADMIN_PREFIX = "hxadm_";
@@ -22,7 +22,7 @@ export const PATH_HXOA_TOKEN = `${API_V1}/hxoa/{id}/tokens/{tok}`;
 export const PATH_HXOA_TOKEN_PROMPT = `${API_V1}/hxoa/{id}/tokens/{tok}/prompt`;
 export const PATH_HXOA_TOKEN_MERGE = `${API_V1}/hxoa/{id}/tokens/{tok}/merge`;
 
-// hxoa 的 /admin/v1/hello: 版本, 管理令牌名, 公网地址
+// hxoa 的 /v1/admin/hello: 版本, 管理令牌名, 公网地址
 export type HxoaHello = { server: string; admin: string; publicUrl: string };
 // 一条接入; hello 缺省 = 这次没连上, error 是原因; kind 为 agent 时是旧版工作区令牌
 export type HxoaConn = { id: string; name: string; base: string; at: number; kind: string; hello?: HxoaHello; error?: string };

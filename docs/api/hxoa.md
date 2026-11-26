@@ -2,11 +2,11 @@
 
 内置插件 `hengxin666.hxoa` (#97, #104)。主人启用后才有, 否则整组 404; 只有主人能调 (Agent 的 key 返回 403)。
 
-每条接入存 hxoa 的**管理令牌** (`hxadm_` 开头, 在 hxoa 面板 "远程管理" 里建, hxoa 2.4.0+), 在服务端用 `TOKEN_SECRET` (没有时用 `AUTH_TOKEN`) 派生的密钥 AES-GCM 加密落库 (表 `hxoa_conn`, `kind = admin`), 任何接口都不返回它。服务端带它转发到 hxoa 的 `<base>/admin/v1/*` (见 hxoa 的 `docs/PROTOCOL.md`)。
+每条接入存 hxoa 的**管理令牌** (`hxadm_` 开头, 在 hxoa 面板 "远程管理" 里建, hxoa 2.4.1+), 在服务端用 `TOKEN_SECRET` (没有时用 `AUTH_TOKEN`) 派生的密钥 AES-GCM 加密落库 (表 `hxoa_conn`, `kind = admin`), 任何接口都不返回它。服务端带它转发到 hxoa 的 `<base>/v1/admin/*` (见 hxoa 的 `docs/PROTOCOL.md`)。
 
 | 方法 路径 | 说明 |
 | --- | --- |
-| `GET /api/v1/hxoa` | `{conns: HxoaConn[]}`; 每条并行打一次 `/admin/v1/hello` (5 秒超时), 连上的带 `hello` (`server`, `admin`, `publicUrl`), 连不上的带 `error`; `kind` 为 `agent` 的是 #97 旧版存的工作区令牌, 只能删除重接 |
+| `GET /api/v1/hxoa` | `{conns: HxoaConn[]}`; 每条并行打一次 `/v1/admin/hello` (5 秒超时), 连上的带 `hello` (`server`, `admin`, `publicUrl`), 连不上的带 `error`; `kind` 为 `agent` 的是 #97 旧版存的工作区令牌, 只能删除重接 |
 | `POST /api/v1/hxoa` | `{name, base, token}` 新接入, token 必须是管理令牌; 先 hello 验证; 最多 20 条 |
 | `PATCH /api/v1/hxoa/{id}` | `{name}` 改名 |
 | `DELETE /api/v1/hxoa/{id}` | 删接入 (管理令牌要在 hxoa 面板删) |

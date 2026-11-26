@@ -34,14 +34,14 @@ const STATE = {
   ],
 };
 
-/** 假 hxoa: 只认 TOKEN, 走 /admin/v1/*, 记下每次调用。 */
+/** 假 hxoa: 只认 TOKEN, 走 /v1/admin/*, 记下每次调用。 */
 function fakeHxoa(calls: Call[]) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const u = new URL(String(input));
     const auth = new Headers(init?.headers).get("Authorization");
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     const method = init?.method ?? "GET";
-    const path = u.pathname.replace("/admin/v1", "");
+    const path = u.pathname.replace("/v1/admin", "");
     calls.push({ method, path: path + u.search, auth, body });
     if (auth !== `Bearer ${TOKEN}`) return Response.json({ ok: false, error: "管理令牌无效或已被删除", code: "unauthorized" }, { status: 401 });
     const k = `${method} ${path}`;

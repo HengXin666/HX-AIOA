@@ -133,7 +133,7 @@ private fun AddConnDialog(api: HxoaApi, onDismiss: () -> Unit, onDone: () -> Uni
                 OutlinedTextField(name, { name = it }, label = { androidx.compose.material3.Text("名字") }, singleLine = true)
                 OutlinedTextField(base, { base = it }, label = { androidx.compose.material3.Text("服务地址") }, singleLine = true)
                 OutlinedTextField(token, { token = it }, label = { androidx.compose.material3.Text("管理令牌 (hxadm_ 开头)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                androidx.compose.material3.Text("在 hxoa 面板 远程管理 里建 (需 2.4.0+)。令牌只存在服务端, 加密保存。", fontSize = 12.sp, color = Aioa.colors.textSecondary)
+                androidx.compose.material3.Text("在 hxoa 面板 远程管理 里建 (需 2.4.1+)。令牌只存在服务端, 加密保存。", fontSize = 12.sp, color = Aioa.colors.textSecondary)
                 err?.let { androidx.compose.material3.Text(it, fontSize = 12.sp, color = Aioa.colors.danger) }
             }
         },
