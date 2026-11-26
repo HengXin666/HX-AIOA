@@ -141,11 +141,12 @@ fun HomeTopBar(
         BarIcon("menu", onMenu)
         Spacer(Modifier.weight(1f))
         Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).pointerTap(onTitle).padding(horizontal = 10.dp, vertical = 6.dp),
+            Modifier.clip(RoundedCornerShape(50)).background(c.surface).border(1.dp, c.border, RoundedCornerShape(50))
+                .pointerTap(onTitle).padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(title, c.text, 17, weight = FontWeight.SemiBold)
+            Text(title, c.text, 16, weight = FontWeight.SemiBold)
             Icon("chevron-down", c.textSecondary, 16.dp, Modifier.graphicsLayer { rotationZ = turn })
         }
         Spacer(Modifier.weight(1f))
@@ -155,18 +156,22 @@ fun HomeTopBar(
             contentAlignment = Alignment.Center,
         ) {
             Box(
-                Modifier.size(32.dp).clip(CircleShape).border(1.5.dp, ring, CircleShape)
-                    .background(if (menuOpen) c.surface else c.background),
+                Modifier.size(38.dp).clip(CircleShape).border(1.dp, ring, CircleShape).background(c.surface),
                 contentAlignment = Alignment.Center,
             ) { Icon("ellipsis", c.text, 18.dp) }
         }
     }
 }
 
+/** 顶栏上浮着的圆形按钮: 实底 + 细描边, 没有整条栏背景 (ChatGPT 做法)。 */
 @Composable
 private fun BarIcon(name: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).pointerTap(onClick), contentAlignment = Alignment.Center) {
-        Icon(name, Aioa.colors.text, 22.dp)
+    val c = Aioa.colors
+    Box(Modifier.size(44.dp).pointerTap(onClick), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).background(c.surface).border(1.dp, c.border, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { Icon(name, c.text, 19.dp) }
     }
 }
 

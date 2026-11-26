@@ -1,6 +1,7 @@
 package com.hengxin.aioa.kit
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -219,13 +220,13 @@ fun SpaceSwitcher(
 
 private const val MANAGE_KEY = "#manage"
 
-/** 底部输入条: 记点子或交给 Agent, 圆角矩形, 发送键是小圆角方块。 */
+/** 底部输入条: 记点子或交给 Agent, ChatGPT 式全圆角胶囊。 */
 @Composable
 fun HomeComposer(placeholder: String, modifier: Modifier = Modifier) {
     val c = Aioa.colors
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(22.dp))
-            .background(c.surface).padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(50))
+            .background(c.surface).border(1.dp, c.border, RoundedCornerShape(50)).padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -233,7 +234,7 @@ fun HomeComposer(placeholder: String, modifier: Modifier = Modifier) {
         Text(placeholder, c.textSecondary, 15, Modifier.weight(1f))
         Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Icon("mic", c.text, 19.dp) }
         Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.accent),
+            Modifier.size(36.dp).clip(CircleShape).background(c.accent),
             contentAlignment = Alignment.Center,
         ) { Icon("arrow-up", c.onAccent, 19.dp) }
     }
