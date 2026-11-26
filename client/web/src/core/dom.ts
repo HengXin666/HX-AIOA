@@ -55,6 +55,15 @@ export function agoText(ts: number, now = Date.now()): string {
   return `${Math.floor(s / 86_400)} 天前`;
 }
 
+/** 将来的相对时间: "x 分钟后"。 */
+export function untilText(ts: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((ts - now) / 1000));
+  if (s < 60) return "1 分钟内";
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟后`;
+  if (s < 86_400) return `${Math.floor(s / 3600)} 小时后`;
+  return `${Math.floor(s / 86_400)} 天后`;
+}
+
 export function uid(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }

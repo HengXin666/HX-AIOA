@@ -27,7 +27,7 @@ export function formatBrief(b) {
   if (b.reads?.length) out.push(`可读的群: ${b.reads.join(", ")}`);
   if (b.plugin) out.push(`插件: ${b.plugin.id}@${b.plugin.version}`);
   if (b.skills?.length) out.push(`skill: ${b.skills.map((s) => `${s.id}@${s.version}`).join(", ")}`);
-  if (b.trigger) out.push(`触发: ${b.trigger.expr}${b.trigger.every ? ` (约每 ${b.trigger.every} 秒)` : ""}`);
+  if (b.trigger) out.push(`触发: ${b.trigger.expr}${b.trigger.every ? ` (约每 ${b.trigger.every} 秒)` : ""}${b.trigger.tz ? ` 时区 ${b.trigger.tz}` : ""}`);
   for (const m of b.missing ?? []) out.push(`缺大版本 ${m.version}: ${m.changes}; 不升级会少: ${m.missing}${m.until ? `; 兼容到 ${m.until}` : ""}`);
   if (b.view) out.push(`界面: ${json(b.view)}`);
   if (b.feedTags?.length) out.push(`标签: ${json(b.feedTags)}`);

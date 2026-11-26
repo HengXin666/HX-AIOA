@@ -1,4 +1,4 @@
-import { HANDLED_SET_MAX, NEXT_LIMIT, SOURCE_TYPE_USER, type ChatAgent, type Envelope } from "@hx-aioa/protocol";
+import { HANDLED_SET_MAX, NEXT_LIMIT, SOURCE_TYPE_USER, parseInterval, type ChatAgent, type Envelope } from "@hx-aioa/protocol";
 import type { Core } from "./core";
 
 // 云 Agent 的处理游标 (docs/design/agent-skill.md 实现契约): handled 之前的人发消息都处理过, handledSet 是之后零散处理过的
@@ -72,25 +72,23 @@ export function advance(core: Core, channel: string, cur: Cursor, seqs: number[]
 
 export const sameCursor = (a: Cursor, b: Cursor) => a.handled === b.handled && a.handledSet.join() === b.handledSet.join();
 
-const UNIT: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400, 秒: 1, 分: 60, 分钟: 60, 时: 3600, 小时: 3600, 天: 86_400 };
 const STEP = /^\*\/(\d+)$/;
 const NUM = /^\d+$/;
+const MIN_S = 60;
+const HOUR_S = 3600;
 const pos = (n: number) => (Number.isFinite(n) && n > 0 ? n : undefined);
 
-/** 定时表达式推算间隔秒数: every 2h, 每 2 小时, 分钟或小时步进的 cron, 纯数字秒; 看不懂返回 undefined。 */
+/** 定时表达式推算间隔秒数 (旧客户端只认 every): every 2h, 每 2 小时, 分钟或小时步进的 cron, 纯数字秒; 看不懂返回 undefined。 */
 export function parseEvery(expr: string): number | undefined {
   const t = expr.trim();
-  if (NUM.test(t)) return pos(Number(t));
-  const en = /^every\s+(\d+)\s*([smhd])[a-z]*$/i.exec(t);
-  if (en) return pos(Number(en[1]) * (UNIT[(en[2] ?? "").toLowerCase()] ?? 0));
-  const zh = /^每\s*(\d*)\s*(秒|分钟|分|小时|时|天)$/.exec(t);
-  if (zh) return pos((zh[1] ? Number(zh[1]) : 1) * (UNIT[zh[2] ?? ""] ?? 0));
+  const plain = parseInterval(t);
+  if (plain) return plain;
   const f = t.split(/\s+/);
   if (f.length !== 5 || !f.slice(2).every((x) => x === "*")) return undefined;
   const [mi = "", ho = ""] = f;
   const m = STEP.exec(mi);
-  if (m && ho === "*") return pos(Number(m[1]) * UNIT.m!);
+  if (m && ho === "*") return pos(Number(m[1]) * MIN_S);
   const h = STEP.exec(ho);
-  if (h && NUM.test(mi)) return pos(Number(h[1]) * UNIT.h!);
+  if (h && NUM.test(mi)) return pos(Number(h[1]) * HOUR_S);
   return undefined;
 }

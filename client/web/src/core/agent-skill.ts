@@ -4,26 +4,26 @@ import {
   MAJOR_COMPAT_DAYS,
   parseSkillVer,
   skillGap,
+  triggerView,
   type ChatAgent,
   type Envelope,
   type MajorChange,
   type PluginAgent,
   type SkillGap,
   type SkillReport,
+  type TriggerView,
 } from "@hx-aioa/protocol";
 
 // skill 版 Agent 的版本与运行状态 (docs/design/agent-skill.md "App"); 只读 ChatMeta 与本地事件, 不发请求
 
 const DAY_MS = 86_400_000;
-const SEC_MS = 1000;
-const LATE_FACTOR = 2;
 const DEFAULT_SETUP = 1;
 const USER_SOURCE = "user:";
 const STORAGE_SEEN = "aioa.skillSeen";
 
 export type MissingMajor = { id: string; have?: string; want: string; changes: MajorChange[]; deadline: number };
 export type SkillStatus = { gap: SkillGap; legacy: boolean; setupHave?: number; setupWant: number; missing: MissingMajor[] };
-export type RunInfo = { next?: number; late: boolean };
+export type RunInfo = TriggerView;
 // 插件清单的 agent 段里与 skill 有关的两项; Web 端目前没有插件清单, 传 undefined 时按 warned 推断
 export type PluginSkill = Pick<PluginAgent, "skill" | "changes">;
 
@@ -86,12 +86,9 @@ export function skillStatus(a: ChatAgent, plugin: PluginSkill | undefined, now: 
   return { gap, legacy: !have, setupHave: have?.setup, setupWant: want.setup, missing };
 }
 
-/** 按 every 推算下次运行; 超过 2 倍间隔没跑算迟到。 */
-export function runInfo(a: ChatAgent, now: number): RunInfo {
-  const every = a.trigger?.every;
-  if (!a.trigger || !every || every <= 0) return { late: false };
-  const base = a.lastRun ?? a.trigger.at;
-  return { next: base + every * SEC_MS, late: now - base > LATE_FACTOR * every * SEC_MS };
+/** 按触发表达式推算 (cron 按 Agent 上报的时区, 没报按本机时区); 过了预计时刻 + min(间隔, 30 分钟) 没跑算迟到。没上报为 undefined。 */
+export function runInfo(a: ChatAgent, now: number): RunInfo | undefined {
+  return a.trigger ? triggerView(a.trigger, a.lastRun, now) : undefined;
 }
 
 /** 本地已有消息里 seq > handled 且不在 handledSet 的人发消息条数; 不是 skill 版 Agent 为 undefined。 */

@@ -25,7 +25,7 @@ test("send --covers: 请求体带 covers 数组, reply 照常", async () => {
 test("done 与 me --trigger 的请求体", async () => {
   const srv = await fakeServer(({ path }) => {
     if (path === "/api/v1/chat-agent/done") return { json: { cursor: 851, left: 1 } };
-    if (path === "/api/v1/chat-agent/trigger") return { json: { trigger: { expr: "every 2h", every: 7200, at: 1 } } };
+    if (path === "/api/v1/chat-agent/trigger") return { json: { trigger: { expr: "every 2h", every: 7200, at: 1, tz: "Asia/Shanghai" } } };
   });
   const dir = home(CFG);
   try {
@@ -33,9 +33,9 @@ test("done 与 me --trigger 的请求体", async () => {
     assert.equal(d.code, 0, d.stderr);
     assert.deepEqual(srv.reqs[0].body, { seqs: [849, 851, 852] });
     assert.match(d.stdout, /游标 #851, 还剩 1 条/);
-    const t = await run(dir, srv.base, ["me", "--trigger", "every 2h"]);
-    assert.deepEqual(srv.reqs[1].body, { expr: "every 2h" });
-    assert.match(t.stdout, /约每 7200 秒/);
+    const t = await run(dir, srv.base, ["me", "--trigger", "every 2h"], { TZ: "Asia/Shanghai" });
+    assert.deepEqual(srv.reqs[1].body, { expr: "every 2h", tz: "Asia/Shanghai" });
+    assert.match(t.stdout, /约每 7200 秒\) 时区 Asia\/Shanghai/);
     assert.equal((await run(dir, srv.base, ["done", "abc"])).code, 1);
   } finally {
     await srv.close();

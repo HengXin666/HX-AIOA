@@ -30,8 +30,8 @@ export const AGENT_TRIGGER_MAX = 120;
 
 export type SkillReport = { setup: number; skills: Record<string, string>; auto?: boolean };
 export type SkillGap = "same" | "minor" | "major";
-// 触发方式: expr 是 Agent 原样上报的定时表达式, every 是服务端能看懂时推算的间隔秒数
-export type AgentTrigger = { expr: string; every?: number; at: number };
+// 触发方式: expr 是 Agent 原样上报的定时表达式, every 是服务端能看懂时推算的间隔秒数, tz 是 Agent 宿主的 IANA 时区 (cron 按它算)
+export type AgentTrigger = { expr: string; every?: number; at: number; tz?: string };
 // 插件清单 agent.changes 的一项: 某个大版本改了什么, 不升级会少什么, 旧版兼容到哪天
 export type MajorChange = { version: string; changes: string; missing: string; until?: string };
 export type SkillSource = { id: string; version: string; url: string };
@@ -54,7 +54,7 @@ export type AgentNext = { pending: Envelope[]; head: number; cursor: number; bri
 // POST done 与 POST /messages 的 covers: 把这些 seq 记为已处理
 export type AgentDoneInput = { seqs: number[] };
 export type AgentDoneResult = { cursor: number; left: number };
-export type AgentTriggerInput = { expr: string };
+export type AgentTriggerInput = { expr: string; tz?: string };
 
 const VER = /^(\d+)\.(\d+)$/;
 

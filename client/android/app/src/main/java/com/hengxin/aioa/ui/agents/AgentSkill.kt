@@ -15,8 +15,6 @@ const val CORE_SKILL = "hx-aioa"
 const val CORE_SKILL_VERSION = "1.0"
 const val MAJOR_COMPAT_DAYS = 14
 private const val DAY_MS = 86_400_000L
-private const val SEC_MS = 1000L
-private const val LATE_FACTOR = 2
 private const val DEFAULT_SETUP = 1
 private const val KEY_VERSION = "version"
 private const val KEY_CHANGES = "changes"
@@ -27,8 +25,8 @@ private val VER = Regex("""^(\d+)\.(\d+)$""")
 private val DATE = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
 
 data class SkillReport(val setup: Int, val skills: Map<String, String>, val auto: Boolean = false)
-/** 触发方式: expr 是 Agent 原样上报的定时表达式, every 是服务端推算的间隔秒数。 */
-data class AgentTrigger(val expr: String, val every: Long?, val at: Long)
+/** 触发方式: expr 是 Agent 原样上报的定时表达式, every 是服务端推算的间隔秒数, tz 是 Agent 宿主的 IANA 时区。 */
+data class AgentTrigger(val expr: String, val every: Long?, val at: Long, val tz: String? = null)
 /** 插件清单 agent.changes 的一项: 某个大版本改了什么, 不升级会少什么, 旧版兼容到哪天。 */
 data class MajorChange(val version: String, val changes: String, val missing: String, val until: String?)
 /** 插件清单里与 skill 有关的两项: agent.skill 与 agent.changes。 */
@@ -41,8 +39,6 @@ data class MissingMajor(val id: String, val have: String?, val want: String, val
 
 /** 卡片要的 skill 状态; legacy 表示还没装 skill (旧指令 Agent)。 */
 data class SkillStatus(val gap: SkillGap, val legacy: Boolean, val setupHave: Int?, val setupWant: Int, val missing: List<MissingMajor>)
-
-data class RunInfo(val next: Long?, val late: Boolean)
 
 fun parseSkillVer(s: String?): Pair<Int, Int>? = VER.find(s.orEmpty())?.let { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
 
@@ -95,13 +91,8 @@ fun skillStatus(context: Context, a: ChatAgent, plugin: PluginSkill?, now: Long)
     return SkillStatus(gap, have == null, have?.setup, want.setup, missing)
 }
 
-/** 按 every 推算下次运行; 超过 2 倍间隔没跑算迟到。 */
-fun runInfo(a: ChatAgent, now: Long): RunInfo {
-    val t = a.trigger ?: return RunInfo(null, false)
-    val every = t.every?.takeIf { it > 0 }?.let { it * SEC_MS } ?: return RunInfo(null, false)
-    val base = a.lastRun ?: t.at
-    return RunInfo(base + every, now - base > LATE_FACTOR * every)
-}
+/** 按触发表达式推算 (Trigger.kt); 没上报为 null。 */
+fun runInfo(a: ChatAgent, now: Long): TriggerView? = a.trigger?.let { triggerView(it, a.lastRun, now) }
 
 fun dateText(ts: Long): String = DATE.format(java.util.Date(ts))
 
@@ -113,7 +104,7 @@ fun parseSkillReport(o: JSONObject?): SkillReport? {
 }
 
 fun parseTrigger(o: JSONObject?): AgentTrigger? = o?.optString("expr")?.ifEmpty { null }?.let {
-    AgentTrigger(it, if (o.has("every")) o.optLong("every") else null, o.optLong("at"))
+    AgentTrigger(it, if (o.has("every")) o.optLong("every") else null, o.optLong("at"), o.optString("tz").ifEmpty { null })
 }
 
 fun parseChanges(a: JSONArray?): List<MajorChange> = (0 until (a?.length() ?: 0)).mapNotNull { i ->

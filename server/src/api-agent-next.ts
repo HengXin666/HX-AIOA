@@ -5,6 +5,8 @@ import {
   PATH_AGENT_DONE,
   PATH_AGENT_NEXT,
   PATH_AGENT_TRIGGER,
+  TRIGGER_TZ_MAX,
+  isTimeZone,
   parseSkillHeader,
   type AgentDoneResult,
   type AgentNext,
@@ -84,13 +86,16 @@ async function done(c: ReqCtx): Promise<Response> {
 
 async function trigger(c: ReqCtx): Promise<Response> {
   const { channel, agent } = agentByKey(c);
-  const raw = (await readJson(c.req)) as { expr?: unknown } | undefined;
+  const raw = (await readJson(c.req)) as { expr?: unknown; tz?: unknown } | undefined;
   const expr = typeof raw?.expr === "string" ? raw.expr.trim() : "";
   if (!expr || expr.length > AGENT_TRIGGER_MAX) return fail(400, `需要 {"expr": "定时表达式"}, 最多 ${AGENT_TRIGGER_MAX} 字`);
+  const tz = raw?.tz === undefined || raw.tz === "" ? agent.trigger?.tz : raw.tz;
+  if (tz !== undefined && (typeof tz !== "string" || !isTimeZone(tz))) return fail(400, `tz 必须是 IANA 时区名, 如 Asia/Shanghai, 最多 ${TRIGGER_TZ_MAX} 字`);
   touchAgent(c.core, agent.keyId);
-  if (agent.trigger?.expr === expr) return json({ trigger: agent.trigger });
+  if (agent.trigger?.expr === expr && agent.trigger.tz === tz) return json({ trigger: agent.trigger });
+  // cron 与间隔写法都按原样记下; every 只给旧客户端推算用
   const every = parseEvery(expr);
-  const t: AgentTrigger = { expr, ...(every ? { every } : {}), at: Date.now() };
+  const t: AgentTrigger = { expr, ...(every ? { every } : {}), at: Date.now(), ...(tz ? { tz } : {}) };
   putAgent(c.core, channel, agent.keyId, (a) => ({ ...a, trigger: t }));
   return json({ trigger: t });
 }

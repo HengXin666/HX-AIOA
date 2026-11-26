@@ -33,6 +33,7 @@ export * from "./v1/translate";
 export * from "./v1/term";
 export * from "./v1/presence";
 export * from "./v1/agent-skill";
+export * from "./v1/trigger";
 export * from "./v1/compat";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 import { parseTyping, type TypingFrame } from "./v1/presence";

@@ -1,9 +1,9 @@
-import { PATH_CHAT_AGENT, PATH_CHAT_AGENT_PROMPT, PATH_CHATS, type ChatAgent, type ChatMeta } from "@hx-aioa/protocol";
+import { PATH_CHAT_AGENT, PATH_CHAT_AGENT_PROMPT, PATH_CHATS, localTimeZone, type ChatAgent, type ChatMeta } from "@hx-aioa/protocol";
 import { CLS } from "../constants";
 import { api, json } from "../core/api";
-import { agoText, button, h } from "../core/dom";
+import { agoText, button, h, untilText } from "../core/dom";
 import { TOPIC_CHAT_SYNC, TOPIC_EVENTS } from "../core/store";
-import { isSkillAgent, pendingCount, runInfo, skillStatus, type SkillStatus } from "../core/agent-skill";
+import { isSkillAgent, pendingCount, runInfo, skillStatus, type RunInfo, type SkillStatus } from "../core/agent-skill";
 import { keyedRegion, section, type Env } from "../pages/page";
 
 // 群 Agent 卡片 (skill 版): 触发方式, 运行, 待处理, skill 状态, 大更新自动执行, 复制新接入语
@@ -16,6 +16,13 @@ const CLS_DANGER = "danger-text";
 const RENDER_TICK_MS = 60_000;
 const fmtDay = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 const fmtDate = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+const fmtClock = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+const TXT_UNKNOWN = "无法推算";
+const TXT_HOW = "触发方式";
+const TXT_NEXT = "下次触发";
+const DAY_NAMES = ["今天", "明天"];
+// 卡片每分钟重画一次, 记住哪些 Agent 的时间点列表是展开的
+const openLists = new Set<string>();
 
 const agentPath = (tpl: string, channel: string, keyId: string) => tpl.replace("{channel}", encodeURIComponent(channel)).replace("{keyId}", encodeURIComponent(keyId));
 
@@ -39,6 +46,32 @@ function majorList(s: SkillStatus): HTMLElement[] {
   return out;
 }
 
+// 详情里的时间点按本机日界标 "今天 / 明天", 更远的写日期
+function dayLabel(ts: number, now: number): string {
+  const day = (t: number) => Math.floor((t - new Date(t).getTimezoneOffset() * 60_000) / 86_400_000);
+  return DAY_NAMES[day(ts) - day(now)] ? `${DAY_NAMES[day(ts) - day(now)]} ${fmtClock.format(ts)}` : fmtDay.format(ts);
+}
+
+function triggerLines(a: ChatAgent, run: RunInfo | undefined, now: number): (HTMLElement | null)[] {
+  if (!a.trigger || !run) return [line(TXT_HOW, "还没上报")];
+  const tz = a.trigger.tz && a.trigger.tz !== localTimeZone() ? ` · 按 ${a.trigger.tz} 推算` : "";
+  if (!run.parsed) return [line(TXT_HOW, a.trigger.expr), line(TXT_NEXT, `${TXT_UNKNOWN} (${a.trigger.expr})`)];
+  const lateText = run.late && run.expected ? ` · 预计 ${fmtDay.format(run.expected)} 触发, 还没运行` : "";
+  const list = h(
+    "details",
+    {},
+    h("summary", { class: CLS.meta }, `接下来的触发时间 (${run.upcoming.length} 个)`),
+    ...run.upcoming.map((t) => h("div", { class: CLS.meta }, `${dayLabel(t, now)} (${untilText(t, now)})`)),
+  ) as HTMLDetailsElement;
+  list.open = openLists.has(a.keyId);
+  list.addEventListener("toggle", () => (list.open ? openLists.add(a.keyId) : openLists.delete(a.keyId)));
+  return [
+    line(TXT_HOW, a.trigger.expr + tz),
+    run.next ? line(TXT_NEXT, `${fmtDay.format(run.next)} (${untilText(run.next, now)})${lateText}`, run.late) : line(TXT_NEXT, TXT_UNKNOWN),
+    run.upcoming.length ? list : null,
+  ];
+}
+
 export function agentCard(meta: ChatMeta, a: ChatAgent, env: Env, reload: () => void): HTMLElement {
   const now = Date.now();
   const status = h("div", { class: CLS.meta });
@@ -53,12 +86,11 @@ export function agentCard(meta: ChatMeta, a: ChatAgent, env: Env, reload: () => 
     { class: "row wrap" },
     h("span", { class: s.gap === "major" ? `chip ${CLS_DANGER}` : s.gap === "same" ? "chip on" : "chip" }, GAP_TEXT[s.gap]),
     pending ? h("span", { class: "chip" }, `待处理 ${pending}`) : null,
-    run.late ? h("span", { class: `chip ${CLS_DANGER}` }, "定时未运行") : null,
+    run?.late ? h("span", { class: `chip ${CLS_DANGER}` }, "定时未运行") : null,
   );
   const lines = [
-    line("触发方式", a.trigger?.expr ?? "还没上报"),
     line("上次运行", a.lastRun ? `${fmtDay.format(a.lastRun)} (${agoText(a.lastRun, now)})` : "还没有"),
-    run.next ? line("下次运行", `${fmtDay.format(run.next)}${run.late ? " · 超过 2 倍间隔没跑" : ""}`, run.late) : null,
+    ...triggerLines(a, run, now),
     pending !== undefined ? line("待处理", `${pending} 条`) : null,
     s.gap === "minor" ? line("skill", "小更新待生效, Agent 下一轮自己重装") : null,
   ];

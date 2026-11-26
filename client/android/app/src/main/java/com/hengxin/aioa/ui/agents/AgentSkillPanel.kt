@@ -43,6 +43,10 @@ private val TAG_SHAPE = RoundedCornerShape(6.dp)
 private val CLOCK = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
 private const val TXT_RELINK = "需重新接入"
 private const val TXT_SWITCH_HINT = "触发语会变, 需要把新接入语发给 Agent 一次。"
+private const val TXT_NEXT = "下次触发"
+private const val TXT_UNKNOWN = "无法推算"
+private val CLOCK_TIME = SimpleDateFormat("HH:mm", Locale.CHINA)
+private val DAY_NAMES = listOf("今天", "明天")
 
 /** 用过 skill 版接口的 Agent 才有这些字段; 旧指令 Agent 不显示 skill 区。 */
 fun isSkillAgent(a: ChatAgent) = a.skills != null || a.setup != null || a.handled != null || a.trigger != null || a.lastRun != null
@@ -83,7 +87,34 @@ fun SkillTags(group: String, a: ChatAgent, now: Long) {
         SkillGap.MAJOR -> AgentTag(TXT_RELINK, true)
     }
     pending?.takeIf { it > 0 }?.let { AgentTag("待处理 $it") }
-    if (runInfo(a, now).late) AgentTag("定时未运行", true)
+    val run = runInfo(a, now) ?: return
+    AgentTag(run.next?.let { "$TXT_NEXT ${CLOCK.format(Date(it))} (${until(it, now)})" } ?: "$TXT_NEXT: $TXT_UNKNOWN", run.late)
+    if (run.late) AgentTag("定时未运行", true)
+}
+
+// 时间点按本机日界标 "今天 / 明天", 更远的写日期
+private fun dayLabel(ts: Long, now: Long): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val day = { t: Long -> java.time.Instant.ofEpochMilli(t).atZone(zone).toLocalDate().toEpochDay() }
+    return DAY_NAMES.getOrNull((day(ts) - day(now)).toInt())?.let { "$it ${CLOCK_TIME.format(Date(ts))}" } ?: CLOCK.format(Date(ts))
+}
+
+@Composable
+private fun TriggerLines(a: ChatAgent, run: TriggerView?, now: Long) {
+    val t = a.trigger
+    if (t == null || run == null) {
+        Line("触发方式", "还没上报")
+        return
+    }
+    val tz = t.tz?.takeIf { run.zone != java.time.ZoneId.systemDefault() }?.let { " · 按 $it 推算" } ?: ""
+    Line("触发方式", t.expr + tz)
+    if (!run.parsed) {
+        Line(TXT_NEXT, "$TXT_UNKNOWN (${t.expr})")
+        return
+    }
+    val lateText = if (run.late) run.expected?.let { " · 预计 ${CLOCK.format(Date(it))} 触发, 还没运行" } ?: "" else ""
+    Line(TXT_NEXT, run.next?.let { "${CLOCK.format(Date(it))} (${until(it, now)})$lateText" } ?: TXT_UNKNOWN, run.late)
+    if (run.upcoming.isNotEmpty()) Line("接下来", run.upcoming.joinToString("\n") { "${dayLabel(it, now)} (${until(it, now)})" })
 }
 
 /** 详情里的运行与 skill 区: 触发方式, 上次 / 下次运行, 待处理, 版本状态, 自动大更新开关, 复制新接入语。 */
@@ -104,9 +135,8 @@ fun SkillSection(model: ChatModel, group: String, a: ChatAgent, now: Long) {
     val run = runInfo(a, now)
     Title("运行")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Line("触发方式", a.trigger?.expr ?: "还没上报")
         Line("上次运行", a.lastRun?.let { "${CLOCK.format(Date(it))} (${ago(it, now)})" } ?: "还没有")
-        run.next?.let { Line("下次运行", CLOCK.format(Date(it)) + if (run.late) " · 超过 2 倍间隔没跑" else "", run.late) }
+        TriggerLines(a, run, now)
         pending?.let { Line("待处理", "$it 条") }
     }
     Title("skill")

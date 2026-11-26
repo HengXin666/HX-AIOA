@@ -171,6 +171,21 @@ test("trigger: 解析 every, 同一表达式不重写", async () => {
   assert.equal(a.me().trigger!.at, at);
 });
 
+test("trigger: 具体时刻的 cron 也收下, tz 校验后存下, 不带 tz 时沿用旧的", async () => {
+  const a = setup();
+  const path = "/api/v1/chat-agent/trigger";
+  const r = await call(a.core, a.who, "POST", path, { expr: "0 9,18 * * *", tz: "Asia/Shanghai" });
+  assert.equal(r.status, 200);
+  assert.deepEqual({ ...a.me().trigger!, at: 0 }, { expr: "0 9,18 * * *", at: 0, tz: "Asia/Shanghai" });
+  assert.equal((await call(a.core, a.who, "POST", path, { expr: "30 8 * * 1-5", tz: "Mars/Base" })).status, 400);
+  assert.equal((await call(a.core, a.who, "POST", path, { expr: "30 8 * * 1-5", tz: 8 })).status, 400);
+  assert.equal(a.me().trigger!.expr, "0 9,18 * * *");
+  await call(a.core, a.who, "POST", path, { expr: "30 8 * * 1-5" });
+  assert.deepEqual({ ...a.me().trigger!, at: 0 }, { expr: "30 8 * * 1-5", at: 0, tz: "Asia/Shanghai" });
+  await call(a.core, a.who, "POST", path, { expr: "30 8 * * 1-5", tz: "UTC" });
+  assert.equal(a.me().trigger!.tz, "UTC");
+});
+
 test("covers: 只给群 Agent, seq 必须是正整数数组", () => {
   const a = setup();
   assert.match(coversOf(a.core, { owner: true } as Principal, [1]) as string, /Agent/);

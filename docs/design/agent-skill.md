@@ -57,7 +57,8 @@
 - `POST /api/v1/chat-agent/done` `{ seqs }`: 记为已处理, 返回 `{ cursor, left }` (left 为剩下没处理的条数)。
 - `POST /api/v1/messages` 新增可选 `covers: number[]`: 仅群 Agent 可用, 发送成功后等同 done(covers ∪ {reply})。
 - 游标推进: 把 seqs 并入 `handledSet`, 然后从 `handled` 往后, 只要下一条人发消息的 seq 在集合里就前移并移出集合; 集合超过 `HANDLED_SET_MAX` 时直接推到集合里最小那段连续值之后。游标与集合只在变化时写。
-- `POST /api/v1/chat-agent/trigger` `{ expr }`: 存 `trigger = { expr, every, at }`。`every` 能从 `every 2h`, `每 2 小时`, `*/30 * * * *`, `0 */2 * * *`, 纯数字秒这几种推算时才填。
+- `POST /api/v1/chat-agent/trigger` `{ expr, tz? }`: 存 `trigger = { expr, every, at, tz }`。`every` 能从 `every 2h`, `每 2 小时`, `*/30 * * * *`, `0 */2 * * *`, 纯数字秒这几种推算时才填 (给旧客户端)。`tz` 是宿主的 IANA 时区, 命令行 `me --trigger` 从 Intl 拿到就带上, 服务端用 Intl 校验, 不带时沿用已存的。
+- 推算在 `protocol/src/v1/trigger.ts` (安卓 `ui/agents/Trigger.kt` 移植): 5 段 cron (数字, `*`, 列表, 范围, `*/n`, `a-b/n`; 星期 0-7, 7 为周日; 日与星期都限定时取并集) 按 `tz` 算, 没有 `tz` 按客户端本地时区; 间隔写法以 lastRun (没有则 at) 为基准。
 - `PATCH /api/v1/chats/{channel}/agents/{keyId}` 新增 `autoMajor: boolean`: 变化时 `setup + 1`。
 - `GET .../agents/{keyId}/prompt` 对 skill 版 Agent 返回新的接入语 (更新用, 不含密钥), 见下。
 
@@ -111,7 +112,7 @@ hxaioa skill install --setup <N>
 
 ### App (安卓 + Web)
 
-- Agent 卡片新增: 触发方式 (expr) 与上次运行, 按 every 推算的下次运行 (超过 2 倍间隔没跑标红); 待处理条数 (本地消息里 seq > handled 且不在 handledSet 的人发消息); skill 状态: 最新 / 小更新待生效 / 需重新接入 (列出缺的大版本, changes, missing, 兼容截止日); 开关 "大更新自动执行"; 按钮 "复制新接入语" (需重新接入时突出显示)。
+- Agent 卡片新增: 触发方式 (expr) 与上次运行, "下次触发: 时间 (相对时间)", 展开列出接下来的触发时间点 (今天和明天的全部, 最多 12 个, 都没有时列下一次); 过了预计触发时间 + min(间隔, 30 分钟) 还没有新的 lastRun 标红, 无法解析时显示原表达式和 "无法推算"; 待处理条数 (本地消息里 seq > handled 且不在 handledSet 的人发消息); skill 状态: 最新 / 小更新待生效 / 需重新接入 (列出缺的大版本, changes, missing, 兼容截止日); 开关 "大更新自动执行"; 按钮 "复制新接入语" (需重新接入时突出显示)。
 - 只读 ChatMeta 里已有的字段, 不新增请求; 开关走 PATCH agent。
 
 ### 门禁 (`tools/check-plugins.ts`)

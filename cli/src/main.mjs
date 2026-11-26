@@ -7,7 +7,7 @@ import { print } from "./format.mjs";
 import { ApiError, VERSION, call, enc } from "./http.mjs";
 import { syncHistory } from "./history.mjs";
 import { next } from "./next.mjs";
-import { PATH_AGENT_DONE, PATH_AGENT_ME, PATH_AGENT_TRIGGER, PATH_MESSAGES } from "./proto.mjs";
+import { PATH_AGENT_DONE, PATH_AGENT_ME, PATH_AGENT_TRIGGER, PATH_MESSAGES, hostTimeZone } from "./proto.mjs";
 import { install, installedText, settleWant, skillGuide, upgrade } from "./skill.mjs";
 import { todoAdd, todoLine, todoSet } from "./todo.mjs";
 import { watch } from "./watch.mjs";
@@ -22,7 +22,7 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa todo set <id> [--title t] [--state open|hold|doing|done] [--prio n] [--repo r] [--issue n] [--parent id] [--note s]
   hxaioa todo done <id> [--note s]     冲突时打印当前行, 退出码 3
   hxaioa skill install [--setup N] [--dir 目录]   从 Git 装 skill (接入语里用)
-  hxaioa me --trigger <定时表达式>     上报定时任务的触发方式
+  hxaioa me --trigger <定时表达式>     上报定时任务的触发方式 (顺带上报本机时区)
   hxaioa upgrade                   大更新自动执行 (只在主人开了开关时有效)
 
 其它
@@ -91,9 +91,10 @@ const COMMANDS = {
   },
   async me(cfg, v) {
     if (v.trigger === undefined) return out(await whoami(cfg));
-    const r = await call(cfg, "POST", PATH_AGENT_TRIGGER, { expr: v.trigger });
+    const tz = hostTimeZone();
+    const r = await call(cfg, "POST", PATH_AGENT_TRIGGER, { expr: v.trigger, ...(tz ? { tz } : {}) });
     const t = r.trigger ?? r;
-    out(`已记下触发方式: ${t.expr ?? v.trigger}${t.every ? ` (约每 ${t.every} 秒)` : ""}`);
+    out(`已记下触发方式: ${t.expr ?? v.trigger}${t.every ? ` (约每 ${t.every} 秒)` : ""}${t.tz ? ` 时区 ${t.tz}` : ""}`);
   },
   async guide(cfg, v) {
     if (cfg.skill?.dir && !v.ack) return out((await skillGuide(cfg)).join("\n"));

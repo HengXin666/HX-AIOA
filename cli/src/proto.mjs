@@ -8,6 +8,8 @@ export const PATH_AGENT_NEXT = `${API}/chat-agent/next`;
 export const PATH_AGENT_DONE = `${API}/chat-agent/done`;
 export const PATH_AGENT_TRIGGER = `${API}/chat-agent/trigger`;
 export const PATH_AGENT_ME = `${API}/chat-agent/me`;
+// 来源 protocol/src/v1/trigger.ts
+export const TRIGGER_TZ_MAX = 64;
 export const PATH_MESSAGES = `${API}/messages`;
 export const SKILL_GIT_BASE = "https://raw.githubusercontent.com";
 export const TODO_PLUGIN = "hengxin666.todo";
@@ -41,6 +43,16 @@ export function parseSkillHeader(v) {
     }
   }
   return out;
+}
+
+/** 宿主的 IANA 时区, 随 me --trigger 上报 (cron 按它推算); 拿不到或太长返回 undefined。 */
+export function hostTimeZone() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz && tz.length <= TRIGGER_TZ_MAX ? tz : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** 已装的和应有的差多少: 接入版本或任一大号不同算 major, 只差小号算 minor。 */
