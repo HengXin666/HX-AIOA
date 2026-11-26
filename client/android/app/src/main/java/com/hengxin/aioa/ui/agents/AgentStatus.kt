@@ -50,6 +50,17 @@ fun ago(ts: Long, now: Long): String {
     }
 }
 
+/** 将来的相对时间: "x 分钟后"。 */
+fun until(ts: Long, now: Long): String {
+    val d = (ts - now).coerceAtLeast(0)
+    return when {
+        d < MINUTE -> "1 分钟内"
+        d < HOUR -> "${d / MINUTE} 分钟后"
+        d < DAY -> "${d / HOUR} 小时后"
+        else -> "${d / DAY} 天后"
+    }
+}
+
 @Composable
 fun StatusDot(state: AgentState, size: Dp = 10.dp) {
     val c = MaterialTheme.colorScheme

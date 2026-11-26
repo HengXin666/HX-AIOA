@@ -1,19 +1,35 @@
 #!/usr/bin/env node
-// hxaioa: HX-AIOA 群 Agent 命令行。配置一次 (login), 之后直接收发消息, 长连监听
+// hxaioa: HX-AIOA 群 Agent 命令行。配置一次 (login), 之后直接收发消息, 长连监听; 装了 skill 的 Agent 一轮用 next / send --covers / done
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { configPath, loadConfig, loadState, saveConfig, saveHead } from "./config.mjs";
 import { print } from "./format.mjs";
 import { ApiError, VERSION, call, enc } from "./http.mjs";
 import { syncHistory } from "./history.mjs";
+import { next } from "./next.mjs";
+import { PATH_AGENT_DONE, PATH_AGENT_ME, PATH_AGENT_TRIGGER, PATH_MESSAGES, hostTimeZone } from "./proto.mjs";
+import { install, installedText, settleWant, skillGuide, upgrade } from "./skill.mjs";
+import { todoAdd, todoLine, todoSet } from "./todo.mjs";
 import { watch } from "./watch.mjs";
 
 const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
 
+一轮 (装了 hx-aioa skill 的 Agent)
+  hxaioa next [--wait 秒] [--timeout 秒]   待处理消息; 没有就等人说话。退出码 0 有消息, 10 原样再跑, 2 idle 本轮结束
+  hxaioa send <文字|-> --reply seq --covers 849,850   回复并把这些 seq 记为已处理
+  hxaioa done <seq...>             不用回复的记为已处理
+  hxaioa todo add <标题> [--prio n] [--repo r] [--issue n] [--parent id] [--note s] [--src seq] [--id id]
+  hxaioa todo set <id> [--title t] [--state open|hold|doing|done] [--prio n] [--repo r] [--issue n] [--parent id] [--note s]
+  hxaioa todo done <id> [--note s]     冲突时打印当前行, 退出码 3
+  hxaioa skill install [--setup N] [--dir 目录]   从 Git 装 skill (接入语里用)
+  hxaioa me --trigger <定时表达式>     上报定时任务的触发方式 (顺带上报本机时区)
+  hxaioa upgrade                   大更新自动执行 (只在主人开了开关时有效)
+
+其它
   hxaioa login <服务地址> <密钥>   保存配置 (${configPath}, 权限 600) 并验证
   hxaioa me                        我是谁: 名字, 本群, 可读的群
-  hxaioa guide [--ack]             打印专属指令; --ack 顺带报到
-  hxaioa send <文字|->  [-c 群] [--reply seq] [--title 标题] [--html 文件] [--priority need_me|worth_reading]
+  hxaioa guide [--ack]             装了 skill: 打印 SKILL.md 与简报; 没装: 打印专属指令, --ack 顺带报到
+  hxaioa send <文字|->  [-c 群] [--reply seq] [--title 标题] [--html 文件] [--priority need_me|worth_reading] [--covers seq,...]
   hxaioa read  [-c 群] [--new] [--since seq] [--before seq] [--limit n] [--json]
   hxaioa watch [-c 群] [--all] [--once] [--timeout 秒] [--window 秒] [--any] [--exec 命令] [--json] [--mine] [--interval 秒]
   hxaioa memory [--add 一句话] [--set 全文|-]   长期记忆 (存服务端, 最多 4000 字)
@@ -25,45 +41,33 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa api <METHOD> <路径> [JSON|-]
 
   不写 -c 就是本群。文字写 - 表示从标准输入读。环境变量 AIOA_SERVER / AIOA_KEY 可代替 login。
-  watch 默认只等人发的消息, --any 时别的 Agent 和系统消息也算。
+  watch 默认只等人发的消息, --any 时别的 Agent 和系统消息也算; 消息打印 (或 --exec) 之后才记为读到。
   watch --once 退出码: 0 来了一条; 2 等满了没人说话; 3 专属指令更新了 (先 guide --ack);
     4 本次 --timeout 到了但 --window 还没满, 再跑一次接着等 (命令有时长上限时用)。
-  watch 优先用长连接 (省额度), 连不上自动改为每 --interval 秒 (默认 20) 拉一次。`;
+  小更新 hxaioa 自己装好, 下一轮生效; 看到 "大更新, 需要重新接入" 就停下在群里告诉主人。`;
 
+const STR = { type: "string" };
+const BOOL = { type: "boolean" };
 const OPTIONS = {
-  channel: { type: "string", short: "c" },
-  reply: { type: "string" },
-  title: { type: "string" },
-  html: { type: "string" },
-  priority: { type: "string" },
-  new: { type: "boolean" },
-  since: { type: "string" },
-  before: { type: "string" },
-  limit: { type: "string" },
-  json: { type: "boolean" },
-  all: { type: "boolean" },
-  once: { type: "boolean" },
-  timeout: { type: "string" },
-  exec: { type: "string" },
-  mine: { type: "boolean" },
-  interval: { type: "string" },
-  window: { type: "string" },
-  any: { type: "boolean" },
-  add: { type: "string" },
-  set: { type: "string" },
-  ack: { type: "boolean" },
-  summary: { type: "string" },
-  file: { type: "string" },
-  dedupe: { type: "string" },
-  help: { type: "boolean", short: "h" },
+  channel: { ...STR, short: "c" },
+  ...Object.fromEntries(["reply", "title", "html", "priority", "since", "before", "limit", "timeout", "exec", "interval", "window", "add", "set", "summary", "file", "dedupe"].map((k) => [k, STR])),
+  ...Object.fromEntries(["wait", "setup", "dir", "covers", "trigger", "prio", "repo", "issue", "parent", "note", "src", "state", "id"].map((k) => [k, STR])),
+  ...Object.fromEntries(["new", "json", "all", "once", "mine", "any", "ack"].map((k) => [k, BOOL])),
+  help: { ...BOOL, short: "h" },
 };
 
 const num = (v) => (v === undefined ? undefined : Number.parseInt(v, 10));
 const stdin = () => readFileSync(0, "utf8");
 const out = (v) => process.stdout.write(`${typeof v === "string" ? v : JSON.stringify(v, null, 2)}\n`);
 
+function seqs(list) {
+  const all = list.flatMap((s) => String(s).split(/[,\s]+/)).filter(Boolean).map((s) => Number.parseInt(s.replace(/^#/, ""), 10));
+  if (!all.length || all.some((n) => !Number.isInteger(n) || n <= 0)) throw new ApiError(0, "seq 要是正整数, 如 849 850 或 849,850");
+  return [...new Set(all)];
+}
+
 async function whoami(cfg) {
-  const r = await call(cfg, "GET", "/api/v1/chat-agent/me");
+  const r = await call(cfg, "GET", PATH_AGENT_ME);
   saveConfig({ me: r.me });
   return r.me;
 }
@@ -74,29 +78,26 @@ async function channelOf(cfg, v) {
   return (cfg.me ?? (await whoami(cfg))).channel;
 }
 
-const EVERY_LABEL = { day: "天", week: "周", month: "个月", year: "年" };
-const STATE_LABEL = { open: "待进行", hold: "挂起", doing: "进行中", done: "已完成", dropped: "已完成" };
-// 一行一条: [状态] P优先级 id 标题 (repo#issue) <- 父 | note
-function todoLine(t) {
-  const issue = t.repo && t.issue ? ` (${t.repo}#${t.issue})` : "";
-  const parent = t.parent ? ` <- ${t.parent}` : "";
-  const note = t.note ? ` | ${t.note.replace(/\s+/g, " ").slice(0, 80)}` : "";
-  // 分区, 截止 (东八区), 周期, 星标 (#105)
-  const due = t.due ? ` 截止 ${new Date(t.due + 8 * 3_600_000).toISOString().slice(5, 16).replace("T", " ")}` : "";
-  const plan = `${t.star ? " ★" : ""}${t.area ? ` {${t.area}}` : ""}${due}${t.every ? ` 每${t.every.n}${EVERY_LABEL[t.every.unit] ?? t.every.unit}` : ""}`;
-  return `[${STATE_LABEL[t.state] ?? t.state}] P${t.prio ?? 2} ${t.id} ${t.title}${plan}${issue}${parent}${note}`;
-}
+// 这些命令自己处理版本 (或不发请求), 结束时不再看 X-Aioa-Want
+const SELF_SETTLED = new Set(["next", "skill", "upgrade", "login", "version"]);
 
 const COMMANDS = {
   async login(cfg, v, [server, key]) {
     if (!server || !key) throw new ApiError(0, "用法: hxaioa login <服务地址> <密钥>");
     const next = { ...cfg, server: server.replace(/\/+$/, ""), key };
-    const me = (await call(next, "GET", "/api/v1/chat-agent/me")).me;
+    const me = (await call(next, "GET", PATH_AGENT_ME)).me;
     saveConfig({ server: next.server, key, me });
     out(`已登录: ${me.name} (本群 ${me.channel ?? "无"})`);
   },
-  me: async (cfg) => out(await whoami(cfg)),
+  async me(cfg, v) {
+    if (v.trigger === undefined) return out(await whoami(cfg));
+    const tz = hostTimeZone();
+    const r = await call(cfg, "POST", PATH_AGENT_TRIGGER, { expr: v.trigger, ...(tz ? { tz } : {}) });
+    const t = r.trigger ?? r;
+    out(`已记下触发方式: ${t.expr ?? v.trigger}${t.every ? ` (约每 ${t.every} 秒)` : ""}${t.tz ? ` 时区 ${t.tz}` : ""}`);
+  },
   async guide(cfg, v) {
+    if (cfg.skill?.dir && !v.ack) return out((await skillGuide(cfg)).join("\n"));
     const res = await call(cfg, "GET", "/api/v1/chat-agent/guide", undefined, { raw: true });
     const version = res.headers.get("X-Aioa-Guide-Version");
     out(await res.text());
@@ -105,6 +106,25 @@ const COMMANDS = {
     if (ok) saveConfig({ guide: version });
     out(ok ? `已报到 ${version}` : "报到失败");
   },
+  async skill(cfg, v, [sub]) {
+    if (sub !== "install") throw new ApiError(0, "用法: hxaioa skill install [--setup N] [--dir 目录]");
+    out(installedText(await install(cfg, { setup: v.setup, dir: v.dir })));
+  },
+  next: (cfg, v) => next(cfg, v),
+  async done(cfg, v, list) {
+    const r = await call(cfg, "POST", PATH_AGENT_DONE, { seqs: seqs(list) });
+    out(`已记为处理完, 游标 #${r.cursor}, 还剩 ${r.left} 条没处理`);
+  },
+  async upgrade(cfg, v) {
+    out((await upgrade(cfg, v)).join("\n"));
+  },
+  async todo(cfg, v, [sub, arg]) {
+    const ch = await channelOf(cfg, v);
+    if (sub === "add") return todoAdd(cfg, ch, v, arg, out);
+    if (sub === "set") return todoSet(cfg, ch, v, arg, out);
+    if (sub === "done") return todoSet(cfg, ch, { ...v, state: undefined }, arg, out, { state: "done" });
+    throw new ApiError(0, "用法: hxaioa todo add|set|done ...");
+  },
   async send(cfg, v, [text]) {
     const body = { text: text === "-" || text === undefined ? stdin() : text };
     if (v.channel) body.channel = v.channel;
@@ -112,7 +132,8 @@ const COMMANDS = {
     if (v.title) body.title = v.title;
     if (v.priority) body.priority = v.priority;
     if (v.html) body.html = readFileSync(v.html, "utf8");
-    out(await call(cfg, "POST", "/api/v1/messages", body));
+    if (v.covers) body.covers = seqs([v.covers]);
+    out(await call(cfg, "POST", PATH_MESSAGES, body));
   },
   async read(cfg, v) {
     const ch = await channelOf(cfg, v);
@@ -173,7 +194,9 @@ async function main() {
   const { values, positionals } = parseArgs({ options: OPTIONS, allowPositionals: true, strict: true });
   const [cmd, ...rest] = positionals;
   if (!cmd || values.help || !COMMANDS[cmd]) return out(HELP);
-  const code = await COMMANDS[cmd](loadConfig(), values, rest);
+  const cfg = loadConfig();
+  const code = await COMMANDS[cmd](cfg, values, rest);
+  if (!SELF_SETTLED.has(cmd)) for (const l of await settleWant(cfg)) out(l);
   if (typeof code === "number") process.exitCode = code;
 }
 

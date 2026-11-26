@@ -1,9 +1,10 @@
 // 市场 CI: 校验 plugins/ 下每个清单, 按 "全部放进白名单" 做静态冲突检测与每日请求估算, 输出兼容报告
 // 用法: node --import tsx tools/check-plugins.ts [市场目录]; 环境变量 PR_AUTHOR + CHANGED (改动的插件目录, 逗号分隔) 时校验命名空间,
-// BASE (git 引用, 如 origin/main) 时检查改了的插件有没有升版本
+// BASE (git 引用, 如 origin/main) 时检查改了的插件与 skill 有没有升版本
 import { existsSync, readdirSync, readFileSync, appendFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { checkBumps, checkClosures, checkCycles, checkIndex, depTable, type IndexEntry } from "./plugin-index";
+import { checkSkillBumps, checkSkills } from "./skill-check";
 import { PLUGIN_DAILY_BUDGET, PROTOCOL_VERSION, checkPlugins, dailyRequests, isL2a, parseManifest, pluginNamespace, type PluginManifest } from "@hx-aioa/protocol";
 
 const root = process.argv[2] ?? "plugins";
@@ -45,6 +46,10 @@ checkIndex(index.plugins, ms, errors, warns, raws);
 checkCycles(ms, errors);
 checkClosures(ms, engine, errors, warns);
 if (process.env.BASE) checkBumps(process.env.BASE, ms, root, errors);
+// 核心 skill 与 server/ 在市场目录的上一级 (本仓库); 别的市场仓库里没有, 只查插件 skill
+const repo = dirname(resolve(root));
+checkSkills(repo, root, ms, errors);
+if (process.env.BASE) checkSkillBumps(process.env.BASE, repo, resolve(root), ms, errors);
 const r = checkPlugins(ms, { engine, budget: PLUGIN_DAILY_BUDGET });
 for (const c of r.conflicts) {
   // 单选冲突由管理员放行时指定默认, 市场里只提示

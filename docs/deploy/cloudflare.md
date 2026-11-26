@@ -30,6 +30,8 @@ Account Resources 选 `Heng_Xin`; Zone Resources 选 `woa.qzz.io` (自定义域�
 
 ## 运行时密钥 (AUTH_TOKEN 等)
 
+> 全部变量 (必填, 可选, 插件携带) 和仓库里对应的名字见 [env.md](env.md), 以那张表为准。
+
 Worker 的运行时密钥 (`AUTH_TOKEN` / `MIPUSH_APP_SECRET` 等) **不是**部署命令的一部分, 用 `wrangler secret put` 单独设置, 已设置过一次就长期保留。
 
 - 当前 `AUTH_TOKEN` 已在 Worker 里配置好, 手动触发的部署**不会覆盖**它。

@@ -76,6 +76,7 @@ fun AgentDetail(model: ChatModel, group: String, a: ChatAgent, state: AgentState
                 Step("最近活跃", a.active)
                 Step("最近发言", recent.firstOrNull()?.ts)
             }
+            SkillSection(model, group, a, now)
             Text("能读的群", fontSize = 13.sp, fontWeight = FontWeight.Medium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (a.reads.isEmpty()) Text("只能发, 不能读", fontSize = 13.sp, color = c.outline)

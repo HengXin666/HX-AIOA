@@ -4,6 +4,7 @@ import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
 import { pushPlugin } from "./notify";
+import { bumpSetup, pluginSkill } from "../agent-want";
 
 export const CODE_NOT_ALLOWED = "plugin_not_allowed";
 
@@ -44,7 +45,9 @@ export async function upgrade(core: Core, id: string): Promise<PluginInstall> {
   if (rec.space && !space && !keep && (await core.spaces.remove(rec.space))) core.sockets.toV1Clients({ t: "space_update", id: rec.space, deleted: true });
   const { space: _old, ...rest } = rec;
   const next: PluginInstall = { ...rest, version: m.version, name: m.name, updated: Date.now(), ...((space ?? keep) ? { space: space ?? keep } : {}) };
-  core.plugins.save(next, m.name, prompt, { interval: m.agent?.interval, task: m.agent?.task });
+  const before = pluginSkill(core, id)?.version;
+  core.plugins.save(next, m.name, prompt, { interval: m.agent?.interval, task: m.agent?.task, skill: m.agent?.skill, changes: m.agent?.changes });
+  bumpSetup(core, id, before, m.agent?.skill);
   pushPlugin(core, id, "updated", { uid: core.users.ownerId(), version: m.version, keyId: next.keyId });
   return next;
 }

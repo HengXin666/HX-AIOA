@@ -48,8 +48,9 @@ export class GhService {
     return this.env.TOKEN_SECRET || this.env.AUTH_TOKEN;
   }
 
+  // 设备码令牌会 8 小时过期, 没有 secret 续不了, 所以两项齐了才开设备码 (#115 #119)
   get deviceOk(): boolean {
-    return !!this.env.GH_CLIENT_ID;
+    return !!(this.env.GH_CLIENT_ID && this.env.GH_CLIENT_SECRET);
   }
 
   auth(): GhAuth | undefined {
@@ -149,6 +150,7 @@ export class GhService {
   async startDevice(): Promise<GhDevice> {
     const id = this.env.GH_CLIENT_ID;
     if (!id) throw new ApiFail(400, "bad_request", "服务端没配 GH_CLIENT_ID, 先用令牌授权");
+    if (!this.env.GH_CLIENT_SECRET) throw new ApiFail(400, "bad_request", "服务端没配 GH_CLIENT_SECRET, 设备码拿到的令牌 8 小时后续不了期; 按 docs/deploy/env.md 配好再用, 或先用令牌授权");
     const d = await deviceStart(id);
     if (!d.device_code) throw new ApiFail(502, GH_CODE, "GitHub 没返回设备码, 检查应用是否开了 Device Flow");
     const key = randomId("ghd_");

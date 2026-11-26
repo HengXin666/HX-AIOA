@@ -31,6 +31,9 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 测试
+        run: cd cli && npm test
+
       - name: 打包
         run: |
           npx esbuild cli/src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=out/hxaioa.mjs

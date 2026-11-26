@@ -1,6 +1,7 @@
-import { API_V1, feedTagsOf, HEADER_GUIDE_VERSION, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type GuideFrame, type RouteInfo } from "@hx-aioa/protocol";
+import { API_V1, feedTagsOf, HEADER_GUIDE_VERSION, HEADER_SKILL, HEADER_SKILL_WANT, PATH_AGENT_GUIDE, PATH_AGENT_GUIDE_ACK, PATH_AGENT_FEED_TAGS, type ChatAgent, type ChatMeta, type GuideFrame, type RouteInfo } from "@hx-aioa/protocol";
 import { usesGh } from "./gh/gate";
 import { agentGuide } from "./agent-prompt";
+import { noteSkill } from "./agent-want";
 import { baseOf, saveAgents } from "./api-chats";
 import { messageInput } from "./api-events";
 import { GET } from "./constants";
@@ -45,7 +46,7 @@ function replace(core: Core, meta: ChatMeta, agent: ChatAgent): void {
   saveAgents(core, meta.channel, (meta.agents ?? []).map((x) => (x.keyId === agent.keyId ? agent : x)));
 }
 
-async function notice(core: Core, channel: string, text: string): Promise<void> {
+export async function notice(core: Core, channel: string, text: string): Promise<void> {
   const input = messageInput({ text });
   if (typeof input === "string") return;
   input.channel = channel;
@@ -65,6 +66,8 @@ const isStale = (agent: ChatAgent, version: string) => !!agent.joined && agent.v
 export async function refreshGuides(core: Core, base: string): Promise<void> {
   for (const meta of core.chats.chats()) {
     for (const agent of meta.agents ?? []) {
+      // 上报过 skill 版本的 Agent 不用专属指令
+      if (agent.skills) continue;
       const g = guideFor(core, base, meta.channel, agent);
       if (isStale(agent, g.version)) await markStale(core, core.chats.chat(meta.channel) ?? meta, agent, g.version);
     }
@@ -85,8 +88,10 @@ export async function stampGuide(core: Core, req: Request, url: URL, who: Princi
   const hit = agentOfKey(core, who.key.id);
   if (!hit) return res;
   const { meta, agent } = hit;
-  const g = guideFor(core, baseOf(url), meta.channel, agent);
   const out = new Response(res.body, res);
+  out.headers.set(HEADER_SKILL_WANT, await noteSkill(core, req, meta, agent));
+  if (req.headers.has(HEADER_SKILL)) return out;
+  const g = guideFor(core, baseOf(url), meta.channel, agent);
   out.headers.set(HEADER_GUIDE_VERSION, g.version);
   if (isStale(agent, g.version) && !QUIET_PATHS.includes(url.pathname)) await markStale(core, meta, agent, g.version);
   return out;

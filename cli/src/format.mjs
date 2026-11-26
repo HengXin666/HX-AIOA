@@ -1,4 +1,4 @@
-// 消息的人读格式: "#seq 名字: 正文"; --json 时一行一条原样 Envelope
+// 消息的人读格式: "#seq 时间 名字: 正文"; --json 时一行一条原样 Envelope
 export function textOf(ev) {
   const d = ev.data ?? {};
   if (ev.kind === "report") return [d.title, d.summary].filter(Boolean).join("\n");
@@ -13,6 +13,9 @@ export function line(ev) {
   const time = new Date(ev.ts).toLocaleString("zh-CN", { hour12: false });
   return `#${ev.seq} ${time} ${who}${reply}: ${textOf(ev)}`;
 }
+
+// 多行正文缩进两格, 一条消息的首行总以 #seq 开头, 方便 grep -n "^#123"
+export const block = (ev) => line(ev).replace(/\n/g, "\n  ");
 
 export function print(ev, json) {
   process.stdout.write(`${json ? JSON.stringify(ev) : line(ev)}\n`);

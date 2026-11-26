@@ -1,0 +1,140 @@
+{
+  "$comment": "安卓页面关系唯一来源. 加页面 / 改跳转时改这里, 再运行 python3 gen.py 生成 sitemap.svg 与 prototype.html. 类型: tab 底部栏根页; block 根页里的区块 (不是导航); page 子页 (右侧推入, 有标题栏和返回); sheet 底部抽屉; dialog 确认 / 短输入; full 全屏 Dialog (待改成 page); activity 独立界面; go 跨栏跳转 (to=目标栏). rt: live 秒级推送, near 进页拉取 + 推送失效, static 本机或低频.",
+  "boot": [
+    {"id": "boot-setup", "t": "page", "label": "连接服务端", "sub": "地址 · 令牌 · 订阅 · 保存并连接", "rt": "static"},
+    {"id": "boot-login", "t": "page", "label": "登录 / 注册", "sub": "邀请码预填 (hxaioa://join)", "rt": "static"},
+    {"id": "boot-notify", "t": "activity", "label": "系统通知点按", "sub": "直达群聊 / Agent 确认", "rt": "live"}
+  ],
+  "tabs": [
+    {"id": "overview", "label": "总览", "icon": "gauge", "rt": "live", "kids": [
+      {"id": "ov-need", "t": "block", "label": "需要我", "sub": "告警 · 待确认", "rt": "live", "kids": [
+        {"id": "ov-confirm", "t": "sheet", "label": "Agent 确认", "sub": "执行 / 拒绝", "rt": "live"}
+      ]},
+      {"id": "ov-now", "t": "block", "label": "正在发生", "sub": "Agent 任务卡", "rt": "live", "kids": [
+        {"id": "ov-go-agent", "t": "go", "to": "agent", "label": "Agent 栏", "sub": "回来时回总览"}
+      ]},
+      {"id": "ov-worth", "t": "block", "label": "值得一看", "sub": "少而重要", "rt": "near", "kids": [
+        {"id": "ov-mailpeek", "t": "sheet", "label": "单封邮件", "sub": "只标这一封已读", "rt": "static"},
+        {"id": "ov-event", "t": "sheet", "label": "事件详情", "sub": "EventSheet", "rt": "static", "kids": [
+          {"id": "ov-go-chat", "t": "go", "to": "chat", "label": "消息 · 定位到条", "sub": "返回: 群列表 → 总览"}
+        ]}
+      ]},
+      {"id": "ov-board", "t": "block", "label": "今日消息", "sub": "开发 | 日常 · 日报周报", "rt": "live"},
+      {"id": "ov-todo", "t": "block", "label": "重点待办", "sub": "#120", "rt": "live", "kids": [
+        {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "按仓库 / 按日期 · 筛选", "rt": "live"}
+      ]},
+      {"id": "ov-server", "t": "block", "label": "服务器 / 设备", "sub": "在线 · 负载", "rt": "live", "kids": [
+        {"id": "ov-go-res", "t": "go", "to": "resources", "label": "资源栏"}
+      ]},
+      {"id": "ov-gh", "t": "block", "label": "GitHub 卡", "sub": "今日动态", "rt": "near", "kids": [
+        {"id": "gh", "t": "page", "label": "GitHub", "sub": "我的仓库 · 同步", "rt": "near", "kids": [
+          {"id": "gh-repo", "t": "page", "label": "仓库", "sub": "动态 | 分支 | Issue | PR | CI", "rt": "near"},
+          {"id": "gh-pick", "t": "page", "label": "选择仓库", "rt": "near"},
+          {"id": "gh-go-src", "t": "go", "to": "me", "label": "我的 · 添加数据源", "sub": "空状态; 返回回 GitHub"}
+        ]}
+      ]}
+    ]},
+    {"id": "chat", "label": "消息", "icon": "message-circle", "rt": "live", "kids": [
+      {"id": "ch-list", "t": "block", "label": "群列表", "sub": "分组 · 折叠 · 未读", "rt": "live", "kids": [
+        {"id": "ch-new", "t": "dialog", "label": "新建群 / 组 · 加入群", "rt": "static"},
+        {"id": "ch-long", "t": "sheet", "label": "长按操作", "sub": "置顶 · 移动 · 改名 · 删除", "rt": "static", "warn": "现为 DropdownMenu + 多个 AlertDialog, 统一成操作抽屉"}
+      ]},
+      {"id": "ch-room", "t": "page", "label": "群聊", "sub": "输入中 · Agent 监听 · 引用回复", "rt": "live", "kids": [
+        {"id": "ch-settings", "t": "page", "label": "群设置", "sub": "头像 · 类型 · 免打扰 · 置顶", "rt": "near", "kids": [
+          {"id": "ch-members", "t": "sheet", "label": "成员与邀请", "rt": "near"},
+          {"id": "ch-clear", "t": "dialog", "label": "清空 / 删除群", "sub": "危险操作确认", "rt": "static"}
+        ]},
+        {"id": "ch-fav", "t": "page", "label": "收藏", "sub": "定位回原消息", "rt": "near"},
+        {"id": "ch-forward", "t": "dialog", "label": "转发到", "rt": "static", "warn": "选群是列表, 应为抽屉"},
+        {"id": "ch-todo", "t": "sheet", "label": "群待办看板", "rt": "live"},
+        {"id": "ch-file", "t": "sheet", "label": "文件 · 传输进度", "rt": "live"}
+      ]},
+      {"id": "ch-mail", "t": "page", "label": "邮件群", "sub": "全部 | 按厂商 · 搜索", "rt": "live", "kids": [
+        {"id": "ch-maildetail", "t": "page", "label": "邮件详情", "sub": "翻译条 · 原文", "rt": "static", "kids": [
+          {"id": "ch-mailact", "t": "sheet", "label": "邮件操作", "sub": "复制链接 · 转给 Agent", "rt": "static"}
+        ]},
+        {"id": "ch-mailprefs", "t": "sheet", "label": "邮件偏好", "rt": "static"}
+      ]},
+      {"id": "ch-feed", "t": "page", "label": "信息流群", "sub": "全部 | 有效 | 收藏", "rt": "near", "kids": [
+        {"id": "ch-peek", "t": "sheet", "label": "FeedPeek 过渡层", "rt": "static", "kids": [
+          {"id": "browser", "t": "activity", "label": "内置浏览器", "sub": "代理 · 复制链接", "rt": "static"}
+        ]},
+        {"id": "ch-tags", "t": "sheet", "label": "标签编辑", "rt": "static"}
+      ]},
+      {"id": "ch-banner", "t": "block", "label": "新消息横幅 (全局)", "sub": "任意栏顶部", "rt": "live"}
+    ]},
+    {"id": "agent", "label": "Agent", "icon": "activity", "rt": "live", "kids": [
+      {"id": "ag-tasks", "t": "block", "label": "任务", "sub": "进行中 | 已结束", "rt": "live", "kids": [
+        {"id": "ag-confirm", "t": "dialog", "label": "确认执行?", "rt": "live"}
+      ]},
+      {"id": "ag-list", "t": "block", "label": "Agent 列表", "sub": "在线 · 指令同步状态", "rt": "live", "kids": [
+        {"id": "ag-detail", "t": "sheet", "label": "Agent 详情", "sub": "时间线 · 能读的群", "rt": "live", "kids": [
+          {"id": "ag-guide", "t": "sheet", "label": "查看指令", "sub": "复制提示词", "rt": "static", "warn": "抽屉叠抽屉, 改为详情内分段"},
+          {"id": "ag-edit", "t": "dialog", "label": "编辑 / 移除", "rt": "static"}
+        ]},
+        {"id": "ag-wizard", "t": "sheet", "label": "接入向导", "sub": "选群 · 权限 · 复制接入语", "rt": "static"}
+      ]}
+    ]},
+    {"id": "resources", "label": "资源", "icon": "server", "rt": "live", "kids": [
+      {"id": "rs-host", "t": "block", "label": "主机 · 探针", "sub": "CPU 走势 · 内存 · 温度 · 负载", "rt": "live", "kids": [
+        {"id": "rs-add", "t": "dialog", "label": "添加主机", "sub": "一行命令安装探针", "rt": "static"},
+        {"id": "rs-pwd", "t": "dialog", "label": "终端密码", "rt": "static", "kids": [
+          {"id": "rs-term", "t": "full", "label": "终端", "sub": "沉浸式, 保留全屏", "rt": "live"}
+        ]}
+      ]},
+      {"id": "rs-space", "t": "block", "label": "工作台与组件", "sub": "Agent 下发的面板", "rt": "live", "kids": [
+        {"id": "rs-exec", "t": "dialog", "label": "执行确认", "rt": "static"},
+        {"id": "rs-go-chat", "t": "go", "to": "chat", "label": "去原消息"}
+      ]},
+      {"id": "rs-hxoa", "t": "block", "label": "hxoa 服务器", "sub": "多台 · 在线", "rt": "live", "kids": [
+        {"id": "hx-node", "t": "full", "label": "一台 hxoa", "sub": "工作区列表", "rt": "live", "warn": "全屏 Dialog 逐层叠, 改成子页", "kids": [
+          {"id": "hx-ws", "t": "full", "label": "工作区", "sub": "令牌 · workers · 合并 · 复制提示", "rt": "live", "warn": "改成子页"},
+          {"id": "hx-add", "t": "full", "label": "添加工作区", "rt": "static", "warn": "改成子页", "kids": [
+            {"id": "hx-pick", "t": "full", "label": "选目录 / 新建文件夹", "rt": "static", "warn": "改成抽屉"}
+          ]}
+        ]},
+        {"id": "hx-join", "t": "dialog", "label": "接入 hxoa", "sub": "地址 · 管理令牌", "rt": "static"}
+      ]},
+      {"id": "rs-gh", "t": "block", "label": "GitHub 入口", "rt": "near", "kids": [
+        {"id": "rs-go-gh", "t": "go", "to": "overview", "label": "GitHub 叠层 (同总览)", "sub": "返回回资源"}
+      ]}
+    ]},
+    {"id": "me", "label": "我的", "icon": "user", "rt": "static", "kids": [
+      {"id": "me-account", "t": "page", "label": "账号", "sub": "头像 · 改密码 · 登录设备", "rt": "near"},
+      {"id": "me-common", "t": "block", "label": "常用", "kids": [
+        {"id": "me-notify", "t": "page", "label": "通知设置", "sub": "权限状态 · 渠道 · 测试", "rt": "static"},
+        {"id": "me-look", "t": "page", "label": "外观", "sub": "明暗 · 主题色 · 圆角 · 密度", "rt": "static"}
+      ]},
+      {"id": "me-data", "t": "block", "label": "数据", "kids": [
+        {"id": "me-src", "t": "page", "label": "数据源", "rt": "near", "kids": [
+          {"id": "me-src-add", "t": "page", "label": "添加数据源", "rt": "static", "kids": [
+            {"id": "me-src-done", "t": "page", "label": "接入结果", "sub": "复制配置", "rt": "static"}
+          ]}
+        ]},
+        {"id": "me-integ", "t": "page", "label": "接入总览", "rt": "near"},
+        {"id": "me-plug", "t": "page", "label": "插件市场", "sub": "已安装 | 官方 | 私有源", "rt": "near", "kids": [
+          {"id": "me-plug-detail", "t": "page", "label": "插件详情", "sub": "配置 · 主题 · 事件", "rt": "near"},
+          {"id": "me-plug-src", "t": "page", "label": "市场源", "rt": "static"}
+        ]},
+        {"id": "me-go-space", "t": "go", "to": "resources", "label": "工作台与组件", "sub": "返回回我的"},
+        {"id": "me-storage", "t": "page", "label": "存储", "sub": "用量 · 路由 · 迁移 · TG 直连 · 缓存", "rt": "near"}
+      ]},
+      {"id": "me-conn", "t": "block", "label": "连接", "kids": [
+        {"id": "me-server", "t": "page", "label": "服务端", "sub": "未保存先问放弃", "rt": "live"},
+        {"id": "me-proxy", "t": "page", "label": "代理", "sub": "订阅 · 状态 · 节点延迟", "rt": "near"},
+        {"id": "me-debug", "t": "page", "label": "调试模式", "sub": "连接日志", "rt": "live"}
+      ]},
+      {"id": "me-admin", "t": "block", "label": "管理 (主人)", "kids": [
+        {"id": "me-members", "t": "page", "label": "成员与邀请", "rt": "near"},
+        {"id": "me-cf", "t": "page", "label": "CF 总览", "sub": "用量 · Zones", "rt": "near"}
+      ]},
+      {"id": "me-sys", "t": "block", "label": "系统", "kids": [
+        {"id": "me-perm", "t": "page", "label": "系统权限", "sub": "通知 · 后台保活 · 安装", "rt": "static"},
+        {"id": "me-update", "t": "page", "label": "更新", "rt": "near", "kids": [
+          {"id": "me-notes", "t": "sheet", "label": "更新说明", "rt": "static"}
+        ]},
+        {"id": "me-about", "t": "page", "label": "关于", "rt": "static"}
+      ]}
+    ]}
+  ]
+}

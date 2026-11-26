@@ -106,6 +106,15 @@ class MessageDb private constructor(context: Context) :
     fun bySource(sid: String, limit: Int): List<ServerFrame.Msg> =
         query("SELECT * FROM $T_MSG WHERE $C_SID = ? AND $LIVE ORDER BY $C_SEQ DESC LIMIT ?", arrayOf(sid, limit.toString()))
 
+    /** 群里 seq > after 且不在 skip 里的人发消息 (自己或 user: 来源) 条数: skill 版 Agent 的待处理。 */
+    fun humanAfter(key: String, after: Long, skip: Collection<Long>): Int {
+        val not = if (skip.isEmpty()) "" else " AND $C_SEQ NOT IN (${skip.joinToString(",")})"
+        return longQuery(
+            "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND ($C_MINE = 1 OR $C_SID LIKE 'user:%') AND $LIVE$not",
+            arrayOf(key, after.toString()),
+        ).toInt()
+    }
+
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */

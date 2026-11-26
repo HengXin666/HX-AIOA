@@ -6,7 +6,7 @@ export function memSql(): SqlStorage {
   return {
     exec(query: string, ...binds: unknown[]) {
       const st = db.prepare(query);
-      const read = /^\s*select/i.test(query);
+      const read = /^\s*select/i.test(query) || /\sreturning\s/i.test(query);
       const rows = read ? (st.all(...(binds as never[])) as Record<string, unknown>[]) : [];
       const written = read ? 0 : Number(st.run(...(binds as never[])).changes);
       return {

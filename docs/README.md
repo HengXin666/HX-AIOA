@@ -40,6 +40,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [env.md](deploy/env.md) | 环境变量与密钥总表 (必填, 可选, 插件携带), 改变量必须同步 |
 | [cloudflare.md](deploy/cloudflare.md) | 服务端部署 (Workers, 密钥, CI) |
 | [cf-usage.md](deploy/cf-usage.md) | CF 额度页与免费额度 |
 | [android-signing.md](deploy/android-signing.md) | 安卓签名与自动发布 |
@@ -54,6 +55,7 @@
 | [android-battery.md](client/android-battery.md) | 后台耗电测量方法与记录 |
 | [testing.md](client/testing.md) | 客户端测试: 单测, 布局静态检查, 截图测试计划 |
 | [browser.md](client/browser.md) | 安卓内置浏览器: 链接入口, 登录态, 走订阅代理, 广告拦截 |
+| [android-permissions.md](client/android-permissions.md) | 安卓权限清单: 现有, 规划, 申请时机 (#121) |
 
 ## 设计与调研 `design/`
 
@@ -68,6 +70,8 @@
 | [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
 | [mockups/mail-detail.html](design/mockups/mail-detail.html) | 邮件详情重做设计稿: 原文内嵌, 图片拦截, 深色, 链接去向, 转进群 / 交给 Agent (#46) |
 | [mockups/gh-todo.html](design/mockups/gh-todo.html) | GitHub 授权插件与待办关联 issue 手机设计稿 (#90 #98) |
+| [agent-skill.md](design/agent-skill.md) | 云 Agent 设计统一草案: 现状图, 重构后图, skill 从 Git 下载, 两种提示词 (#117) |
+| [ui-spec/README.md](design/ui-spec/README.md) | 安卓 UI 与交互规范 (对齐 HX-UI 2), 页面关系图 `sitemap.svg`, 可点原型 `prototype.html` (#121) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`

@@ -1,0 +1,15 @@
+{
+  "name": "hx-aioa",
+  "version": "1.0",
+  "files": [
+    "SKILL.md",
+    "references/cli.md",
+    "references/feed.md",
+    "references/github.md",
+    "references/pdata.md",
+    "steps/1-next/index.md",
+    "steps/2-handle/impl/default.md",
+    "steps/2-handle/index.md",
+    "steps/3-wait/index.md"
+  ]
+}

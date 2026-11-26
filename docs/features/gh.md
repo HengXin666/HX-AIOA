@@ -12,7 +12,7 @@
 
 | 方式 | 说明 |
 | --- | --- |
-| 设备码 (推荐) | `POST /api/v1/gh/device` 返回 `userCode` 与 `verifyUrl`, 主人在任何登录了 GitHub 的设备 (通常是电脑) 上输入; App 每 `interval` 秒 `POST /api/v1/gh/device/{id}` 轮询, `status` 为 `done` 即完成。需要服务端变量 `GH_CLIENT_ID` (OAuth App 或开了 Device Flow 的 GitHub App): 在仓库 Settings → Secrets and variables → Actions → Variables 填 `AIOA_GH_CLIENT_ID`, 部署时同步为 Worker 的 secret。Fork 请用自己的 OAuth App。 |
+| 设备码 (推荐) | `POST /api/v1/gh/device` 返回 `userCode` 与 `verifyUrl`, 主人在任何登录了 GitHub 的设备 (通常是电脑) 上输入; App 每 `interval` 秒 `POST /api/v1/gh/device/{id}` 轮询, `status` 为 `done` 即完成。需要服务端变量 `GH_CLIENT_ID` 和 `GH_CLIENT_SECRET` 一起配 (仓库变量 `AIOA_GH_CLIENT_ID` + secret `AIOA_GH_CLIENT_SECRET`, 部署时同步, 只配一个部署报错), 见 [env.md](../deploy/env.md)。Fork 请用自己的 OAuth App。 |
 | 粘贴令牌 | `PUT /api/v1/gh/token { "token": "github_pat_..." }`, 建议 fine-grained, 只给 Issues 读写。 |
 
 - 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或停用并清除 (`?purge=1`) 即删除。

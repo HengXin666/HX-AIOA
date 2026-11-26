@@ -107,6 +107,15 @@ export class EventStore {
       .map(parse);
   }
 
+  // 某来源在群里最后一条的 seq (云 Agent 游标初始化用)
+  lastBy(grp: string, sourceId: string): number | null {
+    return this.sql.exec<{ m: number | null }>("SELECT MAX(seq) AS m FROM ev WHERE grp = ? AND json_extract(body, '$.source.id') = ?", grp, sourceId).one().m ?? null;
+  }
+
+  lastBefore(grp: string, ts: number): number | null {
+    return this.sql.exec<{ m: number | null }>("SELECT MAX(seq) AS m FROM ev WHERE grp = ? AND ts < ?", grp, ts).one().m ?? null;
+  }
+
   // 清空一个群 seq < before 的消息 (指标不算), 返回删掉的条数
   clearGroup(key: string, before: number): number {
     this.tail = null;

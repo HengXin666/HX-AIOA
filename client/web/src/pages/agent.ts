@@ -2,6 +2,7 @@ import type { TaskLogEntry, TaskSnapshot } from "@hx-aioa/protocol";
 import { CLS, FIELD_TASK, TASKS_PATH, TXT_LOADING } from "../constants";
 import { promptBox, replyForm, TASK_STATE_TEXT, taskCard } from "../components/cards";
 import { api, hasServer } from "../core/api";
+import { groupAgents } from "../components/agent-card";
 import { button, h, timeText } from "../core/dom";
 import { topicOf, TOPIC_AGENTS, TOPIC_TASKS } from "../core/store";
 import { emptyNote, keyedRegion, pageHead, section, type Env } from "./page";
@@ -32,7 +33,9 @@ export function agentPage(root: HTMLElement, env: Env, id?: string): void {
     },
     () => env.store.agents.map((a) => `${a.id}:${a.online}`).join(),
   );
-  root.append(pageHead("Agent", "任务进度, 待确认与完整对话"), online.el, body.el);
+  root.append(pageHead("Agent", "任务进度, 待确认与完整对话"), online.el);
+  if (hasServer() && env.actions.mode === "live") root.append(groupAgents(env));
+  root.append(body.el);
   env.scope.add(env.store.on(TOPIC_TASKS, body.update));
   env.scope.add(env.store.on(TOPIC_AGENTS, online.update));
   online.update();
