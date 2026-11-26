@@ -18,6 +18,8 @@ const MAX_LIST = 64;
 const LEGACY_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const NS_ID = /^[a-z0-9](?:[a-z0-9-]{0,38})\.[a-z0-9][a-z0-9-]{0,31}$/;
 export const isPluginId = (v: unknown): v is string => typeof v === "string" && (LEGACY_ID.test(v) || NS_ID.test(v));
+/** 带命名空间的新 id (<GitHub 登录名>.<名字>); 开发插件只能用这种。 */
+export const isNsPluginId = (v: unknown): v is string => typeof v === "string" && NS_ID.test(v);
 export const pluginNamespace = (id: string): string | null => (id.includes(".") ? id.split(".")[0]! : null);
 
 export type Cardinality = "single" | "multiple" | "layered" | "pipeline";
@@ -70,8 +72,10 @@ const FIXED_PERMS = [PERM_DATA_OWN, PERM_PUSH, PERM_WEBVIEW, PERM_REPLACE];
 export const isPermission = (p: unknown): p is string =>
   typeof p === "string" &&
   (FIXED_PERMS.includes(p) || (p.startsWith(PERM_READ_PREFIX) && /^[\w.-]+\.[\w-]+$/.test(p.slice(PERM_READ_PREFIX.length))) || (p.startsWith(PERM_NET_PREFIX) && /^[a-z0-9.*-]+$/.test(p.slice(PERM_NET_PREFIX.length))));
-/** 高危权限: 安装时单独确认。 */
-export const isRisky = (p: string) => p === PERM_WEBVIEW || p === PERM_REPLACE || p.startsWith(PERM_NET_PREFIX);
+/** 高危权限: 放行与启用时单独确认; 读别的插件的数据也算。 */
+export const isRisky = (p: string) => p === PERM_WEBVIEW || p === PERM_REPLACE || p.startsWith(PERM_NET_PREFIX) || p.startsWith(PERM_READ_PREFIX);
+/** 只给带服务端代码 (L2a) 的插件的权限。 */
+export const isServerPerm = (p: string) => p.startsWith(PERM_NET_PREFIX);
 
 export type PluginBudget = { cron?: string; agentPoll?: number; requestsPerDay?: number };
 
@@ -87,6 +91,8 @@ export type PluginExtras = {
   listens?: string[];
   permissions?: string[];
   budget?: PluginBudget;
+  // 带服务端代码 (L2a): 代码随部署发布, 白名单只能放行这次部署里有的
+  server?: boolean;
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -152,7 +158,7 @@ export function checkExtras(raw: Record<string, unknown>): string | null {
   const api = raw.api ?? PLUGIN_API_LEGACY;
   if (!(PLUGIN_APIS as readonly unknown[]).includes(api)) return `api 只能是 ${PLUGIN_APIS.join(" / ")}`;
   if (api === PLUGIN_API_LEGACY) {
-    for (const k of ["engines", "requires", "optional", "provides", "conflicts", "contributes", "emits", "listens", "permissions", "budget"]) if (raw[k] !== undefined) return `用 ${k} 需要 "api": "${PLUGIN_API}"`;
+    for (const k of ["engines", "requires", "optional", "provides", "conflicts", "contributes", "emits", "listens", "permissions", "budget", "server"]) if (raw[k] !== undefined) return `用 ${k} 需要 "api": "${PLUGIN_API}"`;
     return null;
   }
   if (!isObj(raw.engines) || !isRange(raw.engines.aioa)) return "api 2 需要 engines.aioa 版本范围";
@@ -183,5 +189,8 @@ export function checkExtras(raw: Record<string, unknown>): string | null {
   if (raw.emits !== undefined && !(strList(raw.emits, EVENT_RE) && (raw.emits as string[]).every((ev) => ev.startsWith(`${id}.`)))) return `emits 的事件名必须以 "${id}." 开头`;
   if (raw.listens !== undefined && !strList(raw.listens, EVENT_RE)) return "listens 必须是事件名数组";
   if (raw.permissions !== undefined && !(Array.isArray(raw.permissions) && raw.permissions.every(isPermission))) return "permissions 里有不认识的权限";
+  if (raw.server !== undefined && typeof raw.server !== "boolean") return "server 只能是 true / false";
+  const net = ((raw.permissions as string[] | undefined) ?? []).find(isServerPerm);
+  if (net && raw.server !== true) return `${net} 只给带服务端代码的插件 ("server": true)`;
   return budget(raw.budget);
 }

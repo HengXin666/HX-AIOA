@@ -23,6 +23,7 @@ import com.hengxin.aioa.link.LinkSocket
 import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.ui.term.TermHub
+import com.hengxin.aioa.ui.settings.PluginEvents
 import com.hengxin.aioa.kit.TaskOption
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.TaskSnapshot
@@ -149,8 +150,13 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
         if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
         if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
-        if (frame is ServerFrame.PluginUpdate) return if (frame.id == Constants.GITHUB_PLUGIN) github.onPlugin(frame.change) else Unit
+        if (frame is ServerFrame.PluginUpdate) {
+            PluginEvents.bump()
+            spaces.onPlugin(frame.id, frame.change)
+            return if (frame.id == Constants.GITHUB_PLUGIN) github.onPlugin(frame.change) else Unit
+        }
         if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
+        if (frame is ServerFrame.Welcome) PluginEvents.setCompat(frame.compat)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)
         if (frame is ServerFrame.Ev) {

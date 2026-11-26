@@ -5,6 +5,7 @@ import {
   PATH_PLUGIN_INSTALL,
   PATH_PLUGIN_UPDATE,
   PATH_PLUGINS,
+  isL2a,
   isPluginId,
   pluginChannel,
   resolvePluginId,
@@ -15,12 +16,13 @@ import {
 } from "@hx-aioa/protocol";
 import { agentBootstrap } from "../agent-prompt";
 import { baseOf, createAgent, dropAgent } from "../api-chats";
-import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
-import { type Core, OWNER, type ReqCtx, type Route, route } from "../core";
+import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
+import { type Core, OWNER, ROOM, type ReqCtx, type Route, route } from "../core";
 import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { TODO_ROUTES } from "./api-todos";
 import { usesGh } from "../gh/gate";
-import { acctOf } from "./who";
+import { acctOf, isAdmin } from "./who";
+import { L2A } from "./l2a";
 import { renderTask } from "./store";
 import { pushPlugin } from "./notify";
 import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
@@ -35,35 +37,54 @@ function pluginId(c: ReqCtx): string {
   return id;
 }
 
-async function list(c: ReqCtx): Promise<Response> {
-  for (const p of c.core.plugins.list()) await autoUpgrade(c.core, p.id);
-  const installed = new Map(c.core.plugins.list().map((p) => [p.id, p]));
-  const allow = new Map(c.core.kernel.list().map((a) => [a.id, a]));
+// 市场与详情主人和子号都能看; 安装记录 (群, Agent) 只属于主人, 只给主人看
+function viewer(c: ReqCtx): string {
   const uid = acctOf(c.core, c.who);
+  if (!uid || !(c.who.owner || c.who.member)) throw new ApiFail(403, CODE_FORBIDDEN, ERR_FORBIDDEN);
+  return uid;
+}
+
+async function list(c: ReqCtx): Promise<Response> {
+  const uid = viewer(c);
+  if (c.who.owner) for (const p of c.core.plugins.list()) await autoUpgrade(c.core, p.id);
+  const installed = new Map(c.who.owner ? c.core.plugins.list().map((p) => [p.id, p]) : []);
+  const allow = new Map(c.core.kernel.visible(uid).map((a) => [a.id, a]));
+  // 开发插件不在市场里, 单独列出 (只有开发者自己看得到)
+  const devs = [...allow.values()].filter((a) => a.dev).map((a) => {
+    const m = c.core.kernel.get(a.id)!.manifest;
+    return { id: a.id, name: m.name, summary: m.summary, version: m.version, icon: m.icon, tags: m.tags, author: m.author, dev: true as const };
+  });
+  const admin = isAdmin(c.who);
   const on = (id: string) => !!uid && allow.has(id) && c.core.kernel.isEnabled(uid, id);
   const extra = (id: string) => ({ ...(installed.has(id) ? { installed: installed.get(id)! } : {}), ...(allow.has(id) ? { allowed: allow.get(id)! } : {}), ...(on(id) ? { enabled: true as const } : {}) });
   try {
-    const index = await c.core.market.index();
-    return json({ plugins: index.map((p) => ({ ...p, ...extra(p.id) })) } satisfies PluginList);
+    const index = (await c.core.market.index()).filter((p) => !allow.get(p.id)?.dev);
+    return json({ plugins: [...devs, ...index].map((p) => ({ ...p, ...extra(p.id) })), admin, owner: c.who.owner } satisfies PluginList);
   } catch (e) {
     // 市场连不上时, 白名单与已安装的照样能看能装能卸
-    const ids = new Set([...installed.keys(), ...allow.keys()]);
-    const plugins = [...ids].map((id) => {
+    const ids = new Set([...installed.keys(), ...allow.keys()].filter((id) => !allow.get(id)?.dev));
+    const plugins = [...devs, ...[...ids].map((id) => {
       const a = allow.get(id);
       const i = installed.get(id);
-      return { id, name: a?.name ?? i?.name ?? id, summary: "", version: a?.version ?? i?.version ?? "", ...extra(id) };
-    });
-    return json({ plugins, error: e instanceof Error ? e.message : String(e) } satisfies PluginList);
+      return { id, name: a?.name ?? i?.name ?? id, summary: "", version: a?.version ?? i?.version ?? "" };
+    })].map((p) => ({ ...p, ...extra(p.id) }));
+    return json({ plugins, error: e instanceof Error ? e.message : String(e), admin, owner: c.who.owner } satisfies PluginList);
   }
 }
 
 async function detail(c: ReqCtx): Promise<Response> {
+  const uid = viewer(c);
   const id = pluginId(c);
-  const manifest = await c.core.market.manifest(id, true);
-  const readme = await c.core.market.file(id, manifest.readme);
-  await autoUpgrade(c.core, id);
-  const installed = c.core.plugins.get(id);
-  const allow = c.core.kernel.get(id)?.meta;
+  const row = c.core.kernel.get(id);
+  // 开发插件不在市场里: 开发者自己用它的快照; 别人看到的是市场内容 (没有就 404), 不暴露开发插件
+  const own = row?.meta.dev ? row.meta.by === uid : true;
+  const devRow = row?.meta.dev && own ? row : undefined;
+  // 只有管理员绕过市场缓存, 免得子号打开详情放大对市场的请求
+  const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, isAdmin(c.who)));
+  const readme = devRow ? (devRow.readme ?? "") : await c.core.market.file(id, manifest.readme);
+  if (c.who.owner) await autoUpgrade(c.core, id);
+  const installed = c.who.owner ? c.core.plugins.get(id) : undefined;
+  const allow = own ? row?.meta : undefined;
   const base = baseOf(c.url);
   const channel = installed?.channel ?? pluginChannel(id);
   const title = c.core.chats.chat(channel)?.title || manifest.group.title;
@@ -71,7 +92,7 @@ async function detail(c: ReqCtx): Promise<Response> {
     ? undefined
     : installed
     ? c.core.plugins.promptFor(id, base, channel, title, usesGh(c.core, id))
-    : renderTask(manifest.name, await c.core.market.file(id, manifest.prompt), base, channel, title);
+    : renderTask(manifest.name, devRow ? devRow.prompt : await c.core.market.file(id, manifest.prompt), base, channel, title);
   const body: PluginDetail = {
     manifest,
     readme,
@@ -79,7 +100,9 @@ async function detail(c: ReqCtx): Promise<Response> {
     ...(installed ? { installed } : {}),
     ...(allow ? { allowed: allow } : {}),
     ...(task ? { task } : {}),
-    admin: true,
+    admin: isAdmin(c.who),
+    owner: c.who.owner,
+    ...(isL2a(id) && L2A[id].owner ? { deploy: true } : {}),
   };
   return json(body);
 }
@@ -88,8 +111,9 @@ async function install(c: ReqCtx): Promise<Response> {
   const id = pluginId(c);
   if (c.core.plugins.get(id)) return fail(409, `插件 ${id} 已安装, 先卸载再装`, CODE_CONFLICT);
   if (c.core.plugins.list().length >= MAX_PLUGINS) return fail(400, `最多安装 ${MAX_PLUGINS} 个插件`);
-  // 只装白名单里的快照版本, 不看市场当前版本
+  // 只装白名单里的快照版本, 不看市场当前版本; 别人的开发插件不能装
   const { manifest: m, prompt } = allowed(c.core, id);
+  if (!c.core.kernel.usable(c.core.users.ownerId(), id)) return notFound();
   if (!m.agent) return fail(400, `插件 ${id} 没有 Agent, 不用安装, 启用即可`);
   const channel = pluginChannel(id);
   const meta = c.core.chats.chat(channel);
@@ -148,8 +172,8 @@ async function uninstall(c: ReqCtx): Promise<Response> {
 }
 
 export const PLUGIN_ROUTES: Route[] = [
-  route(GET, PATH_PLUGINS, OWNER, list),
-  route(GET, PATH_PLUGIN, OWNER, detail),
+  route(GET, PATH_PLUGINS, ROOM, list),
+  route(GET, PATH_PLUGIN, ROOM, detail),
   route(DELETE, PATH_PLUGIN, OWNER, uninstall),
   route(POST, PATH_PLUGIN_INSTALL, OWNER, install),
   route(POST, PATH_PLUGIN_UPDATE, OWNER, update),

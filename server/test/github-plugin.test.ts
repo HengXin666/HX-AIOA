@@ -44,7 +44,7 @@ test("升级迁移: 现有部署视为已放行并为主人启用, 只跑一次"
 test("升级迁移: 旧插件种子照常跑, 已放行的不被覆盖", () => {
   const sql = memSql();
   const allow = new AllowStore(sql);
-  const legacy = { ...builtinRow({ ...raw, id: "todo", api: undefined, engines: undefined, permissions: undefined, contributes: undefined, budget: undefined, agent: { name: "a" } }, 1) };
+  const legacy = { ...builtinRow({ ...raw, id: "todo", api: undefined, engines: undefined, permissions: undefined, contributes: undefined, budget: undefined, server: undefined, agent: { name: "a" } }, 1) };
   const k = new PluginKernel(allow, () => ({ rows: [legacy], uid: OWNER }), () => seedBuiltins(allow, OWNER, 1));
   assert.deepEqual(k.enabledOf(OWNER).sort(), [GITHUB_PLUGIN, "todo"].sort());
 

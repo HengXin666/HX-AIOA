@@ -11,6 +11,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,12 +55,25 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
     // 接入语含密钥, 只放内存, 离开页面就没了
     var prompt by remember(id) { mutableStateOf<PluginInstalled?>(null) }
     var confirm by rememberSaveable { mutableStateOf(false) }
+    // 待确认的高危操作: 放行 (allow) 或启用 (enable)
+    var risky by remember { mutableStateOf<String?>(null) }
     val reload = {
         scope.launch {
             api.detail(id).onSuccess { detail = it; error = null }.onFailure { error = it.message }
         }
     }
-    LaunchedEffect(id) { reload() }
+    val pushed by PluginEvents.rev.collectAsState()
+    val compat by PluginEvents.compat.collectAsState()
+    // 低于支持窗口时新功能灰掉: 只能看, 不能放行 / 启用 / 安装
+    val limited = compat?.limited == true
+    LaunchedEffect(id, pushed) { reload() }
+    val perform = { block: suspend () -> Result<Unit> ->
+        busy = true
+        scope.launch {
+            block().onSuccess { onChanged(); reload() }.onFailure { error = it.message }
+            busy = false
+        }
+    }
     val d = detail
     SettingsPageFrame(d?.entry?.name ?: "插件", onBack) {
         error?.let { SettingsGroup { NoteRow(it, c.danger) } }
@@ -84,27 +98,24 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         val installed = e.installed
         val p = prompt
         if (p != null) Handoff(p)
-        AllowGroup(d, busy) { act ->
-            busy = true
-            scope.launch {
-                (if (act) api.allow(id) else api.revoke(id)).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
-                busy = false
-            }
-        }
-        if (installed == null && e.allowed == null) {
-            if (!d.admin) Paragraph("管理员还没放行这个插件, 放行后才能安装。", c.textSecondary, BODY_SP)
-        } else if (d.agentless) {
-            SettingsGroup("启用", "这个插件没有 Agent, 不用安装。停用后它的接口与入口都隐藏, 数据保留, 再启用即恢复。") {
-                SwitchRow("启用", d.enabled) { on ->
+        if (limited) SettingsGroup { NoteRow(compat?.msg ?: "App 版本过旧, 请更新", c.danger) }
+        if (e.dev && d.admin) {
+            SettingsGroup("开发中", "开发模式装的本地插件, 只有你看得到。重新上传即换版本, 装了 Agent 的会立即换上新提示词。") {
+                ActionRow("撤掉", "trash-2", danger = true, enabled = !busy) {
                     busy = true
-                    scope.launch {
-                        api.setEnabled(id, on).onSuccess { onChanged(); reload() }.onFailure { error = it.message }
-                        busy = false
-                    }
+                    // 成功后再离开, 离开页面会取消这里的协程
+                    scope.launch { api.devRemove(id).onSuccess { onChanged(); onBack() }.onFailure { error = it.message; busy = false } }
                 }
             }
+        } else AllowGroup(d, busy || limited) { act ->
+            if (act && d.risky.isNotEmpty()) { risky = ACT_ALLOW } else { perform { if (act) api.allow(id) else api.revoke(id) } }
+        }
+        if (installed == null && e.allowed == null) {
+            if (!d.admin) Paragraph("管理员还没放行这个插件, 放行后才能启用。", c.textSecondary, BODY_SP)
+        } else if (d.agentless || !d.owner) {
+            EnableGroup(d, !busy && !limited) { on -> if (on && d.risky.isNotEmpty()) { risky = ACT_ENABLE } else { perform { api.setEnabled(id, on) } } }
         } else if (installed == null) {
-            PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy) {
+            PrimaryAction(if (busy) "安装中..." else "安装", enabled = !busy && !limited) {
                 busy = true
                 scope.launch {
                     api.install(id).onSuccess { prompt = it; onChanged(); reload() }.onFailure { error = it.message }
@@ -141,6 +152,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
                 ActionRow("卸载", "trash-2", danger = true, enabled = !busy) { confirm = true }
             }
         }
+        ChoiceGroup(d, !busy && !limited) { point, plugin -> perform { api.choose(point, plugin) }; Unit }
         // GitHub 授权没有 Agent: 启用后在这里授权
         if (id == GH_ID && d.enabled) GhSection()
         if (installed != null && id == TODO_ID && installed.channel.isNotEmpty()) TodoExtSection(installed.channel)
@@ -148,6 +160,11 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         Column(Modifier.fillMaxWidth().clip(README_SHAPE).background(c.surface).padding(16.dp)) {
             if (d.html) HtmlCard(d.readme, maxHeight = README_MAX)
             else MarkdownText(d.readme, MdColors(c.text, c.textSecondary, c.accent, c.surfaceAlt))
+        }
+    }
+    risky?.let { act ->
+        RiskyDialog(d?.entry?.name.orEmpty(), if (act == ACT_ALLOW) "放行" else "启用", d?.risky.orEmpty(), { risky = null }) {
+            perform { if (act == ACT_ALLOW) api.allow(id) else api.setEnabled(id, true) }
         }
     }
     if (confirm) {
@@ -171,6 +188,8 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
 }
 
 private const val TASK_PREVIEW_LINES = 6
+private const val ACT_ALLOW = "allow"
+private const val ACT_ENABLE = "enable"
 
 /** 管理员才看到: 放行 (或放行市场新版) 与撤销放行。act = true 放行, false 撤销。 */
 @Composable

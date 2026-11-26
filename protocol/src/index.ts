@@ -24,12 +24,14 @@ export * from "./v1/plugin-check";
 export * from "./v1/plugin-api";
 export * from "./v1/plugin-todo";
 export * from "./v1/plugin-hxoa";
+export * from "./v1/plugin-l2a";
 export * from "./v1/semver";
 export * from "./v1/mail";
 export * from "./v1/mail-rules";
 export * from "./v1/translate";
 export * from "./v1/term";
 export * from "./v1/presence";
+export * from "./v1/compat";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 import { parseTyping, type TypingFrame } from "./v1/presence";
 

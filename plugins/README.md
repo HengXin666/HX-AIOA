@@ -41,7 +41,8 @@ plugins/
 | `contributes` | 扩展点贡献, 目录见 `docs/api/plugins.md`; 非集合的 id 必须以插件 id 加 `.` 开头 |
 | `contributes.collections` | 插件数据集合 `{ "id": "items", "fields": { "title": "string" }, "index": ["title"] }` |
 | `emits` / `listens` | 事件名; `emits` 必须以插件 id 开头 |
-| `permissions` | `data:own`, `data:read:<插件>.<集合>`, `push:send`, `net:<域名>`, `ui.webview`, `core.replace`; 后三类是高危 |
+| `permissions` | `data:own`, `data:read:<插件>.<集合>`, `push:send`, `net:<域名>`, `ui.webview`, `core.replace`; 除 `data:own` 与 `push:send` 外都是高危, 放行与启用时单独确认; `net:*` 只给 `server: true` 的插件 |
+| `server` | `true` 表示带服务端代码 (L2a), 代码随部署发布, 必须登记在 `protocol/src/v1/plugin-l2a.ts` 的 `L2A_PLUGINS`; 白名单只能放行这次部署里有的; 开发模式不能用 |
 | `budget` | `{ "cron": "0 * * * *", "agentPoll": 0, "requestsPerDay": 0 }`; `agentPoll` 为 0 表示 Agent 用长连, 否则不小于 60 秒 |
 
 api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa watch`)。市场 CI (`npm run check:plugins`) 按 "全部放进白名单" 做冲突检测, 并估算每天请求, 合计超过 5 万不让合并。

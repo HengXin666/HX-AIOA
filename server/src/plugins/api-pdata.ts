@@ -29,6 +29,7 @@ type Target = { acct: string; plugin: string; coll: Contribution; scope: string[
 const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
 const deny = (text = ERR_FORBIDDEN) => new ApiFail(403, CODE_FORBIDDEN, text);
 const ID_ERR = "id 只能包含字母数字和 _ . : -, 最多 64 字";
+const BATCH_FAIL = "这一行写入失败";
 
 /**
  * 谁能碰 (账号, 插件, 集合): 主人与子号能读写自己账号下启用了的插件;
@@ -151,15 +152,24 @@ async function batch(c: ReqCtx): Promise<Response> {
       out.items.push({ id, error: err });
       continue;
     }
-    if (row.deleted === true) channels.push(channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body));
-    const r = row.deleted === true ? c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver) : c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, ver, fixBody(c, t, id, row.body));
+    const was = row.deleted === true ? channelOf(c.core.pdata.get(t.acct, t.plugin, t.coll.id, id)?.body) : undefined;
+    let r;
+    // 某一行抛错也只记在这一行, 前面写成的照常推送
+    try {
+      r = row.deleted === true ? c.core.pdata.remove(t.acct, t.plugin, t.coll.id, id, ver) : c.core.pdata.put(t.acct, t.plugin, t.coll.id, id, ver, fixBody(c, t, id, row.body));
+    } catch (e) {
+      // 内部错误不原样回给调用方, 细节进日志
+      console.error(`pdata 批量写 ${t.plugin}/${t.coll.id}/${id} 出错:`, e);
+      out.items.push({ id, error: e instanceof ApiFail ? e.message : BATCH_FAIL });
+      continue;
+    }
     if ("error" in r) out.items.push({ id, error: r.error });
     else if ("conflict" in r) out.items.push({ id, conflict: r.conflict });
     else {
       out.items.push({ id, item: r.ok });
       if (r.ok.ver !== ver + 1) continue;
       out.rev = Math.max(out.rev, r.ok.rev);
-      if (row.deleted !== true) channels.push(channelOf(row.body));
+      channels.push(row.deleted === true ? was : channelOf(row.body));
     }
   }
   touched(c, t, out.rev, channels);

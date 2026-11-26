@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import { saveHead, saveUntil, loadState } from "./config.mjs";
 import { isMine, print } from "./format.mjs";
-import { call, enc, guideChanged, headers } from "./http.mjs";
+import { PROTOCOL, call, enc, guideChanged, headers } from "./http.mjs";
 
 const PING_MS = 25_000;
 const RETRY_WS_MS = 60_000;
@@ -118,6 +118,7 @@ export function watch(cfg, me, opts) {
       url.searchParams.set("role", "chat");
       url.searchParams.set("device", `cli-${hostname()}`.slice(0, 64));
       if (since) url.searchParams.set("since", String(since));
+      url.searchParams.set("pv", String(PROTOCOL));
       let open = false;
       try {
         ws = new WebSocket(url, { headers: headers(cfg.key) });
@@ -140,7 +141,8 @@ export function watch(cfg, me, opts) {
         } catch {
           return;
         }
-        if (f.t === "ev" && f.ev) handle(f.ev);
+        if (f.t === "welcome" && f.compat && f.compat.level !== "ok") process.stderr.write(`服务端提示: ${f.compat.msg ?? f.compat.level}, 请更新 hxaioa\n`);
+        else if (f.t === "ev" && f.ev) handle(f.ev);
         else if (f.t === "guide") guide(f.version);
         else if (f.t === "plugin_update" && f.guide) pluginChanged(f);
       };

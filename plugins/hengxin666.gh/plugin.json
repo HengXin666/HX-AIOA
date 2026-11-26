@@ -2,7 +2,7 @@
   "id": "hengxin666.gh",
   "name": "GitHub 授权",
   "summary": "授权一次 GitHub, 令牌只存在服务端; 别的插件和你允许的 Agent 通过服务端操作 issue。",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "icon": "github",
   "tags": [
     "GitHub",
@@ -16,6 +16,7 @@
     "title": "GitHub 授权"
   },
   "api": "2",
+  "server": true,
   "engines": {
     "aioa": "^2"
   },

@@ -44,6 +44,7 @@ import { messageInput } from "./api-events";
 import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
+import { blocked, compatFor } from "./compat";
 import { Config } from "./config";
 import {
   ABNORMAL_CLOSE,
@@ -134,7 +135,8 @@ export class Hub extends DurableObject<Env> {
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...pluginParts(sql, () => users.ownerId()), mail: new MailStore(sql), todos: new TodoStore(sql, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    const parts = pluginParts(sql, () => users.ownerId());
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -261,6 +263,8 @@ export class Hub extends DurableObject<Env> {
     const roleRaw = url.searchParams.get(QUERY_ROLE) ?? (device.startsWith(PROBE_DEVICE_PREFIX) ? "probe" : "client");
     const role = (STREAM_ROLES as readonly string[]).includes(roleRaw) ? (roleRaw as StreamRole) : null;
     if (!role || !this.mayConnect(who, role, device)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+    const deny = blocked(url);
+    if (deny) return deny;
 
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
     const session = who.owner ? who.session : who.member?.session;
@@ -282,7 +286,8 @@ export class Hub extends DurableObject<Env> {
     const floor = this.core.store.floor();
     // 断线期间有墓碑被清理: 让客户端丢掉 floor 之前的缓存, 补拉改为最近一批
     const resync = Number.isFinite(since) && since > 0 && since < floor;
-    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me, ...(resync ? { resync, floor } : {}) });
+    const compat = compatFor(url);
+    if (v1) sendFrame(server, { t: "welcome", head, v: PROTOCOL_VERSION, now: Date.now(), role, ...me, ...(resync ? { resync, floor } : {}), ...(compat ? { compat } : {}) });
     else sendFrame(server, { t: "welcome", head });
     if (listen) {
       chatBacklog(this.core, server, who, since);

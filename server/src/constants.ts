@@ -54,6 +54,7 @@ export const CODE_UNAUTHORIZED = "unauthorized";
 export const CODE_FORBIDDEN = "forbidden";
 export const CODE_NOT_FOUND = "not_found";
 export const CODE_CONFLICT = "conflict";
+export const CODE_PLUGIN_CONFLICT = "plugin_conflict";
 export const CODE_NEED_CONFIRM = "need_confirm";
 export const CODE_EXPIRED = "expired";
 export const CODE_RATE_LIMITED = "rate_limited";

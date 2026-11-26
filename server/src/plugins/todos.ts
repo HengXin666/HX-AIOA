@@ -31,8 +31,8 @@ const live = (it: PDataItem | null): TodoBody | null => (it && !it.deleted ? (it
 export class TodoStore {
   private readonly pdata: PDataStore;
 
-  constructor(sql: SqlStorage, private readonly owner: () => string, tx: Tx) {
-    this.pdata = new PDataStore(sql);
+  constructor(sql: SqlStorage, pdata: PDataStore, private readonly owner: () => string, tx: Tx) {
+    this.pdata = pdata;
     migrateTodo(sql, this.pdata, owner, tx);
   }
 

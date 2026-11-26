@@ -10,6 +10,7 @@
   "prompt": "prompt.md",
   "group": { "title": "hxoa" },
   "api": "2",
+  "server": true,
   "engines": { "aioa": "^2" },
   "permissions": ["net:*"],
   "contributes": {

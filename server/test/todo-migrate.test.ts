@@ -44,7 +44,7 @@ function oldDb(opts: { allow?: boolean } = {}) {
 
 test("迁移: 旧表搬进 pdata, 旧 id 全部改成新 id, 群与工作台不改名, 旧表删掉", () => {
   const { sql, chats } = oldDb();
-  const todos = new TodoStore(sql, () => OWNER, tx);
+  const todos = new TodoStore(sql, new PDataStore(sql), () => OWNER, tx);
   const items = todos.list(CH).sort((a, b) => a.id.localeCompare(b.id));
   assert.deepEqual(items, [
     { id: "t-1", title: "调研", state: "open", prio: 3, created: 100, updated: 200, note: "先看", src: 7 },
@@ -84,7 +84,7 @@ test("迁移幂等: 再跑一次不写; 标记丢了旧表又在也不重复写"
 
 test("#99 之前的库 (白名单为空): 升级种子用新 id, 带上 v2 数据声明", () => {
   const { sql } = oldDb({ allow: false });
-  new TodoStore(sql, () => OWNER, tx);
+  new TodoStore(sql, new PDataStore(sql), () => OWNER, tx);
   const plugins = new PluginStore(sql);
   const k = new PluginKernel(new AllowStore(sql), () => legacySeed(plugins, OWNER));
   assert.ok(k.isEnabled(OWNER, TODO_PLUGIN));
@@ -92,7 +92,7 @@ test("#99 之前的库 (白名单为空): 升级种子用新 id, 带上 v2 数�
 });
 
 test("转发层: 按 id 合并, 内容没变不写, 删除写墓碑, 删后可重建", () => {
-  const todos = new TodoStore(memSql(), () => OWNER, tx);
+  const todos = (() => { const m = memSql(); return new TodoStore(m, new PDataStore(m), () => OWNER, tx); })();
   const a = todos.upsert(CH, [{ id: "t-9", title: "新的", prio: 1 }], 10);
   assert.ok(typeof a !== "string" && a.rev > 0 && a.todos[0]?.state === "open");
   const same = todos.upsert(CH, [{ id: "t-9", title: "新的" }], 11);
@@ -129,7 +129,7 @@ test("市场里的清单与服务端的待办数据声明一致", () => {
 });
 
 test("待办归个人: 子号的待办与主人的分开存", () => {
-  const todos = new TodoStore(memSql(), () => OWNER, tx);
+  const todos = (() => { const m = memSql(); return new TodoStore(m, new PDataStore(m), () => OWNER, tx); })();
   todos.upsert(CH, [{ id: "a", title: "主人的" }]);
   todos.upsert(CH, [{ id: "a", title: "子号的" }], 1, "u_member");
   assert.equal(todos.list(CH)[0]?.title, "主人的");
