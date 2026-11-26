@@ -1,0 +1,21 @@
+name: env-doc
+
+# 改了环境变量相关文件就核对总表 docs/deploy/env.md (#119)
+on:
+  push:
+    branches: ["main"]
+    paths: ["server/src/env.ts", "server/wrangler.toml", ".github/workflows/**", "docs/deploy/env.md", ".github/scripts/env_doc_check.py"]
+  pull_request:
+    paths: ["server/src/env.ts", "server/wrangler.toml", ".github/workflows/**", "docs/deploy/env.md", ".github/scripts/env_doc_check.py"]
+
+permissions:
+  contents: read
+
+jobs:
+  env-doc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核对环境变量总表
+        run: python3 .github/scripts/env_doc_check.py

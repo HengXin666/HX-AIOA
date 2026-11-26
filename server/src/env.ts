@@ -10,7 +10,8 @@ export interface Env {
   WXPUSHER_APP_TOKEN?: string;
   WXPUSHER_UID?: string;
   GITHUB_TOKEN?: string;
-  // 可选, GitHub 授权插件的设备码流程: OAuth App 或 GitHub App 的 client id; secret 只用于 GitHub App 令牌续期
+  // 所有变量的说明, 级别与归属见 docs/deploy/env.md, 改这里要同步改那张表
+  // GitHub 授权插件的设备码流程: id 和 secret 一起配, secret 用于 8 小时到期后续期
   GH_CLIENT_ID?: string;
   GH_CLIENT_SECRET?: string;
   // CF 额度页: 只读 Account Analytics token 与账号 id

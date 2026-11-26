@@ -68,6 +68,10 @@ jobs:
           PY
           fi
 
+      - name: 核对环境变量总表
+        working-directory: .
+        run: python3 .github/scripts/env_doc_check.py
+
       - name: 部署到 Cloudflare
         run: npx wrangler deploy
 
@@ -127,26 +131,21 @@ jobs:
           fi
           printf '%s' "$AIOA_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN
 
-      # 可选: 仓库变量 AIOA_GH_CLIENT_ID (OAuth App 的 Client ID, 开了 Device Flow, 公开值) 同步为 Worker 的 GH_CLIENT_ID, gh 插件设备码授权要用
-      - name: 同步 GitHub 设备码 Client ID
+      # gh 插件设备码授权: 仓库变量 AIOA_GH_CLIENT_ID 和 secret AIOA_GH_CLIENT_SECRET 必须一起配 (令牌 8 小时过期, 没 secret 续不了), 见 docs/deploy/env.md
+      - name: 同步 GitHub 设备码凭据
         env:
           AIOA_GH_CLIENT_ID: ${{ vars.AIOA_GH_CLIENT_ID }}
-        run: |
-          if [ -z "$AIOA_GH_CLIENT_ID" ]; then
-            echo "未配置 AIOA_GH_CLIENT_ID 变量, 跳过, gh 插件只能粘贴令牌授权"
-            exit 0
-          fi
-          printf '%s' "$AIOA_GH_CLIENT_ID" | npx wrangler secret put GH_CLIENT_ID
-
-      # 可选: 仓库 secret AIOA_GH_CLIENT_SECRET 同步为 GH_CLIENT_SECRET。应用开了 "用户令牌过期" 时, 设备码拿到的令牌 8 小时过期, 要它才能自动续期
-      - name: 同步 GitHub 续期密钥
-        env:
           AIOA_GH_CLIENT_SECRET: ${{ secrets.AIOA_GH_CLIENT_SECRET }}
         run: |
-          if [ -z "$AIOA_GH_CLIENT_SECRET" ]; then
-            echo "未配置 AIOA_GH_CLIENT_SECRET, 跳过, 会过期的 GitHub 授权到期后要重新授权"
+          if [ -z "$AIOA_GH_CLIENT_ID" ] && [ -z "$AIOA_GH_CLIENT_SECRET" ]; then
+            echo "未配置 GitHub 设备码凭据, 跳过, gh 插件只能粘贴令牌授权"
             exit 0
           fi
+          if [ -z "$AIOA_GH_CLIENT_ID" ] || [ -z "$AIOA_GH_CLIENT_SECRET" ]; then
+            echo "::error::AIOA_GH_CLIENT_ID (variable) 和 AIOA_GH_CLIENT_SECRET (secret) 必须一起配, 只配一个授权 8 小时后就失效。见 docs/deploy/env.md"
+            exit 1
+          fi
+          printf '%s' "$AIOA_GH_CLIENT_ID" | npx wrangler secret put GH_CLIENT_ID
           printf '%s' "$AIOA_GH_CLIENT_SECRET" | npx wrangler secret put GH_CLIENT_SECRET
 
       # 可选: 配置了 AZURE_TRANSLATOR_KEY secret 时同步微软翻译密钥 (区域资源另配 AZURE_TRANSLATOR_REGION)

@@ -40,7 +40,7 @@ HX-AIOA (All In One App) 是一个个人用的随处可用对话入口: 把各�
 4. 中文里的标点一律使用英文半角标点 (`,` `:` `;` `!` `?` `()` `""`), 唯一例外是句号使用 `。`。
 5. 同一个字面量出现 3 次及以上, 提取为常量, 放进该模块的常量文件 (`constants.ts` / `Constants.kt`)。
 6. 代码中禁止出现任何绝对路径, 包括拼接出来的绝对路径。
-7. 密钥只放环境变量或 secret, 不进仓库。
+7. 密钥只放环境变量或 secret, 不进仓库。新增, 改名, 删除环境变量 / 仓库 secret / wrangler 绑定, 必须同一个提交更新 `docs/deploy/env.md` (写清级别和归属插件), CI 会核对。
 8. 文档放进 `docs/` 对应子目录 (api, features, deploy, client, design), 新增时在 `docs/README.md` 登记一行; `docs/agent-guide.md` 地址已写进各 Agent, 不得移动。
 
 ## 5. 验证命令
