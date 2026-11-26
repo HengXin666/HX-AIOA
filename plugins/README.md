@@ -48,6 +48,12 @@ plugins/
 
 api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa watch`)。市场 CI (`npm run check:plugins`) 按 "全部放进白名单" 做冲突检测, 并估算每天请求, 合计超过 5 万不让合并。
 
+市场 CI 还检查 (`tools/plugin-index.ts`):
+
+- `index.json`: 不重复, 每条都有目录, `name` / `summary` / `icon` / `author` 齐全, 版本与清单一致。
+- 升版本: 插件目录有任何改动就必须升 `version` (与 `index.json` 一起改), 不能倒退; 否则已装的部署收不到更新。
+- 依赖: `requires` 不能成环; 每个插件只带上它依赖的提供者 (取满足范围的最高版本) 也要能单独装上, 不冲突; `optional` 的提供者版本不满足时提示。报告里列出依赖表。
+
 模板占位符: `{{channel}}` 群 channel, `{{title}}` 群标题, `{{base}}` 服务地址。`prompt.md` 与 `space` 里都能用。
 
 ## 安装后的专属指令

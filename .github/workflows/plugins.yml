@@ -26,4 +26,8 @@ jobs:
           dirs=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- plugins | awk -F/ 'NF>2{print $2}' | sort -u | paste -sd, -)
           echo "CHANGED=$dirs" >> "$GITHUB_ENV"
           echo "PR_AUTHOR=${{ github.event.pull_request.user.login }}" >> "$GITHUB_ENV"
+      - name: 升版本检查的基线
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then echo "BASE=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+          elif [ -n "${{ github.event.before }}" ] && git cat-file -e "${{ github.event.before }}" 2>/dev/null; then echo "BASE=${{ github.event.before }}" >> "$GITHUB_ENV"; fi
       - run: npm run check:plugins
