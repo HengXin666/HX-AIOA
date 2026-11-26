@@ -140,7 +140,10 @@ fun ChatScreen(model: ChatModel) {
             // 装了待办插件的群: 顶上切 聊天 / 待办
             var todo by rememberSaveable(open) { mutableStateOf(false) }
             if (dir.metas[open]?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
-            if (todo) KeepState("chat:todo:$open") { com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { seq -> todo = false; g.jumpTo(seq) }, Modifier.weight(1f)) }
+            if (todo) KeepState("chat:todo:$open") {
+                // 看 "全部待办" 时来源消息可能在别的群: 本群就地定位, 别的群进去再定位
+                com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { ch, seq -> todo = false; if (ch == open) g.jumpTo(seq) else model.groups.openAt(ch, seq) }, Modifier.weight(1f))
+            }
             else {
                 KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
                 Composer(g)

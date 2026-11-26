@@ -36,6 +36,9 @@ class Notifier(private val context: Context, private val db: MessageDb) {
     /** v1 事件; msg 是它写进消息库的样子。loud 为 false 时 (安静路由, 已恢复) 只更新已有通知。 */
     fun event(ev: Envelope, msg: ServerFrame.Msg, loud: Boolean) {
         if (events.recover(ev)) return
+        // 待办提醒: 本地闹钟已挂或已响过的同一次提醒不再弹 (断网时本地先响, 服务端消息补到群里)
+        val todoKey = ev.dedupeKey?.takeIf { ev.source.id == Constants.SOURCE_TODO_REMIND }
+        if (todoKey != null && TodoAlarms.handled(context, todoKey)) return
         val task = ev.task
         when {
             task != null -> events.task(task, ev.source.name, loud)

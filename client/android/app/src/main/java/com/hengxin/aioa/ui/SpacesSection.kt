@@ -64,7 +64,8 @@ private class AppSpaceSource(private val chat: ChatModel) : SpaceSource {
     override fun todos(subject: String): List<TodoRow>? = chat.spaces.todos(subject)
 
     // 与群里的待办看板同款; 详情里 "去原消息" 进群定位
-    override val todoView: @Composable (String, Int) -> Unit = { subject, limit -> TodoCompact(chat.spaces, subject, limit) { seq -> chat.groups.openAt(subject, seq) } }
+    // 看本账号全部群的待办 (与看板一致), subject 只用来认出这是待办组件
+    override val todoView: @Composable (String, Int) -> Unit = { _, limit -> TodoCompact(chat.spaces, limit) { ch, seq -> chat.groups.openAt(ch, seq) } }
 }
 
 /** 资源页顶部的工作台: 与 Web 渲染同一份 schema; 危险按钮与危险选项先二次确认。 */

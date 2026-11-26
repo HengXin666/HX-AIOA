@@ -27,12 +27,26 @@ object Channels {
             channel(context, Constants.CHANNEL_GITHUB, R.string.channel_github, R.string.channel_github_desc, NotificationManager.IMPORTANCE_DEFAULT),
             channel(context, Constants.CHANNEL_REPORT, R.string.channel_report, R.string.channel_report_desc, NotificationManager.IMPORTANCE_LOW),
             channel(context, Constants.CHANNEL_UPDATE, R.string.channel_update, R.string.channel_update_desc, NotificationManager.IMPORTANCE_DEFAULT),
+            loud(channel(context, Constants.CHANNEL_TODO, R.string.channel_todo, R.string.channel_todo_desc, NotificationManager.IMPORTANCE_HIGH)),
+            alarm(channel(context, Constants.CHANNEL_TODO_ALARM, R.string.channel_todo_alarm, R.string.channel_todo_alarm_desc, NotificationManager.IMPORTANCE_HIGH)),
         )
         manager.createNotificationChannels(list)
     }
 
     private fun channel(context: Context, id: String, @StringRes name: Int, @StringRes desc: Int, importance: Int) =
         NotificationChannel(id, context.getString(name), importance).apply { description = context.getString(desc) }
+
+    // 闹钟: 系统闹钟铃声, 按闹钟音量响, 勿扰模式下按闹钟规则放行
+    private fun alarm(c: NotificationChannel) = c.apply {
+        enableVibration(true)
+        vibrationPattern = Constants.VIBRATE_PATTERN
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        setBypassDnd(true)
+        setSound(
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build(),
+        )
+    }
 
     // 需要像聊天软件那样顶部弹出的渠道: 震动, 灯光, 锁屏可见, 即时通讯音效
     private fun loud(c: NotificationChannel) = c.apply {

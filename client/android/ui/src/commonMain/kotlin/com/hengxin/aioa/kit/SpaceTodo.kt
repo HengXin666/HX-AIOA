@@ -34,8 +34,25 @@ data class TodoRow(
     val ghOpen: Boolean? = null,
     val ghComments: Int = 0,
     val ghParent: Int? = null,
+    // 所在的群 (pdata 行 id 的前缀); 看全部待办时写回要用
+    val channel: String = "",
+    // 分区, 截止 (毫秒), 提前几分钟提醒, 闹钟响铃, 星标, 周期 (单位 day/week/month/year, 每 n 个), 已完成几期 (#105)
+    val area: String? = null,
+    val due: Long? = null,
+    val remind: Int? = null,
+    val alarm: Boolean = false,
+    val star: Boolean = false,
+    val everyUnit: String? = null,
+    val everyN: Int = 1,
+    val runs: Int = 0,
 ) {
     val finished: Boolean get() = state == STATE_DONE || state == STATE_DROPPED
+
+    /** 提醒时刻: 有截止且设了提醒, 还没完成。 */
+    val fireAt: Long? get() = if (due != null && remind != null && !finished) due - remind * MINUTE_MS else null
+
+    /** 分区: 没填时关联了仓库的算 "开发", 其余 "未分区"。 */
+    val areaKey: String get() = area ?: if (repo != null) AREA_DEV else AREA_NONE
 
     companion object {
         const val STATE_DONE = "done"
@@ -43,6 +60,9 @@ data class TodoRow(
         const val STATE_OPEN = "open"
         const val STATE_DOING = "doing"
         const val STATE_HOLD = "hold"
+        const val AREA_DEV = "开发"
+        const val AREA_NONE = "未分区"
+        const val MINUTE_MS = 60_000L
     }
 }
 

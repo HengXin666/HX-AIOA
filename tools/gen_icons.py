@@ -18,6 +18,7 @@ ICONS = [
     "search", "mail", "mail-open", "inbox", "check-check", "flame", "archive", "at-sign", "corner-up-left", "users", "calendar-days", "link", "ban", "circle-check",
     "folder", "eye", "eye-off", "sliders-horizontal", "key-round", "monitor", "circle-pause", "circle-dashed", "clock", "languages", "thumbs-up",
     "terminal", "plus", "play", "file", "corner-left-up",
+    "alarm-clock", "repeat", "layers", "pencil", "bell-off",
 ]
 # Lucide 已移除品牌图标, 这些名字借用相近图标的路径
 ALIASES = {"github": "git-branch"}

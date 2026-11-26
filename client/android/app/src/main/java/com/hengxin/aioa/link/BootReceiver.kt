@@ -10,7 +10,11 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (ConfigStore.load(context) == null) return
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> LinkService.start(context)
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                LinkService.start(context)
+                // 重启或升级后系统清掉了闹钟, 按存的计划补挂
+                TodoAlarms.restore(context)
+            }
         }
     }
 }
