@@ -8,6 +8,7 @@ import { PROTOCOL, call, enc, guideChanged, headers } from "./http.mjs";
 const PING_MS = 25_000;
 const RETRY_WS_MS = 60_000;
 const DEFAULT_POLL_S = 20;
+const POLL_LIMIT = 100;
 const EXIT_TIMEOUT = 2;
 const EXIT_GUIDE = 3;
 const EXIT_AGAIN = 4;
@@ -36,6 +37,7 @@ function wake(ev, me, opts) {
 
 /**
  * opts: channels (null = 能读的全部), once, timeout (秒), window (秒), json, exec, mine, any, interval (秒), guide (已报到的指令版本)
+ * peek: 只等不记 (next 用), 不推进任何本地 head, 第一条要叫醒的消息交给 deliver 后结束; since 为补发起点。
  * 返回进程退出码: 0 收到消息 (once) 或被打断, 2 等满了没人说话, 3 指令更新了, 4 本次到点但窗口没满 (再跑一次)。
  */
 export function watch(cfg, me, opts) {
@@ -44,12 +46,15 @@ export function watch(cfg, me, opts) {
     let ws = null;
     let pollTimer = null;
     let pingTimer = null;
+    const peek = !!opts.peek;
+    const once = opts.once || peek;
     const { ms, until } = budget(opts);
     const finish = (code) => {
       if (done) return;
       done = true;
       // 等到消息或窗口用完就关掉窗口, 下一轮重新计 5 分钟
       if (until && (code === 0 || code === EXIT_TIMEOUT)) saveUntil(0);
+      clearTimeout(timer);
       clearInterval(pollTimer);
       clearInterval(pingTimer);
       try {
@@ -58,7 +63,8 @@ export function watch(cfg, me, opts) {
       resolve(code);
     };
     const expire = () => finish(until && Date.now() < until - SLACK_MS ? EXIT_AGAIN : EXIT_TIMEOUT);
-    if (Number.isFinite(ms)) setTimeout(expire, Math.max(0, ms)).unref?.();
+    // 不 unref: 握手失败到退回拉取之间事件循环可能是空的, 靠它撑住
+    const timer = Number.isFinite(ms) ? setTimeout(expire, Math.max(0, ms)) : null;
     process.once("SIGINT", () => finish(0));
 
     const wanted = (ev) => {
@@ -67,37 +73,51 @@ export function watch(cfg, me, opts) {
       return wake(ev, me, opts);
     };
     const guide = (version) => {
-      if (!version || version === opts.guide) return;
+      if (peek || !version || version === opts.guide) return;
       process.stdout.write(opts.json ? `${JSON.stringify({ guide: version })}\n` : `专属指令已更新到 ${version}: 先运行 hxaioa guide --ack\n`);
       if (opts.once) finish(EXIT_GUIDE);
     };
+    const deliver = opts.deliver ?? ((ev) => {
+      print(ev, opts.json);
+      if (opts.exec) runExec(opts.exec, ev);
+    });
+    // peek 时的读到位置只在内存里
+    const local = {};
+    const advance = (ch, seq) => {
+      if (!ch) return;
+      if (peek) local[ch] = Math.max(local[ch] ?? 0, seq);
+      else saveHead(ch, seq);
+    };
     const seen = new Set();
+    // #114: 先交出 (打印或 exec) 再推进 head; --once 结束后到的消息不碰 head, 下次 read --new 还能拿到
     const handle = (ev) => {
       if (done || seen.has(ev.seq)) return;
       seen.add(ev.seq);
-      if (ev.channel) saveHead(ev.channel, ev.seq);
-      if (!wanted(ev)) return;
-      print(ev, opts.json);
-      if (opts.exec) runExec(opts.exec, ev);
-      if (opts.once) finish(0);
+      const hit = wanted(ev);
+      if (hit) deliver(ev);
+      advance(ev.channel, ev.seq);
+      if (hit && once) finish(0);
     };
 
     // 插件更新: 服务端推到 Agent 长连, 马上提示换指令; --once 时就此醒来, 让调用方立即处理
     // 退出码与 guide 帧一致 (3): 调用方先 hxaioa guide --ack 再等
     const pluginChanged = (f) => {
-      if (done) return;
+      if (done || peek) return;
       process.stderr.write(`插件 ${f.id} 已${f.change === "updated" ? "更新" : "变化"}${f.version ? `到 ${f.version}` : ""}: 先运行 hxaioa guide --ack, 用新全文替换旧指令再继续。\n`);
       if (opts.json) process.stdout.write(`${JSON.stringify({ t: "guide", id: f.id, version: f.version ?? null })}\n`);
       if (opts.once) finish(EXIT_GUIDE);
     };
 
     const poll = async () => {
-      const heads = loadState().heads;
+      const heads = peek ? local : loadState().heads;
       for (const ch of opts.channels ?? [me.channel].filter(Boolean)) {
         try {
-          const r = await call(cfg, "GET", `/api/v1/chats/${enc(ch)}/messages?since=${heads[ch] ?? 0}&limit=100`);
-          for (const ev of r.messages ?? []) handle(ev);
-          if (r.head) saveHead(ch, r.head);
+          const since = heads[ch] ?? opts.since ?? 0;
+          const r = await call(cfg, "GET", `/api/v1/chats/${enc(ch)}/messages?since=${since}&limit=${POLL_LIMIT}`);
+          const list = r.messages ?? [];
+          for (const ev of list) handle(ev);
+          // 这一批全交出了才把 head 推到服务端的位置; 还有下一页时 head 会跳过没拉到的
+          if (r.head && !done && list.length < POLL_LIMIT) advance(ch, r.head);
         } catch (e) {
           process.stderr.write(`拉取 ${ch} 失败: ${e.message}\n`);
         }
@@ -112,7 +132,7 @@ export function watch(cfg, me, opts) {
       setTimeout(() => !done && connect(), RETRY_WS_MS).unref?.();
     };
     const connect = () => {
-      const since = loadState().last;
+      const since = peek ? Math.max(opts.since ?? 0, ...Object.values(local)) : loadState().last;
       const url = new URL("/api/v1/stream", cfg.server.replace(/^http/, "ws"));
       url.searchParams.set("token", cfg.key);
       url.searchParams.set("role", "chat");
@@ -156,7 +176,8 @@ export function watch(cfg, me, opts) {
         if (open) setTimeout(connect, 3000);
         else startPolling();
       };
-      ws.onerror = () => {};
+      // 有的 Node 版本握手失败只发 error 不发 close
+      ws.onerror = () => !open && startPolling();
     };
     connect();
   });

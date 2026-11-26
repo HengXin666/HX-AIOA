@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataDir } from "./config.mjs";
-import { line } from "./format.mjs";
+import { block } from "./format.mjs";
 import { call, enc } from "./http.mjs";
 
 const PAGE = 200;
@@ -33,9 +33,6 @@ function apply(map, list) {
     map.set(ev.seq, ev);
   }
 }
-
-// 多行正文缩进两格, 一条消息的首行总以 #seq 开头, 方便 grep -n "^#123"
-const text = (ev) => line(ev).replace(/\n/g, "\n  ");
 
 /**
  * 同步一个群的历史到 ~/.hxaioa/history/<群>.jsonl 与 .txt; want 为本地至少要有的条数 (往前翻页补足)。
@@ -71,6 +68,6 @@ export async function syncHistory(cfg, channel, want = DEFAULT_WANT) {
   }
   const all = [...map.values()].sort((a, b) => a.seq - b.seq).slice(-MAX_KEEP);
   writeFileSync(`${base}.jsonl`, all.map((ev) => JSON.stringify(ev)).join("\n") + "\n", { mode: 0o600 });
-  writeFileSync(`${base}.txt`, all.map(text).join("\n") + "\n", { mode: 0o600 });
+  writeFileSync(`${base}.txt`, all.map(block).join("\n") + "\n", { mode: 0o600 });
   return { file: `${base}.txt`, json: `${base}.jsonl`, count: all.length, first: all[0]?.seq ?? 0, last: all.at(-1)?.seq ?? 0, fetched };
 }
