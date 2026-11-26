@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2266.5" viewBox="0 0 1800 2266.5">
+<defs><marker id="ah34495e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34495e"/></marker><marker id="ah2e86c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e86c1"/></marker><marker id="ahd68910" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d68910"/></marker><marker id="ah16a085" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a085"/></marker><marker id="ah8e44ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8e44ad"/></marker></defs>
+<rect width="100%" height="100%" fill="#fbfbfd"/>
+<text x="30" y="42" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#1f2430" font-weight="bold" text-anchor="start">HX-AIOA 云 Agent 重构后</text>
+<text x="30" y="68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#5d6778" font-weight="normal" text-anchor="start">知识装一次 (skill, 从 Git 下), 机制收进命令行, 服务端只管数据。提示词分两种: 接入语用一次, 触发语每次一句。绿色为相对现状新增或改变的部分。</text>
+<text x="30" y="110" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" fill="#1f2430" font-weight="bold" text-anchor="start">一. 各部分管什么</text>
+<rect x="30" y="124" width="410" height="30" rx="8" fill="#34495e" stroke="#34495e" stroke-width="1.2"/>
+<text x="42" y="145" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14.5" fill="#fff" font-weight="bold" text-anchor="start">GitHub 仓库: 唯一的知识来源</text>
+<text x="42" y="176.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">skills/hx-aioa/: 核心 skill</text>
+<text x="42" y="195.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  SKILL.md: 一轮怎么跑, 安全边界, 回复风格 (L2, 目标少于 1</text>
+<text x="42" y="214.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  500 字)</text>
+<text x="42" y="232.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  steps/1-next, 2-handle, 3-wait: 每步一个契约 index.md</text>
+<text x="42" y="251.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  references/: cli.md (由 --help 生成), pdata.md, feed.</text>
+<text x="42" y="270.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  md, github.md</text>
+<text x="42" y="289.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">plugins/&lt;id&gt;/skill/handle.md: 插件自带的业务契约, 装进 st</text>
+<text x="42" y="307.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">  eps/2-handle/impl/</text>
+<text x="42" y="326.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">按版本 tag 固定, 插件升级 = skill 升级</text>
+<text x="42" y="345.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">skill 与插件文本都过 prose_rules 标点门禁</text>
+<rect x="470" y="124" width="410" height="30" rx="8" fill="#d68910" stroke="#d68910" stroke-width="1.2"/>
+<text x="482" y="145" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14.5" fill="#fff" font-weight="bold" text-anchor="start">hxaioa 命令行: 机制</text>
+<text x="482" y="176.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">skill install: 从 Git 下载 skill 和本群插件的 handle.md, </text>
+<text x="482" y="195.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">  写进宿主的 skill 目录</text>
+<text x="482" y="214.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  地址可用 HXAIOA_GIT_BASE 换镜像, 不经过 CF</text>
+<text x="482" y="232.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">next [--wait 秒]: 取未处理消息, 附简报差量与记忆摘要</text>
+<text x="482" y="251.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">send --covers: 回复时把覆盖的几条一起标为已处理</text>
+<text x="482" y="270.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">done &lt;seq...&gt;: 不需要回复的标已处理</text>
+<text x="482" y="289.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">todo add / set / done: 待办子命令, 冲突时打印当前行</text>
+<text x="482" y="307.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">me --trigger: 上报触发方式</text>
+<text x="482" y="326.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">每条输出末尾自带下一步, 不靠退出码说明</text>
+<text x="482" y="345.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">发现 skill 版本落后: 下一次 next 前自动重装</text>
+<rect x="910" y="124" width="410" height="30" rx="8" fill="#16a085" stroke="#16a085" stroke-width="1.2"/>
+<text x="922" y="145" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14.5" fill="#fff" font-weight="bold" text-anchor="start">服务端: 只管数据</text>
+<text x="922" y="176.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">next: 按 key 的处理游标 + 之后未处理的人发消息</text>
+<text x="922" y="195.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">简报: 名字, 群, 可读的群, 插件 id@版本, 标签表; 只在版本变</text>
+<text x="922" y="214.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">  化时带全文</text>
+<text x="922" y="232.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">游标只在回复覆盖或 done 时推进, 存 SQLite (每轮 1 行写入)</text>
+<text x="922" y="251.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">trigger: 保存触发方式, 推算下次运行</text>
+<text x="922" y="270.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">不再拼 4331 字的长指令, 不托管 skill, 不再发 "指令已更新" </text>
+<text x="922" y="289.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">  系统消息</text>
+<text x="922" y="307.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">messages, stream, pdata, memory, gh 代办保持不变</text>
+<rect x="1350" y="124" width="410" height="30" rx="8" fill="#2e86c1" stroke="#2e86c1" stroke-width="1.2"/>
+<text x="1362" y="145" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14.5" fill="#fff" font-weight="bold" text-anchor="start">主人 App: 看得见</text>
+<text x="1362" y="176.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">接入 Agent 与装插件: 和现在一样拿到接入语</text>
+<text x="1362" y="195.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">Agent 卡片显示: 触发方式, 上次运行, 下次运行</text>
+<text x="1362" y="214.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">显示处理游标: 哪几条还没被处理</text>
+<text x="1362" y="232.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">显示 skill 版本是否与插件一致</text>
+<text x="1362" y="251.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">改名, 读权限, 标签: 简报当场带过去, 不用等 Agent 报到</text>
+<text x="1362" y="270.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">信息流不喜欢 (#106) 走同一个反馈接口, 简报里带最近反馈</text>
+<rect x="30" y="154" width="410" height="207.5" rx="0" fill="none" stroke="#34495e" stroke-width="1.2"/>
+<rect x="470" y="154" width="410" height="207.5" rx="0" fill="none" stroke="#d68910" stroke-width="1.2"/>
+<rect x="910" y="154" width="410" height="207.5" rx="0" fill="none" stroke="#16a085" stroke-width="1.2"/>
+<rect x="1350" y="154" width="410" height="207.5" rx="0" fill="none" stroke="#2e86c1" stroke-width="1.2"/>
+<path d="M440,184 L470,184" fill="none" stroke="#34495e" stroke-width="1.6" marker-end="url(#ah34495e)"/>
+<rect x="425.62" y="163" width="58.760000000000005" height="18" rx="4" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text x="455.0" y="176" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#34495e" font-weight="normal" text-anchor="middle">raw 下载</text>
+<path d="M880,184 L910,184" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<rect x="877.12" y="163" width="35.760000000000005" height="18" rx="4" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text x="895.0" y="176" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#d68910" font-weight="normal" text-anchor="middle">next</text>
+<path d="M1350,184 L1320,184" fill="none" stroke="#2e86c1" stroke-width="1.6" marker-end="url(#ah2e86c1)"/>
+<rect x="1323.56" y="163" width="22.880000000000003" height="18" rx="4" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text x="1335.0" y="176" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#2e86c1" font-weight="normal" text-anchor="middle">WS</text>
+<text x="30" y="413.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" fill="#1f2430" font-weight="bold" text-anchor="start">二. 两种提示词</text>
+<rect x="30" y="427.5" width="855.0" height="205" rx="8" fill="#eef6fc" stroke="#9cc7e6" stroke-width="1.2"/>
+<text x="44" y="453.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#2e86c1" font-weight="bold" text-anchor="start">接入语: 创建云 Agent 时, 主人复制一次</text>
+<rect x="44" y="467.5" width="827.0" height="128" rx="6" fill="#ffffff" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="56" y="488.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">帮我接入 HX-AIOA 群 "点子待办", 依次执行:</text>
+<text x="56" y="507.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">curl -fsSLo ~/.local/bin/hxaioa &lt;GitHub Releases 地址&gt; &amp;&amp; chmod +x ~/.local/bin/hxaioa</text>
+<text x="56" y="527.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">hxaioa login &lt;服务地址&gt; &lt;密钥&gt;</text>
+<text x="56" y="546.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">hxaioa skill install</text>
+<text x="56" y="566.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">然后建一个定时任务 (间隔按插件建议), 内容就是下面这句触发语,</text>
+<text x="56" y="585.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">建好后用 hxaioa me --trigger "&lt;你的定时表达式&gt;" 上报。</text>
+<text x="44" y="618.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">规则, 命令, 接口一律不写, 都在 skill 里; 不支持 skill 的宿主用 hxaioa guide 打印 SKILL.md 全文 + 简报。</text>
+<rect x="915.0" y="427.5" width="855.0" height="205" rx="8" fill="#f5eefa" stroke="#c39bd3" stroke-width="1.2"/>
+<text x="929.0" y="453.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#8e44ad" font-weight="bold" text-anchor="start">触发语: 定时任务每次运行, 只有一句</text>
+<rect x="929.0" y="467.5" width="827.0" height="44" rx="6" fill="#ffffff" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="941.0" y="495.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#1f2430" font-weight="bold" text-anchor="start">用 hx-aioa skill 处理群 plugin-todo 一轮。</text>
+<text x="929.0" y="536.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">宿主按 description 命中 skill, 读 SKILL.md; 其余按需读。</text>
+<text x="929.0" y="554.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">群的角色, 插件任务, 标签都在 next 带回的简报里, 触发语不写。</text>
+<text x="929.0" y="573.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">主人改了插件或设置, 触发语不用改; 换群只改群名。</text>
+<text x="929.0" y="592.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">现状每次运行进上下文 4331 字; 重构后: 触发语约 25 字 + SKILL.md (稳定, 目标少于 1500 字) + 简报 (平时只有版本号)。</text>
+<text x="30" y="684.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" fill="#1f2430" font-weight="bold" text-anchor="start">三. 每次触发, 云 Agent 怎么执行 (以 11-26 #849, #850 为例)</text>
+<rect x="60.0" y="700.5" width="100.0" height="32" rx="8" fill="#8e44ad" stroke="#8e44ad" stroke-width="1.2"/>
+<text x="110" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">宿主定时器</text>
+<line x1="110" y1="732.5" x2="110" y2="1508.5" stroke="#8e44ad" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="359.64" y="700.5" width="120.72000000000001" height="32" rx="8" fill="#8e44ad" stroke="#8e44ad" stroke-width="1.2"/>
+<text x="420" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">Agent (模型)</text>
+<line x1="420" y1="732.5" x2="420" y2="1508.5" stroke="#8e44ad" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="649.56" y="700.5" width="140.88000000000002" height="32" rx="8" fill="#34495e" stroke="#34495e" stroke-width="1.2"/>
+<text x="720" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">本地 skill 目录</text>
+<line x1="720" y1="732.5" x2="720" y2="1508.5" stroke="#34495e" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="971.48" y="700.5" width="77.04" height="32" rx="8" fill="#d68910" stroke="#d68910" stroke-width="1.2"/>
+<text x="1010" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">hxaioa</text>
+<line x1="1010" y1="732.5" x2="1010" y2="1508.5" stroke="#d68910" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="1266.56" y="700.5" width="126.88000000000002" height="32" rx="8" fill="#16a085" stroke="#16a085" stroke-width="1.2"/>
+<text x="1330" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">服务端 Hub DO</text>
+<line x1="1330" y1="732.5" x2="1330" y2="1508.5" stroke="#16a085" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="1601.48" y="700.5" width="77.04" height="32" rx="8" fill="#34495e" stroke="#34495e" stroke-width="1.2"/>
+<text x="1640" y="721.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#fff" font-weight="bold" text-anchor="middle">GitHub</text>
+<line x1="1640" y1="732.5" x2="1640" y2="1508.5" stroke="#34495e" stroke-width="1.2" stroke-dasharray="4 4"/>
+<path d="M110,770.5 L414,770.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="118" y="763.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">1  触发语: 用 hx-aioa skill 处理群 plugin-todo 一轮。</text>
+<path d="M420,820.5 L714,820.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="813.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">2  description 命中, 读 SKILL.md: 先 next, 每条都要有结果, idle 才结束</text>
+<path d="M420,870.5 L1004,870.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="863.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">3  hxaioa next --wait 300</text>
+<path d="M1010,920.5 L1324,920.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="1018" y="913.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">4  GET next (1 次请求, 带本地 skill 版本)</text>
+<path d="M1330,970.5 L1016,970.5" fill="none" stroke="#16a085" stroke-width="1.6" marker-end="url(#ah16a085)"/>
+<text x="1018" y="963.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#16a085" font-weight="normal" text-anchor="start">5  简报 (版本没变只给版本号) + 记忆摘要 + 未处理 #849 #850</text>
+<path d="M1010,1020.5 L1634,1020.5" fill="none" stroke="#d68910" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ahd68910)"/>
+<text x="1018" y="1013.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">5a 插件版本 &gt; skill 版本时: 从 Git 拉新 handle.md, 不经过 CF</text>
+<path d="M1010,1070.5 L426,1070.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="428" y="1063.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">6  打印消息, 末尾一行: 下一步: 按 steps/2-handle 处理, 回复用 send --covers</text>
+<path d="M420,1120.5 L714,1120.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="1113.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">7  读 impl/todo.md (业务契约); 要写待办时再读 references/pdata.md</text>
+<path d="M420,1170.5 L1004,1170.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="1163.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">8  hxaioa todo add ... ; hxaioa send "..." --reply 850 --covers 849</text>
+<path d="M1010,1220.5 L1324,1220.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="1018" y="1213.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">9  POST 消息, 同时把 #849 #850 标为已处理, 游标推进</text>
+<path d="M420,1270.5 L1004,1270.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="1263.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">10 hxaioa next --wait 300</text>
+<path d="M1010,1320.5 L1324,1320.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="1018" y="1313.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">11 WS 长连等 (休眠不计费)</text>
+<path d="M1010,1370.5 L426,1370.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="428" y="1363.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">12 到命令时长上限: 窗口还剩 3 分 20 秒, 原样再跑 hxaioa next --wait 300</text>
+<path d="M420,1420.5 L1004,1420.5" fill="none" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#ah8e44ad)"/>
+<text x="428" y="1413.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#8e44ad" font-weight="normal" text-anchor="start">13 hxaioa next --wait 300 (续等, 不重新计时)</text>
+<path d="M1010,1470.5 L426,1470.5" fill="none" stroke="#d68910" stroke-width="1.6" marker-end="url(#ahd68910)"/>
+<text x="428" y="1463.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#d68910" font-weight="normal" text-anchor="start">14 idle: 5 分钟没人说话, 本轮结束</text>
+<rect x="360" y="1512.5" width="120" height="26" rx="13" fill="#1f2430" stroke="#1f2430" stroke-width="1.2"/>
+<text x="420" y="1530.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#fff" font-weight="bold" text-anchor="middle">Agent 结束</text>
+<rect x="80" y="1560.5" width="1640" height="96" rx="8" fill="#eefaf1" stroke="#a9dfbf" stroke-width="1.2"/>
+<text x="96" y="1583.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">保障: 消息只有被回复覆盖或 done 才算处理过, 游标在服务端。</text>
+<text x="96" y="1603.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1e8449" font-weight="normal" text-anchor="start">Agent 中途崩溃, 超时被宿主掐断, 或临时容器丢了本地文件: 没处理的消息留在游标后面, 下一轮 next 一定再给, 不会漏 (对应 #114)。</text>
+<text x="96" y="1622.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1e8449" font-weight="normal" text-anchor="start">watch 的 4 个退出码, "每天先 guide --ack", 待办 JSON 形状都不再出现在提示词里: 由命令行输出直接告诉模型下一步, 接口细节在 references 按需读。</text>
+<text x="30" y="1710.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" fill="#1f2430" font-weight="bold" text-anchor="start">四. 各个角度对比</text>
+<rect x="24" y="1726.5" width="1752" height="30" rx="6" fill="#eceff4" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="38" y="1746.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#1f2430" font-weight="bold" text-anchor="start">角度</text>
+<text x="238" y="1746.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#1f2430" font-weight="bold" text-anchor="start">现状</text>
+<text x="928" y="1746.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#1f2430" font-weight="bold" text-anchor="start">重构后</text>
+<rect x="24" y="1756.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1777.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">每次进上下文</text>
+<text x="238" y="1777.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">专属指令全文 4331 字, 约 67% 是命令, 退出码, 接口形状</text>
+<text x="928" y="1777.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">触发语 1 句 + SKILL.md (稳定) + 简报差量; 接口细节按需读</text>
+<rect x="24" y="1788.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1809.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">知识怎么学</text>
+<text x="238" y="1809.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">每次运行重读长指令, 宿主里存副本</text>
+<text x="928" y="1809.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">首次 skill install 装好, 之后按版本自动更新</text>
+<rect x="24" y="1820.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1841.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">知识放在哪</text>
+<text x="238" y="1841.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">服务端现算, 和 agent-guide.md, --help 三处各写一份</text>
+<text x="928" y="1841.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">只在 GitHub: skills/ 与 plugins/&lt;id&gt;/skill/, --help 生成 references/cli.md</text>
+<rect x="24" y="1852.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1873.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">skill 怎么下载</text>
+<text x="238" y="1873.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">无</text>
+<text x="928" y="1873.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">hxaioa 直接从 Git raw 下载, 可换镜像; CF 不托管</text>
+<rect x="24" y="1884.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1905.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">读到哪</text>
+<text x="238" y="1905.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">客户端 state.json, watch 打印前就推进 (#114)</text>
+<text x="928" y="1905.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">服务端处理游标, 回复覆盖或 done 才推进</text>
+<rect x="24" y="1916.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1937.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">漏回复</text>
+<text x="238" y="1937.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">靠模型照提示词顺序执行</text>
+<text x="928" y="1937.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">未处理的下一轮必然再给, 机制保证</text>
+<rect x="24" y="1948.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="1969.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">监听窗口</text>
+<text x="238" y="1969.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">提示词讲 0/2/3/4 四个退出码</text>
+<text x="928" y="1969.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">输出自带下一步; 续等不重新计时</text>
+<rect x="24" y="1980.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2001.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">指令或插件更新</text>
+<text x="238" y="2001.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">群里发系统消息, 等模型自己 guide --ack 替换</text>
+<text x="928" y="2001.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">next 发现版本落后, 命令行自动重装 skill; 简报随响应带回</text>
+<rect x="24" y="2012.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2033.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">改名, 设置, 标签</text>
+<text x="238" y="2033.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">换指令版本, 等 Agent 报到才算生效</text>
+<text x="928" y="2033.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">下一次 next 的简报里就是新的</text>
+<rect x="24" y="2044.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2065.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">触发方式</text>
+<text x="238" y="2065.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">主人看不到 (#107)</text>
+<text x="928" y="2065.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">接入时 me --trigger 上报, App 显示下次运行</text>
+<rect x="24" y="2076.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2097.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">插件作者写什么</text>
+<text x="238" y="2097.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">prompt.md, 服务端再拼接口说明</text>
+<text x="928" y="2097.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">只写 skill/handle.md 业务契约: 每类消息怎么算处理完</text>
+<rect x="24" y="2108.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2129.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">每轮 CF 请求 (约)</text>
+<text x="238" y="2129.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">read + memory + todos + N 次 send + watch 3 段 = 6 + N</text>
+<text x="928" y="2129.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">next + N 次 send + next 3 段 = 4 + N; skill 下载 0</text>
+<rect x="24" y="2140.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2161.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">SQLite 写入</text>
+<text x="238" y="2161.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">无游标写入</text>
+<text x="928" y="2161.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">每轮约 1 行 (游标); 远低于每天 10 万行</text>
+<rect x="24" y="2172.5" width="1752" height="32" rx="0" fill="#f7f8fa" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2193.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">不支持 skill 的宿主</text>
+<text x="238" y="2193.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">照常贴长指令</text>
+<text x="928" y="2193.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">hxaioa guide 打印 SKILL.md 全文 + 简报, 一样能跑</text>
+<rect x="24" y="2204.5" width="1752" height="32" rx="0" fill="#ffffff" stroke="#e3e6ec" stroke-width="1.2"/>
+<text x="38" y="2225.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" fill="#1f2430" font-weight="bold" text-anchor="start">能不能测</text>
+<text x="238" y="2225.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#7b4a44" font-weight="normal" text-anchor="start">行为靠模型照做, 只能人工看群</text>
+<text x="928" y="2225.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1e8449" font-weight="normal" text-anchor="start">机制在命令行和服务端, e2e: 回复后 1 分钟连发两条, 两条都被处理</text>
+</svg>

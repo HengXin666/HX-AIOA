@@ -67,6 +67,7 @@
 | [mockups/mail-feed.html](design/mockups/mail-feed.html) | 邮件页与统一推送 (福利群) 手机设计稿 (#66 #70) |
 | [mockups/mail-detail.html](design/mockups/mail-detail.html) | 邮件详情重做设计稿: 原文内嵌, 图片拦截, 深色, 链接去向, 转进群 / 交给 Agent (#46) |
 | [mockups/gh-todo.html](design/mockups/gh-todo.html) | GitHub 授权插件与待办关联 issue 手机设计稿 (#90 #98) |
+| [agent-skill.md](design/agent-skill.md) | 云 Agent 设计统一草案: 现状图, 重构后图, skill 从 Git 下载, 两种提示词 (#117) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`
