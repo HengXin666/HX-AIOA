@@ -30,6 +30,7 @@ import { pushPlugin } from "./notify";
 import { CODE_NOT_ALLOWED, autoUpgrade } from "./update";
 import { acctOf, isAdmin } from "./who";
 import { privatePlugin } from "./private";
+import { relocateMoved } from "./relocate";
 
 const QUERY_PURGE = "purge";
 
@@ -82,6 +83,8 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   // 先拦再拉: 别的管理员不能借主人的令牌拉私有内容
   if (!c.who.owner && privatePlugin(c.core, id, cached.id)) return fail(403, `${id} 来自主人的私有源, 只有主人能放行`, CODE_FORBIDDEN);
   const { m: manifest, src } = await c.core.market.manifestAt(id, cached.official ? "fresh" : "latest");
+  // 官方源搬到主人私有源的 (#124) 不算换作者: 就地换源后按更新处理, 启用与数据保留
+  if (c.who.owner && src.private) await relocateMoved(c.core, id);
   const was = c.core.kernel.get(id)?.meta.source ?? OFFICIAL_SOURCE;
   // 换源等于换作者: 必须先撤销旧的再放行, 不能当成 "更新"
   if (c.core.kernel.get(id) && was !== src.id) return fail(409, `${id} 现在来自另一个市场源 (${src.name}), 先撤销旧的再放行`, CODE_CONFLICT);
