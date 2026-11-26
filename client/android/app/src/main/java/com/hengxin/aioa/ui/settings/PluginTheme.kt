@@ -27,6 +27,12 @@ object PluginTheme {
 
     private fun file(context: Context) = File(context.filesDir, FILE)
 
+    /** 退出登录或换服务端时丢掉缓存, 免得沿用上一个账号的主题。 */
+    fun clear(context: Context) {
+        file(context).delete()
+        _flow.value = null
+    }
+
     /** 读本地缓存 (只读一次)。 */
     fun load(context: Context) {
         if (loaded) return
@@ -56,7 +62,7 @@ object PluginTheme {
     private fun hex(s: String): Color? {
         if (!Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$").matches(s)) return null
         val rgb = s.substring(1, 7).toLong(16)
-        val a = if (s.length == 9) s.substring(7, 9).toLong(16) else 0xFF
+        val a = if (s.length == 9) s.substring(7, 9).toLong(16) else 0xFFL
         return Color(((a shl 24) or rgb).toInt())
     }
 }

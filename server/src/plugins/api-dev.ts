@@ -36,6 +36,8 @@ export async function dropDev(core: Core, uid: string, id: string): Promise<void
   core.kernel.revoke(id);
   await teardown(core, id);
   pushPlugin(core, id, "revoked", { uid });
+  // 主人的插件页也列出别人的开发插件, 一起刷新
+  if (uid !== core.users.ownerId()) pushPlugin(core, id, "revoked", { uid: core.users.ownerId() });
 }
 
 /** 账号不再是管理员 (降为成员, 停用, 删号): 撤掉他的开发插件并关掉开发模式。 */
@@ -87,6 +89,7 @@ async function put(c: ReqCtx): Promise<Response> {
   // 只在第一次上传时启用; 开发者自己停用后再上传不再打开
   if (!old) c.core.kernel.setEnabled(uid, id, true);
   pushPlugin(c.core, id, old ? "updated" : "allowed", { uid, version: m.version });
+  if (uid !== c.core.users.ownerId()) pushPlugin(c.core, id, old ? "updated" : "allowed", { uid: c.core.users.ownerId(), version: m.version });
   // 主人装过它的 Agent: 换上新提示词并推给 Agent 长连, 秒级生效 (L3 热更新); 安装只属于主人
   if (uid === c.core.users.ownerId()) await autoUpgrade(c.core, id);
   return json({ allow: c.core.kernel.get(id)!.meta });

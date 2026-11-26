@@ -93,6 +93,8 @@ object Auth {
         val s = load(context) ?: return
         runCatching { call(context, config.server, Constants.AUTH_LOGOUT_PATH, JSONObject(), "Bearer ${bearer(context, config)}") }
         if (load(context)?.session == s.session) clear(context)
+        // 主题插件的缓存跟账号走
+        com.hengxin.aioa.ui.settings.PluginTheme.clear(context)
     }
 
     private const val UNAUTHORIZED = "unauthorized"

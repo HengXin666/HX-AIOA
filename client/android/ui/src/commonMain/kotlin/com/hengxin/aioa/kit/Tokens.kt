@@ -53,10 +53,13 @@ data class ThemeOverride(val light: Map<String, Color>, val dark: Map<String, Co
 private fun AioaColors.with(o: Map<String, Color>): AioaColors {
     if (o.isEmpty()) return this
     fun c(name: String, d: Color) = o[name] ?: d
+    // 只给了强调色没给字色时按亮度补, 免得浅色强调色配白字看不清
+    val accent = c("accent", accent)
+    val onAccent = o["onAccent"] ?: if ("accent" in o) contrastOn(accent) else onAccent
     return AioaColors(
         background = c("background", background), surface = c("surface", surface), surfaceAlt = c("surfaceAlt", surfaceAlt),
         border = c("border", border), text = c("text", text), textSecondary = c("textSecondary", textSecondary),
-        accent = c("accent", accent), onAccent = c("onAccent", onAccent), success = c("success", success),
+        accent = accent, onAccent = onAccent, success = c("success", success),
         warning = c("warning", warning), danger = c("danger", danger),
     )
 }

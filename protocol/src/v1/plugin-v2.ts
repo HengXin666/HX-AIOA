@@ -150,7 +150,7 @@ function contribution(id: string, point: ExtPoint, c: unknown): string | null {
   }
   if (!c.id.startsWith(`${id}.`) || c.id.length > 96) return `${where}: id 必须以插件 id "${id}." 开头`;
   for (const k of ["before", "after", "reads", "writes"] as const) if (c[k] !== undefined && !strList(c[k], /^[\w.:-]{1,96}$/)) return `${where}: ${k} 必须是字符串数组`;
-  if (point === THEME_POINT && !(palette(c.light) && palette(c.dark))) return `${where}: light / dark 只能写 ${THEME_TOKENS.join(", ")}, 值是 #RRGGBB`;
+  if (point === THEME_POINT && !(palette(c.light) && palette(c.dark))) return `${where}: light / dark 只能写 ${THEME_TOKENS.join(", ")}, 值是 #RRGGBB 或 #RRGGBBAA`;
   if (cardOf(point) === "layered" && c.type !== undefined && !(FIELD_TYPES as readonly unknown[]).includes(c.type)) return `${where}: type 不合法`;
   return null;
 }
