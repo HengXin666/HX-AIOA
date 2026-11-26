@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { memSql } from "./sql";
 
@@ -8,7 +7,8 @@ const { HxoaService } = await import("../src/hxoa/service");
 const { ApiFail } = await import("../src/http");
 
 const env = { TOKEN_SECRET: "s3cret" } as never;
-const raw = JSON.parse(readFileSync(new URL("../../plugins/hengxin666.hxoa/plugin.json", import.meta.url), "utf8"));
+// 清单已搬到主人私有源 (#124), 这里留一份要点: 无 Agent, 服务端插件, net:* 高危
+const raw = { id: "hengxin666.hxoa", name: "hxoa 管理", summary: "s", version: "2.0.0", readme: "README.md", prompt: "prompt.md", group: { title: "hxoa" }, api: "2", server: true, engines: { aioa: "^2" }, permissions: ["net:*"] };
 const TOKEN = "hxadm_abcdefgh12345678";
 const SECRET = "hx_workspace_secret_1";
 

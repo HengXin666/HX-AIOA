@@ -14,7 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.net.ApiCache
-import com.hengxin.aioa.ui.chat.Avatars
+import com.hengxin.aioa.net.ErrKind
+import com.hengxin.aioa.ui.ErrorNote
+import com.hengxin.aioa.ui.chat.AvatarUploads
+import com.hengxin.aioa.ui.chat.UploadingAvatar
 import com.hengxin.aioa.ui.chat.rememberAvatarPicker
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ private const val POST = "POST"
 private const val PASSWORD_MIN = 8
 private const val PATCH = "PATCH"
 private const val SETTING_AVATAR = "avatar"
+private val ACCOUNT_AVATAR = 72.dp
 
 private data class Device(val id: String, val name: String, val platform: String, val current: Boolean)
 
@@ -71,13 +75,19 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     var newPw by remember { mutableStateOf("") }
     val c = Aioa.colors
     var avatar by remember { mutableStateOf<String?>(null) }
-    val pickAvatar = rememberAvatarPicker({ message = it }) { bytes ->
-        message = "正在上传头像..."
-        Avatars.upload(context, bytes).onSuccess { id ->
-            val saved = withContext(Dispatchers.IO) { Api.call(context, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(SETTING_AVATAR, id)) }
-            if (saved.error == null) avatar = id
-            message = saved.error ?: "头像已更新"
-        }.onFailure { message = "头像上传失败: ${it.message}" }
+    // 上传在应用级作用域里跑 (#125): 离开页面继续, 回来接着看进度与结果
+    val job = AvatarUploads.jobs[AvatarUploads.ME]
+    val upload = { bytes: ByteArray ->
+        AvatarUploads.start(context, AvatarUploads.ME, bytes) { id ->
+            withContext(Dispatchers.IO) { Api.call(app, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(SETTING_AVATAR, id)) }.error
+        }
+    }
+    val pickAvatar = rememberAvatarPicker({ message = it }) { upload(it) }
+    LaunchedEffect(job?.done) {
+        val id = job?.done ?: return@LaunchedEffect
+        avatar = id
+        message = "头像已更新"
+        AvatarUploads.clear(AvatarUploads.ME)
     }
 
     // 登录状态变化后让常驻连接与界面连接都换上新凭证
@@ -138,10 +148,13 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
         } else {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.clickable { pickAvatar() }) {
-                        ChatAvatar(session.name, avatar, 72.dp)
+                    UploadingAvatar(job, ACCOUNT_AVATAR, Modifier.clickable(enabled = job?.running != true) { pickAvatar() }) {
+                        ChatAvatar(session.name, avatar, ACCOUNT_AVATAR)
                     }
                     Text("点头像更换", fontSize = 12.sp, color = c.textSecondary, modifier = Modifier.padding(top = 4.dp))
+                    job?.error?.let { e ->
+                        ErrorNote("头像上传失败: $e", Modifier.padding(top = 6.dp), kind = job.kind ?: ErrKind.guess(e), onRetry = { upload(job.bytes) }, onDismiss = { AvatarUploads.clear(AvatarUploads.ME) })
+                    }
                 }
             }
             SettingsGroup("当前账号") {

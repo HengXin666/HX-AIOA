@@ -94,6 +94,18 @@ export const MAX_TODOS = 500;
 export const MAX_TODO_NOTE = 2000;
 export const MAX_TODO_BATCH = 50;
 export const TODO_SYNC_TOPIC = "todos";
+// 分区 (#105): 生活, 开发这类自由文字; 不填时开发类 (关联了仓库) 归 "开发", 其余归 "未分区"
+export const MAX_TODO_AREA = 20;
+// 提醒提前量 (分钟) 上限 30 天; 周期每 n 个单位一次
+export const MAX_TODO_REMIND = 43_200;
+export const MAX_TODO_EVERY = 365;
+export const TODO_EVERY_UNITS = ["day", "week", "month", "year"] as const;
+export type TodoEveryUnit = (typeof TODO_EVERY_UNITS)[number];
+// tz 是写入端的时区偏移 (分钟, 东为正), 按月 / 年推下一期时按当地日历算, 不填按 +8;
+// day 是按月 / 年时锚定的日 (31 号在短月落到月底, 下个月回到 31 号), 不填时第一次推期由服务端记下
+export type TodoEvery = { unit: TodoEveryUnit; n: number; tz?: number; day?: number };
+// 截止时间上限 (JS Date 能表示的最大毫秒数)
+export const MAX_TODO_DUE = 8.64e15;
 
 export type TodoItem = {
   id: string;
@@ -113,6 +125,18 @@ export type TodoItem = {
   updated: number;
   // 进入 done 的时间
   doneAt?: number;
+  // 分区; 截止时间 (毫秒); 提前几分钟提醒 (0 为到点); alarm 为真时手机按闹钟响铃; star 重点 (上总览)
+  area?: string;
+  due?: number;
+  remind?: number;
+  alarm?: boolean;
+  star?: boolean;
+  // 周期: 完成时服务端把 due 推到下一期并回到 open; runs 已完成几期, lastDone 上一期完成时间,
+  // prevDue 推期前的截止 (撤销上次完成时用它退回去)
+  every?: TodoEvery;
+  runs?: number;
+  lastDone?: number;
+  prevDue?: number;
 };
 export type TodoGh = { state: "open" | "closed"; comments: number; parent?: number; subs?: number; title?: string; synced: number };
 export type TodoInput = {
@@ -125,6 +149,12 @@ export type TodoInput = {
   repo?: string | null;
   issue?: number | null;
   parent?: string | null;
+  area?: string | null;
+  due?: number | null;
+  remind?: number | null;
+  alarm?: boolean | null;
+  star?: boolean | null;
+  every?: TodoEvery | null;
 };
 export type TodoList = { todos: TodoItem[] };
 
@@ -191,6 +221,44 @@ export function parseTodoInput(raw: unknown): TodoInput | string {
   if (raw.src !== undefined) {
     if (raw.src !== null && !(typeof raw.src === "number" && Number.isInteger(raw.src) && raw.src > 0)) return "src 必须是消息 seq";
     out.src = raw.src as number | null;
+  }
+  return parsePlan(raw, out);
+}
+
+/** 分区, 截止, 提醒, 周期, 重点 (#105) 的单值校验; 字段间的约束 (提醒与周期要有截止) 由写入端按整行查。 */
+export function planError(k: string, v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  switch (k) {
+    case "area":
+      return typeof v === "string" && v.trim() && v.length <= MAX_TODO_AREA ? null : `area 为 1 到 ${MAX_TODO_AREA} 字`;
+    case "due":
+      return typeof v === "number" && Number.isInteger(v) && v > 0 && v <= MAX_TODO_DUE ? null : "due 是毫秒时间戳";
+    case "remind":
+      return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_TODO_REMIND ? null : `remind 是提前的分钟数 (0 到 ${MAX_TODO_REMIND})`;
+    case "alarm":
+    case "star":
+      return typeof v === "boolean" ? null : `${k} 是 true/false`;
+    case "every": {
+      const e = v as Partial<TodoEvery>;
+      if (!isObj(v) || !(TODO_EVERY_UNITS as readonly unknown[]).includes(e.unit)) return `every.unit 只能是 ${TODO_EVERY_UNITS.join("/")}`;
+      if (!(Number.isInteger(e.n) && (e.n as number) >= 1 && (e.n as number) <= MAX_TODO_EVERY)) return `every.n 为 1 到 ${MAX_TODO_EVERY}`;
+      if (e.tz !== undefined && !(Number.isInteger(e.tz) && Math.abs(e.tz as number) <= 14 * 60)) return "every.tz 是时区偏移分钟数";
+      if (e.day !== undefined && !(Number.isInteger(e.day) && (e.day as number) >= 1 && (e.day as number) <= 31)) return "every.day 是 1 到 31";
+      return Object.keys(v).every((x) => ["unit", "n", "tz", "day"].includes(x)) ? null : "every 只能有 unit, n, tz, day";
+    }
+    default:
+      return null;
+  }
+}
+
+export const TODO_PLAN_KEYS = ["area", "due", "remind", "alarm", "star", "every"] as const;
+
+function parsePlan(raw: Record<string, unknown>, out: TodoInput): TodoInput | string {
+  for (const k of TODO_PLAN_KEYS) {
+    if (raw[k] === undefined) continue;
+    const err = planError(k, raw[k]);
+    if (err) return err;
+    (out as Record<string, unknown>)[k] = typeof raw[k] === "string" ? (raw[k] as string).trim() : raw[k];
   }
   return out;
 }

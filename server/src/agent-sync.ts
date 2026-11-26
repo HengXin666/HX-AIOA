@@ -8,8 +8,8 @@ import { GET } from "./constants";
 import type { Core, Principal } from "./core";
 import { sendFrame } from "./sockets";
 
-// 指令更新通知: 服务端以 "系统" 身份发到 Agent 所在的群, 不响铃
-const NOTICE_SOURCE = { id: "system:guide", name: "系统", icon: "refresh-cw" };
+// 指令更新通知: 服务端以 "指令更新" 身份发到 Agent 所在的群, 不响铃
+const NOTICE_SOURCE = { id: "system:guide", name: "指令更新", icon: "refresh-cw" };
 const NOTICE_ROUTE: RouteInfo = { action: "silent", channels: ["ws"], reason: "指令更新" };
 const CLI_UA = /hxaioa-cli\/([\w.-]+)/;
 const API_CLIENT = "接口";

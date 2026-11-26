@@ -2,7 +2,7 @@
   "id": "hengxin666.todo",
   "name": "点子待办",
   "summary": "在群里随手丢想法, Agent 整理成待办, 并对值得做的点子写可行性分析; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "api": "2",
   "server": true,
   "engines": {
@@ -28,7 +28,7 @@
     "schedule": "长连等新消息 (hxaioa watch), 每 30 分钟兜底一次, 外加主人说 \"整理一下\" 时立即跑一次",
     "interval": 1800,
     "task": "把新想法整理成待办, 每条消息都回应。",
-    "skill": "1.0"
+    "skill": "1.1"
   },
   "permissions": [
     "data:own"
@@ -49,7 +49,16 @@
           "issue": "number",
           "parent": "string",
           "gh": "object",
-          "doneAt": "number"
+          "doneAt": "number",
+          "area": "string",
+          "due": "number",
+          "remind": "number",
+          "alarm": "boolean",
+          "star": "boolean",
+          "every": "object",
+          "runs": "number",
+          "lastDone": "number",
+          "prevDue": "number"
         }
       }
     ]

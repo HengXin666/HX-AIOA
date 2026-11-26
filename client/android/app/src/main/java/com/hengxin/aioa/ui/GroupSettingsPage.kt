@@ -23,10 +23,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.data.MessageDb
-import com.hengxin.aioa.ui.chat.Avatars
+import com.hengxin.aioa.ui.chat.AvatarUploads
+import com.hengxin.aioa.ui.chat.UploadingAvatar
 import com.hengxin.aioa.ui.chat.rememberAvatarPicker
 import com.hengxin.aioa.net.ErrKind
 import com.hengxin.aioa.ui.chat.ChatAgent
@@ -48,7 +49,6 @@ import com.hengxin.aioa.ui.chat.DIGEST_WEEKLY
 import com.hengxin.aioa.ui.chat.MembersCard
 import com.hengxin.aioa.ui.chat.ROLE_ADMIN
 import com.hengxin.aioa.ui.chat.ROLE_OWNER
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,25 +76,15 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     val owner = meta?.role == null || meta.role == ROLE_OWNER
     val manage = owner || meta?.role == ROLE_ADMIN
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     var dialog by remember { mutableStateOf<GsDialog?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
-    // 上传失败时留着裁好的图, 错误条上点 "重试" 不用重新选图
-    var failed by remember { mutableStateOf<ByteArray?>(null) }
-    var failKind by remember { mutableStateOf<ErrKind?>(null) }
-    val upload: suspend (ByteArray) -> Unit = { bytes ->
-        busy = "正在上传头像..."
-        dir.error = null
-        Avatars.upload(context, bytes).onSuccess { failed = null; dir.setAvatar(group, it) }.onFailure {
-            failed = bytes
-            failKind = (it as? com.hengxin.aioa.net.ApiFailure)?.kind
-            dir.error = "$AVATAR_FAIL${it.message}"
-        }
-        busy = null
-    }
+    // 上传在应用级作用域里跑 (#125): 离开页面继续, 回来接着看进度; 失败留着裁好的图, 点 "重试" 不用重新选图
+    val avatarKey = AvatarUploads.groupKey(group)
+    val job = AvatarUploads.jobs[avatarKey]
+    val upload = { bytes: ByteArray -> AvatarUploads.start(context, avatarKey, bytes) { id -> dir.saveAvatar(group, id) } }
     val pickAvatar = rememberAvatarPicker({ dir.error = it }) { upload(it) }
-    val retryScope = rememberCoroutineScope()
+    LaunchedEffect(job?.done, meta?.avatar) { if (job?.done != null && job.done == meta?.avatar) AvatarUploads.clear(avatarKey) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
@@ -102,17 +92,15 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = PAD), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.clickable(enabled = manage) { pickAvatar() }) {
-                    ChatAvatar(group, meta?.avatar, BIG_AVATAR)
+                UploadingAvatar(job, BIG_AVATAR, Modifier.clickable(enabled = manage && job?.running != true) { pickAvatar() }) {
+                    ChatAvatar(group, job?.done ?: meta?.avatar, BIG_AVATAR)
                 }
                 Text(meta?.title ?: group, Modifier.padding(top = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(busy ?: if (manage) "点头像更换 · channel: $group" else "channel: $group", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                dir.error?.let { e ->
-                    // 只有当前这条就是头像失败时才给重试; 收起时一并丢掉留着的图
-                    val avatarErr = failed != null && failKind != null && e.startsWith(AVATAR_FAIL)
-                    val retry = failed?.takeIf { avatarErr }?.let { b -> { retryScope.launch { upload(b) }; Unit } }
-                    ErrorNote(e, Modifier.padding(top = 6.dp), kind = if (avatarErr) failKind!! else ErrKind.guess(e), onRetry = retry, onDismiss = { dir.error = null; failed = null; failKind = null })
+                job?.error?.let { e ->
+                    ErrorNote("$AVATAR_FAIL$e", Modifier.padding(top = 6.dp), kind = job.kind ?: ErrKind.guess(e), onRetry = { upload(job.bytes) }, onDismiss = { AvatarUploads.clear(avatarKey) })
                 }
+                dir.error?.let { e -> ErrorNote(e, Modifier.padding(top = 6.dp), onDismiss = { dir.error = null }) }
             }
             Card {
                 ValueRow("群名称", (meta?.title ?: group) + if (manage) "  ›" else "") { if (manage) dialog = GsDialog.Rename }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HANDLED_SET_MAX, HEADER_SKILL, PATH_CHAT_AGENT, type ChatAgent, type Envelope } from "@hx-aioa/protocol";
+import { CORE_SKILL_VERSION, HANDLED_SET_MAX, HEADER_SKILL, PATH_CHAT_AGENT, type ChatAgent, type Envelope } from "@hx-aioa/protocol";
 import { advance, initialHandled, parseEvery, pendingOf } from "../src/agent-cursor";
 import { bumpSetup, majorRemind, noteSkill } from "../src/agent-want";
 import { AGENT_NEXT_ROUTES, coversOf, markDone } from "../src/api-agent-next";
@@ -119,7 +119,7 @@ test("want 头与 skill 上报: 只在变化时写; 插件大号缺失提醒一�
   a.plugins.save({ id: PLUGIN, version: "2.2.0", name: "点子待办", channel: CH, keyId: KEY, installed: 1 }, "点子待办", "p", { skill: "2.0", changes: [{ version: "2.0", changes: "改用 todo 命令", missing: "待办写不进去", until: "2026-12-31" }] });
   const meta = () => a.core.chats.chat(CH)!;
   const req = (v: string) => new Request(BASE, { headers: { [HEADER_SKILL]: v } });
-  assert.equal(await noteSkill(a.core, new Request(BASE), meta(), a.me()), `setup=1,hx-aioa@1.0,${PLUGIN}@2.0`);
+  assert.equal(await noteSkill(a.core, new Request(BASE), meta(), a.me()), `setup=1,hx-aioa@${CORE_SKILL_VERSION},${PLUGIN}@2.0`);
   assert.equal(a.me().skills, undefined);
   await noteSkill(a.core, req(`setup=1,hx-aioa@1.0,${PLUGIN}@1.3`), meta(), a.me(), Date.UTC(2026, 11, 1));
   assert.equal(a.me().skills?.skills[PLUGIN], "1.3");

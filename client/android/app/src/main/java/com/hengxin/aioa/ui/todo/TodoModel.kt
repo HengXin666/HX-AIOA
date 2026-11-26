@@ -8,14 +8,21 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-/** 两个维度一键互换: 按日期 (天 > 仓库) 或按仓库 (仓库 > 天), 里面都是父子树。 */
-enum class TodoAxis { DATE, REPO }
+/**
+ * 看板的分组维度, 里面都是父子树: 分区 (分区 > 仓库), 截止 (逾期 / 今天 / 明天 / 7 天内 / 以后 / 无截止),
+ * 日期 (创建的天 > 仓库), 仓库 (仓库 > 天)。
+ */
+enum class TodoAxis(val label: String, val icon: String) { AREA("分区", "layers"), DUE("截止", "alarm-clock"), DATE("日期", "calendar-days"), REPO("仓库", "folder") }
 
 const val NO_REPO = "未关联仓库"
 private const val DAY_FMT = "yyyy-MM-dd"
 private const val SHORT_FMT = "MM-dd"
 private const val TIME_FMT = "HH:mm"
-private const val DAY_MS = 86_400_000L
+internal const val DAY_MS = 86_400_000L
+private const val HOUR_MS = 3_600_000L
+private const val WEEK_DAYS = 7
+/** 新建时可选的分区; 用过的自定义分区也会出现在选项里。 */
+val PRESET_AREAS = listOf("生活", "开发", "工作", "学习")
 
 /** 界面显示的四态, dropped 是旧数据按已完成算。 */
 val STATES = listOf(TodoRow.STATE_OPEN, TodoRow.STATE_DOING, TodoRow.STATE_HOLD, TodoRow.STATE_DONE)
@@ -40,10 +47,17 @@ class TodoGroup(val key: String, val title: String, val nodes: List<TodoNode>, v
 
 class TodoSection(val key: String, val title: String, val sub: String, val groups: List<TodoGroup>, val repo: String? = null)
 
-/** 筛选: repos 为空表示全部; 默认藏已完成。 */
-data class TodoFilter(val repos: Set<String> = emptySet(), val showDone: Boolean = false, val onlyIssue: Boolean = false, val prios: Set<Int> = setOf(1, 2, 3)) {
-    fun keep(r: TodoRow) = (showDone || !r.finished) && (!onlyIssue || r.issue != null) &&
-        r.prio in prios && (repos.isEmpty() || (r.repo ?: NO_REPO) in repos)
+/** 筛选: areas / repos 为空表示全部; 默认藏已完成。 */
+data class TodoFilter(
+    val repos: Set<String> = emptySet(),
+    val showDone: Boolean = false,
+    val onlyIssue: Boolean = false,
+    val prios: Set<Int> = setOf(1, 2, 3),
+    val areas: Set<String> = emptySet(),
+    val onlyStar: Boolean = false,
+) {
+    fun keep(r: TodoRow) = (showDone || !r.finished) && (!onlyIssue || r.issue != null) && (!onlyStar || r.star) &&
+        r.prio in prios && (repos.isEmpty() || (r.repo ?: NO_REPO) in repos) && (areas.isEmpty() || r.areaKey in areas)
 
     companion object {
         private const val PREFS = "todo_board"
@@ -55,14 +69,17 @@ data class TodoFilter(val repos: Set<String> = emptySet(), val showDone: Boolean
                 showDone = p.getBoolean("$channel.done", false),
                 onlyIssue = p.getBoolean("$channel.issue", false),
                 prios = p.getStringSet("$channel.prio", null)?.mapNotNull { it.toIntOrNull() }?.toSet() ?: setOf(1, 2, 3),
+                areas = p.getStringSet("$channel.areas", emptySet()).orEmpty(),
+                onlyStar = p.getBoolean("$channel.star", false),
             )
-            return f to if (p.getString("$channel.axis", null) == TodoAxis.REPO.name) TodoAxis.REPO else TodoAxis.DATE
+            return f to (TodoAxis.entries.firstOrNull { it.name == p.getString("$channel.axis", null) } ?: TodoAxis.AREA)
         }
 
         fun save(context: Context, channel: String, f: TodoFilter, axis: TodoAxis) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putStringSet("$channel.repos", f.repos).putBoolean("$channel.done", f.showDone).putBoolean("$channel.issue", f.onlyIssue)
-                .putStringSet("$channel.prio", f.prios.map { it.toString() }.toSet()).putString("$channel.axis", axis.name).apply()
+                .putStringSet("$channel.prio", f.prios.map { it.toString() }.toSet()).putString("$channel.axis", axis.name)
+                .putStringSet("$channel.areas", f.areas).putBoolean("$channel.star", f.onlyStar).apply()
         }
     }
 }
@@ -92,40 +109,77 @@ fun repoName(repo: String) = repo.substringAfter('/')
 private val REPO_COLORS = listOf(0xFF2F6BFF, 0xFF12A150, 0xFFD97706, 0xFF8250DF, 0xFFDB2777, 0xFF0891B2, 0xFF65A30D)
 fun repoColor(repo: String): Color = if (repo == NO_REPO) Color(0xFF9CA3AF) else Color(REPO_COLORS[Math.floorMod(repo.hashCode(), REPO_COLORS.size)])
 
-/** 父待办: parent 字段优先, 其次 GitHub 的父 issue。 */
-private fun parentOf(r: TodoRow, byId: Map<String, TodoRow>, byIssue: Map<String, TodoRow>): TodoRow? =
-    r.parent?.let(byId::get) ?: if (r.ghParent != null && r.repo != null) byIssue["${r.repo}#${r.ghParent}"] else null
+// 未完成在前, 星标在前, 截止近的在前, 再按优先级和新旧
+private val ORDER = compareBy<TodoRow> { it.finished }.thenBy { !it.star }.thenBy { it.due ?: Long.MAX_VALUE }.thenBy { it.prio }.thenByDescending { it.created }
 
-private val ORDER = compareBy<TodoRow> { it.finished }.thenBy { it.prio }.thenByDescending { it.created }
+// 看全部群时不同群的待办 id 可能相同, 一律带群区分
+private fun TodoRow.uid() = "$channel:$id"
+
+/** 父待办: parent 字段优先 (同群), 其次 GitHub 的父 issue。 */
+private fun parentOf(r: TodoRow, byId: Map<String, TodoRow>, byIssue: Map<String, TodoRow>): TodoRow? =
+    r.parent?.let { byId["${r.channel}:$it"] } ?: if (r.ghParent != null && r.repo != null) byIssue["${r.repo}#${r.ghParent}"] else null
 
 /** 筛选后的森林: 父不在结果里的子待办升为根。 */
 fun forest(rows: List<TodoRow>): List<TodoNode> {
-    val byId = rows.associateBy { it.id }
+    val byId = rows.associateBy { it.uid() }
     val byIssue = rows.filter { it.repo != null && it.issue != null }.associateBy { "${it.repo}#${it.issue}" }
     val kids = HashMap<String, MutableList<TodoRow>>()
     val roots = ArrayList<TodoRow>()
     for (r in rows) {
-        val p = parentOf(r, byId, byIssue)?.takeIf { it.id != r.id }
-        if (p != null) kids.getOrPut(p.id) { ArrayList() }.add(r) else roots.add(r)
+        val p = parentOf(r, byId, byIssue)?.takeIf { it.uid() != r.uid() }
+        if (p != null) kids.getOrPut(p.uid()) { ArrayList() }.add(r) else roots.add(r)
     }
     val seen = HashSet<String>()
     fun node(r: TodoRow): TodoNode {
-        seen.add(r.id)
-        return TodoNode(r, kids[r.id].orEmpty().filter { it.id !in seen }.sortedWith(ORDER).map(::node))
+        seen.add(r.uid())
+        return TodoNode(r, kids[r.uid()].orEmpty().filter { it.uid() !in seen }.sortedWith(ORDER).map(::node))
     }
-    return roots.sortedWith(ORDER).map(::node)
+    // 成环的 (互为父子) 没有根, 补成根, 一条都不丢
+    val out = roots.sortedWith(ORDER).mapTo(ArrayList(), ::node)
+    for (r in rows.sortedWith(ORDER)) if (r.uid() !in seen) out.add(node(r))
+    return out
 }
 
 private fun repoKey(r: TodoRow) = r.repo ?: NO_REPO
 private val REPO_ORDER = compareBy<String> { it == NO_REPO }.thenBy { it.lowercase() }
 
-/** 按维度切成分节; 根的日期和仓库决定位置, 子待办跟着父。 */
+// 不关联仓库的一组: 按日期看时叫 "未关联仓库", 按分区看时不画组头 (生活事务本来就没有仓库)
+private fun byRepo(key: String, nodes: List<TodoNode>, noRepo: String = NO_REPO) =
+    nodes.groupBy { repoKey(it.row) }.toSortedMap(REPO_ORDER).map { (repo, ns) -> TodoGroup("$key|$repo", if (repo == NO_REPO) noRepo else repoName(repo), ns, repo) }
+
+/** 分区顺序: 预设的在前 (生活, 开发, 工作, 学习), 自定义的按名字, 未分区最后。 */
+private val AREA_ORDER = compareBy<String> { it == TodoRow.AREA_NONE }.thenBy { PRESET_AREAS.indexOf(it).let { i -> if (i < 0) PRESET_AREAS.size else i } }.thenBy { it }
+
+/** 截止分桶: 0 逾期, 1 今天, 2 明天, 3 七天内, 4 以后, 5 无截止。 */
+private val DUE_BUCKETS = listOf("已逾期", "今天", "明天", "7 天内", "以后", "无截止")
+fun dueBucket(due: Long?, now: Long = System.currentTimeMillis()): Int {
+    if (due == null) return DUE_BUCKETS.size - 1
+    if (due < now) return 0
+    val days = dayIndex(due) - dayIndex(now)
+    return when {
+        days == 0L -> 1
+        days == 1L -> 2
+        days < WEEK_DAYS -> 3
+        else -> 4
+    }
+}
+private fun dayIndex(ts: Long): Long = (ts + java.util.TimeZone.getDefault().getOffset(ts)) / DAY_MS
+
+/** 按维度切成分节; 根的日期, 分区, 截止, 仓库决定位置, 子待办跟着父。 */
 fun sections(rows: List<TodoRow>, axis: TodoAxis): List<TodoSection> {
     val roots = forest(rows)
     return when (axis) {
+        TodoAxis.AREA -> roots.groupBy { it.row.areaKey }.toSortedMap(AREA_ORDER).map { (area, nodes) ->
+            val groups = byRepo(area, nodes, "")
+            TodoSection(area, area, "${groups.sumOf { it.count }} 条", groups)
+        }
+        TodoAxis.DUE -> roots.groupBy { dueBucket(it.row.due) }.toSortedMap().map { (b, nodes) ->
+            val groups = nodes.groupBy { it.row.areaKey }.toSortedMap(AREA_ORDER).map { (area, ns) -> TodoGroup("due$b|$area", area, ns) }
+            TodoSection("due$b", DUE_BUCKETS[b], "${groups.sumOf { it.count }} 条", groups)
+        }
         TodoAxis.DATE -> roots.groupBy { dayOf(it.row.created) }.toSortedMap(reverseOrder()).map { (day, nodes) ->
             val (title, week) = dayTitle(day)
-            val groups = nodes.groupBy { repoKey(it.row) }.toSortedMap(REPO_ORDER).map { (repo, ns) -> TodoGroup("$day|$repo", if (repo == NO_REPO) repo else repoName(repo), ns, repo) }
+            val groups = byRepo(day, nodes)
             TodoSection(day, title, "$week · ${groups.sumOf { it.count }} 条", groups)
         }
         TodoAxis.REPO -> roots.groupBy { repoKey(it.row) }.toSortedMap(REPO_ORDER).map { (repo, nodes) ->
@@ -134,3 +188,65 @@ fun sections(rows: List<TodoRow>, axis: TodoAxis): List<TodoSection> {
         }
     }
 }
+
+/** 倒计时: "还剩 2 天 3 小时" / "还剩 40 分钟" / "逾期 1 天"; 第二项为 true 表示逾期或 24 小时内 (标红)。 */
+fun countdown(due: Long, now: Long = System.currentTimeMillis()): Pair<String, Boolean> {
+    val left = due - now
+    val abs = kotlin.math.abs(left)
+    val d = abs / DAY_MS
+    val h = (abs % DAY_MS) / HOUR_MS
+    val m = (abs % HOUR_MS) / MINUTE_MS
+    val span = when {
+        d > 0 -> if (h > 0 && d < WEEK_DAYS) "$d 天 $h 小时" else "$d 天"
+        h > 0 -> if (m > 0) "$h 小时 $m 分" else "$h 小时"
+        else -> "${maxOf(m, 1)} 分钟"
+    }
+    return (if (left >= 0) "还剩 $span" else "逾期 $span") to (left < DAY_MS)
+}
+
+/** 截止时间: 今年的省略年份。 */
+fun dueText(due: Long): String {
+    val sameYear = SimpleDateFormat("yyyy", Locale.ROOT).let { it.format(Date(due)) == it.format(Date()) }
+    return SimpleDateFormat(if (sameYear) "MM-dd HH:mm" else "yyyy-MM-dd HH:mm", Locale.ROOT).format(Date(due))
+}
+
+val EVERY_UNITS = listOf("day" to "天", "week" to "周", "month" to "个月", "year" to "年")
+fun everyText(unit: String?, n: Int): String? {
+    val u = EVERY_UNITS.firstOrNull { it.first == unit }?.second ?: return null
+    return if (n == 1) "每${u.removePrefix("个")}" else "每 $n $u"
+}
+
+/** 提前量: 0 到点, 15 分钟, 2 小时, 1 天。 */
+fun remindText(min: Int): String = when {
+    min == 0 -> "到点提醒"
+    min % (24 * 60) == 0 -> "提前 ${min / (24 * 60)} 天"
+    min % 60 == 0 -> "提前 ${min / 60} 小时"
+    else -> "提前 $min 分钟"
+}
+
+/** 本地闹钟计划; 键与服务端提醒消息的去重键一致。 */
+fun alarmPlan(r: TodoRow): com.hengxin.aioa.link.TodoAlarmPlan? {
+    val at = r.fireAt ?: return null
+    val due = r.due ?: return null
+    val lead = if (r.remind == 0) "现在到点 (${dueText(due)})" else "还有 ${remindText(r.remind ?: 0).removePrefix("提前 ")} 截止 (${dueText(due)})"
+    return com.hengxin.aioa.link.TodoAlarmPlan(com.hengxin.aioa.link.TodoAlarms.key(r.channel, r.id, at), at, r.channel, "⏰ ${r.title}", lead, r.alarm)
+}
+
+/** 总览的重点待办: 星标或 P1 的未完成, 加上 24 小时内到期和已逾期的; 逾期和快到期的排前面。 */
+fun focusRows(rows: List<TodoRow>, now: Long = System.currentTimeMillis()): List<TodoRow> =
+    rows.filter { !it.finished && (it.star || it.prio == 1 || (it.due?.let { d -> d - now < DAY_MS } == true)) }
+        .sortedWith(compareBy<TodoRow> { it.due ?: Long.MAX_VALUE }.thenBy { !it.star }.thenBy { it.prio })
+
+const val MINUTE_MS = 60_000L
+// 没有任何待办时, 新建的放进待办插件自己的群
+const val DEFAULT_TODO_GROUP = "plugin-todo"
+
+/** 分区选项: 预设 + 已用过的, 未分区不算。 */
+fun areasOf(rows: List<TodoRow>): List<String> = (PRESET_AREAS + rows.mapNotNull { it.area }).distinct()
+
+/** 在 "全部" 里新建时放哪个群: 待办插件的群优先, 否则待办最多的群。 */
+fun homeGroup(rows: List<TodoRow>): String =
+    rows.firstOrNull { it.channel == DEFAULT_TODO_GROUP }?.channel ?: rows.groupingBy { it.channel }.eachCount().maxByOrNull { it.value }?.key ?: DEFAULT_TODO_GROUP
+
+/** App 里新建的待办 id: m- 加时间 (36 进制), 与 Agent 的 t-<seq> 区分。 */
+fun newTodoId(now: Long = System.currentTimeMillis()): String = "m-${now.toString(36)}"

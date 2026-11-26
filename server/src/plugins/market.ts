@@ -77,11 +77,16 @@ function parseIndex(text: string): { name?: string; entries: Entry[] } {
   return { ...(typeof raw.name === "string" ? { name: raw.name } : {}), entries };
 }
 
-/** 第三方源只收带命名空间的新 id: 不能是官方命名空间, 旧 id 别名, 服务端插件。 */
-function thirdPartyBad(id: string): string | null {
+/**
+ * 第三方源只收带命名空间的新 id: 不能是官方命名空间, 旧 id 别名, 服务端插件。
+ * 私有源是主人自己的仓库 (只有主人能加, 用主人的令牌读), 可以接手官方命名空间与这次部署里的服务端插件 (#124)。
+ */
+export function entryBad(id: string, src: Pick<MarketSource, "official" | "private">): string | null {
+  if (src.official) return null;
+  if (!isNsPluginId(id) || resolvePluginId(id) !== id) return "id 要写成 <作者>.<名字>";
+  if (src.private) return null;
   if (officialOnly(id)) return "官方命名空间";
-  if (!isNsPluginId(id) || resolvePluginId(id) !== id || isL2a(id)) return "id 要写成 <作者>.<名字>";
-  return null;
+  return isL2a(id) ? "id 要写成 <作者>.<名字>" : null;
 }
 
 async function sha256(text: string): Promise<string> {
@@ -233,7 +238,7 @@ export class Market {
       const skipped: string[] = [];
       const loaded = await this.load(src, only && only !== src.id ? "cache" : mode);
       for (const entry of loaded.entries) {
-        const bad = src.official ? null : thirdPartyBad(entry.id);
+        const bad = entryBad(entry.id, src);
         if (bad) skipped.push(`${entry.id}: ${bad}`);
         else if (seen.has(entry.id)) skipped.push(`${entry.id}: 与 ${seen.get(entry.id)} 撞名`);
         else {
@@ -272,6 +277,19 @@ export class Market {
   }
 
   /**
+   * 官方源已经没有, 改由主人私有源提供的插件 (按缓存, 不多拉): id → 私有源。
+   * 官方源本次拉取出错时一律不算, 免得官方暂时连不上被误判成搬走了。
+   */
+  async movedToPrivate(ids: string[]): Promise<Map<string, MarketSource>> {
+    const out = new Map<string, MarketSource>();
+    if (!ids.length) return out;
+    const list = await this.merged().catch(() => [] as Located[]);
+    if (this.loaded.get(OFFICIAL_SOURCE)?.error) return out;
+    for (const { src, entry } of list) if (src.private && ids.includes(entry.id)) out.set(entry.id, src);
+    return out;
+  }
+
+  /**
    * cache: 全走缓存; latest: 重拉所在源的索引 (10 秒内复用), 文件版本没变仍用缓存, 管理员看详情用;
    * fresh: 全部重拉, 官方源放行时用。内嵌清单只信官方源 (CI 保证与 plugin.json 一致), 第三方一律读 plugin.json。
    * 返回清单和它所在的源 (放行记来源用同一份, 不另查)。
@@ -307,8 +325,8 @@ export class Market {
     const m = parseManifest(raw);
     if (typeof m === "string") throw new ApiFail(400, CODE_BAD_REQUEST, `插件 ${id} 的 plugin.json 有误: ${m}`);
     if (m.id !== id) throw new ApiFail(400, CODE_BAD_REQUEST, `插件目录 ${id} 与 plugin.json 的 id 不一致`);
-    // 服务端代码只能编进部署, 第三方源不能带
-    if (m.server && !src.official) throw new ApiFail(400, CODE_BAD_REQUEST, `${id} 声明了服务端代码, 只有官方源能提供`);
+    // 服务端代码只能编进部署, 第三方源不能带; 主人的私有源可以提供这次部署里已有的 (从官方源搬过去的)
+    if (m.server && !src.official && !(src.private && isL2a(id))) throw new ApiFail(400, CODE_BAD_REQUEST, `${id} 声明了服务端代码, 只有官方源能提供`);
     return m;
   }
 

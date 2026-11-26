@@ -1,6 +1,6 @@
 # hxoa 管理接口
 
-内置插件 `hengxin666.hxoa` (#97, #104)。主人启用后才有, 否则整组 404; 只有主人能调 (Agent 的 key 返回 403)。
+内置插件 `hengxin666.hxoa` (#97, #104), 代码在本仓库, 清单在主人的私有源 `HengXin666/aioa-private-plugins` (#124)。主人启用后才有, 否则整组 404; 只有主人能调 (Agent 的 key 返回 403)。
 
 每条接入存 hxoa 的**管理令牌** (`hxadm_` 开头, 在 hxoa 面板 "远程管理" 里建, hxoa 2.4.1+), 在服务端用 `TOKEN_SECRET` (没有时用 `AUTH_TOKEN`) 派生的密钥 AES-GCM 加密落库 (表 `hxoa_conn`, `kind = admin`), 任何接口都不返回它。服务端带它转发到 hxoa 的 `<base>/v1/admin/*` (见 hxoa 的 `docs/PROTOCOL.md`)。
 

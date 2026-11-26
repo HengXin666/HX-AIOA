@@ -96,6 +96,8 @@ private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit, sho
         TaskCard(task.toCard(feed.pending[task.id]), onOption = { answer(task, it) }) { open(Tab.AGENT) }
     }
     Layer(chat, TITLE_NEED_ME, "少而重要", Constants.PRIORITY_NEED_ME, state, "一切正常, 没有需要处理的事", NEED_ME_SHOWN, show)
+    // 重点待办 (星标, P1, 快到期, 已逾期), 点开是全部待办的看板
+    com.hengxin.aioa.ui.todo.TodoFocus(chat.spaces) { ch, seq -> chat.groups.openAt(ch, seq) }
     Layer(chat, TITLE_HAPPENING, "不必立即处理", Constants.PRIORITY_HAPPENING, state, "暂时风平浪静", LAYER_SHOWN, show)
     ResourceTiles(chat, open)
     Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show)

@@ -16,6 +16,10 @@ export class Timers {
     else await this.storage.deleteAlarm();
   }
 
+  async get(name: string): Promise<number | undefined> {
+    return (await this.load())[name];
+  }
+
   // keepEarlier: 已有更早的同名定时不推迟 (用于合并多条兜底推送)
   async set(name: string, due: number, keepEarlier = false): Promise<void> {
     const map = await this.load();

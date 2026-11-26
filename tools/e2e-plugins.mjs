@@ -181,6 +181,24 @@ const tomb = await call(key, "POST", ITEMS, { items: [{ id: `${CHANNEL}:${T3}`, 
 const afterTomb = await api("GET", TODOS);
 check("批量删除写墓碑, 旧接口看不到", tomb.data?.items?.[0]?.item?.deleted === true && !afterTomb.data?.todos?.some((t) => t.id === T3), tomb.data);
 
+// 分区, 截止, 提醒, 周期 (#105): 提醒要有截止; 到点服务端发 "待办提醒" 到群里; 周期待办完成后排到下一期
+const T4 = `${T1}-4`;
+const noDue = await api("PUT", `${ITEMS}/${encodeURIComponent(`${CHANNEL}:${T4}`)}`, { ver: 0, body: { channel: CHANNEL, title: "交电费", state: "open", prio: 2, created: 1, remind: 1 } });
+check("提醒没有截止被拒", noDue.status === 400 && /due/.test(noDue.data?.error), noDue.data);
+const due = Date.now() + 75_000;
+const plan = await api("PUT", `${ITEMS}/${encodeURIComponent(`${CHANNEL}:${T4}`)}`, { ver: 0, body: { channel: CHANNEL, title: "交电费", state: "open", prio: 2, created: 1, area: "生活", star: true, due, remind: 1, every: { unit: "month", n: 1, tz: 480 } } });
+check("计划字段写入", plan.status === 200 && plan.data.item?.body?.area === "生活", plan.data);
+let reminded = null;
+for (let i = 0; i < 30 && !reminded; i++) {
+  await new Promise((ok) => setTimeout(ok, 2000));
+  const msgs = await api("GET", `${V1}/chats/${CHANNEL}/messages?since=0&limit=200`);
+  reminded = msgs.data?.messages?.find((m) => JSON.stringify(m).includes("⏰ 交电费"));
+}
+check("到点发出待办提醒消息", !!reminded, reminded);
+const rolled = await api("POST", TODOS, { id: T4, state: "done" });
+const next = rolled.data?.todos?.[0];
+check("周期待办完成后排到下一期", next?.state === "open" && next.due > due + 27 * 86_400_000 && next.runs === 1 && !!next.lastDone, rolled.data);
+
 const reply = await call(key, "POST", `${V1}/messages`, { text: "**结论**: 值得做", reply: src?.seq });
 const back = await call(key, "GET", `${V1}/chats/${CHANNEL}/messages?since=${src?.seq ?? 0}`);
 check("Agent 引用回复", reply.status === 200 && back.data?.messages?.some((m) => m.reply?.seq === src?.seq), back.data);

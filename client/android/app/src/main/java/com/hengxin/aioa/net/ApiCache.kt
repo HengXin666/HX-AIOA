@@ -100,13 +100,16 @@ object ApiCache {
         return runCatching { Net.client(context).newCall(req).execute().use { if (it.isSuccessful) it.body?.bytes() else null } }.getOrNull()
     }
 
-    /** 上传二进制, 返回服务端 JSON。超时会重试, 只用于幂等的 PUT (头像按内容哈希命名, 重传结果相同)。 */
-    fun upload(context: Context, segments: List<String>, data: ByteArray, mime: String): ApiReply {
+    /**
+     * 上传二进制, 返回服务端 JSON。超时会重试, 只用于幂等的 PUT (头像按内容哈希命名, 重传结果相同)。
+     * onProgress 报 (已发字节, 总字节), 重试时从 0 重报。
+     */
+    fun upload(context: Context, segments: List<String>, data: ByteArray, mime: String, onProgress: ((Long, Long) -> Unit)? = null): ApiReply {
         val url = urlOf(context, segments) ?: return ApiReply(null, "还没有配置服务端")
         val config = ConfigStore.load(context) ?: return ApiReply(null, "还没有配置服务端")
         val req = Request.Builder().url(url)
             .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
-            .put(data.toRequestBody(mime.toMediaType()))
+            .put(data.toRequestBody(mime.toMediaType()).let { b -> onProgress?.let { CountingBody(b, it) } ?: b })
             .build()
         // 上传走代理或弱网时 OkHttp 默认 10 秒写超时不够 (#110 群头像上传超时), 放宽并在超时时重试一次
         val client = Net.client(context).newBuilder()

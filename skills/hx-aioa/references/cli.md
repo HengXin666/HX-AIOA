@@ -27,8 +27,8 @@
 | 命令 | 说明 |
 |---|---|
 | `hxaioa todos [--all] [--json]` | 本群待办, 一行一条 `[状态] P优先级 id 标题 (repo#issue) <- 父 \| note`; `--all` 含已完成和挂起 |
-| `hxaioa todo add <标题>` | 新建待办; `--prio n`, `--repo owner/name`, `--issue n`, `--parent <id>`, `--note s`, `--src <seq>`; 打印新待办的 id |
-| `hxaioa todo set <id>` | 改字段, 参数同 add, 另有 `--state open\|doing\|hold\|done`, `--title` |
+| `hxaioa todo add <标题>` | 新建待办; `--prio n`, `--repo owner/name`, `--issue n`, `--parent <id>`, `--note s`, `--src <seq>`; 计划: `--area 生活`, `--due "11-30 18:00"` (东八区), `--remind 分钟` (截止前多久提醒, 0 为到点), `--every month` (day/week/month/year, 可写 2week), `--star` (重点), `--alarm` (手机闹钟响铃); 打印新待办的 id |
+| `hxaioa todo set <id>` | 改字段, 参数同 add, 另有 `--state open\|doing\|hold\|done`, `--title`; 值写空串清掉 (`--due ""`), `--every none` 取消周期 |
 | `hxaioa todo done <id> [--note s]` | 标记完成 |
 | `hxaioa api <METHOD> <路径> [JSON\|-]` | 其它接口直接调, 请求头与退避由命令行处理 |
 

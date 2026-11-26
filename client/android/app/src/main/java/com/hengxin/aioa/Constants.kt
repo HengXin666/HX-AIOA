@@ -51,6 +51,9 @@ object Constants {
     const val CHANNEL_AGENT = "agent"
     const val CHANNEL_GITHUB = "github"
     const val CHANNEL_REPORT = "report"
+    // 待办到点提醒 (#105): 普通提醒与闹钟响铃分两个渠道, 用户可在系统里分别调
+    const val CHANNEL_TODO = "todo_remind"
+    const val CHANNEL_TODO_ALARM = "todo_alarm"
     // 同一类通知共用一个 id, 用 tag 区分来源或去重键, 不会撞号
     const val NOTIFY_ID_LINK = 1
     const val NOTIFY_ID_MESSAGE = 2
@@ -58,6 +61,10 @@ object Constants {
     const val NOTIFY_ID_ALERT = 4
     const val NOTIFY_ID_AGENT = 5
     const val NOTIFY_ID_EVENT = 6
+    const val NOTIFY_ID_TRANSFER = 8
+    const val NOTIFY_ID_TODO = 7
+    // 服务端待办提醒消息的来源 id, 与 server/src/plugins/todo-notice.ts 一致
+    const val SOURCE_TODO_REMIND = "system:todo"
     const val GROUP_MESSAGE = "com.hengxin.aioa.group.MESSAGE"
     const val GROUP_ALERT = "com.hengxin.aioa.group.ALERT"
     const val GROUP_AGENT = "com.hengxin.aioa.group.AGENT"

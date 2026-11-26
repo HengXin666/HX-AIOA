@@ -18,7 +18,8 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa next [--wait 秒] [--timeout 秒]   待处理消息; 没有就等人说话。退出码 0 有消息, 10 原样再跑, 2 idle 本轮结束
   hxaioa send <文字|-> --reply seq --covers 849,850   回复并把这些 seq 记为已处理
   hxaioa done <seq...>             不用回复的记为已处理
-  hxaioa todo add <标题> [--prio n] [--repo r] [--issue n] [--parent id] [--note s] [--src seq] [--id id]
+  hxaioa todo add <标题> [--prio n] [--area 生活] [--due "11-30 18:00"] [--remind 分钟] [--every month|2week] [--star] [--alarm]
+                [--repo r] [--issue n] [--parent id] [--note s] [--src seq] [--id id]
   hxaioa todo set <id> [--title t] [--state open|hold|doing|done] [--prio n] [--repo r] [--issue n] [--parent id] [--note s]
   hxaioa todo done <id> [--note s]     冲突时打印当前行, 退出码 3
   hxaioa skill install [--setup N] [--dir 目录]   从 Git 装 skill (接入语里用)
@@ -51,8 +52,8 @@ const BOOL = { type: "boolean" };
 const OPTIONS = {
   channel: { ...STR, short: "c" },
   ...Object.fromEntries(["reply", "title", "html", "priority", "since", "before", "limit", "timeout", "exec", "interval", "window", "add", "set", "summary", "file", "dedupe"].map((k) => [k, STR])),
-  ...Object.fromEntries(["wait", "setup", "dir", "covers", "trigger", "prio", "repo", "issue", "parent", "note", "src", "state", "id"].map((k) => [k, STR])),
-  ...Object.fromEntries(["new", "json", "all", "once", "mine", "any", "ack"].map((k) => [k, BOOL])),
+  ...Object.fromEntries(["wait", "setup", "dir", "covers", "trigger", "prio", "repo", "issue", "parent", "note", "src", "state", "id", "area", "due", "remind", "every"].map((k) => [k, STR])),
+  ...Object.fromEntries(["new", "json", "all", "once", "mine", "any", "ack", "star", "alarm"].map((k) => [k, BOOL])),
   help: { ...BOOL, short: "h" },
 };
 
