@@ -57,10 +57,13 @@ async function readCapped(res: Response, max: number, name: string): Promise<str
   return text + dec.decode();
 }
 
-async function fetchText(url: string, max: number): Promise<string> {
+async function fetchText(url: string, max: number, token?: string): Promise<string> {
   const name = url.split("/").slice(-2).join("/");
-  const res = await fetch(url, { headers: { "User-Agent": UA } }).catch(() => null);
+  const headers: Record<string, string> = { "User-Agent": UA, ...(token ? { Authorization: `token ${token}` } : {}) };
+  // 带令牌时不跟随跳转, 免得令牌被带到别的主机
+  const res = await fetch(url, { headers, redirect: token ? "manual" : "follow" }).catch(() => null);
   if (!res) throw new ApiFail(502, CODE_MARKET, "插件市场暂时连不上");
+  if (token && res.status >= 300 && res.status < 400) throw new ApiFail(502, CODE_MARKET, `${name} 要求跳转, 私有源不跟随`);
   // 跟随跳转后必须还是 https (本机开发源除外, 它本来就是 http)
   if (res.url && !res.url.startsWith("https://") && new URL(res.url).origin !== new URL(url).origin) throw new ApiFail(502, CODE_MARKET, `${name} 跳转到了非 https 地址`);
   if (res.status === 404) throw new ApiFail(404, CODE_NOT_FOUND, `市场里没有 ${name}`);
@@ -98,6 +101,8 @@ export class Market {
   constructor(
     private readonly base: string | undefined,
     sql: SqlStorage,
+    // 私有源用部署的 GitHub 授权 (主人的令牌) 读取
+    private readonly ghToken: () => Promise<string> = () => Promise.reject(new ApiFail(409, CODE_BAD_REQUEST, "没有 GitHub 授权")),
   ) {
     this.store = new MarketStore(sql);
   }
@@ -117,12 +122,29 @@ export class Market {
     });
   }
 
+  /** 私有源 (主人的私有仓库) 的插件只给主人看和用。 */
+  isPrivate(sourceId: string | undefined): boolean {
+    return !!sourceId && this.privateSources().has(sourceId);
+  }
+
+  privateSources(): Set<string> {
+    return new Set(this.store.sources().filter((s) => s.private).map((s) => s.id));
+  }
+
   errors(): string[] {
     return this.sources().filter((s) => s.error).map((s) => `${s.name}: ${s.error}`);
   }
 
-  /** 加一个源: 依次试候选目录的 index.json (最多两次请求), 第一个能解析的就是。 */
-  async addSource(link: string): Promise<MarketSource> {
+  /** 读源里的文件; 私有源带上 GitHub 授权。 */
+  private async get(src: Pick<MarketSource, "url" | "private">, path: string, max: number): Promise<string> {
+    return fetchText(`${src.url}/${path}`, max, src.private ? await this.ghToken() : undefined);
+  }
+
+  /**
+   * 加一个源: 依次试候选目录的 index.json (最多两次请求), 第一个能解析的就是。
+   * 公开读全是 404 的 GitHub 仓库, 主人加时再用 GitHub 授权试一遍, 读到了就记为私有源。
+   */
+  async addSource(link: string, owner = false): Promise<MarketSource> {
     // 本机 http 只在官方源本身指向本机时放行 (本地开发与 e2e)
     const p = parseMarketLink(link, /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(this.official().url));
     if (typeof p === "string") throw new ApiFail(400, CODE_BAD_REQUEST, p);
@@ -130,12 +152,18 @@ export class Market {
     if (third.length >= MAX_SOURCES) throw new ApiFail(400, CODE_BAD_REQUEST, `第三方源最多 ${MAX_SOURCES} 个`);
     if (p.id === OFFICIAL_SOURCE || third.some((s) => s.id === p.id)) throw new ApiFail(409, CODE_CONFLICT, "这个源已经加过了");
     let last = "";
-    for (const url of p.candidates) {
+    let missing = true;
+    const tries = p.candidates.map((url) => ({ url }) as { url: string; private?: true });
+    // 只有主人能用私有源: 令牌是主人的, 不能让别的管理员借它读主人的私有仓库
+    if (owner && p.github) tries.push(...p.candidates.map((url) => ({ url, private: true as const })));
+    for (const t of tries) {
+      // 公开读有非 404 的失败 (网络, 格式) 就不再用令牌试, 报公开读的原因
+      if (t.private && !missing) break;
       try {
-        const text = await fetchText(`${url}/${PLUGIN_INDEX_FILE}`, MAX_INDEX_TEXT);
+        const text = await this.get(t, PLUGIN_INDEX_FILE, MAX_INDEX_TEXT);
         const idx = parseIndex(text);
         const now = Date.now();
-        const src: MarketSource = { id: p.id, name: idx.name ?? p.name, url, link: link.trim(), added: now };
+        const src: MarketSource = { id: p.id, name: idx.name ?? p.name, url: t.url, link: link.trim(), added: now, ...(t.private ? { private: true } : {}) };
         this.store.putSource(src);
         this.store.put(IDX + src.id, text, now);
         this.keep(src.id, text, now);
@@ -143,10 +171,15 @@ export class Market {
         await this.merged().catch(() => []);
         return this.sources().find((s) => s.id === src.id)!;
       } catch (e) {
-        last = e instanceof Error ? e.message : String(e);
+        if (!t.private) {
+          last = e instanceof Error ? e.message : String(e);
+          missing &&= e instanceof ApiFail && e.status === 404;
+        } else if (!(e instanceof ApiFail && e.status === 404)) last = `${last}; 用 GitHub 授权读也失败: ${e instanceof Error ? e.message : String(e)}`;
       }
     }
-    throw new ApiFail(400, CODE_BAD_REQUEST, `没找到能用的 index.json: ${last}`);
+    // GitHub 对无效令牌读私有仓库也回 404, 分不出 "没有" 和 "没权限"
+    const hint = owner && p.github && missing ? "; 如果是私有仓库, 先确认 GitHub 授权有效 (插件市场里的 GitHub 授权)" : "";
+    throw new ApiFail(400, CODE_BAD_REQUEST, `没找到能用的 index.json: ${last}${hint}`);
   }
 
   removeSource(id: string): boolean {
@@ -174,7 +207,7 @@ export class Market {
     if (busy) return busy;
     const job = (async () => {
       try {
-        const text = await fetchText(`${src.url}/${PLUGIN_INDEX_FILE}`, MAX_INDEX_TEXT);
+        const text = await this.get(src, PLUGIN_INDEX_FILE, MAX_INDEX_TEXT);
         parseIndex(text);
         this.store.put(IDX + src.id, text, now);
         return this.keep(src.id, text, now);
@@ -250,12 +283,12 @@ export class Market {
     const key = (e: Entry, s: MarketSource) => `f:${s.id}:${id}@${e.version}/${PLUGIN_MANIFEST_FILE}`;
     const row = fresh ? null : this.store.get(key(entry, src));
     if (row) return { m: this.check(id, JSON.parse(row.v), src), src };
-    let text = await fetchText(`${src.url}/${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
+    let text = await this.get(src, `${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
     let m = this.check(id, JSON.parse(text), src);
     // 索引和清单在 CDN 上各缓存各的, 可能一新一旧: 强制重拉索引和清单各一次再比, 对上了才写缓存
     if (m.version !== entry.version) {
       ({ src, entry } = await this.locate(id, "force"));
-      text = await fetchText(`${src.url}/${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
+      text = await this.get(src, `${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
       m = this.check(id, JSON.parse(text), src);
     }
     if (m.version !== entry.version) {
@@ -288,7 +321,7 @@ export class Market {
     const key = `f:${src.id}:${id}@${entry.version}/${name}`;
     const row = fresh ? null : this.store.get(key);
     if (row) return row.v;
-    const text = await fetchText(`${src.url}/${id}/${name}`, MAX_PLUGIN_TEXT);
+    const text = await this.get(src, `${id}/${name}`, MAX_PLUGIN_TEXT);
     this.store.put(key, text, Date.now());
     return text;
   }

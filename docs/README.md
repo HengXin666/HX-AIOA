@@ -40,6 +40,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [env.md](deploy/env.md) | 环境变量与密钥总表 (必填, 可选, 插件携带), 改变量必须同步 |
 | [cloudflare.md](deploy/cloudflare.md) | 服务端部署 (Workers, 密钥, CI) |
 | [cf-usage.md](deploy/cf-usage.md) | CF 额度页与免费额度 |
 | [android-signing.md](deploy/android-signing.md) | 安卓签名与自动发布 |

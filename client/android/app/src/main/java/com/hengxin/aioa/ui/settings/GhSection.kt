@@ -105,7 +105,7 @@ private fun Authorize(api: GhApi, device: Boolean, done: () -> Unit) {
             break
         }
     }
-    SettingsGroup("在电脑上授权", if (device) "在任何登录了 GitHub 的设备上打开地址, 输入下面的码, 手机不用登录 GitHub。" else "服务端没配 GH_CLIENT_ID, 设备码不可用, 先用令牌。") {
+    SettingsGroup("在电脑上授权", if (device) "在任何登录了 GitHub 的设备上打开地址, 输入下面的码, 手机不用登录 GitHub。" else "服务端没配齐 GH_CLIENT_ID 和 GH_CLIENT_SECRET, 设备码不可用, 先用令牌。") {
         if (d == null) {
             ActionRow("获取授权码", "monitor", enabled = device) { scope.launch { api.startDevice().onSuccess { dev = it; note = null }.onFailure { note = it.message } } }
         } else {

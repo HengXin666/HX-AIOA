@@ -20,6 +20,8 @@ export type MarketSource = {
   // 管理员填的原始链接
   link: string;
   official?: true;
+  // 私有仓库: 用部署的 GitHub 授权 (主人的令牌) 读取, 只有主人能加
+  private?: true;
   added: number;
   // 最近一次拉到的索引: 时间, 插件数, 失败原因
   at?: number;
@@ -38,7 +40,7 @@ const SEG_RE = /^[\w.-]+$/;
 const MAX_ID = 64;
 
 /** 填的链接 → 依次尝试的根地址 (第一个有 index.json 的就是), 和源 id。 */
-export function parseMarketLink(raw: string, allowLocal = false): { id: string; name: string; candidates: string[] } | string {
+export function parseMarketLink(raw: string, allowLocal = false): { id: string; name: string; candidates: string[]; github?: true } | string {
   const link = raw.trim().replace(/\/index\.json$/, "").replace(/\/+$/, "").replace(/\.git$/, "");
   // 本机 http 只给本地开发与 e2e 用, 由服务端按部署配置决定放不放
   if (!/^https:\/\//.test(link) && !(allowLocal && /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(link))) return "只支持 https 链接";
@@ -57,7 +59,7 @@ export function parseMarketLink(raw: string, allowLocal = false): { id: string; 
     if (rest.some((s) => !SEG_RE.test(s))) return "链接里有不支持的字符";
     const base = join(RAW + owner, repo, ref);
     const candidates = rest.length > 1 ? [join(base, dir)] : DEFAULT_DIRS.map((d) => join(base, d));
-    return { id: idOf(owner, repo, dir), name: `${owner}/${repo}${dir ? `/${dir}` : ""}`, candidates };
+    return { id: idOf(owner, repo, dir), name: `${owner}/${repo}${dir ? `/${dir}` : ""}`, candidates, github: true };
   }
   const u = (() => { try { return new URL(link); } catch { return null; } })();
   if (!u) return "链接格式不对";

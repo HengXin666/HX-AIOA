@@ -46,15 +46,5 @@ CFD_ORIGIN = "https://cfdb.woa.qzz.io"
 pattern = "aioa.woa.qzz.io/*"
 zone_name = "woa.qzz.io"
 
-# 以下用 wrangler secret put 设置, 不写进仓库:
-# AUTH_TOKEN            必填, 客户端令牌 (母号全权限凭证)
-# TOKEN_SECRET          多账号必填, 签发访问令牌并派生各接入 key 的 webhook 签名密钥
-# SETUP_CODE            多账号必填, 一次性母号初始化口令 (POST /api/v1/setup)
-# MIPUSH_APP_SECRET     可选, 小米推送 AppSecret
-# MIPUSH_PACKAGE        可选, 安卓包名
-# WXPUSHER_APP_TOKEN    可选, WxPusher 应用 token
-# WXPUSHER_UID          可选, WxPusher 用户 UID
-# GITHUB_TOKEN          可选, GitHub 只读 fine-grained token, 用于 GitHub 页面回填
-# CFD_TOKEN             可选, HX-CF-Drive 受限令牌 (根目录 /aioa, read+write), 大文件走 TG 时需要
-# GH_CLIENT_ID          可选, GitHub 授权插件的设备码流程 (OAuth App 或开了 Device Flow 的 GitHub App)
-# GH_CLIENT_SECRET      可选, 会过期的 GitHub 令牌自动续期要它 (没配就用到 GitHub 拒绝为止)
+# 运行时密钥用 wrangler secret put 设置 (或由部署从仓库 secret 同步), 不写进仓库。
+# 全部变量, 哪些必填, 哪些是插件带的, 见 docs/deploy/env.md; 增删变量要同步改那张表。

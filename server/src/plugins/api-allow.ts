@@ -29,6 +29,7 @@ import { teardown } from "./api";
 import { pushPlugin } from "./notify";
 import { CODE_NOT_ALLOWED, autoUpgrade } from "./update";
 import { acctOf, isAdmin } from "./who";
+import { privatePlugin } from "./private";
 
 const QUERY_PURGE = "purge";
 
@@ -55,7 +56,9 @@ function admin(c: ReqCtx): string {
 function view(c: ReqCtx, uid: string): PluginAllowView {
   const k = c.core.kernel;
   const admin = isAdmin(c.who);
-  return { allow: k.visible(uid), enabled: k.enabledOf(uid), choices: k.choicesFor(uid), budget: { total: k.check().total, limit: PLUGIN_DAILY_BUDGET }, admin, server: [...L2A_PLUGINS], dev: admin && k.devMode(uid) };
+  // 私有插件不出现在子号的白名单视图里
+  const allow = c.who.owner ? k.visible(uid) : k.visible(uid).filter((a) => !privatePlugin(c.core, a.id));
+  return { allow, enabled: k.enabledOf(uid), choices: k.choicesFor(uid), budget: { total: k.check().total, limit: PLUGIN_DAILY_BUDGET }, admin, server: [...L2A_PLUGINS], dev: admin && k.devMode(uid) };
 }
 
 function getAllow(c: ReqCtx): Response {
@@ -76,6 +79,8 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 被一个开发插件占用, 主人可以先撤销它`, CODE_CONFLICT);
   // 官方源放行绕过缓存拿最新; 第三方按管理员看过的那份 (digest) 放行, 内容变了就拒绝
   const cached = await c.core.market.sourceOf(id);
+  // 先拦再拉: 别的管理员不能借主人的令牌拉私有内容
+  if (!c.who.owner && privatePlugin(c.core, id, cached.id)) return fail(403, `${id} 来自主人的私有源, 只有主人能放行`, CODE_FORBIDDEN);
   const { m: manifest, src } = await c.core.market.manifestAt(id, cached.official ? "fresh" : "latest");
   const was = c.core.kernel.get(id)?.meta.source ?? OFFICIAL_SOURCE;
   // 换源等于换作者: 必须先撤销旧的再放行, 不能当成 "更新"
@@ -90,7 +95,7 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   const defaults = Array.isArray(body.defaults) ? body.defaults.filter((d): d is string => typeof d === "string") : (c.core.kernel.get(id)?.meta.defaults ?? []);
   const bad = defaults.find((d) => badDefault(manifest, d));
   if (bad) return fail(400, `${id} 不提供单选扩展点或服务 ${bad}`);
-  const row: AllowRow = { meta: { id, version: manifest.version, name: manifest.name, by, at: Date.now(), ...(defaults.length ? { defaults } : {}), ...(src.official ? {} : { source: src.id }) }, manifest, prompt };
+  const row: AllowRow = { meta: { id, version: manifest.version, name: manifest.name, by, at: Date.now(), ...(defaults.length ? { defaults } : {}), ...(src.official ? {} : { source: src.id }), ...(src.private ? { private: true as const } : {}) }, manifest, prompt };
   const result = c.core.kernel.check(row);
   if (result.conflicts.length) return fail(409, `${id} 与白名单冲突, 没有放行`, CODE_PLUGIN_CONFLICT, { conflicts: result.conflicts, requests: result.requests, total: result.total });
   const prev = c.core.kernel.get(id)?.meta.version;
@@ -114,9 +119,12 @@ async function deleteAllow(c: ReqCtx): Promise<Response> {
   // 去掉它之后白名单也要能共存: 比如它是某单选扩展点的默认, 或别的插件依赖它提供的服务
   const after = c.core.kernel.check(undefined, id);
   if (after.conflicts.length) return fail(409, `撤销 ${id} 后白名单会冲突, 先给其它提供者指定默认或撤销依赖它的插件`, CODE_PLUGIN_CONFLICT, { conflicts: after.conflicts });
+  // 私有插件只有主人能撤, 撤掉后的推送也只给主人 (白名单行没了就判断不出来, 先记下)
+  const priv = !!row.meta.private;
+  if (priv && !c.who.owner) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
   c.core.kernel.revoke(id);
   await teardown(c.core, id);
-  pushPlugin(c.core, id, "revoked");
+  pushPlugin(c.core, id, "revoked", priv ? { uid: c.core.users.ownerId() } : {});
   return json({ ok: true });
 }
 
@@ -126,6 +134,7 @@ async function enable(c: ReqCtx): Promise<Response> {
   if (!c.core.kernel.usable(uid, id)) return fail(403, `插件 ${id} 还没被管理员放行`, CODE_NOT_ALLOWED);
   // 数据属于整个部署的服务端插件只看主人的启用, 子号开了也没用, 直接说清楚
   if (isL2a(id) && L2A[id].owner && uid !== c.core.users.ownerId()) return fail(400, `${id} 归整个部署, 只有主人启用才生效`);
+  if (privatePlugin(c.core, id) && uid !== c.core.users.ownerId()) return fail(403, `${id} 来自主人的私有源, 只供主人使用`, CODE_FORBIDDEN);
   if (c.core.kernel.setEnabled(uid, id, true)) pushPlugin(c.core, id, "enabled", { uid, version: c.core.kernel.get(id)!.meta.version });
   return json(view(c, uid));
 }

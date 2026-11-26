@@ -136,7 +136,7 @@ export class Hub extends DurableObject<Env> {
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
     const parts = pluginParts(sql, () => users.ownerId());
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 

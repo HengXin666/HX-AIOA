@@ -8,7 +8,7 @@
 
 ## 授权方式
 
-1. 在电脑上授权 (推荐): App 给一个码, 在任何登录了 GitHub 的设备上打开 github.com/login/device 输入即可。需要服务端配置 `GH_CLIENT_ID`。
+1. 在电脑上授权 (推荐): App 给一个码, 在任何登录了 GitHub 的设备上打开 github.com/login/device 输入即可。需要服务端**同时**配置 `GH_CLIENT_ID` 和 `GH_CLIENT_SECRET` (GitHub 新建的 OAuth App 令牌 8 小时过期, 要 secret 才能自动续期), 只配一个部署会报错; 配法见仓库 `docs/deploy/env.md`。
 2. 粘贴令牌: fine-grained token, 权限选 Issues 读写, 仓库按需选。
 
 ## 仓库范围
