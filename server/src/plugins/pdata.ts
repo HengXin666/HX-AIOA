@@ -123,6 +123,14 @@ export class PDataStore {
       .map(toItem);
   }
 
+  /** 某插件集合在所有账号下的有效行 (待办提醒排程用); 总量受每账号行数上限约束。 */
+  allLive(plugin: string, coll: string): { acct: string; item: PDataItem }[] {
+    return this.sql
+      .exec<Row & { acct: string }>("SELECT acct, id, ver, rev, updated, deleted, body FROM pdata WHERE plugin = ? AND coll = ? AND deleted = 0", plugin, coll)
+      .toArray()
+      .map((r) => ({ acct: r.acct, item: toItem(r) }));
+  }
+
   /** 一次性迁移导入: 已有同 id 的行就跳过 (重复跑不重复写), 保留原 updated; 不受配额限制, 旧数据一条不丢。 */
   importRow(acct: string, plugin: string, coll: string, id: string, body: unknown, updated: number): boolean {
     if (this.row(acct, plugin, coll, id)) return false;

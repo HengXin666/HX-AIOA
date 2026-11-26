@@ -80,7 +80,10 @@ function todoLine(t) {
   const issue = t.repo && t.issue ? ` (${t.repo}#${t.issue})` : "";
   const parent = t.parent ? ` <- ${t.parent}` : "";
   const note = t.note ? ` | ${t.note.replace(/\s+/g, " ").slice(0, 80)}` : "";
-  return `[${STATE_LABEL[t.state] ?? t.state}] P${t.prio ?? 2} ${t.id} ${t.title}${issue}${parent}${note}`;
+  // 分区, 截止 (东八区), 周期, 星标 (#105)
+  const due = t.due ? ` 截止 ${new Date(t.due + 8 * 3_600_000).toISOString().slice(5, 16).replace("T", " ")}` : "";
+  const plan = `${t.star ? " ★" : ""}${t.area ? ` {${t.area}}` : ""}${due}${t.every ? ` 每${t.every.n}${t.every.unit}` : ""}`;
+  return `[${STATE_LABEL[t.state] ?? t.state}] P${t.prio ?? 2} ${t.id} ${t.title}${plan}${issue}${parent}${note}`;
 }
 
 const COMMANDS = {

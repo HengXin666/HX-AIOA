@@ -8,6 +8,16 @@ import type { Ctx } from "./frame";
 const DONE = ["done", "dropped"];
 const PRIO_LABEL: Record<number, string> = { 1: "急", 2: "", 3: "以后" };
 const ERR_CLS = "w-ph w-ph-error";
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+// 截止倒计时 (#105): "还剩 2 天" / "还剩 3 小时" / "逾期 1 天"
+export function countdown(due: number, now = Date.now()): string {
+  const left = due - now;
+  const abs = Math.abs(left);
+  const span = abs >= DAY_MS ? `${Math.floor(abs / DAY_MS)} 天` : abs >= HOUR_MS ? `${Math.floor(abs / HOUR_MS)} 小时` : `${Math.max(1, Math.floor(abs / 60_000))} 分钟`;
+  return left >= 0 ? `还剩 ${span}` : `逾期 ${span}`;
+}
 const COLL = PATH_PDATA_COLL.replace("{plugin}", TODO_PLUGIN).replace("{coll}", TODO_COLL);
 const TOPIC = pdataTopic(TODO_PLUGIN, TODO_COLL);
 
@@ -43,12 +53,14 @@ export function renderTodo(ctx: Ctx): HTMLElement {
   const draw = () => {
     root.replaceChildren();
     const todos = [...rows.values()].flatMap((it) => todoOf(it, channel) ?? []);
-    const open = todos.filter((t) => !DONE.includes(t.state)).sort((a, b) => a.prio - b.prio || b.updated - a.updated);
+    // 星标在前, 再按截止近的, 再按优先级
+    const open = todos.filter((t) => !DONE.includes(t.state)).sort((a, b) => Number(!!b.star) - Number(!!a.star) || (a.due ?? Infinity) - (b.due ?? Infinity) || a.prio - b.prio || b.updated - a.updated);
     if (!open.length) root.append(h("div", { class: "w-ph" }, "没有待办"));
     for (const t of open.slice(0, Number(ctx.item.props?.limit ?? 20))) {
       const box = h("input", { type: "checkbox" }) as HTMLInputElement;
       box.onchange = () => void finish(t);
-      root.append(h("label", { class: "todo-row" }, box, h("span", {}, t.title), h("span", { class: CLS.meta }, PRIO_LABEL[t.prio] ?? "")));
+      const meta = [t.star ? "★" : "", t.area ?? "", t.due ? countdown(t.due) : "", PRIO_LABEL[t.prio] ?? ""].filter(Boolean).join(" · ");
+      root.append(h("label", { class: "todo-row" }, box, h("span", {}, t.title), h("span", { class: CLS.meta }, meta)));
     }
     const done = todos.length - open.length;
     if (done) root.append(h("div", { class: CLS.meta }, `已完成 ${done} 条`));

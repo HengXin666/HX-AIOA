@@ -12,7 +12,8 @@ function line(t: TodoItem, depth: number): string {
   const box = finished(t) ? "[x]" : "[ ]";
   const issue = t.repo && t.issue ? ` (${t.repo}#${t.issue}${t.gh ? ` ${t.gh.state === "closed" ? "已关闭" : `${t.gh.comments} 评论`}` : ""})` : "";
   const note = t.note ? ` - ${t.note.replace(/\s+/g, " ").slice(0, 160)}` : "";
-  return `${"  ".repeat(depth)}- ${box} \`${t.id}\` [${STATE_TEXT[t.state]}] P${t.prio} ${t.title}${issue}${note}`;
+  const plan = [t.star ? "★" : "", t.area ? `{${t.area}}` : "", t.due ? `截止 ${new Date(t.due + TZ_OFFSET).toISOString().slice(0, 16).replace("T", " ")}` : "", t.every ? `每 ${t.every.n} ${t.every.unit}` : ""].filter(Boolean).join(" ");
+  return `${"  ".repeat(depth)}- ${box} \`${t.id}\` [${STATE_TEXT[t.state]}] P${t.prio} ${t.title}${plan ? ` (${plan})` : ""}${issue}${note}`;
 }
 
 /** 父子关系: parent 字段优先, 其次 GitHub 的父 issue。 */

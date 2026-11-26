@@ -7,6 +7,7 @@ import type { MailStore } from "./mail/store";
 import type { Market } from "./plugins/market";
 import type { PluginStore } from "./plugins/store";
 import type { TodoStore } from "./plugins/todos";
+import type { TodoRemind } from "./plugins/todo-remind";
 import type { PluginKernel } from "./plugins/kernel";
 import type { PDataStore } from "./plugins/pdata";
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
@@ -56,6 +57,8 @@ export type Core = {
   // 译文缓存与每月计费字符
   tr: TranslateStore;
   todos: TodoStore;
+  // 待办到点提醒 (#105), 待办一变就重排
+  remind: TodoRemind;
   gh: GhService;
   // hxoa 接入 (#97): 远程工作区的令牌与转发
   hxoa: HxoaService;

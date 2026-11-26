@@ -1,6 +1,7 @@
-import { MAX_TODOS, PDATA_ID_RE, TODO_COLL, TODO_PLUGIN, todoOf, todoRowId, type PDataItem, type TodoBody, type TodoGh, type TodoInput, type TodoItem, type TodoState } from "@hx-aioa/protocol";
+import { MAX_TODOS, PDATA_ID_RE, TODO_PLAN_KEYS, checkTodoBody, TODO_COLL, TODO_PLUGIN, todoOf, todoRowId, type PDataItem, type TodoBody, type TodoGh, type TodoInput, type TodoItem, type TodoState } from "@hx-aioa/protocol";
 import { PDataStore } from "./pdata";
 import { migrateTodo, type Tx } from "./todo-migrate";
+import { rollTodo } from "./todo-plan";
 
 const DEFAULT_PRIO = 2;
 const DONE: TodoState = "done";
@@ -19,6 +20,8 @@ export function normTodo(prev: TodoBody | null, next: TodoBody, now = Date.now()
   else out.doneAt = prev?.state === DONE ? (prev.doneAt ?? out.doneAt ?? now) : now;
   if (prev?.gh && prev.repo === out.repo && prev.issue === out.issue) out.gh = prev.gh;
   else delete out.gh;
+  // 周期待办刚完成: 推到下一期 (回到 open, 不留 doneAt), 免得每期都手动新建
+  if (out.state === DONE && prev?.state !== DONE && out.every && out.due) return rollTodo(out, now);
   return out;
 }
 
@@ -65,12 +68,14 @@ export class TodoStore {
       if (i.title !== undefined) next.title = i.title;
       if (i.state !== undefined) next.state = i.state;
       if (i.prio !== undefined) next.prio = i.prio;
-      for (const k of ["note", "src", "repo", "issue", "parent"] as const) {
+      for (const k of ["note", "src", "repo", "issue", "parent", ...TODO_PLAN_KEYS] as const) {
         if (i[k] === null) delete next[k];
         else if (i[k] !== undefined) (next as Record<string, unknown>)[k] = i[k];
       }
       const body = normTodo(old, next, now);
       if (old && JSON.stringify(old) === JSON.stringify(body)) continue;
+      const bad = checkTodoBody(rid, body);
+      if (bad) return bad;
       const r = this.pdata.put(acct, TODO_PLUGIN, TODO_COLL, rid, cur?.ver ?? 0, body, now);
       if ("error" in r) return r.error;
       if (!("ok" in r)) return "待办正被别处修改, 请重试";

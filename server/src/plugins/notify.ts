@@ -1,4 +1,4 @@
-import type { PDataSyncFrame, PluginChange, PluginUpdateFrame } from "@hx-aioa/protocol";
+import { TODO_PLUGIN, type PDataSyncFrame, type PluginChange, type PluginUpdateFrame } from "@hx-aioa/protocol";
 import { PROTO_V1 } from "../constants";
 import type { Core } from "../core";
 import { attOf, sendFrame } from "../sockets";
@@ -12,6 +12,7 @@ export function pushPlugin(core: Core, id: string, change: PluginChange, opts: {
   const frame: PluginUpdateFrame = { t: "plugin_update", id, change, ...(opts.version ? { version: opts.version } : {}) };
   // 私有插件的白名单变化只推给主人
   toAccount(core, opts.uid ?? (privatePlugin(core, id) ? core.users.ownerId() : undefined), frame);
+  if (id === TODO_PLUGIN) core.remind?.kick();
   if (!opts.keyId) return;
   const guide: PluginUpdateFrame = { ...frame, guide: opts.version ?? change };
   for (const ws of core.sockets.chatSockets(opts.keyId)) sendFrame(ws, guide);
@@ -30,4 +31,6 @@ export function toAccount(core: Core, uid: string | undefined, frame: unknown): 
 
 export function pushPData(core: Core, uid: string, plugin: string, coll: string, rev: number): void {
   toAccount(core, uid, { t: "pdata_sync", plugin, coll, rev } satisfies PDataSyncFrame);
+  // 待办的截止或提醒可能变了: 重排到点提醒
+  if (plugin === TODO_PLUGIN) core.remind?.kick();
 }

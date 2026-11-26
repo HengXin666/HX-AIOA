@@ -1,5 +1,5 @@
 // HTTP: 统一带密钥与 UA (默认 UA 会被防火墙拦), 429 / 5xx 指数退避
-export const VERSION = "0.3.2";
+export const VERSION = "0.3.3";
 // 本命令行按哪个协议大版本写的; 握手时带上, 服务端据此给出兼容档位
 export const PROTOCOL = 2;
 export const USER_AGENT = `hx-aioa-agent/1 hxaioa-cli/${VERSION}`;

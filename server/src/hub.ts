@@ -1,6 +1,6 @@
 import { attachFile } from "./files/api";
 import { Drive } from "./files/drive";
-import { Migrator, TIMER_MIGRATE } from "./files/migrate";
+import { Migrator } from "./files/migrate";
 import { storageOf } from "./files/storage";
 import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
@@ -10,7 +10,8 @@ import { TodoStore } from "./plugins/todos";
 import { TranslateStore } from "./translate/store";
 import { GhService } from "./gh/service";
 import { HxoaService } from "./hxoa/service";
-import { pluginParts, retireDev } from "./plugins/seed";
+import { newRemind, pluginParts, retireDev } from "./plugins/seed";
+import { runTimer } from "./timer-jobs";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -63,9 +64,6 @@ import {
   OWNER_ID,
   PROTO_LEGACY,
   PROTO_V1,
-  TIMER_AGG_PREFIX,
-  TIMER_FALLBACK,
-  TIMER_PROMPT_PREFIX,
   UNKNOWN_DEVICE,
   OWNER_NAME,
   BG_DEVICE_PREFIX,
@@ -136,7 +134,7 @@ export class Hub extends DurableObject<Env> {
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
     const parts = pluginParts(sql, () => users.ownerId());
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), remind: newRemind(() => this.core, parts.pdata, this.timers, ctx.storage), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -484,10 +482,7 @@ export class Hub extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     for (const name of await this.timers.takeDue(Date.now())) {
       try {
-        if (name === TIMER_FALLBACK) await this.core.pipeline.runFallback();
-        else if (name.startsWith(TIMER_AGG_PREFIX)) await this.core.pipeline.flushBucket(name.slice(TIMER_AGG_PREFIX.length));
-        else if (name.startsWith(TIMER_PROMPT_PREFIX)) await this.core.agents.expire(name.slice(TIMER_PROMPT_PREFIX.length));
-        else if (name === TIMER_MIGRATE) await this.core.migrator.tick();
+        await runTimer(this.core, name);
       } catch (e) {
         console.error("定时任务失败:", name, e);
       }

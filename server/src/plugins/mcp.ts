@@ -22,6 +22,11 @@ const TODO_FIELDS = {
   repo: { type: "string", description: "关联仓库 owner/name" },
   issue: { type: "integer", description: "关联的 issue 号" },
   parent: { type: "string", description: "父待办 id" },
+  area: { type: "string", description: "分区: 生活 / 开发 / 工作 等短词" },
+  due: { type: "integer", description: "截止时间, 毫秒时间戳" },
+  remind: { type: "integer", description: "截止前几分钟提醒, 0 为到点 (要先有 due)" },
+  star: { type: "boolean", description: "重点, 显示在总览" },
+  every: { type: "object", description: "周期 {unit: day/week/month/year, n: 每几个单位, tz: 时区偏移分钟}, 完成后自动排下一期 (要先有 due)" },
 };
 
 const TOOLS: Tool[] = [

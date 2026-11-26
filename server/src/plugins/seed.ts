@@ -43,5 +43,8 @@ export function pluginParts(sql: SqlStorage, ownerId: () => string): { plugins: 
   return { plugins, kernel, pdata: new PDataStore(sql) };
 }
 
+// Hub 建待办到点提醒用 (#105)
+export { newRemind } from "./todo-notice";
+
 // Hub 账号回调用: 管理员降级, 停用或删号时撤掉他的开发插件
 export { retireDev } from "./api-dev";
