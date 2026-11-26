@@ -58,7 +58,7 @@ export function devicePoll(clientId: string, deviceCode: string): Promise<TokenG
   return form("/login/oauth/access_token", { client_id: clientId, device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }) as Promise<TokenGrant>;
 }
 
-// 过期令牌续期: 设备码流程拿到的令牌不需要 client_secret, 配了就带上 (网页流程 / GitHub App 要)
+// 过期令牌续期要 client_secret (文档说设备码令牌可省, 实测省了拿到的新令牌不能用)
 export function refreshGrant(clientId: string, secret: string | undefined, refresh: string): Promise<TokenGrant> {
   return form("/login/oauth/access_token", { client_id: clientId, ...(secret ? { client_secret: secret } : {}), grant_type: "refresh_token", refresh_token: refresh }) as Promise<TokenGrant>;
 }

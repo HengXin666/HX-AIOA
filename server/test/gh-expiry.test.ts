@@ -13,10 +13,10 @@ test("GitHub 授权: 不过期的令牌不带 renewable", () => {
   assert.equal(svc({}, { login: "a", kind: "token", since: 1, token: "x" }).auth()?.renewable, undefined);
 });
 
-test("GitHub 授权: 会过期, 有 refresh 就能续期 (设备码令牌不需要 secret)", () => {
+test("GitHub 授权: 会过期, 有 refresh 和 secret 才能续期 (没 secret 续出的令牌不能用)", () => {
   const g = { login: "a", kind: "device", since: 1, token: "x", expires: Date.now() + 1000, refresh: "r" };
   assert.equal(svc({ GH_CLIENT_ID: "i", GH_CLIENT_SECRET: "s" }, g).auth()?.renewable, true);
-  assert.equal(svc({ GH_CLIENT_ID: "i" }, g).auth()?.renewable, true);
+  assert.equal(svc({ GH_CLIENT_ID: "i" }, g).auth()?.renewable, false);
   assert.equal(svc({}, g).auth()?.renewable, false);
   assert.equal(svc({ GH_CLIENT_ID: "i", GH_CLIENT_SECRET: "s" }, { ...g, refresh: undefined }).auth()?.renewable, false);
   assert.equal(svc({ GH_CLIENT_ID: "i", GH_CLIENT_SECRET: "s" }, { ...g, refreshExpires: 1 }).auth()?.renewable, false);

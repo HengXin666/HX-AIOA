@@ -60,20 +60,20 @@ export class GhService {
   }
 
   private renewable(s: GhSecret): boolean {
-    // 设备码拿到的令牌续期不用 client_secret (GitHub 文档), 有 refresh 就能续; 配了 secret 也照样带上
-    return !!(s.refresh && this.env.GH_CLIENT_ID) && (!s.refreshExpires || s.refreshExpires > Date.now());
+    // 实测 (#115): 不带 client_secret 续期, GitHub 照样回 gho_ 令牌但调接口 401, 还把旧令牌作废; 所以没 secret 绝不续
+    return !!(s.refresh && this.env.GH_CLIENT_ID && this.env.GH_CLIENT_SECRET) && (!s.refreshExpires || s.refreshExpires > Date.now());
   }
 
   async token(): Promise<string> {
     const s = this.store.secret();
     if (!s) throw new ApiFail(409, "gh_unauthorized", "还没授权 GitHub, 请主人在 App 的 GitHub 授权插件里授权");
-    if (s.expires && s.expires - Date.now() < REFRESH_AHEAD) return this.refresh(s);
+    // 能续才按本地到期时间提前续; 不能续就照用, 以 GitHub 真的回 401 为准 (有的令牌带 expires_in 却不按时失效)
+    if (s.expires && s.expires - Date.now() < REFRESH_AHEAD && this.renewable(s)) return this.refresh(s);
     return unseal(this.secret, s.token);
   }
 
   /**
-   * 用令牌调 GitHub; 401 且有 refresh 时: 库里已换了新令牌就直接重试, 否则续一次再试。
-   * 覆盖本地记的到期时间不准、令牌被提前作废的情况。
+   * 用令牌调 GitHub; 401 时: 库里已换了新令牌就直接重试, 能续期就续一次再试, 否则报 gh_expired 让主人重新授权。
    */
   async withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const t = await this.token();
@@ -82,9 +82,11 @@ export class GhService {
     } catch (e) {
       if (!(e instanceof ApiFail && e.status === 401 && e.code === GH_CODE)) throw e;
       const s = this.store.secret();
-      if (!s?.refresh) throw e;
+      if (!s) throw e;
       const cur = await unseal(this.secret, s.token);
-      return fn(cur !== t ? cur : await this.refresh(s));
+      if (cur !== t) return fn(cur);
+      if (!this.renewable(s)) throw new ApiFail(401, "gh_expired", "GitHub 拒绝了授权令牌 (过期或被撤销), 请主人在 GitHub 授权插件里重新授权");
+      return fn(await this.refresh(s));
     }
   }
 
@@ -104,12 +106,9 @@ export class GhService {
 
   private async doRefresh(s: GhSecret): Promise<string> {
     const id = this.env.GH_CLIENT_ID;
-    if (!id || !s.refresh || (s.refreshExpires && s.refreshExpires <= Date.now())) throw new ApiFail(401, "gh_expired", "GitHub 授权已过期且无法续期, 请主人在 GitHub 授权插件里重新授权");
+    if (!id || !this.renewable(s) || !s.refresh) throw new ApiFail(401, "gh_expired", "GitHub 授权已过期且无法续期, 请主人在 GitHub 授权插件里重新授权");
     const g = await refreshGrant(id, this.env.GH_CLIENT_SECRET, await unseal(this.secret, s.refresh));
     if (!g.access_token) throw new ApiFail(401, "gh_expired", `GitHub 续期失败: ${g.error ?? "未知"}, 请主人重新授权`);
-    // 临时诊断 (#115): 记下续期返回的字段和新令牌能不能用, 不记令牌本身
-    const probe = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${g.access_token}`, "User-Agent": "hx-aioa", Accept: "application/vnd.github+json" } }).then((r) => r.status, () => 0);
-    this.store.log({ ts: Date.now(), by: "系统", op: "续期诊断", repo: "-", ok: probe === 200, note: `keys=${Object.keys(g).join(",")} pre=${g.access_token.slice(0, 4)} len=${g.access_token.length} user=${probe} secret=${this.env.GH_CLIENT_SECRET ? 1 : 0}` });
     await this.save(s.kind, g, s.login);
     return g.access_token;
   }

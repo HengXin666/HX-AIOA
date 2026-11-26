@@ -16,8 +16,8 @@
 | 粘贴令牌 | `PUT /api/v1/gh/token { "token": "github_pat_..." }`, 建议 fine-grained, 只给 Issues 读写。 |
 
 - 令牌用 AES-GCM 加密落库 (密钥由 `TOKEN_SECRET` 派生); `DELETE /api/v1/gh/token` 或停用并清除 (`?purge=1`) 即删除。
-- 会过期的令牌 (GitHub App, 或 OAuth App 开了 "用户令牌过期", 设备码拿到的令牌 8 小时过期) 在剩 5 分钟时用 refresh token 自动续期 (同一时刻只续一次)。设备码令牌续期不需要 client secret; 网页流程或 GitHub App 才要 `GH_CLIENT_SECRET` (仓库 Actions Secrets 填 `AIOA_GH_CLIENT_SECRET`, 部署时同步, 配了就带上)。不过期的令牌 (GitHub 没返回 `expires_in`) 直接长期使用。
-- refresh token 失效 (6 个月没用或被撤销) 时 `GET` 返回的 `auth.renewable` 为 false, App 标红; 到期前 2 小时 (cron) 给主人发一条系统消息, 每个到期时间只发一次。
+- 会过期的令牌 (GitHub App, 或 OAuth App 开了 "用户令牌过期", 设备码拿到的令牌 8 小时过期) 配了 `GH_CLIENT_SECRET` (仓库 Actions Secrets 填 `AIOA_GH_CLIENT_SECRET`, 部署时同步) 时在剩 5 分钟或 GitHub 回 401 时用 refresh token 自动续期 (同一时刻只续一次)。没配就不续 (实测不带 secret 续出的令牌调接口 401, 还会作废旧令牌), 令牌照用到 GitHub 真的拒绝为止。不过期的令牌 (GitHub 没返回 `expires_in`) 直接长期使用。
+- 不能续期时 `GET` 返回的 `auth.renewable` 为 false, App 标红; 过了到期时间 cron 探一次, GitHub 真拒绝了才给主人发一条系统消息, 每个到期时间只发一次。
 
 ## 仓库范围
 

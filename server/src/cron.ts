@@ -5,6 +5,7 @@ import type { Core } from "./core";
 import { ghOn } from "./gh/gate";
 import { syncTodoIssues, SYNC_FAIL } from "./gh/todo-sync";
 import { githubOn } from "./github/gate";
+import { ApiFail } from "./http";
 
 const CF_SOURCE = "CF 额度";
 const KEY_CF_ALERT = "cf_alert_day";
@@ -23,17 +24,18 @@ async function cfCheck(core: Core, storage: DurableObjectStorage): Promise<void>
 }
 
 const KEY_GH_NOTICE = "gh_expiry_notice";
-const GH_WARN_AHEAD = 2 * 60 * 60_000;
-const MIN = 60_000;
 
-/** GitHub 授权会过期又不能自动续期时, 到期前 2 小时提醒主人一次 (每个到期时间一条)。 */
+/** GitHub 授权到了本地记的到期时间又不能自动续时, 实际探一次; GitHub 真拒绝了才提醒主人 (每个到期时间一条)。 */
 async function ghExpiryCheck(core: Core, storage: DurableObjectStorage): Promise<void> {
   const a = core.gh.auth();
-  if (!a?.expires || a.renewable || a.expires - Date.now() > GH_WARN_AHEAD) return;
+  if (!a?.expires || a.renewable || a.expires > Date.now()) return;
   if ((await storage.get<number>(KEY_GH_NOTICE)) === a.expires) return;
-  const left = Math.round((a.expires - Date.now()) / MIN);
-  const when = left > 0 ? `约 ${left} 分钟后过期` : "已经过期";
-  const text = `GitHub 授权 (${a.login}) ${when}, 续期令牌已失效, 不能自动续期。请在 App 的 GitHub 授权插件里重新授权。`;
+  const dead = await core.gh.call("/user").then(
+    () => false,
+    (e: unknown) => e instanceof ApiFail && e.code === "gh_expired",
+  );
+  if (!dead) return;
+  const text = `GitHub 授权 (${a.login}) 已被 GitHub 拒绝 (过期或撤销), 不能自动续期。请在 App 的 GitHub 授权插件里重新授权。`;
   const input = messageInput({ text });
   if (typeof input === "string") return;
   await core.pipeline.fromInput(input, { source: { id: "system:gh", name: "系统", icon: "github" }, sourceInfo: null });
