@@ -55,6 +55,17 @@ data class ChatAgent(
     val plugin: String? = null,
     /** 最近一次拉消息 / 发消息 / 拉指令的时间, 服务端最多每 10 分钟记一次。 */
     val active: Long? = null,
+    /** skill 版 Agent: 处理游标与游标之后零散已处理的 seq; 旧 Agent 没有。 */
+    val handled: Long? = null,
+    val handledSet: List<Long> = emptyList(),
+    /** 最近上报的已装版本; 服务端要求的接入版本, 大更新自动执行开关。 */
+    val skills: com.hengxin.aioa.ui.agents.SkillReport? = null,
+    val setup: Int? = null,
+    val autoMajor: Boolean = false,
+    val trigger: com.hengxin.aioa.ui.agents.AgentTrigger? = null,
+    val lastRun: Long? = null,
+    /** 已在群里提醒过的大版本缺失, 如 "hengxin666.todo@2:new"。 */
+    val warned: List<String> = emptyList(),
 )
 
 /** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
@@ -91,8 +102,18 @@ fun parseAgent(o: JSONObject): ChatAgent = ChatAgent(
     pending = o.optBoolean("pending"),
     sourceId = o.optStr("sourceId"),
     plugin = o.optStr("plugin"),
-    active = if (o.has("active")) o.optLong("active") else null,
+    active = optLongOrNull(o, "active"),
+    handled = optLongOrNull(o, "handled"),
+    handledSet = o.optJSONArray("handledSet")?.let { a -> (0 until a.length()).map { a.optLong(it) } }.orEmpty(),
+    skills = com.hengxin.aioa.ui.agents.parseSkillReport(o.optJSONObject("skills")),
+    setup = if (o.has("setup")) o.optInt("setup") else null,
+    autoMajor = o.optBoolean("autoMajor"),
+    trigger = com.hengxin.aioa.ui.agents.parseTrigger(o.optJSONObject("trigger")),
+    lastRun = optLongOrNull(o, "lastRun"),
+    warned = strings(o.optJSONArray("warned")),
 )
+
+private fun optLongOrNull(o: JSONObject, k: String): Long? = if (o.has(k) && !o.isNull(k)) o.optLong(k) else null
 
 fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
     val arr = body?.optJSONArray("chats") ?: return emptyMap()

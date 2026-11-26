@@ -82,6 +82,7 @@ class PluginApi(private val context: Context) {
         m.put(KEY_DEV, b.optJSONObject(KEY_ALLOWED)?.optBoolean(KEY_DEV) == true).put(KEY_FOREIGN, b.optBoolean(KEY_FOREIGN))
         b.optString("source").ifEmpty { null }?.let { m.put(KEY_SOURCE_NAME, it) }
         val agent = m.optJSONObject("agent")
+        com.hengxin.aioa.ui.agents.PluginSkills.remember(context, id, agent)
         // 启用状态与单选改选在白名单视图里
         val view = Api.call(context, GET, listOf(PATH_ALLOW)).body
         val on = view?.optJSONArray(KEY_ENABLED)?.let { a -> (0 until a.length()).any { a.optString(it) == id } } == true

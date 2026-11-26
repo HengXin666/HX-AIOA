@@ -1,17 +1,17 @@
 package com.hengxin.aioa.ui.agents
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -36,8 +36,6 @@ import kotlinx.coroutines.launch
 
 enum class AgentAction { GUIDE, ROTATE, EDIT, REMOVE }
 
-private val TAG = RoundedCornerShape(6.dp)
-
 // 当前打开的那一层
 private sealed interface Layer {
     data object Wizard : Layer
@@ -49,6 +47,7 @@ private sealed interface Layer {
 }
 
 /** 群设置里的 Agent 区: 每个 Agent 一张状态卡, 点开看详情, 操作收进 ⋯; 接入走三步向导。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>) {
     val dir = model.groups.directory
@@ -81,9 +80,10 @@ fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>) {
                 Column(Modifier.weight(1f)) {
                     Text(a.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(stateLine(a, state, now), fontSize = 12.sp, color = c.outline)
-                    Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Tag(if (a.reads.isEmpty()) "只发不读" else "可读 ${a.reads.size} 个群")
-                        a.plugin?.let { Tag("插件") }
+                    FlowRow(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        AgentTag(if (a.reads.isEmpty()) "只发不读" else "可读 ${a.reads.size} 个群")
+                        a.plugin?.let { AgentTag("插件") }
+                        SkillTags(group, a, now)
                     }
                 }
                 Box {
@@ -117,12 +117,6 @@ fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>) {
         )
         null -> Unit
     }
-}
-
-@Composable
-private fun Tag(text: String) {
-    val c = MaterialTheme.colorScheme
-    Text(text, Modifier.background(c.surface, TAG).padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 11.sp, color = c.outline)
 }
 
 @Composable

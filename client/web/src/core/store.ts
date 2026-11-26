@@ -16,6 +16,8 @@ export type Listener = () => void;
 export const TOPIC_SPACES = "app|spaces";
 export const TOPIC_LINK = "app|link";
 export const TOPIC_AGENTS = "app|agents";
+// 服务端广播群资料有变 (chat_sync topic chats): 群 Agent 卡片据此重拉
+export const TOPIC_CHAT_SYNC = "app|chats";
 export const TOPIC_TASKS = `${ANY}|${FIELD_TASK}`;
 export const TOPIC_EVENTS = `${ANY}|${FIELD_EVENTS}`;
 

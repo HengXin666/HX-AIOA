@@ -160,6 +160,11 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         Api.call(context, PATCH, listOf(CHATS, channel, AGENTS, keyId), agentBody(name, reads)).error
     }.also { refreshChats() }
 
+    /** 大更新自动执行开关; 服务端会把接入版本加 1, 之后要把新接入语发给 Agent 一次。 */
+    suspend fun setAutoMajor(channel: String, keyId: String, on: Boolean): String? = withContext(Dispatchers.IO) {
+        Api.call(context, PATCH, listOf(CHATS, channel, AGENTS, keyId), JSONObject().put("autoMajor", on)).error
+    }.also { refreshChats() }
+
     suspend fun removeAgent(channel: String, keyId: String): String? = withContext(Dispatchers.IO) {
         Api.call(context, DELETE, listOf(CHATS, channel, AGENTS, keyId)).error
     }.also { refreshChats() }
