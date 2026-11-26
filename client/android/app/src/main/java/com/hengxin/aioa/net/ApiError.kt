@@ -51,3 +51,6 @@ enum class ErrKind(val icon: String, val retry: Boolean) {
         }
     }
 }
+
+/** 带分类的失败, 给返回 Result 的调用方用。 */
+class ApiFailure(message: String, val kind: ErrKind) : Exception(message)

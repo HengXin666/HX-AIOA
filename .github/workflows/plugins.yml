@@ -3,10 +3,10 @@ name: plugins
 # 插件市场 CI: 清单校验, 命名空间, 静态冲突检测, 每日请求估算; 报告写进本次运行的摘要
 on:
   pull_request:
-    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts"]
+    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts", "tools/plugin-index.ts"]
   push:
     branches: [main]
-    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts"]
+    paths: ["plugins/**", "protocol/**", "tools/check-plugins.ts", "tools/plugin-index.ts"]
 
 jobs:
   check:

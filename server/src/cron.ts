@@ -31,12 +31,14 @@ async function ghExpiryCheck(core: Core, storage: DurableObjectStorage): Promise
   const a = core.gh.auth();
   if (!a?.expires || a.renewable || a.expires - Date.now() > GH_WARN_AHEAD) return;
   if ((await storage.get<number>(KEY_GH_NOTICE)) === a.expires) return;
-  await storage.put(KEY_GH_NOTICE, a.expires);
   const left = Math.round((a.expires - Date.now()) / MIN);
   const when = left > 0 ? `约 ${left} 分钟后过期` : "已经过期";
   const text = `GitHub 授权 (${a.login}) ${when}, 部署没配 GH_CLIENT_SECRET 不能自动续期。请在 App 的 GitHub 授权插件里重新授权, 或按 docs/features/gh.md 配置续期。`;
   const input = messageInput({ text });
-  if (typeof input !== "string") await core.pipeline.fromInput(input, { source: { id: "system:gh", name: "系统", icon: "github" }, sourceInfo: null });
+  if (typeof input === "string") return;
+  await core.pipeline.fromInput(input, { source: { id: "system:gh", name: "系统", icon: "github" }, sourceInfo: null });
+  // 发成功才记, 发失败下次 cron 再提醒
+  await storage.put(KEY_GH_NOTICE, a.expires);
 }
 
 /**

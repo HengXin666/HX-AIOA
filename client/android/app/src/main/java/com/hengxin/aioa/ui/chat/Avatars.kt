@@ -101,7 +101,7 @@ object Avatars {
 
     suspend fun upload(context: Context, data: ByteArray): Result<String> = withContext(Dispatchers.IO) {
         val r = ApiCache.upload(context, listOf(PATH), data, MIME)
-        r.body?.optString("id")?.ifEmpty { null }?.let { Result.success(it) } ?: Result.failure(Exception(r.error ?: "上传失败"))
+        r.body?.optString("id")?.ifEmpty { null }?.let { Result.success(it) } ?: Result.failure(com.hengxin.aioa.net.ApiFailure(r.error ?: "上传失败", r.kind ?: com.hengxin.aioa.net.ErrKind.OTHER))
     }
 }
 

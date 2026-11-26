@@ -231,14 +231,18 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         httpOn = on
     }
 
-    fun setForward(on: Boolean, group: String = forwardGroup) {
-        com.hengxin.aioa.link.DebugForward.setForward(app, on, group)
+    fun setForward(on: Boolean) {
+        com.hengxin.aioa.link.DebugForward.setForward(app, on)
         forwardOn = on
+    }
+
+    fun setForwardGroup(group: String) {
+        com.hengxin.aioa.link.DebugForward.setGroup(app, group)
         forwardGroup = group
     }
 
-    fun loadHttpLog() {
-        httpLog = com.hengxin.aioa.link.DebugForward.httpRecent(app, HTTP_LOG_LINES)
+    private fun loadHttpLog() {
+        viewModelScope.launch { httpLog = withContext(Dispatchers.IO) { com.hengxin.aioa.link.DebugForward.httpRecent(app, HTTP_LOG_LINES) } }
     }
 
     private fun loadProxy(): ProxyView = loadProxyBase().copy(today = DebugReport.today(app), battery = BatteryLog.summary(app))

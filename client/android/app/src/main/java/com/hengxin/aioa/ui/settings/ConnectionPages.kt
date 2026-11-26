@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.settings
 
+import com.hengxin.aioa.link.DebugForward
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -156,8 +157,6 @@ private fun NodeRow(node: NodeInfo, selected: Boolean, enabled: Boolean, onClick
     }
 }
 
-private const val DEBUG_GROUP_HINT = "debug"
-
 /** 调试模式: 今天的重连统计, 近 24 小时耗电, 计数摘要, 长连接的连接 / 断开 / 重连记录。 */
 @Composable
 fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
@@ -165,14 +164,14 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
     val view = model.proxy
     val log = view.linkLog
     SettingsPageFrame(SettingsPage.LINK_LOG.title, onBack) {
-        SettingsGroup(footer = "每项单独开关。收帧: 后台连接每收到一帧记一行, 找是什么在频繁唤醒手机。请求: 每个 HTTP 请求记方法, 路径, 状态, 耗时。失败转发: 失败的请求和长连接断线攒起来, 搭看门狗或打开 App 时发到下面的群。统计与耗电采样不论开关都在记, 不额外唤醒。") {
+        SettingsGroup(footer = "每项单独开关。收帧: 后台连接每收到一帧记一行, 找是什么在频繁唤醒手机。请求: 每个 HTTP 请求记方法, 路径, 状态, 耗时。失败转发: 失败的请求和长连接断线攒起来, 搭后台看门狗唤醒时发到下面的群; 外部地址只记主机名。统计与耗电采样不论开关都在记, 不额外唤醒。") {
             SwitchRow("记录收帧", model.debugOn, onChange = model::setDebug)
             RowDivider()
             SwitchRow("记录请求", model.httpOn, onChange = model::setHttp)
             RowDivider()
-            SwitchRow("失败转发到群", model.forwardOn, onChange = { model.setForward(it) })
+            SwitchRow("失败转发到群", model.forwardOn, onChange = model::setForward)
             RowDivider()
-            InputRow("转发到的群", model.forwardGroup, DEBUG_GROUP_HINT) { model.setForward(model.forwardOn, it) }
+            InputRow("转发到的群", model.forwardGroup, DebugForward.DEFAULT_GROUP, onChange = model::setForwardGroup)
             RowDivider()
             ActionRow(TEXT_REFRESH, ICON_REFRESH, onClick = model::refreshProxy)
         }

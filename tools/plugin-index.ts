@@ -97,7 +97,7 @@ export function checkClosures(ms: PluginManifest[], engine: string, errors: stri
     while (queue.length) {
       const cur = queue.pop()!;
       for (const [s, range] of Object.entries(cur.requires ?? {})) {
-        const best = ms.filter((p) => p.id !== cur.id && p.provides?.[s] !== undefined && satisfies(p.provides[s]!, range)).sort((a, b) => cmpVer(parseVer(b.version)!, parseVer(a.version)!))[0];
+        const best = ms.filter((p) => p.id !== cur.id && p.provides?.[s] !== undefined && satisfies(p.provides[s]!, range)).sort((a, b) => cmpVer(parseVer(b.version) ?? [0, 0, 0], parseVer(a.version) ?? [0, 0, 0]))[0];
         if (best && !pick.has(best.id)) {
           pick.set(best.id, best);
           queue.push(best);

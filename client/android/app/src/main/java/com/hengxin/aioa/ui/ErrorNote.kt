@@ -24,7 +24,7 @@ private const val SOFT = 0.12f
 private val SHAPE = RoundedCornerShape(8.dp)
 
 /**
- * 分类显示的错误条 (#110): 网络与超时用警告色并给重试, 登录与权限用危险色, 其他用次要色。
+ * 分类显示的错误条 (#110): 网络, 超时, 服务端用警告色并给重试; 登录, 权限, 参数与其他用危险色。
  * 点文字收起; kind 不给时按文字猜。
  */
 @Composable
@@ -32,8 +32,7 @@ fun ErrorNote(text: String, modifier: Modifier = Modifier, kind: ErrKind = ErrKi
     val c = Aioa.colors
     val tint: Color = when (kind) {
         ErrKind.TIMEOUT, ErrKind.NETWORK, ErrKind.SERVER -> c.warning
-        ErrKind.AUTH, ErrKind.DENIED -> c.danger
-        ErrKind.INPUT, ErrKind.OTHER -> c.danger
+        ErrKind.AUTH, ErrKind.DENIED, ErrKind.INPUT, ErrKind.OTHER -> c.danger
     }
     Row(
         modifier.clip(SHAPE).background(tint.copy(alpha = SOFT)).padding(horizontal = 10.dp, vertical = 6.dp),

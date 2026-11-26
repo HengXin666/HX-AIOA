@@ -65,6 +65,8 @@ private sealed interface GsDialog {
 }
 
 /** 群设置: 头像, 名称, 置顶, 免打扰, 日报 / 周报, 以及接入的 Agent。 */
+private const val AVATAR_FAIL = "头像上传失败: "
+
 @Composable
 fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     val g = model.groups
@@ -80,10 +82,15 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     var busy by remember { mutableStateOf<String?>(null) }
     // 上传失败时留着裁好的图, 错误条上点 "重试" 不用重新选图
     var failed by remember { mutableStateOf<ByteArray?>(null) }
+    var failKind by remember { mutableStateOf<ErrKind?>(null) }
     val upload: suspend (ByteArray) -> Unit = { bytes ->
         busy = "正在上传头像..."
         dir.error = null
-        Avatars.upload(context, bytes).onSuccess { failed = null; dir.setAvatar(group, it) }.onFailure { failed = bytes; dir.error = "头像上传失败. ${it.message}" }
+        Avatars.upload(context, bytes).onSuccess { failed = null; dir.setAvatar(group, it) }.onFailure {
+            failed = bytes
+            failKind = (it as? com.hengxin.aioa.net.ApiFailure)?.kind
+            dir.error = "$AVATAR_FAIL${it.message}"
+        }
         busy = null
     }
     val pickAvatar = rememberAvatarPicker({ dir.error = it }) { upload(it) }
@@ -101,8 +108,10 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
                 Text(meta?.title ?: group, Modifier.padding(top = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(busy ?: if (manage) "点头像更换 · channel: $group" else "channel: $group", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 dir.error?.let { e ->
-                    val retry = failed?.let { b -> { retryScope.launch { upload(b) }; Unit } }
-                    ErrorNote(e, Modifier.padding(top = 6.dp), kind = ErrKind.guess(e.substringAfter(". ")), onRetry = retry, onDismiss = { dir.error = null })
+                    // 只有当前这条就是头像失败时才给重试; 收起时一并丢掉留着的图
+                    val avatarErr = failed != null && failKind != null && e.startsWith(AVATAR_FAIL)
+                    val retry = failed?.takeIf { avatarErr }?.let { b -> { retryScope.launch { upload(b) }; Unit } }
+                    ErrorNote(e, Modifier.padding(top = 6.dp), kind = if (avatarErr) failKind!! else ErrKind.guess(e), onRetry = retry, onDismiss = { dir.error = null; failed = null; failKind = null })
                 }
             }
             Card {
