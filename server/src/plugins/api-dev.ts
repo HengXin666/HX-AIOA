@@ -71,6 +71,9 @@ async function put(c: ReqCtx): Promise<Response> {
   if (old && !(old.dev && old.by === uid)) return fail(409, `${id} 已被占用, 换一个 id`, CODE_CONFLICT);
   // 不占市场里已有的 id, 免得挡住别人放行和查看; 市场连不上时不拦
   if (!old && (await c.core.market.index().catch(() => [])).some((p) => p.id === id)) return fail(409, `市场里已有 ${id}, 换一个 id`, CODE_CONFLICT);
+  // 查市场期间别人可能先占了这个 id
+  const now = c.core.kernel.get(id)?.meta;
+  if (now && !(now.dev && now.by === uid)) return fail(409, `${id} 已被占用, 换一个 id`, CODE_CONFLICT);
   const row = { meta: { id, version: m.version, name: m.name, by: uid, at: Date.now(), dev: true as const }, manifest: m, prompt, readme };
   const result = c.core.kernel.check(row);
   if (result.conflicts.length) return fail(409, `${id} 与白名单冲突`, CODE_PLUGIN_CONFLICT, { conflicts: result.conflicts });
