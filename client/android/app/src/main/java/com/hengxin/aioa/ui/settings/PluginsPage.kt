@@ -42,12 +42,18 @@ private val TILE = RoundedCornerShape(12.dp)
 @Composable
 fun PluginsPage(onBack: (() -> Unit)?, openGroup: (String) -> Unit) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    var sources by rememberSaveable { mutableStateOf(false) }
     // 安装 / 卸载后列表要重拉
     var version by remember { mutableStateOf(0) }
     val id = openId
     if (id != null) {
         BackHandler { openId = null }
         PluginDetailPage(id, { openId = null }, { version++ }, openGroup)
+        return
+    }
+    if (sources) {
+        BackHandler { sources = false }
+        MarketSourcesPage({ sources = false; version++ })
         return
     }
     val api = PluginApi(LocalContext.current)
@@ -76,7 +82,15 @@ fun PluginsPage(onBack: (() -> Unit)?, openGroup: (String) -> Unit) {
                 val (mine, rest) = items.filterNot { it.dev }.partition { it.mine }
                 if (devs.isNotEmpty()) PluginGroup("开发中", devs) { openId = it }
                 if (mine.isNotEmpty()) PluginGroup(if (market?.owner == true) "已安装" else "已启用", mine) { openId = it }
-                if (rest.isNotEmpty()) PluginGroup("官方市场", rest) { openId = it }
+                val (official, third) = rest.partition { it.sourceName == null }
+                if (official.isNotEmpty()) PluginGroup("官方市场", official) { openId = it }
+                // 第三方源按源分组, 顺序与市场源页一致
+                third.groupBy { it.sourceName!! }.forEach { (name, list) -> PluginGroup("第三方: $name", list) { openId = it } }
+            }
+        }
+        if (market?.admin == true) {
+            SettingsGroup(footer = "加别的 GitHub 仓库作为市场。第三方插件同样要逐个放行, 不能用官方命名空间, 不能带服务端代码。") {
+                ActionRow("市场源", "globe") { sources = true }
             }
         }
         dev?.let { on ->

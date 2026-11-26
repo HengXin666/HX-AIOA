@@ -74,12 +74,12 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   const id = pluginParam(c);
   if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 被一个开发插件占用, 主人可以先撤销它`, CODE_CONFLICT);
   // 放行是管理员主动操作, 绕过市场缓存
-  const manifest = await c.core.market.manifest(id, true);
+  const manifest = await c.core.market.manifest(id, "fresh");
   if (manifest.server && !isL2a(id)) return fail(409, `${id} 带服务端代码, 要先合进仓库并部署后才能放行`, CODE_NEEDS_DEPLOY);
   if (body.version && body.version !== manifest.version) return fail(409, `市场当前是 ${manifest.version}, 只能放行这个版本`, CODE_CONFLICT);
   const prompt = await c.core.market.file(id, manifest.prompt, true);
   // 两次拉取之间市场可能换了版本, 再核对一次, 免得存下 "旧清单配新提示词"
-  if ((await c.core.market.manifest(id, true)).version !== manifest.version) return fail(409, "市场正在更新, 稍后再放行", CODE_CONFLICT);
+  if ((await c.core.market.manifest(id, "fresh")).version !== manifest.version) return fail(409, "市场正在更新, 稍后再放行", CODE_CONFLICT);
   const defaults = Array.isArray(body.defaults) ? body.defaults.filter((d): d is string => typeof d === "string") : (c.core.kernel.get(id)?.meta.defaults ?? []);
   const bad = defaults.find((d) => badDefault(manifest, d));
   if (bad) return fail(400, `${id} 不提供单选扩展点或服务 ${bad}`);

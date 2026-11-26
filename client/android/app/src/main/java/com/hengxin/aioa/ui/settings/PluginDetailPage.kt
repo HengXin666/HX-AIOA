@@ -95,6 +95,7 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
             }
         }
         if (e.summary.isNotEmpty()) Paragraph(e.summary, c.text, BODY_SP + 1)
+        e.sourceName?.let { SettingsGroup { NoteRow("来自第三方市场源 $it, 内容由源的作者维护, 放行前看清它要的权限。", c.textSecondary) } }
         val installed = e.installed
         val p = prompt
         if (p != null) Handoff(p)

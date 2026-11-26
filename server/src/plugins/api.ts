@@ -60,7 +60,8 @@ async function list(c: ReqCtx): Promise<Response> {
   const extra = (id: string) => ({ ...(installed.has(id) ? { installed: installed.get(id)! } : {}), ...(allow.has(id) ? { allowed: allow.get(id)! } : {}), ...(on(id) ? { enabled: true as const } : {}) });
   try {
     const index = (await c.core.market.index()).filter((p) => !allow.get(p.id)?.dev);
-    return json({ plugins: [...devs, ...index].map((p) => ({ ...p, ...extra(p.id) })), admin, owner: c.who.owner } satisfies PluginList);
+    const errs = c.core.market.errors();
+    return json({ plugins: [...devs, ...index].map((p) => ({ ...p, ...extra(p.id) })), ...(errs.length ? { error: errs.join("; ") } : {}), admin, owner: c.who.owner } satisfies PluginList);
   } catch (e) {
     // 市场连不上时, 白名单与已安装的照样能看能装能卸
     const ids = new Set([...installed.keys(), ...allow.keys()].filter((id) => !allow.get(id)?.dev));
@@ -81,8 +82,9 @@ async function detail(c: ReqCtx): Promise<Response> {
   const own = row?.meta.dev ? row.meta.by === uid || c.who.owner : true;
   const foreign = !!row?.meta.dev && row.meta.by !== uid && c.who.owner;
   const devRow = row?.meta.dev && own ? row : undefined;
-  // 只有管理员绕过市场缓存, 免得子号打开详情放大对市场的请求
-  const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, isAdmin(c.who)));
+  // 管理员看详情要看到市场最新版本: 只重拉索引 (清单内嵌在里面), 文件按版本缓存; 子号全走缓存, 免得放大请求
+  const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, isAdmin(c.who) ? "latest" : "cache"));
+  const src = devRow ? undefined : await c.core.market.sourceOf(id).catch(() => undefined);
   const readme = devRow ? (devRow.readme ?? "") : await c.core.market.file(id, manifest.readme);
   if (c.who.owner) await autoUpgrade(c.core, id);
   const installed = c.who.owner ? c.core.plugins.get(id) : undefined;
@@ -105,6 +107,7 @@ async function detail(c: ReqCtx): Promise<Response> {
     admin: isAdmin(c.who),
     owner: c.who.owner,
     ...(foreign ? { foreign: true } : {}),
+    ...(src && !src.official ? { source: src.name } : {}),
     ...(isL2a(id) && L2A[id].owner ? { deploy: true } : {}),
   };
   return json(body);

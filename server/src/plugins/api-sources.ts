@@ -1,0 +1,37 @@
+import { PATH_PLUGIN_SOURCE, PATH_PLUGIN_SOURCES, PATH_PLUGIN_SOURCES_REFRESH, type MarketSourceList } from "@hx-aioa/protocol";
+import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, POST } from "../constants";
+import { ROOM, type ReqCtx, type Route, route } from "../core";
+import { fail, json, pathParam, readJson } from "../http";
+import { isAdmin } from "./who";
+
+// 市场源是整个部署的: 只有管理员能看能改, 加进来的插件照样要管理员逐个放行
+function list(c: ReqCtx): Response {
+  if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  return json({ sources: c.core.market.sources() } satisfies MarketSourceList);
+}
+
+async function add(c: ReqCtx): Promise<Response> {
+  if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const body = (await readJson(c.req)) as { link?: unknown } | null;
+  if (typeof body?.link !== "string") return fail(400, "需要 link");
+  return json(await c.core.market.addSource(body.link), 201);
+}
+
+function remove(c: ReqCtx): Response {
+  if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  return c.core.market.removeSource(pathParam(c.params, 0)) ? json({ ok: true }) : fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
+}
+
+/** 手动刷新: 跳过 30 分钟的索引缓存, 各源各拉一次。 */
+async function refresh(c: ReqCtx): Promise<Response> {
+  if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  await c.core.market.index("latest").catch(() => []);
+  return json({ sources: c.core.market.sources() } satisfies MarketSourceList);
+}
+
+export const SOURCE_ROUTES: Route[] = [
+  route(GET, PATH_PLUGIN_SOURCES, ROOM, list),
+  route(POST, PATH_PLUGIN_SOURCES, ROOM, add),
+  route(DELETE, PATH_PLUGIN_SOURCE, ROOM, remove),
+  route(POST, PATH_PLUGIN_SOURCES_REFRESH, ROOM, refresh),
+];

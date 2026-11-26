@@ -2,11 +2,11 @@
 import { execFileSync } from "node:child_process";
 import { checkPlugins, cmpVer, parseVer, satisfies, type PluginManifest } from "@hx-aioa/protocol";
 
-export type IndexEntry = { id: string; version: string; name?: string; summary?: string; icon?: string; author?: string };
+export type IndexEntry = { id: string; version: string; name?: string; summary?: string; icon?: string; author?: string; manifest?: unknown };
 const INDEX_FIELDS = ["name", "summary", "icon", "author"] as const;
 
 /** index.json 自身: 不重复, 必填字段齐, 每条都有目录, 名字和清单一致。 */
-export function checkIndex(entries: IndexEntry[], ms: PluginManifest[], errors: string[], warns: string[]): void {
+export function checkIndex(entries: IndexEntry[], ms: PluginManifest[], errors: string[], warns: string[], raw: Map<string, unknown> = new Map()): void {
   const seen = new Set<string>();
   const byId = new Map(ms.map((m) => [m.id, m]));
   for (const e of entries) {
@@ -18,6 +18,8 @@ export function checkIndex(entries: IndexEntry[], ms: PluginManifest[], errors: 
       continue;
     }
     for (const f of INDEX_FIELDS) if (!e[f]) errors.push(`index.json: ${e.id} 缺少 ${f}`);
+    // 内嵌的清单必须和目录里的一字不差, 不然服务端列表与详情会用到旧内容
+    if (e.manifest !== undefined && JSON.stringify(e.manifest) !== JSON.stringify(raw.get(e.id))) errors.push(`index.json: ${e.id} 内嵌的清单与 plugin.json 不一致, 跑 npm run build:index`);
     if (e.name && e.name !== m.name) warns.push(`index.json: ${e.id} 的名字 "${e.name}" 与清单 "${m.name}" 不一致`);
   }
 }

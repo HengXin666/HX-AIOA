@@ -17,10 +17,12 @@ const warns: string[] = [];
 const index = JSON.parse(readFileSync(join(root, "index.json"), "utf8")) as { plugins: IndexEntry[] };
 const listed = new Map(index.plugins.map((p) => [p.id, p.version]));
 const ms: PluginManifest[] = [];
+const raws = new Map<string, unknown>();
 for (const dir of readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory())) {
   const file = join(root, dir.name, "plugin.json");
   if (!existsSync(file)) continue;
-  const m = parseManifest(JSON.parse(readFileSync(file, "utf8")));
+  const json = JSON.parse(readFileSync(file, "utf8")) as unknown;
+  const m = parseManifest(json);
   if (typeof m === "string") {
     errors.push(`${dir.name}: ${m}`);
     continue;
@@ -34,11 +36,12 @@ for (const dir of readdirSync(root, { withFileTypes: true }).filter((d) => d.isD
   }
   // 带服务端代码的插件必须编进部署 (L2A_PLUGINS), 反过来编进去的也必须声明
   if ((m.server === true) !== isL2a(m.id)) errors.push(`${m.id}: "server": true 与服务端 L2A_PLUGINS 不一致`);
+  raws.set(m.id, json);
   ms.push(m);
 }
 
 const engine = `${PROTOCOL_VERSION}.0.0`;
-checkIndex(index.plugins, ms, errors, warns);
+checkIndex(index.plugins, ms, errors, warns, raws);
 checkCycles(ms, errors);
 checkClosures(ms, engine, errors, warns);
 if (process.env.BASE) checkBumps(process.env.BASE, ms, root, errors);
