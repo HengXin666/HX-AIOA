@@ -27,7 +27,8 @@ test("市场链接: 拒绝 http 与认不出的 GitHub 链接, 本机 http 放�
   assert.equal(typeof parseMarketLink("http://example.com/m"), "string");
   assert.equal(typeof parseMarketLink("https://github.com/Foo"), "string");
   assert.equal(typeof parseMarketLink("https://github.com/Foo/bar/issues"), "string");
-  assert.notEqual(typeof parseMarketLink("http://127.0.0.1:8798/m"), "string");
+  assert.equal(typeof parseMarketLink("http://127.0.0.1:8798/m"), "string");
+  assert.notEqual(typeof parseMarketLink("http://127.0.0.1:8798/m", true), "string");
 });
 
 test("官方命名空间", () => {

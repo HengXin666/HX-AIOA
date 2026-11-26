@@ -6,6 +6,7 @@ import {
   PATH_PLUGIN_ENABLED,
   CODE_NEEDS_DEPLOY,
   L2A_PLUGINS,
+  OFFICIAL_SOURCE,
   PLUGIN_DAILY_BUDGET,
   SERVICE_PREFIX,
   cardOf,
@@ -73,22 +74,28 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   const by = admin(c);
   const id = pluginParam(c);
   if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 被一个开发插件占用, 主人可以先撤销它`, CODE_CONFLICT);
-  // 放行是管理员主动操作, 绕过市场缓存
-  const manifest = await c.core.market.manifest(id, "fresh");
+  const src = await c.core.market.sourceOf(id);
+  const was = c.core.kernel.get(id)?.meta.source ?? OFFICIAL_SOURCE;
+  // 换源等于换作者: 必须先撤销旧的再放行, 不能当成 "更新"
+  if (c.core.kernel.get(id) && was !== src.id) return fail(409, `${id} 现在来自另一个市场源 (${src.name}), 先撤销旧的再放行`, CODE_CONFLICT);
+  // 官方源放行绕过缓存拿最新; 第三方按管理员看过的那份 (digest) 放行, 内容变了就拒绝
+  const manifest = await c.core.market.manifest(id, src.official ? "fresh" : "latest");
   if (manifest.server && !isL2a(id)) return fail(409, `${id} 带服务端代码, 要先合进仓库并部署后才能放行`, CODE_NEEDS_DEPLOY);
   if (body.version && body.version !== manifest.version) return fail(409, `市场当前是 ${manifest.version}, 只能放行这个版本`, CODE_CONFLICT);
-  const prompt = await c.core.market.file(id, manifest.prompt, true);
-  // 两次拉取之间市场可能换了版本, 再核对一次, 免得存下 "旧清单配新提示词"
-  if ((await c.core.market.manifest(id, "fresh")).version !== manifest.version) return fail(409, "市场正在更新, 稍后再放行", CODE_CONFLICT);
+  const prompt = await c.core.market.file(id, manifest.prompt, src.official);
+  if (src.official) {
+    // 两次拉取之间市场可能换了版本, 再核对一次, 免得存下 "旧清单配新提示词"
+    if ((await c.core.market.manifest(id, "fresh")).version !== manifest.version) return fail(409, "市场正在更新, 稍后再放行", CODE_CONFLICT);
+  } else if (body.digest !== (await c.core.market.digest(id))) return fail(409, "插件内容和你在详情里看到的不一致, 重新打开详情再放行", CODE_CONFLICT);
   const defaults = Array.isArray(body.defaults) ? body.defaults.filter((d): d is string => typeof d === "string") : (c.core.kernel.get(id)?.meta.defaults ?? []);
   const bad = defaults.find((d) => badDefault(manifest, d));
   if (bad) return fail(400, `${id} 不提供单选扩展点或服务 ${bad}`);
-  const row: AllowRow = { meta: { id, version: manifest.version, name: manifest.name, by, at: Date.now(), ...(defaults.length ? { defaults } : {}) }, manifest, prompt };
+  const row: AllowRow = { meta: { id, version: manifest.version, name: manifest.name, by, at: Date.now(), ...(defaults.length ? { defaults } : {}), ...(src.official ? {} : { source: src.id }) }, manifest, prompt };
   const result = c.core.kernel.check(row);
   if (result.conflicts.length) return fail(409, `${id} 与白名单冲突, 没有放行`, CODE_PLUGIN_CONFLICT, { conflicts: result.conflicts, requests: result.requests, total: result.total });
-  const was = c.core.kernel.get(id)?.meta.version;
+  const prev = c.core.kernel.get(id)?.meta.version;
   c.core.kernel.put(row);
-  pushPlugin(c.core, id, was ? "updated" : "allowed", { version: manifest.version });
+  pushPlugin(c.core, id, prev ? "updated" : "allowed", { version: manifest.version });
   await autoUpgrade(c.core, id);
   return json({ allow: c.core.kernel.get(id)!.meta, requests: result.requests, total: result.total });
 }

@@ -22,9 +22,10 @@ export const PDATA_ID_RE = /^[\w.:-]{1,64}$/;
 
 // 白名单里的一项: 每个插件只放一个版本; defaults 为它被指定为默认提供者的扩展点或服务
 // dev: 开发模式下管理员 by 自己装的本地插件, 只有他看得到, 只能他启用
-export type PluginAllow = { id: string; version: string; name: string; by: string; at: number; defaults?: string[]; risky?: string[]; dev?: true };
-// PUT /plugin-allow/{id} 的请求体: 不写 version 就放行市场当前版本
-export type PluginAllowInput = { version?: string; defaults?: string[] };
+// source: 放行时的市场源 id, 没有就是官方源 (旧数据)
+export type PluginAllow = { id: string; version: string; name: string; by: string; at: number; defaults?: string[]; risky?: string[]; dev?: true; source?: string };
+// PUT /plugin-allow/{id} 的请求体: 不写 version 就放行市场当前版本; 第三方插件必须带详情给的 digest
+export type PluginAllowInput = { version?: string; defaults?: string[]; digest?: string };
 export type PluginAllowView = {
   allow: PluginAllow[];
   // 本账号启用了哪些, 单选扩展点选了谁

@@ -140,6 +140,7 @@ private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
             }
             if (p.summary.isNotEmpty()) Paragraph(p.summary, c.textSecondary, BODY_SP, maxLines = 2)
             if (p.tags.isNotEmpty()) Text(p.tags.joinToString("  ") { "#$it" }, c.accent, SMALL_SP)
+            p.sourceName?.let { Text("来自 $it", c.textSecondary, SMALL_SP) }
         }
     }
 }

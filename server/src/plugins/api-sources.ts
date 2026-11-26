@@ -5,8 +5,10 @@ import { fail, json, pathParam, readJson } from "../http";
 import { isAdmin } from "./who";
 
 // 市场源是整个部署的: 只有管理员能看能改, 加进来的插件照样要管理员逐个放行
-function list(c: ReqCtx): Response {
+async function list(c: ReqCtx): Promise<Response> {
   if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  // 走缓存加载一遍, DO 唤醒后也能显示各源状态 (没过期不发请求)
+  await c.core.market.index().catch(() => []);
   return json({ sources: c.core.market.sources() } satisfies MarketSourceList);
 }
 

@@ -76,8 +76,8 @@ export type PluginSettings = { auto: boolean };
 // dev: 开发模式装的本地插件 (不在市场里); foreign: 别人的开发插件, 只有主人看得到, 只能撤
 export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall; allowed?: PluginAllow; enabled?: true; dev?: true; foreign?: true })[]; error?: string; admin?: boolean; owner?: boolean };
 // task: 插件的任务提示词 (已代入群和服务地址, 不含密钥), 可单独复制给任何 Agent; 未安装时按默认群预览
-export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; allowed?: PluginAllow; task?: string; admin?: boolean; owner?: boolean; deploy?: boolean; foreign?: boolean; source?: string };
-// source: 第三方市场源的名字, 官方源不带
+export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; allowed?: PluginAllow; task?: string; admin?: boolean; owner?: boolean; deploy?: boolean; foreign?: boolean; source?: string; digest?: string; gone?: boolean };
+// source: 第三方市场源的名字, 官方源不带; digest: 第三方插件的内容摘要, 放行时原样带回; gone: 市场里已没有, 显示的是放行时的快照
 // deploy: 服务端插件, 数据属于整个部署, 只看主人的启用 (子号不用启用)
 // 安装结果, 只返回这一次: prompt 是一段接入语 (文档链接, 定时任务, 密钥), 整段复制给任何 Agent; key 另给一份方便单独复制
 export type PluginInstalled = { install: PluginInstall; prompt: string; key: string };

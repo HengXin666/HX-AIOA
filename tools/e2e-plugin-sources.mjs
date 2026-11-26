@@ -73,7 +73,7 @@ const first = await api("GET", SOURCES);
 check("默认只有官方源", first.status === 200 && first.data.sources.length >= 1 && first.data.sources[0].official, first.data);
 check("拒绝 http 外部链接", (await api("POST", SOURCES, { link: "http://example.com/m" })).status === 400);
 const added = await api("POST", SOURCES, { link: "http://127.0.0.1:8798/m" });
-check("加第三方源", added.status === 201 && added.data.name === "e2e 第三方" && added.data.count === 3, added.data);
+check("加第三方源", added.status === 201 && added.data.name === "e2e 第三方" && added.data.count === 2, added.data);
 check("重复加同一个源被拒", (await api("POST", SOURCES, { link: "http://127.0.0.1:8798/m/" })).status === 409);
 
 const list = await api("GET", `${V1}/plugins`);
@@ -93,16 +93,22 @@ await api("GET", `${V1}/plugins/${THIRD}`);
 const extra = hits.slice(before);
 check("再看列表与详情只重拉索引", extra.every((p) => p === "/m/index.json") && extra.length <= 1, extra);
 
-const allow = await api("PUT", `${V1}/plugin-allow/${THIRD}`, {});
-check("放行第三方插件", allow.status === 200, allow.data);
+check("第三方插件不带摘要不能放行", (await api("PUT", `${V1}/plugin-allow/${THIRD}`, {})).status === 409);
+const allow = await api("PUT", `${V1}/plugin-allow/${THIRD}`, { digest: d1.data.digest });
+check("带详情给的摘要放行第三方插件", typeof d1.data.digest === "string" && allow.status === 200 && allow.data.allow?.source === added.data.id, allow.data);
 const bad = await api("PUT", `${V1}/plugin-allow/${SRV}`, {});
 check("第三方源不能带服务端代码", bad.status === 400 && /官方源/.test(bad.text), bad.text);
-await api("DELETE", `${V1}/plugin-allow/${THIRD}`);
 
 const del = await api("DELETE", `${SOURCES}/${added.data.id}`);
 check("删源", del.status === 200);
 const after = await api("GET", `${V1}/plugins`);
-check("删源后列表不再有它的插件", !after.data.plugins.some((p) => p.id === THIRD), after.data.plugins.map((p) => p.id));
+const kept = after.data.plugins.find((p) => p.id === THIRD);
+check("删源后已放行的仍在列表里", kept?.allowed?.version === "1.0.0" && !after.data.error, kept);
+const snap = await api("GET", `${V1}/plugins/${THIRD}`);
+check("删源后详情用放行时的快照", snap.status === 200 && snap.data.gone === true && snap.data.manifest.id === THIRD, snap.data);
+check("删源后能撤销放行", (await api("DELETE", `${V1}/plugin-allow/${THIRD}`)).status === 200);
+const gone = await api("GET", `${V1}/plugins`);
+check("撤销后列表不再有它", !gone.data.plugins.some((p) => p.id === THIRD), gone.data.plugins.map((p) => p.id));
 
 official.close();
 market.close();

@@ -52,6 +52,8 @@ data class PluginDetail(
     val agentless: Boolean = false, val enabled: Boolean = false,
     val owner: Boolean = true, val deploy: Boolean = false, val risky: List<String> = emptyList(),
     val singles: List<String> = emptyList(), val choices: Map<String, String> = emptyMap(),
+    // 第三方插件的内容摘要; gone: 市场里已没有, 显示的是放行时的快照
+    val digest: String? = null, val gone: Boolean = false,
 )
 
 /** 市场列表页: 条目 + 我是不是管理员 / 主人 + 拉市场的报错。 */
@@ -88,6 +90,7 @@ class PluginApi(private val context: Context) {
             entry(m), b.optString("readme"), b.optString("readmeType") == "html", agent?.optString("schedule")?.ifEmpty { null }, b.optString("task").ifEmpty { null }, b.optBoolean(KEY_ADMIN), agent == null, on,
             owner = b.optBoolean(KEY_OWNER, true), deploy = b.optBoolean("deploy"), risky = strings(m.optJSONArray("permissions")).filter(::isRisky),
             singles = singles(m), choices = choices,
+            digest = b.optString("digest").ifEmpty { null }, gone = b.optBoolean("gone"),
         )
     }
 
@@ -122,8 +125,9 @@ class PluginApi(private val context: Context) {
     }
 
     /** 管理员放行市场当前版本 (已放行的就是换成新版); 有冲突时服务端返回原因。 */
-    suspend fun allow(id: String): Result<Unit> = io {
-        val r = Api.call(context, PUT, listOf(PATH_ALLOW, id), JSONObject())
+    suspend fun allow(id: String, digest: String? = null): Result<Unit> = io {
+        // 第三方插件带上详情给的摘要, 服务端核对放行的就是看过的那份
+        val r = Api.call(context, PUT, listOf(PATH_ALLOW, id), JSONObject().apply { digest?.let { put("digest", it) } })
         if (r.body == null) error(r.error ?: FAILED)
     }
 

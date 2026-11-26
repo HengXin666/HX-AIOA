@@ -7,6 +7,7 @@ export const PATH_PLUGIN_SOURCE = `${API_V1}/plugin-sources/{id}`;
 export const PATH_PLUGIN_SOURCES_REFRESH = `${API_V1}/plugin-sources-refresh`;
 export const OFFICIAL_SOURCE = "official";
 export const OFFICIAL_NAMESPACE = "hengxin666";
+// 第三方源个数上限 (官方源不算)
 export const MAX_SOURCES = 10;
 // 索引可以内嵌清单, 比单个文件大
 export const MAX_INDEX_TEXT = 256_000;
@@ -37,10 +38,10 @@ const SEG_RE = /^[\w.-]+$/;
 const MAX_ID = 64;
 
 /** 填的链接 → 依次尝试的根地址 (第一个有 index.json 的就是), 和源 id。 */
-export function parseMarketLink(raw: string): { id: string; name: string; candidates: string[] } | string {
+export function parseMarketLink(raw: string, allowLocal = false): { id: string; name: string; candidates: string[] } | string {
   const link = raw.trim().replace(/\/index\.json$/, "").replace(/\/+$/, "").replace(/\.git$/, "");
-  // 本机地址允许 http, 给本地开发与 e2e 用
-  if (!/^https:\/\//.test(link) && !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(link)) return "只支持 https 链接";
+  // 本机 http 只给本地开发与 e2e 用, 由服务端按部署配置决定放不放
+  if (!/^https:\/\//.test(link) && !(allowLocal && /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(link))) return "只支持 https 链接";
   const join = (...p: string[]) => p.filter(Boolean).join("/");
   const idOf = (...p: string[]) => p.filter(Boolean).join("-").toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, MAX_ID);
   if (link.startsWith(GH) || link.startsWith(RAW)) {

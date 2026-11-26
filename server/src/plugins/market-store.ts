@@ -1,5 +1,6 @@
 import type { MarketSource } from "@hx-aioa/protocol";
 
+export const IDX = "idx:";
 type SrcRow = { id: string; body: string };
 type CacheRow = { v: string; at: number };
 // 缓存行数上限: 超了删最早的一批, 免得旧版本的介绍和提示词一直占库
@@ -23,7 +24,7 @@ export class MarketStore {
 
   dropSource(id: string): boolean {
     const n = this.sql.exec("DELETE FROM plugin_source WHERE id = ?", id).rowsWritten;
-    this.sql.exec("DELETE FROM market_cache WHERE k = ? OR k LIKE ?", `idx:${id}`, `f:${id}:%`);
+    this.sql.exec("DELETE FROM market_cache WHERE k = ? OR k LIKE ?", IDX + id, `f:${id}:%`);
     return n > 0;
   }
 
@@ -34,6 +35,7 @@ export class MarketStore {
   put(k: string, v: string, at: number): void {
     this.sql.exec("INSERT OR REPLACE INTO market_cache (k, v, at) VALUES (?, ?, ?)", k, v, at);
     const n = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM market_cache").one().n;
-    if (n > MAX_ROWS) this.sql.exec("DELETE FROM market_cache WHERE k IN (SELECT k FROM market_cache ORDER BY at LIMIT ?)", PRUNE);
+    // 索引行不裁 (每源一行), 只裁文件缓存
+    if (n > MAX_ROWS) this.sql.exec("DELETE FROM market_cache WHERE k IN (SELECT k FROM market_cache WHERE k NOT LIKE ? ORDER BY at LIMIT ?)", `${IDX}%`, PRUNE);
   }
 }
