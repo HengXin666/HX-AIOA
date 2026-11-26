@@ -71,6 +71,27 @@ export class GhService {
     return unseal(this.secret, s.token);
   }
 
+  /**
+   * 用令牌调 GitHub; 401 且有 refresh 时: 库里已换了新令牌就直接重试, 否则续一次再试。
+   * 覆盖本地记的到期时间不准、令牌被提前作废的情况。
+   */
+  async withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
+    const t = await this.token();
+    try {
+      return await fn(t);
+    } catch (e) {
+      if (!(e instanceof ApiFail && e.status === 401 && e.code === GH_CODE)) throw e;
+      const s = this.store.secret();
+      if (!s?.refresh) throw e;
+      const cur = await unseal(this.secret, s.token);
+      return fn(cur !== t ? cur : await this.refresh(s));
+    }
+  }
+
+  call(path: string, init: { method?: string; body?: unknown } = {}) {
+    return this.withToken((t) => gh(t, path, init));
+  }
+
   // refresh token 一次性: 同一时刻只续一次, 并发请求共用结果, 否则第二个会拿旧 refresh 失败
   private refreshing: Promise<string> | null = null;
 
@@ -152,10 +173,9 @@ export class GhService {
 
   private async raw(fresh = false): Promise<Raw[]> {
     if (!fresh && this.repoCache && Date.now() - this.repoCache.at < REPO_TTL) return this.repoCache.list;
-    const token = await this.token();
     const list: Raw[] = [];
     for (let page = 1; page <= MAX_PAGES; page += 1) {
-      const body = (await gh(token, `/user/repos?per_page=${PER_PAGE}&page=${page}&sort=pushed`)).body;
+      const body = (await this.call(`/user/repos?per_page=${PER_PAGE}&page=${page}&sort=pushed`)).body;
       if (!Array.isArray(body)) break;
       for (const r of body as { full_name?: string; private?: boolean; pushed_at?: string }[]) {
         if (r.full_name) list.push({ repo: r.full_name, private: !!r.private, pushed: r.pushed_at ? Date.parse(r.pushed_at) : 0 });

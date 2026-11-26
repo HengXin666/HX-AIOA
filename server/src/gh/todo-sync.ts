@@ -80,13 +80,12 @@ export async function syncTodoIssues(core: Core, only?: Set<string>): Promise<nu
   if (!ghOn(core) || !core.gh.auth()) return 0;
   const hits = core.todos.linked().filter((h) => !only || only.has(`${h.item.repo!.toLowerCase()}#${h.item.issue}`));
   if (!hits.length) return 0;
-  const token = await core.gh.token();
   const now = Date.now();
   const touched = new Map<string, number>();
   let changed = 0;
   for (let i = 0; i < hits.length; i += CHUNK) {
     const chunk = hits.slice(i, i + CHUNK);
-    const got = await fetchChunk(token, chunk);
+    const got = await core.gh.withToken((t) => fetchChunk(t, chunk));
     for (const h of chunk) {
       const d = got.get(`${h.item.repo!.toLowerCase()}#${h.item.issue}`);
       if (!d) continue;
