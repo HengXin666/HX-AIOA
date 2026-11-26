@@ -117,6 +117,10 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
                 PageRow(SettingsPage.MEMBERS, "", selected, open)
                 RowDivider()
                 PageRow(SettingsPage.CF_USAGE, "", selected, open)
+                if (account.role == ROLE_OWNER) {
+                    RowDivider()
+                    PageRow(SettingsPage.SENDERS, "", selected, open)
+                }
             }
         }
         SettingsGroup("系统") {

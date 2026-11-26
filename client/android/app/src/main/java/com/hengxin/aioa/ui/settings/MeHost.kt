@@ -116,6 +116,7 @@ private fun Detail(p: SettingsPage, deps: MeDeps, onBack: (() -> Unit)?, toRoot:
         SettingsPage.APPEARANCE -> AppearancePage(deps.prefs, deps.setPrefs, onBack)
         SettingsPage.SYSTEM -> SystemPage(deps.actions, onBack)
         SettingsPage.CF_USAGE -> CfUsagePage(onBack)
+        SettingsPage.SENDERS -> SystemSendersPage(chat.groups.directory, onBack)
         SettingsPage.STORAGE -> StoragePage(Auth.load(LocalContext.current)?.role == ROLE_OWNER, onBack)
         SettingsPage.UPDATE -> UpdatePage(deps.settings(), deps.onNotes, onBack)
         SettingsPage.ABOUT -> AboutPage(onBack)

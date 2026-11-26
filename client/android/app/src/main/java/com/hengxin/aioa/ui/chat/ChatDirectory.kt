@@ -64,12 +64,20 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         val id = Avatars.upload(context, bytes).getOrElse { return "头像上传失败: ${it.message}" }
         val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", id)) }
         if (r.error != null) return "没保存: ${r.error}"
-        Senders.setLocal(sid, id)
+        Senders.setLocal(sid) { it.copy(avatar = id) }
+        return null
+    }
+
+    /** 改系统发送者的名字; null 恢复默认名。返回错误文字, 成功为 null。 */
+    suspend fun renameSender(sid: String, alias: String?): String? {
+        val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("alias", alias ?: JSONObject.NULL)) }
+        if (r.error != null) return "没保存: ${r.error}"
+        Senders.setLocal(sid) { it.copy(alias = alias) }
         return null
     }
 
     fun clearSenderAvatar(sid: String) {
-        Senders.setLocal(sid, null)
+        Senders.setLocal(sid) { it.copy(avatar = null) }
         scope.launch {
             val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", JSONObject.NULL)) }
             if (r.error != null) {

@@ -82,8 +82,12 @@ export type ChatMessages = { messages: Envelope[]; head: number };
 export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取
 export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos" | "senders"; channel?: string };
-// 发送者资料 (#123): 主人给某个来源 (sid) 设的头像, 各端消息里按它画; 没设的系统来源用内置图标
-export type SenderMeta = { sid: string; avatar?: string; updated: number };
+/**
+ * 系统发送者登记 (#123 #128): 服务端自己发消息用的来源 (system, system:*, 终端) 第一次发言时自动登记。
+ * name 是发送时的默认名, alias 是主人改的名 (新消息按它发, 客户端旧消息也按它显示), avatar 是主人设的头像 id。
+ */
+export type SenderMeta = { sid: string; name: string; icon?: string; alias?: string; avatar?: string; first: number; last: number; updated: number };
+export type SenderPatch = { alias?: string | null; avatar?: string | null };
 export const PATH_SENDERS = `${API_V1}/senders`;
 export const PATH_SENDER = `${API_V1}/senders/{sid}`;
 // 没带群的系统消息进这个群 (原先按发送者名字归成 "系统" 组, 和发送者重名)

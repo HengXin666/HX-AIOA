@@ -116,7 +116,7 @@ fun ChatScreen(model: ChatModel) {
     }
     BackHandler { g.close() }
     var forwarding by remember { mutableStateOf<ServerFrame.Msg?>(null) }
-    // 主人点发送者头像可以换头像 (#123)
+    // 主人点系统发送者的头像可以改名换头像 (#123 #128)
     var sender by remember { mutableStateOf<ServerFrame.Msg?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isOwner = remember { com.hengxin.aioa.config.Auth.load(context)?.role == com.hengxin.aioa.ui.chat.ROLE_OWNER }
@@ -130,7 +130,8 @@ fun ChatScreen(model: ChatModel) {
         onDigest = { m, key -> g.forward(m, key) },
         onJump = g::jumpTo,
         onRemove = g::remove,
-        onSender = if (isOwner) ({ sender = it }) else null,
+        // 只有系统发送者能改名换头像 (#128); Agent 和人有自己的资料
+        onSender = if (isOwner) ({ m -> if (com.hengxin.aioa.ui.chat.Senders.iconOf(m.sid) != null) sender = m }) else null,
     )
     CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (dir.metas[open]?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(model, open) { g.close() }
@@ -156,7 +157,7 @@ fun ChatScreen(model: ChatModel) {
         }
     } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
-    sender?.let { m -> com.hengxin.aioa.ui.chat.SenderAvatarSheet(m, dir) { sender = null } }
+    sender?.let { m -> com.hengxin.aioa.ui.chat.SenderEditSheet(m.sid.orEmpty(), com.hengxin.aioa.ui.chat.Names.of(m), dir) { sender = null } }
 }
 
 /** 普通页面标题行 (群列表等在用)。 */

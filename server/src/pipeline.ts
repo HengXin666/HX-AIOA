@@ -30,6 +30,7 @@ import type { MetricRouter } from "./metrics";
 import { hasFallback, sendFallback } from "./notify";
 import { PUSH_CHANNELS, aggregateWindowSec, decide, type RuleSets } from "./rules/engine";
 import { inWindow } from "./rules/window";
+import type { SenderStore } from "./senders";
 import type { Sockets } from "./sockets";
 import { EventStore } from "./store";
 import type { Timers } from "./timers";
@@ -51,6 +52,7 @@ export class Pipeline {
     private readonly sockets: Sockets,
     private readonly timers: Timers,
     private readonly files?: FileStore,
+    readonly senders?: SenderStore,
   ) {}
 
   // 外部写入: EventInput + 来源 -> 信封
@@ -84,7 +86,9 @@ export class Pipeline {
     }
     const dk = EventStore.dedupeOf(draft);
     const previous = draft.id ? this.store.get(draft.id) : dk ? this.store.byDedupe(dk) : null;
-    const ev: Envelope = { ...draft, id: draft.id || previous?.id || randomId("e_") };
+    // 系统发送者自动登记, 主人改过名的按别名发 (#128)
+    const named: Envelope = { ...draft, id: draft.id || previous?.id || randomId("e_") };
+    const ev: Envelope = this.senders?.see(named, now) ?? named;
     if (ev.kind === "event" && ev.data.status === "resolved") ev.resolved = true;
     if (ev.ttl) ev.expires = ev.ts + ev.ttl * 1000;
     const gc = groupContext(ev, this.store.recent(RECENT_SCAN), now);
