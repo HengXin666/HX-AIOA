@@ -20,6 +20,7 @@ ICONS = [
     "terminal", "plus", "play", "file", "corner-left-up",
     "menu", "square-pen", "lightbulb", "code-xml", "ellipsis", "pin", "grip-vertical", "mic", "arrow-up", "sparkles",
     "scan-line", "user-plus", "message-square-plus", "pencil", "chevrons-up-down", "layers", "panel-left",
+    "alarm-clock", "repeat", "bell-off",
 ]
 # Lucide 已移除品牌图标, 这些名字借用相近图标的路径
 ALIASES = {"github": "git-branch"}

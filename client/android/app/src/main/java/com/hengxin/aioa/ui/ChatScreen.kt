@@ -116,6 +116,10 @@ fun ChatScreen(model: ChatModel) {
     }
     BackHandler { g.close() }
     var forwarding by remember { mutableStateOf<ServerFrame.Msg?>(null) }
+    // 主人点发送者头像可以换头像 (#123)
+    var sender by remember { mutableStateOf<ServerFrame.Msg?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isOwner = remember { com.hengxin.aioa.config.Auth.load(context)?.role == com.hengxin.aioa.ui.chat.ROLE_OWNER }
     val dir = g.directory
     val actions = BubbleActions(
         onReply = { g.replyTo = it },
@@ -126,6 +130,7 @@ fun ChatScreen(model: ChatModel) {
         onDigest = { m, key -> g.forward(m, key) },
         onJump = g::jumpTo,
         onRemove = g::remove,
+        onSender = if (isOwner) ({ sender = it }) else null,
     )
     CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (dir.metas[open]?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(model, open) { g.close() }
@@ -140,7 +145,10 @@ fun ChatScreen(model: ChatModel) {
             // 装了待办插件的群: 顶上切 聊天 / 待办
             var todo by rememberSaveable(open) { mutableStateOf(false) }
             if (dir.metas[open]?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
-            if (todo) KeepState("chat:todo:$open") { com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { seq -> todo = false; g.jumpTo(seq) }, Modifier.weight(1f)) }
+            if (todo) KeepState("chat:todo:$open") {
+                // 看 "全部待办" 时来源消息可能在别的群: 本群就地定位, 别的群进去再定位
+                com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { ch, seq -> todo = false; if (ch == open) g.jumpTo(seq) else model.groups.openAt(ch, seq) }, Modifier.weight(1f))
+            }
             else {
                 KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
                 Composer(g)
@@ -148,6 +156,7 @@ fun ChatScreen(model: ChatModel) {
         }
     } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
+    sender?.let { m -> com.hengxin.aioa.ui.chat.SenderAvatarSheet(m, dir) { sender = null } }
 }
 
 /** 普通页面标题行 (群列表等在用)。 */
@@ -269,19 +278,19 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
             highlight = null
         }
     }
+    val todoGroup = model.groups.directory.metas[group]?.agents?.any { it.plugin in TODO_PLUGINS } == true
     Box(modifier.fillMaxWidth()) {
     LazyColumn(Modifier.fillMaxSize(), state, reverseLayout = true, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) {
         items(rows.size, key = { rows[it].key }, contentType = { rows[it]::class.hashCode() }) { i ->
             val mod = Modifier.animateItem()
             when (val row = rows[i]) {
                 is ChatRow.Day -> DayChip(row.ts, mod)
-                is ChatRow.Bubble -> MessageBubble(
-                    row.msg,
-                    model.isMine(row.msg),
-                    BubbleSpot(row.head, showSender, highlight == row.msg.seq),
-                    actions,
-                    mod,
-                )
+                is ChatRow.Bubble -> Column(mod) {
+                    val mine = model.isMine(row.msg)
+                    MessageBubble(row.msg, mine, BubbleSpot(row.head, showSender, highlight == row.msg.seq), actions, Modifier)
+                    // 待办群: 消息下面挂它生出来的待办, 点开看详情 (#122)
+                    if (todoGroup) com.hengxin.aioa.ui.todo.TodoChips(model.spaces, group, row.msg.seq, mine) { seq -> g.jumpTo(seq) }
+                }
                 is ChatRow.Local -> {
                     val p = row.p
                     MessageBubble(

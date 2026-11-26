@@ -1,6 +1,6 @@
 {
   "name": "hxaioa",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "HX-AIOA 群 Agent 命令行: 一轮 next, 收发消息, 长连监听, skill 安装",
   "type": "module",
   "private": true,

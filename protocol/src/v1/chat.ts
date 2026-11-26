@@ -81,7 +81,14 @@ export type OnboardResult = { agent: ChatAgent; prompt: string; key: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
 export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取
-export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos"; channel?: string };
+export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos" | "senders"; channel?: string };
+// 发送者资料 (#123): 主人给某个来源 (sid) 设的头像, 各端消息里按它画; 没设的系统来源用内置图标
+export type SenderMeta = { sid: string; avatar?: string; updated: number };
+export const PATH_SENDERS = `${API_V1}/senders`;
+export const PATH_SENDER = `${API_V1}/senders/{sid}`;
+// 没带群的系统消息进这个群 (原先按发送者名字归成 "系统" 组, 和发送者重名)
+export const SYSTEM_CHANNEL = "system";
+export const SYSTEM_CHANNEL_TITLE = "系统通知";
 
 export const DIGEST_KINDS = ["daily", "weekly"] as const;
 export const MAX_BRIEF_LENGTH = 8000;

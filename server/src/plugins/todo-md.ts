@@ -1,8 +1,9 @@
 import type { TodoItem, TodoState } from "@hx-aioa/protocol";
+import { DEFAULT_TZ_MIN } from "./todo-plan";
 
 // 给外部 AI 看的待办: 按创建日期分天, 天里按仓库, 父子缩进
 export const STATE_TEXT: Record<TodoState, string> = { open: "待进行", hold: "挂起", doing: "进行中", done: "已完成", dropped: "已放弃" };
-const TZ_OFFSET = 8 * 3_600_000;
+const TZ_OFFSET = DEFAULT_TZ_MIN * 60_000;
 const NO_REPO = "未关联仓库";
 const finished = (t: TodoItem) => t.state === "done" || t.state === "dropped";
 
@@ -12,7 +13,8 @@ function line(t: TodoItem, depth: number): string {
   const box = finished(t) ? "[x]" : "[ ]";
   const issue = t.repo && t.issue ? ` (${t.repo}#${t.issue}${t.gh ? ` ${t.gh.state === "closed" ? "已关闭" : `${t.gh.comments} 评论`}` : ""})` : "";
   const note = t.note ? ` - ${t.note.replace(/\s+/g, " ").slice(0, 160)}` : "";
-  return `${"  ".repeat(depth)}- ${box} \`${t.id}\` [${STATE_TEXT[t.state]}] P${t.prio} ${t.title}${issue}${note}`;
+  const plan = [t.star ? "★" : "", t.area ? `{${t.area}}` : "", t.due ? `截止 ${new Date(t.due + TZ_OFFSET).toISOString().slice(0, 16).replace("T", " ")}` : "", t.every ? `每 ${t.every.n} ${t.every.unit}` : ""].filter(Boolean).join(" ");
+  return `${"  ".repeat(depth)}- ${box} \`${t.id}\` [${STATE_TEXT[t.state]}] P${t.prio} ${t.title}${plan ? ` (${plan})` : ""}${issue}${note}`;
 }
 
 /** 父子关系: parent 字段优先, 其次 GitHub 的父 issue。 */

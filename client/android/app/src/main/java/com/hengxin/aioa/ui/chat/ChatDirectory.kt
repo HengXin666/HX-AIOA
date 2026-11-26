@@ -40,17 +40,50 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
             }
             refreshChats()
             refreshFavorites()
+            refreshSenders()
         }
     }
 
     fun onSync(topic: String) {
-        if (topic == TOPIC_FAVORITES) refreshFavorites() else refreshChats()
+        when (topic) {
+            TOPIC_FAVORITES -> refreshFavorites()
+            Senders.TOPIC -> refreshSenders()
+            else -> refreshChats()
+        }
+    }
+
+    /** 发送者头像 (#123): 先用缓存, 再问服务端。 */
+    fun refreshSenders() = scope.launch {
+        withContext(Dispatchers.IO) { ApiCache.read(context, Senders.CACHE) }?.let(Senders::apply)
+        val r = withContext(Dispatchers.IO) { ApiCache.refresh(context, Senders.CACHE, listOf(Senders.PATH)) }
+        if (r.changed) Senders.apply(r.body)
+    }
+
+    /** 主人给发送者换头像: 先上传图片, 再记到发送者上; 返回错误文字, 成功为 null。 */
+    suspend fun setSenderAvatar(sid: String, bytes: ByteArray): String? {
+        val id = Avatars.upload(context, bytes).getOrElse { return "头像上传失败: ${it.message}" }
+        val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", id)) }
+        if (r.error != null) return "没保存: ${r.error}"
+        Senders.setLocal(sid, id)
+        return null
+    }
+
+    fun clearSenderAvatar(sid: String) {
+        Senders.setLocal(sid, null)
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", JSONObject.NULL)) }
+            if (r.error != null) {
+                error = "头像没恢复: ${r.error}"
+                refreshSenders()
+            }
+        }
     }
 
     /** 手动同步: 群资料与收藏都重新问一遍服务端, 顺带清理不再用的头像。 */
     suspend fun syncNow() {
         listOf(refreshChats(), refreshFavorites()).forEach { it.join() }
-        val keep = metas.values.mapNotNull { it.avatar }.toSet()
+        refreshSenders().join()
+        val keep = metas.values.mapNotNull { it.avatar }.toSet() + Senders.all()
         withContext(Dispatchers.IO) { Avatars.prune(context, keep) }
     }
 

@@ -8,7 +8,7 @@ import type { ChatView } from "./mail";
 
 export const CORE_SKILL = "hx-aioa";
 // 必须和 skills/hx-aioa/manifest.json 的 version 一致 (check:plugins 校验)
-export const CORE_SKILL_VERSION = "1.0";
+export const CORE_SKILL_VERSION = "1.1";
 // 命令行 -> 服务端, 每个请求都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0
 export const HEADER_SKILL = "X-Aioa-Skill";
 // 服务端 -> 命令行, 群 Agent 的每个响应都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0[,auto]

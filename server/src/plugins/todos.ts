@@ -1,6 +1,7 @@
-import { MAX_TODOS, PDATA_ID_RE, TODO_COLL, TODO_PLUGIN, todoOf, todoRowId, type PDataItem, type TodoBody, type TodoGh, type TodoInput, type TodoItem, type TodoState } from "@hx-aioa/protocol";
+import { MAX_TODOS, PDATA_ID_RE, TODO_PLAN_KEYS, checkTodoBody, TODO_COLL, TODO_PLUGIN, todoOf, todoRowId, type PDataItem, type TodoBody, type TodoGh, type TodoInput, type TodoItem, type TodoState } from "@hx-aioa/protocol";
 import { PDataStore } from "./pdata";
 import { migrateTodo, type Tx } from "./todo-migrate";
+import { rollTodo } from "./todo-plan";
 
 const DEFAULT_PRIO = 2;
 const DONE: TodoState = "done";
@@ -19,6 +20,9 @@ export function normTodo(prev: TodoBody | null, next: TodoBody, now = Date.now()
   else out.doneAt = prev?.state === DONE ? (prev.doneAt ?? out.doneAt ?? now) : now;
   if (prev?.gh && prev.repo === out.repo && prev.issue === out.issue) out.gh = prev.gh;
   else delete out.gh;
+  // 周期待办刚完成: 推到下一期 (回到 open, 不留 doneAt), 免得每期都手动新建
+  // 新建时就是完成的不推 (导入旧数据, 或建错了)
+  if (out.state === DONE && prev && prev.state !== DONE && out.every && out.due) return rollTodo(out, now);
   return out;
 }
 
@@ -65,12 +69,14 @@ export class TodoStore {
       if (i.title !== undefined) next.title = i.title;
       if (i.state !== undefined) next.state = i.state;
       if (i.prio !== undefined) next.prio = i.prio;
-      for (const k of ["note", "src", "repo", "issue", "parent"] as const) {
+      for (const k of ["note", "src", "repo", "issue", "parent", ...TODO_PLAN_KEYS] as const) {
         if (i[k] === null) delete next[k];
         else if (i[k] !== undefined) (next as Record<string, unknown>)[k] = i[k];
       }
       const body = normTodo(old, next, now);
       if (old && JSON.stringify(old) === JSON.stringify(body)) continue;
+      const bad = checkTodoBody(rid, body);
+      if (bad) return bad;
       const r = this.pdata.put(acct, TODO_PLUGIN, TODO_COLL, rid, cur?.ver ?? 0, body, now);
       if ("error" in r) return r.error;
       if (!("ok" in r)) return "待办正被别处修改, 请重试";
@@ -96,6 +102,8 @@ export class TodoStore {
     const cur = this.pdata.get(acct, TODO_PLUGIN, TODO_COLL, rid);
     const old = live(cur);
     if (!cur || !old) return null;
+    // 周期待办不跟 issue 状态走: 关闭的 issue 每轮同步都会 "完成" 一次, 把截止一期期往后推
+    if (old.every) state = undefined;
     const body = { ...normTodo(old, { ...old, ...(state ? { state } : {}) }, now), gh };
     if (JSON.stringify(old) === JSON.stringify(body)) return { item: todoOf(cur)!, rev: 0 };
     // 同步状态不算主人或 Agent 的改动: 只改 gh 时保留原 updated

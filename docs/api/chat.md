@@ -56,6 +56,8 @@
 
 - `PUT /api/v1/avatars` (母号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。
 - `GET /api/v1/avatars/{id}` → 图片, `Cache-Control: immutable`, 客户端按 id 永久缓存。
+- 发送者头像 (#123): `GET /api/v1/senders` → `{ senders: [{ sid, avatar, updated }] }` (设过头像的来源); `PUT /api/v1/senders/{sid}` (母号) `{ "avatar": "<头像 id>" | null }`, 变了推 `chat_sync` topic `senders`。没设头像的 `system:*` 来源客户端用内置图标。
+- 没有所属群的系统通知 (CF 额度, GitHub 授权到期) 发进 `system` 群 ("系统通知"), 发送者按用途命名 (指令更新, GitHub 同步, GitHub 授权, 待办提醒, CF 额度)。
 - 群头像写进群资料 `avatar`; 本人头像写进设置 `avatar`。
 
 ## 其它

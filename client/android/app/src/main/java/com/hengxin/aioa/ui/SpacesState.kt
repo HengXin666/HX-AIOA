@@ -47,6 +47,8 @@ private const val KEY_TODOS_SYNC = "todos-sync"
 private const val HTTP_CONFLICT = 409
 private const val CHANGE_DISABLED = "disabled"
 private const val CHANGE_REVOKED = "revoked"
+// todos 里这个键放本账号全部群的待办
+const val ALL_TODOS = "*"
 
 private fun JSONObject.optPositive(k: String): Long? = optLong(k).takeIf { it > 0 }
 
@@ -71,7 +73,33 @@ internal fun todoRow(o: JSONObject): Pair<String, TodoRow>? {
         ghOpen = gh?.let { it.optString("state") != "closed" },
         ghComments = gh?.optInt("comments") ?: 0,
         ghParent = gh?.optPositive("parent")?.toInt(),
+        channel = channel,
+        area = b.optString("area").ifEmpty { null },
+        due = b.optPositive("due"),
+        remind = if (b.has("remind") && !b.isNull("remind")) b.optInt("remind") else null,
+        alarm = b.optBoolean("alarm"),
+        star = b.optBoolean("star"),
+        everyUnit = b.optJSONObject("every")?.optString("unit")?.ifEmpty { null },
+        everyN = b.optJSONObject("every")?.optInt("n", 1) ?: 1,
+        runs = b.optInt("runs"),
+        prevDue = b.optPositive("prevDue"),
     )
+}
+
+/** 编辑面板能改的字段写进行 body; null 的删掉 (服务端按缺省处理)。状态不在这里写, 免得盖掉编辑期间 Agent 或 GitHub 同步改的。 */
+internal fun planInto(body: JSONObject, r: TodoRow) {
+    fun opt(k: String, v: Any?) { if (v == null) body.remove(k) else body.put(k, v) }
+    body.put("title", r.title).put("prio", r.prio)
+    opt("note", r.note)
+    opt("area", r.area)
+    opt("due", r.due)
+    opt("remind", r.remind?.takeIf { r.due != null })
+    opt("alarm", r.alarm.takeIf { it && r.due != null })
+    opt("star", r.star.takeIf { it })
+    val tz = java.util.TimeZone.getDefault().getOffset(r.due ?: System.currentTimeMillis()) / TodoRow.MINUTE_MS.toInt()
+    // 按月 / 年的锚定日取截止那天 (31 号在短月落月底, 下个月回到 31 号)
+    val day = r.due?.let { java.util.Calendar.getInstance().apply { timeInMillis = it }.get(java.util.Calendar.DAY_OF_MONTH) }
+    opt("every", r.everyUnit?.takeIf { r.due != null }?.let { u -> JSONObject().put("unit", u).put("n", r.everyN).put("tz", tz).also { if (u == "month" || u == "year") it.put("day", day) } })
 }
 
 /** 工作台的界面状态: 布局来自 space_update 帧, 用户的排序与尺寸 PUT 到服务端, 打开时取一次服务端解析好的当前值。 */
@@ -176,16 +204,78 @@ class SpacesState(
         return todos[channel]
     }
 
-    /** 勾选本地先生效, 再带 ver 写回; 版本冲突或失败时以服务端为准重拉。 */
-    fun setTodo(channel: String, row: TodoRow, done: Boolean) = setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
+    /** 本账号所有群的待办 (总览的看板, 重点待办)。 */
+    fun allTodos(): List<TodoRow>? = todos(ALL_TODOS)
+
+    /** 新建或整条编辑: 新建 ver 为 0, 编辑在读到的整行上改计划字段 (保留 src, gh, created 等)。 */
+    fun saveTodo(row: TodoRow, fresh: Boolean) {
+        val id = "${row.channel}:${row.id}"
+        val now = System.currentTimeMillis()
+        if (fresh) todos[ALL_TODOS]?.let { todos[ALL_TODOS] = it + row.copy(created = now, updated = now) }
+        if (fresh && row.channel in todos) todos[row.channel] = todos[row.channel].orEmpty() + row.copy(created = now, updated = now)
+        if (!fresh) return patchTodo(row.channel, row) { planInto(it, row) }
+        io {
+            val body = JSONObject().put("channel", row.channel).put("created", now).put(KEY_STATE, row.state).also { planInto(it, row) }
+            val err = callErr(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", JSONObject().put("ver", 0).put(KEY_BODY, body))
+            if (err != null) toast("待办没保存: ${err.second}")
+            pullTodos()
+        }
+    }
+
+    /** 删除写墓碑, 带读到的版本。 */
+    fun deleteTodo(row: TodoRow) {
+        for (k in todos.keys.toList()) todos[k] = todos[k].orEmpty().filter { !(it.id == row.id && it.channel == row.channel) }
+        val id = "${row.channel}:${row.id}"
+        io {
+            val ver = todoLock.withLock { todoRows[id] }?.optInt("ver") ?: return@io pullTodos()
+            val target = url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id)?.newBuilder()?.addQueryParameter("ver", ver.toString())?.build()
+            val err = callErr(target, "DELETE", null)
+            if (err != null && err.first != HTTP_CONFLICT) toast("没删掉: ${err.second}")
+            pullTodos()
+        }
+    }
+
+    private suspend fun toast(text: String) = withContext(Dispatchers.Main) { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+
+    /** 刚勾完成的那条 (勾之前的样子): 看板底部出 "撤销" 条, 几秒后自动消失。 */
+    var undo by mutableStateOf<TodoRow?>(null)
+
+    /** 勾选本地先生效, 再带 ver 写回; 版本冲突或失败时以服务端为准重拉。勾完成时记下可撤销。 */
+    fun setTodo(channel: String, row: TodoRow, done: Boolean) {
+        undo = if (done) row else null
+        setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
+    }
+
+    /** 撤销刚才的完成: 周期待办已被服务端推到下一期的退回上一期, 普通待办回到勾之前的状态。 */
+    fun undoDone() {
+        val before = undo ?: return
+        undo = null
+        val cur = todos[ALL_TODOS]?.find { it.channel == before.channel && it.id == before.id }
+            ?: todos[before.channel]?.find { it.id == before.id } ?: before
+        if (cur.prevDue != null && cur.runs > before.runs) undoRoll(cur)
+        else setState(before.channel, cur, before.state.takeIf { it != TodoRow.STATE_DONE && it != TodoRow.STATE_DROPPED } ?: TodoRow.STATE_OPEN)
+    }
+
+    /** 周期待办撤销上次完成: due 退回 prevDue, runs 减一, 去掉 prevDue 与 lastDone (服务端不会再推期)。 */
+    fun undoRoll(r: TodoRow) {
+        val due = r.prevDue ?: return
+        val runs = (r.runs - 1).coerceAtLeast(0)
+        patchTodo(r.channel, r.copy(due = due, runs = runs, prevDue = null, state = TodoRow.STATE_OPEN)) {
+            it.put("due", due).put(KEY_STATE, TodoRow.STATE_OPEN).remove("prevDue")
+            it.remove("lastDone")
+            if (runs > 0) it.put("runs", runs) else it.remove("runs")
+        }
+    }
 
     fun setState(channel: String, row: TodoRow, state: String) = patchTodo(channel, row.copy(state = state)) { it.put(KEY_STATE, state) }
 
     fun setPrio(channel: String, row: TodoRow, prio: Int) = patchTodo(channel, row.copy(prio = prio)) { it.put("prio", prio) }
 
     /** 改一条: 本地先换成 next, 再在读到的整行上改要改的字段, 带 ver 写回 (doneAt 与 gh 由服务端补)。 */
-    private fun patchTodo(channel: String, next: TodoRow, edit: (JSONObject) -> Unit) {
-        todos[channel] = todos[channel].orEmpty().map { if (it.id == next.id) next.copy(updated = System.currentTimeMillis()) else it }
+    private fun patchTodo(group: String, next: TodoRow, edit: (JSONObject) -> Unit) {
+        val channel = next.channel.ifEmpty { group }
+        val now = System.currentTimeMillis()
+        for (k in listOf(channel, ALL_TODOS)) todos[k]?.let { list -> todos[k] = list.map { if (it.id == next.id && it.channel == channel) next.copy(updated = now) else it } }
         val id = "$channel:${next.id}"
         io {
             val cur = todoLock.withLock { todoRows[id] } ?: return@io pullTodos()
@@ -193,7 +283,7 @@ class SpacesState(
             val put = JSONObject().put("ver", cur.optInt("ver")).put(KEY_BODY, body)
             val err = callErr(url(Constants.PDATA_API, Constants.TODO_PLUGIN, Constants.TODO_COLL, id), "PUT", put)
             // 版本冲突不提示 (重拉即可), 其它错误 (如 id 太长, 没启用) 告诉用户, 不再悄悄吞掉
-            if (err != null && err.first != HTTP_CONFLICT) withContext(Dispatchers.Main) { Toast.makeText(context, "待办没保存: ${err.second}", Toast.LENGTH_SHORT).show() }
+            if (err != null && err.first != HTTP_CONFLICT) toast("待办没保存: ${err.second}")
             pullTodos()
         }
     }
@@ -207,6 +297,7 @@ class SpacesState(
                     todoRows.clear()
                     todoRev = 0L
                 }
+                com.hengxin.aioa.link.TodoAlarms.sync(context, emptyList())
                 withContext(Dispatchers.Main) { for (ch in todoAsked) todos[ch] = emptyList() }
             }
         } else if (todoAsked.isNotEmpty()) pullTodos()
@@ -232,8 +323,11 @@ class SpacesState(
                 }
                 todoRev = r.optLong("rev", todoRev)
             } while (r.optBoolean("more"))
-            val byGroup = todoRows.values.mapNotNull(::todoRow).groupBy({ it.first }, { it.second })
-            withContext(Dispatchers.Main) { for (ch in todoAsked) todos[ch] = byGroup[ch].orEmpty() }
+            val all = todoRows.values.mapNotNull(::todoRow)
+            val byGroup = all.groupBy({ it.first }, { it.second })
+            // 本地闹钟按最新的待办重排 (到点提醒不靠长连)
+            com.hengxin.aioa.link.TodoAlarms.sync(context, all.mapNotNull { com.hengxin.aioa.ui.todo.alarmPlan(it.second) })
+            withContext(Dispatchers.Main) { for (ch in todoAsked) todos[ch] = if (ch == ALL_TODOS) all.map { it.second } else byGroup[ch].orEmpty() }
         }
     }
 
@@ -258,12 +352,12 @@ class SpacesState(
     }
 
     /** 写入用: 成功返回 null, 失败返回 (状态码, 服务端给的原因)。 */
-    private fun callErr(url: HttpUrl?, method: String, body: JSONObject): Pair<Int, String>? {
+    private fun callErr(url: HttpUrl?, method: String, body: JSONObject?): Pair<Int, String>? {
         val config = ConfigStore.load(context) ?: return 0 to "未配置服务端"
         val target = url ?: return 0 to "地址无效"
         val req = Request.Builder().url(target)
             .header("Authorization", "Bearer ${Auth.bearer(context, config)}")
-            .method(method, body.toString().toRequestBody(JSON_TYPE.toMediaType()))
+            .method(method, body?.toString()?.toRequestBody(JSON_TYPE.toMediaType()))
             .build()
         return runCatching {
             Net.client(context).newCall(req).execute().use { res ->

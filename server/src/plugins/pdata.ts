@@ -123,6 +123,15 @@ export class PDataStore {
       .map(toItem);
   }
 
+  /** 某插件集合在所有账号下, body 里 fields 都有值的有效行 (待办提醒排程用, 先在库里筛掉不相关的行)。 */
+  allWith(plugin: string, coll: string, fields: string[]): { acct: string; item: PDataItem }[] {
+    const has = fields.map(() => " AND json_extract(body, ?) IS NOT NULL").join("");
+    return this.sql
+      .exec<Row & { acct: string }>(`SELECT acct, id, ver, rev, updated, deleted, body FROM pdata WHERE plugin = ? AND coll = ? AND deleted = 0${has}`, plugin, coll, ...fields.map((f) => `$.${f}`))
+      .toArray()
+      .map((r) => ({ acct: r.acct, item: toItem(r) }));
+  }
+
   /** 一次性迁移导入: 已有同 id 的行就跳过 (重复跑不重复写), 保留原 updated; 不受配额限制, 旧数据一条不丢。 */
   importRow(acct: string, plugin: string, coll: string, id: string, body: unknown, updated: number): boolean {
     if (this.row(acct, plugin, coll, id)) return false;

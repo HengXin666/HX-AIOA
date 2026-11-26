@@ -6,6 +6,7 @@ import { ghOn } from "./gh/gate";
 import { syncTodoIssues, SYNC_FAIL } from "./gh/todo-sync";
 import { githubOn } from "./github/gate";
 import { ApiFail } from "./http";
+import { systemNotice } from "./system-notice";
 
 export { majorRemind } from "./agent-want";
 
@@ -22,7 +23,7 @@ async function cfCheck(core: Core, storage: DurableObjectStorage): Promise<void>
   await storage.put(KEY_CF_ALERT, u.day);
   const text = `今天 (UTC) 的 CF 免费额度已用超过 80%: ${hot.map((i) => `${i.label} ${Math.round((i.used / i.limit) * PCT)}%`).join(", ")}`;
   const input = messageInput({ text });
-  if (typeof input !== "string") await core.pipeline.fromInput(input, { source: { id: CF_SOURCE, name: CF_SOURCE }, sourceInfo: null });
+  if (typeof input !== "string") await systemNotice(core, input, { id: "system:cf", name: CF_SOURCE, icon: "cloud" });
 }
 
 const KEY_GH_NOTICE = "gh_expiry_notice";
@@ -40,7 +41,7 @@ async function ghExpiryCheck(core: Core, storage: DurableObjectStorage): Promise
   const text = `GitHub 授权 (${a.login}) 已被 GitHub 拒绝 (过期或撤销), 不能自动续期。请在 App 的 GitHub 授权插件里重新授权。`;
   const input = messageInput({ text });
   if (typeof input === "string") return;
-  await core.pipeline.fromInput(input, { source: { id: "system:gh", name: "系统", icon: "github" }, sourceInfo: null });
+  await systemNotice(core, input, { id: "system:gh-auth", name: "GitHub 授权", icon: "github" });
   // 发成功才记, 发失败下次 cron 再提醒
   await storage.put(KEY_GH_NOTICE, a.expires);
 }
