@@ -83,6 +83,37 @@ test("todo add: id 用 t-<src>, 占用了加 -2; todo set 冲突时打印当前�
   }
 });
 
+test("todo add/set: 分区, 截止 (东八区), 提醒, 周期, 星标; 空串清掉", async () => {
+  const rows = {};
+  const srv = await fakeServer(({ method, path, body }) => {
+    if (!path.startsWith(ITEMS)) return undefined;
+    const id = decodeURIComponent(path.slice(ITEMS.length));
+    if (method === "GET") return rows[id] ? { json: { item: rows[id] } } : { status: 404, json: { error: "没有这一行" } };
+    rows[id] = { id, ver: body.ver + 1, rev: 1, updated: 1, body: body.body };
+    return { json: { item: rows[id] } };
+  });
+  const dir = home(CFG);
+  try {
+    const a = await run(dir, srv.base, ["todo", "add", "交电费", "--id", "t-1", "--area", "生活", "--due", "2026-11-30 18:00", "--remind", "1440", "--every", "month", "--star"]);
+    assert.equal(a.code, 0, a.stderr);
+    const b = rows["g1:t-1"].body;
+    assert.equal(b.due, Date.UTC(2026, 10, 30, 10, 0));
+    assert.deepEqual(b.every, { unit: "month", n: 1, tz: 480 });
+    assert.equal(b.remind, 1440);
+    assert.equal(b.star, true);
+    assert.match(a.stdout, /交电费 ★ \{生活\} 截止 11-30 18:00 提前1440分提醒 每个月/);
+    const s = await run(dir, srv.base, ["todo", "set", "t-1", "--every", "none", "--remind", "", "--due", "2026-12-01"]);
+    assert.equal(s.code, 0, s.stderr);
+    assert.equal(rows["g1:t-1"].body.every, undefined);
+    assert.equal(rows["g1:t-1"].body.remind, undefined);
+    assert.equal(rows["g1:t-1"].body.due, Date.UTC(2026, 11, 1, 15, 59));
+    const bad = await run(dir, srv.base, ["todo", "set", "t-1", "--every", "hour"]);
+    assert.notEqual(bad.code, 0);
+  } finally {
+    await srv.close();
+  }
+});
+
 test("命令行常量与协议真源一致", () => {
   const ts = readFileSync(fileURLToPath(new URL("../../protocol/src/v1/agent-skill.ts", import.meta.url)), "utf8");
   for (const s of ['"X-Aioa-Skill"', '"X-Aioa-Want"', '"hx-aioa"', '"https://raw.githubusercontent.com"', "chat-agent/next", "chat-agent/done", "chat-agent/trigger"]) assert.ok(ts.includes(s), s);

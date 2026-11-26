@@ -28,7 +28,7 @@
     "schedule": "长连等新消息 (hxaioa watch), 每 30 分钟兜底一次, 外加主人说 \"整理一下\" 时立即跑一次",
     "interval": 1800,
     "task": "把新想法整理成待办, 每条消息都回应。",
-    "skill": "1.0"
+    "skill": "1.1"
   },
   "permissions": [
     "data:own"
