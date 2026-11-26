@@ -19,7 +19,7 @@ export class MarketStore {
   }
 
   putSource(s: MarketSource): void {
-    this.sql.exec("INSERT OR REPLACE INTO plugin_source (id, body) VALUES (?, ?)", s.id, JSON.stringify({ id: s.id, name: s.name, url: s.url, link: s.link, added: s.added }));
+    this.sql.exec("INSERT OR REPLACE INTO plugin_source (id, body) VALUES (?, ?)", s.id, JSON.stringify({ id: s.id, name: s.name, url: s.url, link: s.link, added: s.added, ...(s.private ? { private: true } : {}) }));
   }
 
   dropSource(id: string): boolean {

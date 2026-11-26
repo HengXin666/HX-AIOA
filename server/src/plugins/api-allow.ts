@@ -126,6 +126,7 @@ async function enable(c: ReqCtx): Promise<Response> {
   if (!c.core.kernel.usable(uid, id)) return fail(403, `插件 ${id} 还没被管理员放行`, CODE_NOT_ALLOWED);
   // 数据属于整个部署的服务端插件只看主人的启用, 子号开了也没用, 直接说清楚
   if (isL2a(id) && L2A[id].owner && uid !== c.core.users.ownerId()) return fail(400, `${id} 归整个部署, 只有主人启用才生效`);
+  if (c.core.market.isPrivate(c.core.kernel.get(id)?.meta.source) && uid !== c.core.users.ownerId()) return fail(403, `${id} 来自主人的私有源, 只供主人使用`, CODE_FORBIDDEN);
   if (c.core.kernel.setEnabled(uid, id, true)) pushPlugin(c.core, id, "enabled", { uid, version: c.core.kernel.get(id)!.meta.version });
   return json(view(c, uid));
 }

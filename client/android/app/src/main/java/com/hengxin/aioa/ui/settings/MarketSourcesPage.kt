@@ -27,6 +27,8 @@ private const val BODY_SP = 13
 data class MarketSource(
     val id: String, val name: String, val link: String, val official: Boolean,
     val at: Long, val count: Int, val error: String?, val skipped: List<String>,
+    // 私有仓库: 用 GitHub 授权读取, 插件只给主人
+    val private: Boolean = false,
 )
 
 private fun parse(b: JSONObject?): List<MarketSource> {
@@ -37,6 +39,7 @@ private fun parse(b: JSONObject?): List<MarketSource> {
             o.optString("id"), o.optString("name"), o.optString("link"), o.optBoolean("official"),
             o.optLong("at"), o.optInt("count"), o.optString("error").ifEmpty { null },
             (0 until (sk?.length() ?: 0)).mapNotNull { sk?.optString(it) },
+            o.optBoolean("private"),
         )
     }
 }
@@ -68,7 +71,7 @@ fun MarketSourcesPage(onBack: () -> Unit) {
     }
     LaunchedEffect(Unit) { val r = call(context, "GET", listOf(PATH)); list = parse(r.body); error = r.error }
     SettingsPageFrame("市场源", onBack) {
-        Paragraph("填 GitHub 仓库首页或目录链接 (仓库根目录或 plugins/ 下有 index.json)。索引每 30 分钟最多拉一次, 介绍与提示词按版本缓存, 不常用时几乎不产生请求。", c.textSecondary, BODY_SP)
+        Paragraph("填 GitHub 仓库首页或目录链接 (仓库根目录或 plugins/ 下有 index.json)。私有仓库由主人添加, 用 GitHub 授权读取, 里面的插件只给主人。索引每 30 分钟最多拉一次, 介绍与提示词按版本缓存, 不常用时几乎不产生请求。", c.textSecondary, BODY_SP)
         error?.let { SettingsGroup { NoteRow(it, c.danger) } }
         SettingsGroup("添加") {
             InputRow("链接", link, "https://github.com/用户/仓库") { link = it }
@@ -83,7 +86,8 @@ fun MarketSourcesPage(onBack: () -> Unit) {
                 s.at > 0 -> "${s.count} 个插件 · ${time(s.at)} 拉取"
                 else -> "还没拉取"
             }
-            SettingsGroup(if (s.official) "${s.name} (官方)" else s.name, s.skipped.takeIf { it.isNotEmpty() }?.let { "跳过: ${it.joinToString("; ")}" }) {
+            val tag = when { s.official -> " (官方)"; s.private -> " (私有)"; else -> "" }
+            SettingsGroup(s.name + tag, s.skipped.takeIf { it.isNotEmpty() }?.let { "跳过: ${it.joinToString("; ")}" }) {
                 NoteRow(s.link, c.textSecondary)
                 RowDivider(false)
                 NoteRow(state, if (s.error != null) c.danger else null)

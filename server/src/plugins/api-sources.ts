@@ -16,7 +16,7 @@ async function add(c: ReqCtx): Promise<Response> {
   if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
   const body = (await readJson(c.req)) as { link?: unknown } | null;
   if (typeof body?.link !== "string") return fail(400, "需要 link");
-  return json(await c.core.market.addSource(body.link), 201);
+  return json(await c.core.market.addSource(body.link, c.who.owner), 201);
 }
 
 function remove(c: ReqCtx): Response {
