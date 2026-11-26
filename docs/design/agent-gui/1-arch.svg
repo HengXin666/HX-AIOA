@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1700" height="770" viewBox="0 0 1700 770">
-<defs><marker id="ah2e86c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e86c1"/></marker><marker id="ahd68910" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d68910"/></marker></defs>
+<defs><marker id="ahd68910" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d68910"/></marker><marker id="ah2e86c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e86c1"/></marker></defs>
 <rect width="100%" height="100%" fill="#fbfbfd"/>
 <text x="30" y="42" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#1f2430" font-weight="bold" text-anchor="start">Agent GUI 架构草案 (#126)</text>
 <text x="30" y="68" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13.5" fill="#5d6778" font-weight="normal" text-anchor="start">执行只在主机; 服务端只做中继与审批队列; 客户端一个入口两种模式。蓝线 = 控制面 (审批模式只用它), 橙线 = 数据面 (工作模式, 有人看才推)。</text>
@@ -66,27 +66,29 @@
 <rect x="1166" y="140" width="496" height="117.0" rx="8" fill="#fff" stroke="#c9ced8" stroke-width="1.2"/>
 <text x="1176" y="164" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">统一模型</text>
 <text x="1176" y="184.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">host / project / session / turn / item / request</text>
-<text x="1176" y="203.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">工具种类: read edit exec search fetch mcp</text>
-<text x="1176" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">能力表: steer interrupt plan resume fork rollback modes</text>
-<text x="1176" y="240.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">会话全文只存主机 (JSONL), 审批卡片的关键上下文在主机算好</text>
-<rect x="1166" y="277.0" width="496" height="79.5" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
-<text x="1176" y="301.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">Claude Code 适配</text>
-<text x="1176" y="321.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">Agent SDK 流式输入</text>
-<text x="1176" y="340.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">canUseTool -&gt; request, 原生选项原样透传</text>
-<rect x="1166" y="368.5" width="496" height="79.5" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
-<text x="1176" y="392.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">Codex 适配</text>
-<text x="1176" y="413.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">codex app-server JSON-RPC</text>
-<text x="1176" y="431.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">命令 / 改文件审批 -&gt; request</text>
-<rect x="1166" y="460.0" width="496" height="79.5" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
-<text x="1176" y="484.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">ACP 通用适配</text>
-<text x="1176" y="504.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">session/prompt, session/update, request_permission</text>
-<text x="1176" y="523.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">DSH 若说 ACP 则零适配 (待确认)</text>
-<rect x="1166" y="551.5" width="496" height="117.0" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
-<text x="1176" y="575.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">hooks 接管终端里的 claude (第一步, #58)</text>
-<text x="1176" y="596.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">PermissionRequest / Notification / Stop hook 调 aioa hook</text>
-<text x="1176" y="614.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">手机答了 -&gt; hook 输出 -&gt; CLI 继续</text>
-<text x="1176" y="633.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">电脑先答 -&gt; hook 结束 -&gt; as_unreq 撤回</text>
-<text x="1176" y="652.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">保留原生 TUI, 不需要 tmux send-keys</text>
+<text x="1176" y="203.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">工具种类与审批选项直接用 ACP 的 ToolKind / PermissionOption</text>
+<text x="1176" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">能力表: 来自 initialize 与会话配置</text>
+<text x="1176" y="240.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">会话全文只存主机, 审批卡片的关键上下文与风险档在主机算好</text>
+<rect x="1166" y="277.0" width="496" height="98.25" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="1176" y="301.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">ACP 客户端 (唯一适配, 全部 Agent 走 ACP)</text>
+<text x="1176" y="321.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">initialize / session/new / prompt / cancel / load</text>
+<text x="1176" y="340.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">session/update -&gt; as_ev, request_permission -&gt; as_req</text>
+<text x="1176" y="359.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">能力与选项全部来自 Agent 公布, 不伪造</text>
+<rect x="1166" y="387.25" width="496" height="117.0" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="1176" y="411.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">Agent (一行启动命令)</text>
+<text x="1176" y="431.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">claude-agent-acp (Claude Code)</text>
+<text x="1176" y="450.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">codex-acp (Codex)</text>
+<text x="1176" y="469.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">DSH: @openma/deepseek-harness-acp 或自写 dsh 插件</text>
+<text x="1176" y="488.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">以后的 ACP Agent 零代码接入</text>
+<rect x="1166" y="516.25" width="496" height="117.0" rx="8" fill="#f5eef8" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="1176" y="540.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">统计 (主机算好, 1 秒一帧)</text>
+<text x="1176" y="560.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">上下文: usage_update used / size</text>
+<text x="1176" y="579.5" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">缓存命中: 每轮 usage 的缓存读写</text>
+<text x="1176" y="598.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">tok/s: 流式块估算, 只计活跃输出, 轮末用真实值校准</text>
+<text x="1176" y="617.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">可选 _meta hx.aioa/step: 每步精确值</text>
+<rect x="1166" y="645.25" width="496" height="60.75" rx="8" fill="#f4f6f8" stroke="#c9ced8" stroke-width="1.2"/>
+<text x="1176" y="669.25" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#1f2430" font-weight="bold" text-anchor="start">可选: hooks 接管终端里开的 claude (#58)</text>
+<text x="1176" y="689.75" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5" fill="#1f2430" font-weight="normal" text-anchor="start">PermissionRequest hook -&gt; 同一张审批卡片</text>
 <path d="M1166,175 L1022,175" fill="none" stroke="#2e86c1" stroke-width="1.6" marker-end="url(#ah2e86c1)"/>
 <rect x="1034.26" y="155" width="119.47999999999998" height="18" rx="4" fill="#ffffff" stroke="none" stroke-width="0"/>
 <text x="1094.0" y="168" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="11.5" fill="#2e86c1" font-weight="normal" text-anchor="middle">as_req / as_unreq</text>
