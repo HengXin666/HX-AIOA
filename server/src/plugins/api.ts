@@ -26,6 +26,7 @@ import { ApiFail, fail, json, readJson, pathParam } from "../http";
 import { TODO_ROUTES } from "./api-todos";
 import { usesGh } from "../gh/gate";
 import { privatePlugin } from "./private";
+import { relocateMoved, relocateOfficial } from "./relocate";
 import { acctOf, isAdmin } from "./who";
 import { L2A } from "./l2a";
 import { renderTask } from "./store";
@@ -52,6 +53,8 @@ function viewer(c: ReqCtx): string {
 async function list(c: ReqCtx): Promise<Response> {
   const uid = viewer(c);
   if (c.who.owner) for (const p of c.core.plugins.list()) await autoUpgrade(c.core, p.id);
+  // 官方源搬到主人私有源的插件: 先就地换源, 免得被当成下架
+  if (c.who.owner) await relocateOfficial(c.core).catch(() => []);
   const installed = new Map(c.who.owner ? c.core.plugins.list().map((p) => [p.id, p]) : []);
   // 主人看得到所有人的开发插件 (只能撤, 不能用)
   const allow = new Map(c.core.kernel.visible(uid, c.who.owner).map((a) => [a.id, a]));
@@ -111,6 +114,8 @@ async function detail(c: ReqCtx): Promise<Response> {
       snap = row;
     }
   }
+  // 从官方源搬到主人私有源的 (#124): 主人看详情时就地换源, 之后按私有源的新版本正常显示与放行
+  if (c.who.owner && row && fresh?.src.private) await relocateMoved(c.core, id);
   // 放行时的源和现在市场里的不是同一个 (换源): 也显示快照, 不把别人的内容挂在 "已放行" 旁边
   if (!snap && row && !row.meta.dev && (row.meta.source ?? OFFICIAL_SOURCE) !== fresh!.src.id) snap = row;
   const gone = !!snap && !devRow;

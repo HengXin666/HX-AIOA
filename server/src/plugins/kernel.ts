@@ -173,6 +173,24 @@ export class PluginKernel {
     this.register(next);
   }
 
+  /**
+   * 换源迁移 (#124): 只改白名单记下的源与私有标记, 快照, 版本, 注册, 主人的启用都不动;
+   * 换成私有时除 keep (主人) 外的账号一律停用 (数据保留)。返回被停用的账号。
+   */
+  relocate(id: string, source: string, priv: boolean, keep: string): string[] {
+    this.load();
+    const row = this.allow.get(id);
+    if (!row) return [];
+    const { private: _p, source: _s, ...rest } = row.meta;
+    const next: AllowRow = { ...row, meta: { ...rest, source, ...(priv ? { private: true as const } : {}) } };
+    this.store.putAllow(next);
+    this.allow.set(id, next);
+    if (!priv) return [];
+    const off = [...this.enabled].filter(([uid, s]) => uid !== keep && s.has(id)).map(([uid]) => uid);
+    for (const uid of off) this.setEnabled(uid, id, false);
+    return off;
+  }
+
   /** 撤销放行: 返回原先启用了它的账号。 */
   revoke(id: string): string[] {
     this.load();

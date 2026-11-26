@@ -28,9 +28,11 @@
 | DELETE | `/api/v1/plugin-sources/{id}` | 管理员 | 移除源与它的缓存; 已放行的插件不受影响 |
 | POST | `/api/v1/plugin-sources-refresh` | 管理员 | 各源强制重拉索引 (出错的源也立刻重试), 清掉介绍与提示词缓存 |
 
-私有源: GitHub 仓库公开读全是 404 时, 主人添加会再用部署的 GitHub 授权 (GitHub 授权插件里主人的令牌, 带 `Authorization` 读 raw) 试一遍, 读到了记为 `private: true`。只有主人能加 (令牌是主人的); 私有源的插件只出现在主人的列表与详情里, 子号启用返回 403; 白名单记 `private: true`, 源被删也照样只给主人; 私有源和私有插件只有主人能放行, 撤销, 移除; 白名单视图与推送对子号过滤掉私有插件; 带令牌的请求不跟随跳转。授权过期时用旧索引, 新内容拉不到。主人的私有插件仓库: `HengXin666/aioa-private-plugins`。
+私有源: GitHub 仓库公开读全是 404 时, 主人添加会再用部署的 GitHub 授权 (GitHub 授权插件里主人的令牌, 带 `Authorization` 读 raw) 试一遍, 读到了记为 `private: true`。只有主人能加 (令牌是主人的); 私有源的插件只出现在主人的列表与详情里, 子号启用返回 403; 白名单记 `private: true`, 源被删也照样只给主人; 私有源和私有插件只有主人能放行, 撤销, 移除; 白名单视图与推送对子号过滤掉私有插件; 带令牌的请求不跟随跳转。授权过期时用旧索引, 新内容拉不到; 已放行的照用快照, 启用与门控不受影响。主人的私有插件仓库: `HengXin666/aioa-private-plugins`。
 
-合并规则: 先出现的源为准, 后面同 id 的跳过并记在源上; 第三方源的 id 必须是 `<作者>.<名字>`, 不能用官方命名空间 `hengxin666.*` 或旧 id 别名, 不能声明 `server: true` (放行时 400); 第三方插件同样要管理员逐个放行。列表条目带 `source` (源 id), 第三方的带 `sourceName`; 详情带 `source` (第三方源名)。
+私有源是主人自己的仓库, 可以提供官方命名空间 `hengxin666.*` 与这次部署里已有的服务端插件 (`L2A_PLUGINS`), 用来把官方插件搬成私有 (#124)。换源迁移: 白名单里记的是官方源, 官方索引已经没有 (官方源这次拉取没出错), 主人私有源有同 id 时, 主人打开市场列表, 看详情或放行时就地把白名单的 `source` 改成私有源并标 `private: true`; 快照, 版本, 主人的启用, 安装记录, 插件数据都不动, 不撤销不拆除, 新版本照常看详情后带 `digest` 放行。其他账号的启用随之停用, 数据保留。搬迁顺序: 先部署带这段逻辑的服务端, 再在私有仓库上架, 最后从官方 index 删除; 服务端插件的代码 (路由, 存储) 留在主仓。
+
+合并规则: 先出现的源为准, 后面同 id 的跳过并记在源上; 第三方源的 id 必须是 `<作者>.<名字>`, 不能用官方命名空间 `hengxin666.*` 或旧 id 别名, 不能声明 `server: true` (放行时 400), 主人私有源的例外见上; 第三方插件同样要管理员逐个放行。列表条目带 `source` (源 id), 第三方的带 `sourceName`; 详情带 `source` (第三方源名)。
 
 第三方插件的安全约束:
 
@@ -90,7 +92,7 @@
 | 插件 | 门控 | 数据 |
 | --- | --- | --- |
 | `hengxin666.github` (GitHub 接入) | 主人没启用时: `/api/v1/github/*` 404 (云 Agent 的 key 也是), `POST /api/v1/hooks/github/...` 404 不入库, cron 不回填 | 现有 `gh_*` 表, 不进 pdata; 主人停用带 `?purge=1` 时清空 |
-| `hengxin666.hxoa` (hxoa 接入) | 主人没启用时: `/api/v1/hxoa/*` 404 | `hxoa` 表 (接入与令牌); 主人停用带 `?purge=1` 时清空 |
+| `hengxin666.hxoa` (hxoa 接入, 清单在主人私有源, #124) | 主人没启用时: `/api/v1/hxoa/*` 404 | `hxoa` 表 (接入与令牌); 主人停用带 `?purge=1` 时清空 |
 | `hengxin666.todo` (待办) | 按调用者自己的账号 (个人归属), 见下文 | pdata |
 | `hengxin666.gh` (GitHub 授权, 旧 id `gh`) | 主人没启用时: `/api/v1/gh/*` 404, 待办 issue 同步不跑, 专属指令不带 issue 一节; 提供 `service:gh.issues`, 声明了它的插件 (待办) 的 Agent 默认可用 | `gh` 表 (加密令牌, 规则, Agent 开关, 操作记录); 主人停用带 `?purge=1` 时清空 |
 
@@ -200,5 +202,5 @@
 ## 验证
 
 - 单元: `npm test` (清单, 冲突检测, 内核, pdata, 逐扩展点契约 `plugin-ext-contract.test.ts`, 开发插件, 握手档位)。
-- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。GitHub 授权与待办关联: `tools/e2e-gh-todo.mjs`。开发模式与握手: `tools/e2e-plugin-dev.mjs`。hxoa 管理 (打真实 hxoa 2.4.1+, 需 `HXOA_BASE` / `HXOA_ADMIN` / `HXOA_DIR`): `tools/e2e-hxoa-plugin.mjs`。线上版 (插件体系之前) 升级: 同一个 `--persist-to` 目录先用旧版跑 `AIOA_PHASE=seed tools/e2e-upgrade-main.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次)。
+- 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。GitHub 授权与待办关联: `tools/e2e-gh-todo.mjs`。开发模式与握手: `tools/e2e-plugin-dev.mjs`。hxoa 管理 (打真实 hxoa 2.4.1+, 需 `HXOA_BASE` / `HXOA_ADMIN` / `HXOA_DIR`, `AIOA_MARKET_ROOT` 指私有插件仓库的本地克隆): `tools/e2e-hxoa-plugin.mjs`。线上版 (插件体系之前) 升级: 同一个 `--persist-to` 目录先用旧版跑 `AIOA_PHASE=seed tools/e2e-upgrade-main.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次)。
 - 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`)。

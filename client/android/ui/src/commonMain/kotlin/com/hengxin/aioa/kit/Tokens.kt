@@ -22,6 +22,10 @@ data class AioaColors(
     val success: Color,
     val warning: Color,
     val danger: Color,
+    // 侧栏底, 浮层 (菜单) 底, 遮罩; 主题插件没给时按明暗取默认
+    val sidebar: Color = background,
+    val popover: Color = surface,
+    val scrim: Color = Color.Black,
 )
 
 /** 尺寸令牌: 圆角, 间距, 是否紧凑。 */
@@ -61,6 +65,7 @@ private fun AioaColors.with(o: Map<String, Color>): AioaColors {
         border = c("border", border), text = c("text", text), textSecondary = c("textSecondary", textSecondary),
         accent = accent, onAccent = onAccent, success = c("success", success),
         warning = c("warning", warning), danger = c("danger", danger),
+        sidebar = c("sidebar", sidebar), popover = c("popover", popover), scrim = c("scrim", scrim),
     )
 }
 
@@ -80,19 +85,24 @@ object Minimal {
         success = Color(0xFF1A9F4B),
         warning = Color(0xFFE08600),
         danger = Color(0xFFD93025),
+        sidebar = Color(0xFFF9F9F9),
+        popover = Color(0xFFFFFFFF),
     )
+    // 深色取 ChatGPT App 实测色 (2026): 纯黑底, 控件 #212121 + 细描边
     val dark = AioaColors(
-        background = Color(0xFF212121),
-        surface = Color(0xFF2F2F2F),
-        surfaceAlt = Color(0xFF3A3A3A),
-        border = Color(0xFF3D3D3D),
-        text = Color(0xFFECECEC),
-        textSecondary = Color(0xFF9B9B9B),
-        accent = Color(0xFFECECEC),
-        onAccent = Color(0xFF0D0D0D),
+        background = Color(0xFF000000),
+        surface = Color(0xFF212121),
+        surfaceAlt = Color(0xFF2B2B2B),
+        border = Color(0xFF373737),
+        text = Color(0xFFFFFFFF),
+        textSecondary = Color(0xFFAFAFAF),
+        accent = Color(0xFFFFFFFF),
+        onAccent = Color(0xFF000000),
         success = Color(0xFF34C759),
         warning = Color(0xFFFF9F0A),
         danger = Color(0xFFFF453A),
+        sidebar = Color(0xFF0D0D0D),
+        popover = Color(0xFF212121),
     )
 }
 

@@ -72,6 +72,8 @@
 | [mockups/gh-todo.html](design/mockups/gh-todo.html) | GitHub 授权插件与待办关联 issue 手机设计稿 (#90 #98) |
 | [agent-skill.md](design/agent-skill.md) | 云 Agent 设计统一草案: 现状图, 重构后图, skill 从 Git 下载, 两种提示词 (#117) |
 | [ui-spec/README.md](design/ui-spec/README.md) | 安卓 UI 与交互规范 (对齐 HX-UI 2), 页面关系图 `sitemap.svg`, 可点原型 `prototype.html` (#121) |
+| [ui-spec/home-spaces.md](design/ui-spec/home-spaces.md) | 新总览: ChatGPT 式侧栏, 空间切换, 插件的空间与区块怎么挂 (#121) |
+| [ui-spec/hx-ui-sync.md](design/ui-spec/hx-ui-sync.md) | 安卓端如何跟随 HX-UI: 令牌导出, 组件对照, 版本锁定 (#121) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 
 ## 过程记录 `aegis/`
