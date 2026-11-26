@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.DropMenu
 import com.hengxin.aioa.kit.HomeShell
+import com.hengxin.aioa.kit.HxButton
+import com.hengxin.aioa.kit.HxButtonSize
+import com.hengxin.aioa.kit.HxButtonVariant
 import com.hengxin.aioa.kit.HomeSidebar
 import com.hengxin.aioa.kit.HomeSpace
 import com.hengxin.aioa.kit.HomeTopBar
@@ -147,21 +150,13 @@ private fun Glyph(icon: String, tint: androidx.compose.ui.graphics.Color = Aioa.
 }
 
 @Composable
-private fun Act(label: String, primary: Boolean) {
-    val c = Aioa.colors
-    Box(
-        Modifier.clip(RoundedCornerShape(10.dp)).background(if (primary) c.accent else c.surface)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-    ) { Text(label, if (primary) c.onAccent else c.text, 14, weight = FontWeight.Medium) }
-}
-
-@Composable
 private fun DailySpace() {
     val c = Aioa.colors
     Head("需要我", "2")
     Item({ Glyph("bot", c.warning) }, "DSH 请求部署到生产", "镜像已推送, 健康检查通过", "1 分钟前") {
         Row(Modifier.padding(start = 48.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Act("允许", true); Act("先不", false)
+            HxButton("允许", {}, size = HxButtonSize.Sm)
+            HxButton("先不", {}, variant = HxButtonVariant.Secondary, size = HxButtonSize.Sm)
         }
     }
     Item({ Glyph("mail") }, "GitHub: 有新的登录", "来自 Linux · Chrome, 不是你就去改密码", "8 分钟前")

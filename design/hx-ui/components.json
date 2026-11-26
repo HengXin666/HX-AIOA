@@ -1,0 +1,104 @@
+{
+  "$schema": "hx-ui-tokens/1",
+  "components": {
+    "alert": {
+      "variant": [
+        "default",
+        "info",
+        "success",
+        "warning",
+        "destructive"
+      ],
+      "default": {
+        "variant": "default"
+      }
+    },
+    "badge": {
+      "variant": [
+        "default",
+        "secondary",
+        "destructive",
+        "outline",
+        "ghost",
+        "link"
+      ],
+      "default": {
+        "variant": "default"
+      }
+    },
+    "button": {
+      "variant": [
+        "default",
+        "destructive",
+        "outline",
+        "secondary",
+        "ghost",
+        "link",
+        "shimmer"
+      ],
+      "size": [
+        "default",
+        "xs",
+        "sm",
+        "lg",
+        "icon",
+        "icon-xs",
+        "icon-sm",
+        "icon-lg"
+      ],
+      "default": {
+        "variant": "default",
+        "size": "default"
+      }
+    },
+    "input": {
+      "size": [
+        "sm",
+        "default",
+        "lg"
+      ],
+      "default": {
+        "size": "default"
+      }
+    },
+    "sidebarMenuButton": {
+      "variant": [
+        "default",
+        "outline"
+      ],
+      "size": [
+        "default",
+        "sm",
+        "lg"
+      ],
+      "default": {
+        "variant": "default",
+        "size": "default"
+      }
+    },
+    "tabsList": {
+      "variant": [
+        "default",
+        "line"
+      ],
+      "default": {
+        "variant": "default"
+      }
+    },
+    "toggle": {
+      "variant": [
+        "default",
+        "outline"
+      ],
+      "size": [
+        "default",
+        "sm",
+        "lg"
+      ],
+      "default": {
+        "variant": "default",
+        "size": "default"
+      }
+    }
+  }
+}

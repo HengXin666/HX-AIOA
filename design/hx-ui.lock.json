@@ -1,0 +1,9 @@
+{
+  "version": "2.3.0",
+  "skin": "ink",
+  "source": "https://github.com/HengXin666/HX-UI/releases/download/v2.3.0/hx-ui-2.3.0.tgz",
+  "sha256": {
+    "tokens.json": "26ca692abb56a6065612145201e3bcc3dc6d56f8a016136592ead222dd162f82",
+    "components.json": "f1a86ff003797b0164703545523198056bdc806231466dace03a25b87ebd4795"
+  }
+}
