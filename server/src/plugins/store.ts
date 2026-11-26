@@ -1,17 +1,29 @@
-import { PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type PluginInstall } from "@hx-aioa/protocol";
+import { PLUGIN_VAR_BASE, PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, type MajorChange, type PluginInstall } from "@hx-aioa/protocol";
 import { todoGuide } from "./todo-guide";
 
 type Row = { id: string; body: string };
-// job: 清单里的定时与一句话任务, 重新接入时拼接入语用
-export type PluginJob = { interval?: number; task?: string };
+// job: 清单里的定时与一句话任务, 重新接入时拼接入语用; skill / changes: 已装版本的插件 skill 版本与大版本说明
+export type PluginJob = { interval?: number; task?: string; skill?: string; changes?: MajorChange[] };
 type Saved = { install: PluginInstall; prompt: string; name: string; job?: PluginJob };
 
 /** 已安装的插件: 一行一个, 带安装时拉到的提示词模板, 生成专属指令时不用再联网。 */
 export class PluginStore {
   private cache: Map<string, Saved> | null = null;
+  private majors: Map<string, number> | null = null;
 
   constructor(private readonly sql: SqlStorage) {
     sql.exec("CREATE TABLE IF NOT EXISTS plugin (id TEXT PRIMARY KEY, body TEXT NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS skill_major (k TEXT PRIMARY KEY, at INTEGER NOT NULL)");
+  }
+
+  /** skill 大版本 (如 "hx-aioa@2") 第一次被要求的时间, 兼容期从这天算; 每个大版本只写一次。 */
+  majorSince(key: string, now = Date.now()): number {
+    this.majors ??= new Map(this.sql.exec<{ k: string; at: number }>("SELECT k, at FROM skill_major").toArray().map((r) => [r.k, r.at]));
+    const at = this.majors.get(key);
+    if (at !== undefined) return at;
+    this.sql.exec("INSERT OR IGNORE INTO skill_major (k, at) VALUES (?, ?)", key, now);
+    this.majors.set(key, now);
+    return now;
   }
 
   private all(): Map<string, Saved> {

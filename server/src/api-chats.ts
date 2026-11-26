@@ -37,7 +37,7 @@ import {
   type OnboardResult,
   type Scope,
 } from "@hx-aioa/protocol";
-import { agentBootstrap } from "./agent-prompt";
+import { agentSetup } from "./agent-prompt";
 import { acked, guideFor } from "./agent-sync";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
@@ -201,7 +201,7 @@ async function clearChat(c: ReqCtx): Promise<Response> {
   return json({ deleted, cleared } satisfies ChatCleared);
 }
 
-type AgentInput = { name: string; reads: string[]; job?: AgentJob };
+type AgentInput = { name: string; reads: string[]; job?: AgentJob; autoMajor?: boolean };
 const SEND_SCOPE: Scope = "messages:send";
 const MARKDOWN = "text/markdown; charset=utf-8";
 
@@ -218,6 +218,7 @@ function parseAgent(raw: unknown, partial: boolean): Partial<AgentInput> | strin
   const interval = typeof raw.interval === "number" && raw.interval >= 10 ? Math.round(raw.interval) : undefined;
   const task = typeof raw.task === "string" && raw.task.trim() ? raw.task.trim().slice(0, MAX_AGENT_TASK) : undefined;
   if (interval || task) out.job = { ...(interval ? { interval } : {}), ...(task ? { task } : {}) };
+  if (typeof raw.autoMajor === "boolean") out.autoMajor = raw.autoMajor;
   return out;
 }
 
@@ -253,7 +254,7 @@ export async function createAgent(core: Core, channel: string, name: string, rea
   const { info, key } = await issueKey(core, channel, draft);
   src.keyId = info.id;
   core.registry.saveSource(src);
-  const agent: ChatAgent = { ...draft, keyId: info.id, created: Date.now(), pending: true, ...(plugin ? { plugin } : {}) };
+  const agent: ChatAgent = { ...draft, keyId: info.id, created: Date.now(), pending: true, setup: 1, ...(plugin ? { plugin } : {}) };
   saveAgents(core, channel, [...(core.chats.chat(channel)?.agents ?? []), agent]);
   return { agent, key };
 }
@@ -272,7 +273,8 @@ async function addAgent(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
   const { agent, key } = await createAgent(c.core, channel, p.name!, p.reads ?? []);
-  return json({ agent, prompt: agentBootstrap(baseOf(c.url), titleOf(c.core, channel), key, p.job), key } satisfies OnboardResult);
+  const prompt = agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: 1, interval: p.job?.interval, task: p.job?.task, key });
+  return json({ agent, prompt, key } satisfies OnboardResult);
 }
 
 // 重新接入: 作废旧 key, 发新 key, 来源与历史消息不变
@@ -285,15 +287,14 @@ async function rotateAgent(c: ReqCtx): Promise<Response> {
   const src = c.core.registry.source(old.sourceId);
   if (src) c.core.registry.saveSource({ ...src, keyId: info.id });
   const { brief: _b, ...rest } = old;
-  const agent: ChatAgent = { ...rest, keyId: info.id, rotated: Date.now(), pending: true };
+  const agent: ChatAgent = { ...rest, keyId: info.id, rotated: Date.now(), pending: true, setup: old.setup ?? 1 };
   saveAgents(c.core, channel, (meta?.agents ?? []).map((x) => (x.keyId === old.keyId ? agent : x)));
   if (agent.plugin) {
     // 插件记录跟着换 keyId, 否则卸载时找不到这个 Agent
     const rec = c.core.plugins.get(agent.plugin);
     if (rec?.keyId === old.keyId) c.core.plugins.setInstall({ ...rec, keyId: info.id });
   }
-  const job = agent.plugin ? (c.core.plugins.job(agent.plugin) ?? {}) : undefined;
-  return json({ agent, prompt: agentBootstrap(baseOf(c.url), titleOf(c.core, channel), key, job), key } satisfies OnboardResult);
+  return json({ agent, prompt: setupPrompt(c, channel, agent, key), key } satisfies OnboardResult);
 }
 
 async function patchAgent(c: ReqCtx): Promise<Response> {
@@ -303,7 +304,10 @@ async function patchAgent(c: ReqCtx): Promise<Response> {
   const p = parseAgent(await readJson(c.req), true);
   if (typeof p === "string") return fail(400, p);
   const base = baseOf(c.url);
-  const agent: ChatAgent = { ...old, ...p };
+  const { job: _j, ...picked } = p;
+  const agent: ChatAgent = { ...old, ...picked };
+  // 大更新自动执行的授权写在接入语里, 拨动开关就要重发接入语
+  if (p.autoMajor !== undefined && p.autoMajor !== !!old.autoMajor) agent.setup = (old.setup ?? 1) + 1;
   // 指令内容变了, 等它下次拉取后重新报到
   if (guideFor(c.core, base, channel, agent).version !== guideFor(c.core, base, channel, old).version) agent.pending = true;
   // 读权限变了就改 key 的白名单与 scope, key 本身不变
@@ -324,10 +328,18 @@ function removeAgent(c: ReqCtx): Response {
   return json({ ok: true });
 }
 
+// 接入语: 给 key 时是新接入, 不给时是更新用 (不含密钥)
+function setupPrompt(c: ReqCtx, channel: string, agent: ChatAgent, key?: string): string {
+  const job = agent.plugin ? c.core.plugins.job(agent.plugin) : undefined;
+  return agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: agent.setup ?? 1, auto: agent.autoMajor, interval: job?.interval, ...(key ? { key } : {}) });
+}
+
+// skill 版 Agent (有接入版本或上报过 skill) 给更新用接入语, 老 Agent 仍给专属指令
 function agentPromptOf(c: ReqCtx): Response {
   const channel = param(c, 0);
   const agent = agentOf(c.core.chats.chat(channel), param(c, 1));
-  return json({ agent, prompt: guideFor(c.core, baseOf(c.url), channel, agent).text });
+  const prompt = agent.setup || agent.skills ? setupPrompt(c, channel, agent) : guideFor(c.core, baseOf(c.url), channel, agent).text;
+  return json({ agent, prompt });
 }
 
 // 按 key 找到它所在的群和 Agent 资料

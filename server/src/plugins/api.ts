@@ -18,7 +18,7 @@ import {
   type PluginInstalled,
   type PluginList,
 } from "@hx-aioa/protocol";
-import { agentBootstrap } from "../agent-prompt";
+import { agentSetup } from "../agent-prompt";
 import { baseOf, createAgent, dropAgent } from "../api-chats";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, PATCH, POST } from "../constants";
 import { type Core, OWNER, ROOM, type ReqCtx, type Route, route } from "../core";
@@ -165,11 +165,11 @@ async function install(c: ReqCtx): Promise<Response> {
     return fail(409, `插件 ${id} 在安装期间被撤销或换了版本, 请重试`, CODE_CONFLICT);
   }
   const rec: PluginInstall = { id, version: m.version, name: m.name, channel, keyId: agent.keyId, installed: Date.now(), ...(space ? { space } : {}) };
-  const job = { interval: m.agent.interval, task: m.agent.task };
+  const job = { interval: m.agent.interval, task: m.agent.task, skill: m.agent.skill, changes: m.agent.changes };
   c.core.plugins.save(rec, m.name, prompt, job);
   const uid = c.core.users.ownerId();
   if (c.core.kernel.setEnabled(uid, id, true)) pushPlugin(c.core, id, "enabled", { uid, version: m.version });
-  return json({ install: rec, prompt: agentBootstrap(baseOf(c.url), title, key, job), key } satisfies PluginInstalled);
+  return json({ install: rec, prompt: agentSetup(baseOf(c.url), { title, channel, setup: agent.setup ?? 1, interval: job.interval, key }), key } satisfies PluginInstalled);
 }
 
 // 手动更新: 不看自动开关, 版本一样也重新拉一遍 (市场缓存最多 5 分钟)

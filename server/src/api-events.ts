@@ -50,6 +50,7 @@ import { ApiFail, badJson, clampInt, fail, json, readJson } from "./http";
 import { textToEventData } from "./legacy";
 import { canRead } from "./api-chats";
 import { touchAgent } from "./api-presence";
+import { coversOf, markDone } from "./api-agent-next";
 import { feedGuard } from "./feed-guard";
 import { refOf } from "./chat";
 import { groupOf } from "./store";
@@ -174,7 +175,12 @@ async function postMessage(c: ReqCtx): Promise<Response> {
     if (!r || !grp || !canRead(c.core, c.who, grp)) return fail(400, "reply 必须是可读群里的消息 seq");
     input.reply = refOf(r);
   }
+  // covers: 这条回复处理完了哪些消息, 发送成功后连同回复本身记为已处理
+  const covers = coversOf(c.core, c.who, (body as Record<string, unknown>).covers);
+  if (typeof covers === "string") return fail(400, covers);
   const out = await writeEvent(c.core, c.who, input);
+  const sent = covers ? c.core.store.get(out.id)?.seq : undefined;
+  if (covers) markDone(c.core, covers.channel, covers.keyId, sent ? [...covers.seqs, sent] : covers.seqs);
   // Agent 发出回复就不再显示 "正在输入"
   if (!c.who.owner && out.channel) c.core.presence.sent(out.channel, c.who.key.id);
   if (!c.who.owner) touchAgent(c.core, c.who.key.id);

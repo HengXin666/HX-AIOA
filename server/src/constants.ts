@@ -115,3 +115,11 @@ export const OWNER_NAME = "主人";
 export const WORKER_DAY_LIMIT = 100_000;
 // 仓库详情里最多留几个活跃分支
 export const GITHUB_BRANCHES = 8;
+
+// 云 Agent skill 化 (protocol agent-skill.ts)
+export const CODE_SKILL_EXPIRED = "skill_major_expired";
+export const QUERY_BRIEF = "brief";
+export const QUERY_START = "start";
+export const QUERY_MEMORY = "memory";
+export const FLAG_ON = "1";
+export const DAY_MS = 86_400_000;

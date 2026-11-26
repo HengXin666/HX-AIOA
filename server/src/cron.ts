@@ -7,6 +7,8 @@ import { syncTodoIssues, SYNC_FAIL } from "./gh/todo-sync";
 import { githubOn } from "./github/gate";
 import { ApiFail } from "./http";
 
+export { majorRemind } from "./agent-want";
+
 const CF_SOURCE = "CF 额度";
 const KEY_CF_ALERT = "cf_alert_day";
 const CF_ALERT_RATIO = 0.8;

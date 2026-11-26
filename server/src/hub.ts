@@ -75,7 +75,7 @@ import { joinPage } from "./join-page";
 import { authorOf } from "./room-access";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
-import { halfHourly } from "./cron";
+import { halfHourly, majorRemind } from "./cron";
 import { buildOverview } from "./group";
 import { chatInput } from "./chat";
 import { ChatStore } from "./chat-store";
@@ -171,7 +171,7 @@ export class Hub extends DurableObject<Env> {
 
   // RPC (每天的清理 cron): 删掉消息已不在的邮件索引
   async mailPrune(): Promise<number> {
-    return this.core.mail.prune();
+    return majorRemind(this.core).catch((e) => console.error("大更新提醒失败:", e)).then(() => this.core.mail.prune());
   }
 
   // 终端开关记一条消息到 "终端" 群: 打开时按规则提醒, 关闭时静默
