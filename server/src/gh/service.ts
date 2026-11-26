@@ -60,7 +60,8 @@ export class GhService {
   }
 
   private renewable(s: GhSecret): boolean {
-    return !!(s.refresh && this.env.GH_CLIENT_ID && this.env.GH_CLIENT_SECRET) && (!s.refreshExpires || s.refreshExpires > Date.now());
+    // 设备码拿到的令牌续期不用 client_secret (GitHub 文档), 有 refresh 就能续; 配了 secret 也照样带上
+    return !!(s.refresh && this.env.GH_CLIENT_ID) && (!s.refreshExpires || s.refreshExpires > Date.now());
   }
 
   async token(): Promise<string> {
@@ -70,12 +71,21 @@ export class GhService {
     return unseal(this.secret, s.token);
   }
 
-  private async refresh(s: GhSecret): Promise<string> {
+  // refresh token 一次性: 同一时刻只续一次, 并发请求共用结果, 否则第二个会拿旧 refresh 失败
+  private refreshing: Promise<string> | null = null;
+
+  private refresh(s: GhSecret): Promise<string> {
+    this.refreshing ??= this.doRefresh(s).finally(() => {
+      this.refreshing = null;
+    });
+    return this.refreshing;
+  }
+
+  private async doRefresh(s: GhSecret): Promise<string> {
     const id = this.env.GH_CLIENT_ID;
-    const sec = this.env.GH_CLIENT_SECRET;
-    if (!id || !sec || !s.refresh) throw new ApiFail(401, "gh_expired", "GitHub 授权已过期, 请主人重新授权");
-    const g = await refreshGrant(id, sec, await unseal(this.secret, s.refresh));
-    if (!g.access_token) throw new ApiFail(401, "gh_expired", `GitHub 续期失败: ${g.error ?? "未知"}, 请重新授权`);
+    if (!id || !s.refresh || (s.refreshExpires && s.refreshExpires <= Date.now())) throw new ApiFail(401, "gh_expired", "GitHub 授权已过期且无法续期, 请主人在 GitHub 授权插件里重新授权");
+    const g = await refreshGrant(id, this.env.GH_CLIENT_SECRET, await unseal(this.secret, s.refresh));
+    if (!g.access_token) throw new ApiFail(401, "gh_expired", `GitHub 续期失败: ${g.error ?? "未知"}, 请主人重新授权`);
     await this.save(s.kind, g, s.login);
     return g.access_token;
   }
