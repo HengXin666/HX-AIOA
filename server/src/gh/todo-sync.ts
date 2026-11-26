@@ -8,7 +8,7 @@ import { ghOn } from "./gate";
 // GitHub issue -> 待办状态: 关闭 = 已完成; 有评论 = 进行中; 重新打开 = 回到待进行。挂起由人定, 同步不动它
 const CHUNK = 40;
 const SYNC_GAP = 5 * 60_000;
-const NOTICE_SOURCE = { id: "system:gh", name: "系统", icon: "circle-check-big" };
+const NOTICE_SOURCE = { id: "system:gh", name: "GitHub 同步", icon: "circle-check-big" };
 const NOTICE_ROUTE: RouteInfo = { action: "silent", channels: ["ws"], reason: "GitHub 同步" };
 const FIELDS = "state title comments { totalCount } parent { number } subIssuesSummary { total }";
 const FIELDS_LITE = "state title comments { totalCount }";

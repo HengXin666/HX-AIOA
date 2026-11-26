@@ -48,7 +48,6 @@ import com.hengxin.aioa.ui.chat.Names
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.HtmlCard
-import com.hengxin.aioa.ui.chat.LetterAvatar
 import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
 import com.hengxin.aioa.ui.chat.colorOf
@@ -71,6 +70,8 @@ class BubbleActions(
     val onJump: (Long) -> Unit,
     // mode: recall / delete
     val onRemove: (ServerFrame.Msg, String) -> Unit = { _, _ -> },
+    // 点发送者头像 (主人可换头像, #123); null 表示不可点
+    val onSender: ((ServerFrame.Msg) -> Unit)? = null,
 )
 
 /** 一条气泡在列表里的位置: 是否一串的第一条 (显示名字与头像)。 */
@@ -98,7 +99,8 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
         verticalAlignment = Alignment.Top,
     ) {
         if (!mine && spot.showSender) {
-            if (spot.head) LetterAvatar(Names.of(msg), SENDER_AVATAR) else Spacer(Modifier.width(SENDER_AVATAR))
+            val tap = actions?.onSender
+            if (spot.head) com.hengxin.aioa.ui.chat.SenderAvatar(msg, SENDER_AVATAR, if (tap != null) Modifier.clickable { tap(msg) } else Modifier) else Spacer(Modifier.width(SENDER_AVATAR))
             Spacer(Modifier.width(6.dp))
         }
         Box {

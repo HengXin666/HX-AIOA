@@ -1,4 +1,4 @@
-import type { AgentMemory, ChatMeta, ChatPatch, Envelope, Favorite } from "@hx-aioa/protocol";
+import type { AgentMemory, ChatMeta, ChatPatch, Envelope, Favorite, SenderMeta } from "@hx-aioa/protocol";
 
 type MetaRow = { channel: string; body: string };
 type FavRow = { seq: number; saved: number; body: string };
@@ -26,6 +26,21 @@ export class ChatStore {
     sql.exec("CREATE TABLE IF NOT EXISTS fav (seq INTEGER PRIMARY KEY, saved INTEGER NOT NULL, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS avatar (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created INTEGER NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS agent_memory (who TEXT PRIMARY KEY, text TEXT NOT NULL, updated INTEGER NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS sender_meta (sid TEXT PRIMARY KEY, avatar TEXT NOT NULL, updated INTEGER NOT NULL)");
+  }
+
+  /** 设过头像的发送者 (#123)。 */
+  senders(): SenderMeta[] {
+    return this.sql.exec<SenderMeta>("SELECT sid, avatar, updated FROM sender_meta ORDER BY sid").toArray().map((r) => ({ ...r }));
+  }
+
+  /** 设或清 (null) 某个发送者的头像; 返回是否有变化。 */
+  setSender(sid: string, avatar: string | null, now = Date.now()): boolean {
+    const cur = this.sql.exec<{ avatar: string }>("SELECT avatar FROM sender_meta WHERE sid = ?", sid).toArray()[0];
+    if ((cur?.avatar ?? null) === avatar) return false;
+    if (avatar === null) this.sql.exec("DELETE FROM sender_meta WHERE sid = ?", sid);
+    else this.sql.exec("INSERT OR REPLACE INTO sender_meta (sid, avatar, updated) VALUES (?, ?, ?)", sid, avatar, now);
+    return true;
   }
 
   /** Agent 的长期记忆, who 为来源 id (换 key 不丢)。 */
