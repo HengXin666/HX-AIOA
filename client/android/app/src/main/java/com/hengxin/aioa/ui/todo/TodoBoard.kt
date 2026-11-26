@@ -96,6 +96,7 @@ fun TodoBoard(spaces: SpacesState, channel: String?, onJump: (String, Long) -> U
                 }
             }
         }
+        UndoBar(spaces, Modifier.align(Alignment.BottomStart).padding(start = 14.dp, end = 84.dp, bottom = 22.dp))
         AddButton(Modifier.align(Alignment.BottomEnd).padding(18.dp)) {
             val group = channel?.takeIf { !everywhere } ?: homeGroup(rows.orEmpty())
             editing = TodoRow(newTodoId(), "", null, TodoRow.STATE_OPEN, 2, null, 0, channel = group, area = filter.areas.singleOrNull()?.takeIf { it != TodoRow.AREA_NONE })
@@ -108,6 +109,7 @@ fun TodoBoard(spaces: SpacesState, channel: String?, onJump: (String, Long) -> U
             setPrio = { p -> spaces.setPrio(r.channel, r, p) },
             edit = { picked = null; editing = r },
             remove = { picked = null; spaces.deleteTodo(r) },
+            undoRoll = { spaces.undoRoll(r) },
         ) { seq -> picked = null; onJump(r.channel, seq) }
     }
     editing?.let { r -> TodoEdit(r, areas, fresh = rows?.none { it.channel == r.channel && it.id == r.id } != false, close = { editing = null }) { spaces.saveTodo(it.first, it.second) } }

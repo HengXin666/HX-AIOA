@@ -65,6 +65,7 @@ fun TodoCompact(spaces: SpacesState, limit: Int, onJump: (String, Long) -> Unit)
         if (open.isEmpty()) KitText("没有待办, 点新建或去群里丢个想法", c.textSecondary, 13, Modifier.padding(vertical = 6.dp))
         open.take(limit).forEach { NodeRows(it, 0, closed, toggle, ui.open, showRepo = true, showArea = area == ALL, tick = ui.tick) }
         if (open.size > limit) KitText("还有 ${open.size - limit} 条, 打开看板看全部", c.textSecondary, 12, Modifier.padding(start = 12.dp, top = 6.dp).clickable { board = true })
+        if (!board) UndoBar(spaces, Modifier.padding(top = 8.dp))
     } }
     ui.Sheets()
     if (board) TodoBoardScreen(spaces, { board = false }, onJump)
@@ -82,6 +83,7 @@ fun TodoFocus(spaces: SpacesState, onJump: (String, Long) -> Unit) {
         CardHeader("list-checks", "重点待办", "${focus.size} 条")
         focus.take(FOCUS_LIMIT).forEach { NodeRows(TodoNode(it, emptyList()), 0, emptySet(), {}, ui.open, showRepo = true, showArea = true, tick = ui.tick) }
         if (focus.size > FOCUS_LIMIT) KitText("还有 ${focus.size - FOCUS_LIMIT} 条, 点开看板", Aioa.colors.textSecondary, 12, Modifier.padding(start = 12.dp, top = 4.dp))
+        if (!board) UndoBar(spaces, Modifier.padding(top = 8.dp))
     } }
     ui.Sheets()
     if (board) TodoBoardScreen(spaces, { board = false }, onJump)
@@ -128,6 +130,7 @@ class TodoUi(
                 setPrio = { p -> spaces.setPrio(r.channel, r, p) },
                 edit = { picked = null; editing = r },
                 remove = { picked = null; spaces.deleteTodo(r) },
+                undoRoll = { spaces.undoRoll(r) },
             ) { seq -> picked = null; onJump(r.channel, seq) }
         }
         editing?.let { r -> TodoEdit(r, areasOf(rows), fresh = rows.none { it.channel == r.channel && it.id == r.id }, close = { editing = null }) { spaces.saveTodo(it.first, it.second) } }

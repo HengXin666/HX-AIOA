@@ -129,10 +129,12 @@ export type TodoItem = {
   remind?: number;
   alarm?: boolean;
   star?: boolean;
-  // 周期: 完成时服务端把 due 推到下一期并回到 open; runs 已完成几期, lastDone 上一期完成时间
+  // 周期: 完成时服务端把 due 推到下一期并回到 open; runs 已完成几期, lastDone 上一期完成时间,
+  // prevDue 推期前的截止 (撤销上次完成时用它退回去)
   every?: TodoEvery;
   runs?: number;
   lastDone?: number;
+  prevDue?: number;
 };
 export type TodoGh = { state: "open" | "closed"; comments: number; parent?: number; subs?: number; title?: string; synced: number };
 export type TodoInput = {

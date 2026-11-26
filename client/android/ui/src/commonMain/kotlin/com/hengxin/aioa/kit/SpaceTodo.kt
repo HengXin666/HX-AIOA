@@ -45,6 +45,8 @@ data class TodoRow(
     val everyUnit: String? = null,
     val everyN: Int = 1,
     val runs: Int = 0,
+    // 周期待办推期前的截止, 撤销上次完成时退回去
+    val prevDue: Long? = null,
 ) {
     val finished: Boolean get() = state == STATE_DONE || state == STATE_DROPPED
 

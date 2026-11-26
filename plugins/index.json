@@ -70,7 +70,8 @@
                 "star": "boolean",
                 "every": "object",
                 "runs": "number",
-                "lastDone": "number"
+                "lastDone": "number",
+                "prevDue": "number"
               }
             }
           ]

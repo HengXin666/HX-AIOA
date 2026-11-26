@@ -27,7 +27,7 @@ const BOOL: FieldType = "boolean";
 // repo / issue / parent 关联 GitHub issue 与父待办; gh 是服务端同步的 issue 状态; doneAt 是完成时间
 export const TODO_FIELDS: Record<string, FieldType> = { channel: STR, title: STR, note: STR, state: STR, prio: NUM, src: NUM, created: NUM, repo: STR, issue: NUM, parent: STR, gh: OBJ, doneAt: NUM,
   // 分区 / 截止 / 提醒 / 周期 / 重点 (#105); runs 与 lastDone 由服务端在周期待办完成时维护
-  area: STR, due: NUM, remind: NUM, alarm: BOOL, star: BOOL, every: OBJ, runs: NUM, lastDone: NUM };
+  area: STR, due: NUM, remind: NUM, alarm: BOOL, star: BOOL, every: OBJ, runs: NUM, lastDone: NUM, prevDue: NUM };
 // 清单 v2 的数据声明; 迁移旧快照时补上, 与 plugins/hengxin666.todo/plugin.json 一致 (单测校验)
 export const TODO_V2: PluginExtras = {
   api: PLUGIN_API,
@@ -40,7 +40,7 @@ export const TODO_V2: PluginExtras = {
 
 // pdata 里的一行待办: id = <群>:<待办 id>, 更新时间用行自带的 updated
 export type TodoBody = { channel: string; title: string; note?: string; state: TodoState; prio: TodoPriority; src?: number; created: number; repo?: string; issue?: number; parent?: string; gh?: TodoGh; doneAt?: number;
-  area?: string; due?: number; remind?: number; alarm?: boolean; star?: boolean; every?: TodoEvery; runs?: number; lastDone?: number };
+  area?: string; due?: number; remind?: number; alarm?: boolean; star?: boolean; every?: TodoEvery; runs?: number; lastDone?: number; prevDue?: number };
 export const todoRowId = (channel: string, id: string): string => `${channel}:${id}`;
 
 /** pdata 行转回旧接口的 TodoItem; 墓碑或不属于该群的返回 null。 */
@@ -76,5 +76,6 @@ export function checkTodoBody(id: string, raw: unknown): string | null {
   if (b.every != null && b.due == null) return "every (周期) 需要先有 due (第一期的截止时间)";
   if (b.runs != null && !(Number.isInteger(b.runs) && b.runs >= 0)) return "runs 是非负整数";
   if (b.lastDone != null && !Number.isInteger(b.lastDone)) return "lastDone 是毫秒时间戳";
+  if (b.prevDue != null && planError("due", b.prevDue)) return "prevDue 是毫秒时间戳";
   return null;
 }

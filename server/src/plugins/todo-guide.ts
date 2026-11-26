@@ -15,7 +15,7 @@ export function todoGuide(_base: string, channel: string, gh = false): string {
     "- 关联: repo (owner/name) + issue (号); parent 填父待办的 id (不带群前缀), App 里按树展示。",
     "- 分区 area: 生活, 开发, 工作, 学习 这类短词 (20 字内); 生活事务填 area 不填 repo。开发类不填 area 时 App 按 repo 归到 \"开发\"。",
     "- 截止 due (毫秒时间戳, 按主人的东八区换算); remind 提前几分钟提醒 (0 为到点, 要先有 due), 到点服务端发 \"待办提醒\" 系统消息并弹通知; alarm 为 true 时手机按闹钟响铃; star 为 true 是重点, 显示在总览。",
-    "- 周期 every: `{\"unit\":\"month\",\"n\":1,\"tz\":480}` (unit 为 day/week/month/year, 要先有 due 作第一期); 改成 done 时服务端自动把 due 推到下一期并回到 open, runs 记完成了几期。主人说 \"每月交一次电费\" 这类就建周期待办。",
+    "- 周期 every: `{\"unit\":\"month\",\"n\":1,\"tz\":480}` (unit 为 day/week/month/year, 要先有 due 作第一期); 改成 done 时服务端自动把 due 推到下一期并回到 open, runs 记完成了几期, prevDue 是推期前的截止; 主人说 \"刚才那期没做完\" 时把 due 改回 prevDue, runs 减 1, 去掉 prevDue 和 lastDone 即撤销。主人说 \"每月交一次电费\" 这类就建周期待办。",
     `- 只删自己建错的: 同一接口传 \`{"id":"...","ver":<读到的版本>,"deleted":true}\`; 每个插件最多 ${MAX_PDATA_ROWS} 行 (含已删除的)。`,
   ];
   if (gh) {

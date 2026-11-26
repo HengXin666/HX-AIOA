@@ -82,6 +82,7 @@ internal fun todoRow(o: JSONObject): Pair<String, TodoRow>? {
         everyUnit = b.optJSONObject("every")?.optString("unit")?.ifEmpty { null },
         everyN = b.optJSONObject("every")?.optInt("n", 1) ?: 1,
         runs = b.optInt("runs"),
+        prevDue = b.optPositive("prevDue"),
     )
 }
 
@@ -236,8 +237,35 @@ class SpacesState(
 
     private suspend fun toast(text: String) = withContext(Dispatchers.Main) { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
 
-    /** 勾选本地先生效, 再带 ver 写回; 版本冲突或失败时以服务端为准重拉。 */
-    fun setTodo(channel: String, row: TodoRow, done: Boolean) = setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
+    /** 刚勾完成的那条 (勾之前的样子): 看板底部出 "撤销" 条, 几秒后自动消失。 */
+    var undo by mutableStateOf<TodoRow?>(null)
+
+    /** 勾选本地先生效, 再带 ver 写回; 版本冲突或失败时以服务端为准重拉。勾完成时记下可撤销。 */
+    fun setTodo(channel: String, row: TodoRow, done: Boolean) {
+        undo = if (done) row else null
+        setState(channel, row, if (done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN)
+    }
+
+    /** 撤销刚才的完成: 周期待办已被服务端推到下一期的退回上一期, 普通待办回到勾之前的状态。 */
+    fun undoDone() {
+        val before = undo ?: return
+        undo = null
+        val cur = todos[ALL_TODOS]?.find { it.channel == before.channel && it.id == before.id }
+            ?: todos[before.channel]?.find { it.id == before.id } ?: before
+        if (cur.prevDue != null && cur.runs > before.runs) undoRoll(cur)
+        else setState(before.channel, cur, before.state.takeIf { it != TodoRow.STATE_DONE && it != TodoRow.STATE_DROPPED } ?: TodoRow.STATE_OPEN)
+    }
+
+    /** 周期待办撤销上次完成: due 退回 prevDue, runs 减一, 去掉 prevDue 与 lastDone (服务端不会再推期)。 */
+    fun undoRoll(r: TodoRow) {
+        val due = r.prevDue ?: return
+        val runs = (r.runs - 1).coerceAtLeast(0)
+        patchTodo(r.channel, r.copy(due = due, runs = runs, prevDue = null, state = TodoRow.STATE_OPEN)) {
+            it.put("due", due).put(KEY_STATE, TodoRow.STATE_OPEN).remove("prevDue")
+            it.remove("lastDone")
+            if (runs > 0) it.put("runs", runs) else it.remove("runs")
+        }
+    }
 
     fun setState(channel: String, row: TodoRow, state: String) = patchTodo(channel, row.copy(state = state)) { it.put(KEY_STATE, state) }
 

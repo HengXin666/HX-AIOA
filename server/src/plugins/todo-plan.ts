@@ -36,11 +36,11 @@ export function nextDue(due: number, e: TodoEvery, now: number): number {
   return next;
 }
 
-/** 周期待办完成一期: 回到 open, due 推到下一期, 记 runs 与 lastDone; 按月 / 年的第一次推期记下锚定日。 */
+/** 周期待办完成一期: 回到 open, due 推到下一期, 记 runs, lastDone 与 prevDue (撤销用); 按月 / 年的第一次推期记下锚定日。 */
 export function rollTodo(b: TodoBody, now: number): TodoBody {
   const every = b.every!;
   const anchored = every.unit === "month" || every.unit === "year" ? { ...every, day: every.day ?? localDay(b.due!, every) } : every;
-  const out: TodoBody = { ...b, every: anchored, state: "open", due: nextDue(b.due!, anchored, now), runs: (b.runs ?? 0) + 1, lastDone: now };
+  const out: TodoBody = { ...b, every: anchored, state: "open", due: nextDue(b.due!, anchored, now), runs: (b.runs ?? 0) + 1, lastDone: now, prevDue: b.due };
   delete out.doneAt;
   return out;
 }

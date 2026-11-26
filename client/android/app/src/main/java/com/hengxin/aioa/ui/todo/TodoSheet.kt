@@ -52,7 +52,7 @@ private val PRIOS = listOf(1 to "P1 紧急", 2 to "P2 普通", 3 to "P3 以后")
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodoSheet(r: TodoRow, all: List<TodoRow>, close: () -> Unit, setState: (String) -> Unit, setPrio: (Int) -> Unit, edit: () -> Unit, remove: () -> Unit, jump: (Long) -> Unit) {
+fun TodoSheet(r: TodoRow, all: List<TodoRow>, close: () -> Unit, setState: (String) -> Unit, setPrio: (Int) -> Unit, edit: () -> Unit, remove: () -> Unit, undoRoll: () -> Unit, jump: (Long) -> Unit) {
     val c = Aioa.colors
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
@@ -87,6 +87,8 @@ fun TodoSheet(r: TodoRow, all: List<TodoRow>, close: () -> Unit, setState: (Stri
             r.note?.let { Text(it, color = c.textSecondary, fontSize = 13.sp, lineHeight = 19.sp) }
             if (r.issue != null) Text("issue 关闭后自动完成, 有评论自动变进行中; 这里手动改不会动 GitHub。", color = c.textSecondary, fontSize = 12.sp)
             if (r.everyUnit != null) Text("周期待办: 勾完成后自动排到下一期, 截止时间往后推。", color = c.textSecondary, fontSize = 12.sp)
+            // 周期待办勾错了: 退回上一期 (截止改回去, 已完成期数减一)
+            r.prevDue?.let { prev -> Action("corner-up-left", "撤销上次完成, 截止退回 ${dueText(prev)}", c.accent, Modifier.fillMaxWidth()) { undoRoll(); close() } }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Action("pencil", "编辑", c.accent, Modifier.weight(1f), edit)
                 // 系统闹钟只能按 "时:分" 设下一次, 所以只给 24 小时内的提醒用

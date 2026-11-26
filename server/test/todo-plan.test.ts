@@ -163,3 +163,14 @@ test("提醒: 写入时提醒时刻已过的不补发", async () => {
   assert.equal(await remind.fire(now + 2 * MIN), 1);
   assert.deepEqual(sent, [`${CH}:soon`]);
 });
+
+test("周期: 撤销上次完成, 把 due 改回 prevDue 不会再推期", () => {
+  const prev = { ...base, due: JAN31, every: { unit: "week" as const, n: 1 } };
+  const rolled = normTodo(prev, { ...prev, state: "done" }, JAN31 - MIN);
+  assert.equal(rolled.prevDue, JAN31);
+  const { prevDue: _p, lastDone: _l, ...rest } = rolled;
+  const undone = normTodo(rolled, { ...rest, due: JAN31, runs: 0 }, JAN31);
+  assert.equal(undone.due, JAN31);
+  assert.equal(undone.state, "open");
+  assert.equal(checkTodoBody(`${CH}:t-1`, undone), null);
+});
