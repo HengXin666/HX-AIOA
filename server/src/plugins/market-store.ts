@@ -28,6 +28,10 @@ export class MarketStore {
     return n > 0;
   }
 
+  dropFiles(): void {
+    this.sql.exec("DELETE FROM market_cache WHERE k LIKE 'f:%'");
+  }
+
   get(k: string): CacheRow | null {
     return this.sql.exec<CacheRow>("SELECT v, at FROM market_cache WHERE k = ?", k).toArray()[0] ?? null;
   }

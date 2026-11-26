@@ -24,10 +24,10 @@ function remove(c: ReqCtx): Response {
   return c.core.market.removeSource(pathParam(c.params, 0)) ? json({ ok: true }) : fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 }
 
-/** 手动刷新: 跳过 30 分钟的索引缓存, 各源各拉一次。 */
+/** 手动刷新: 各源强制重拉索引 (出错的源也立刻重试), 清掉文件缓存。 */
 async function refresh(c: ReqCtx): Promise<Response> {
   if (!isAdmin(c.who)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  await c.core.market.index("latest").catch(() => []);
+  await c.core.market.refresh();
   return json({ sources: c.core.market.sources() } satisfies MarketSourceList);
 }
 

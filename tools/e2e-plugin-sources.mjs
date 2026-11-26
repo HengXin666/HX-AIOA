@@ -24,7 +24,8 @@ const srv = { ...base, id: SRV, name: "e2e 服务端", summary: "带服务端代
 const fake = { ...base, id: "hengxin666.fake", name: "冒名", summary: "冒用官方命名空间" };
 const third = {
   name: "e2e 第三方",
-  plugins: [notes, srv, fake].map((m) => ({ id: m.id, name: m.name, summary: m.summary, version: m.version, icon: "puzzle", author: "e2e", manifest: m })),
+  // 第三方的内嵌清单故意和 plugin.json 不同: 服务端应以 plugin.json 为准
+  plugins: [notes, srv, fake].map((m) => ({ id: m.id, name: m.name, summary: m.summary, version: m.version, icon: "puzzle", author: "e2e", manifest: { ...m, summary: "内嵌的假介绍" } })),
 };
 const files = { "README.md": "# e2e 笔记\n", "prompt.md": "按 {{channel}} 整理。\n" };
 
@@ -41,7 +42,7 @@ function serve(port, handler) {
 const official = await serve(8797, (p) => readFile(join(ROOT, p), "utf8"));
 const market = await serve(8798, async (p) => {
   hits.push(p);
-  if (p === "/m/index.json") return JSON.stringify(third);
+  if (p === "/m/index.json" || p === "/m2/index.json") return JSON.stringify({ ...third, name: p.startsWith("/m2") ? "e2e 第二源" : third.name });
   const [, , id, name] = p.split("/");
   if ([THIRD, SRV].includes(id) && files[name]) return files[name];
   if (id === THIRD && name === "plugin.json") return JSON.stringify(notes);
@@ -86,6 +87,7 @@ check("源上记下跳过原因", me?.skipped?.some((x) => x.startsWith("hengxin
 
 const d1 = await api("GET", `${V1}/plugins/${THIRD}`);
 check("详情带来源与介绍", d1.status === 200 && d1.data.source === "e2e 第三方" && d1.data.readme.includes("e2e 笔记"), d1.data);
+check("第三方以 plugin.json 为准, 不信内嵌清单", d1.data.manifest.summary === notes.summary, d1.data.manifest.summary);
 const before = hits.length;
 await api("GET", `${V1}/plugins`);
 await api("GET", `${V1}/plugins/${THIRD}`);
@@ -94,8 +96,14 @@ const extra = hits.slice(before);
 check("再看列表与详情只重拉索引", extra.every((p) => p === "/m/index.json") && extra.length <= 1, extra);
 
 check("第三方插件不带摘要不能放行", (await api("PUT", `${V1}/plugin-allow/${THIRD}`, {})).status === 409);
-const allow = await api("PUT", `${V1}/plugin-allow/${THIRD}`, { digest: d1.data.digest });
-check("带详情给的摘要放行第三方插件", typeof d1.data.digest === "string" && allow.status === 200 && allow.data.allow?.source === added.data.id, allow.data);
+// 同版本偷换提示词: 刷新清掉文件缓存后, 旧摘要放行被拒
+files["prompt.md"] = "偷换的提示词 {{channel}}\n";
+await api("POST", `${V1}/plugin-sources-refresh`, {});
+const swapped = await api("PUT", `${V1}/plugin-allow/${THIRD}`, { digest: d1.data.digest });
+check("同版本内容变了, 旧摘要放行被拒", swapped.status === 409, swapped.text);
+const d2 = await api("GET", `${V1}/plugins/${THIRD}`);
+const allow = await api("PUT", `${V1}/plugin-allow/${THIRD}`, { digest: d2.data.digest });
+check("带详情给的摘要放行第三方插件", d2.data.digest !== d1.data.digest && allow.status === 200 && allow.data.allow?.source === added.data.id, allow.data);
 const bad = await api("PUT", `${V1}/plugin-allow/${SRV}`, {});
 check("第三方源不能带服务端代码", bad.status === 400 && /官方源/.test(bad.text), bad.text);
 
@@ -106,6 +114,15 @@ const kept = after.data.plugins.find((p) => p.id === THIRD);
 check("删源后已放行的仍在列表里", kept?.allowed?.version === "1.0.0" && !after.data.error, kept);
 const snap = await api("GET", `${V1}/plugins/${THIRD}`);
 check("删源后详情用放行时的快照", snap.status === 200 && snap.data.gone === true && snap.data.manifest.id === THIRD, snap.data);
+// 另一个源发了同 id: 换源不能当更新放行
+const other = await api("POST", SOURCES, { link: "http://127.0.0.1:8798/m2" });
+const moved = await api("GET", `${V1}/plugins/${THIRD}`);
+check("换源后详情显示放行时的快照", other.status === 201 && moved.data.gone === true, moved.data);
+const fresh = await api("GET", `${V1}/plugins`);
+check("换源后列表仍标已放行", fresh.data.plugins.find((p) => p.id === THIRD)?.allowed?.version === "1.0.0");
+const d3 = await api("PUT", `${V1}/plugin-allow/${THIRD}`, { digest: d2.data.digest });
+check("换源放行被拒", d3.status === 409 && /另一个市场源/.test(d3.text), d3.text);
+await api("DELETE", `${SOURCES}/${other.data.id}`);
 check("删源后能撤销放行", (await api("DELETE", `${V1}/plugin-allow/${THIRD}`)).status === 200);
 const gone = await api("GET", `${V1}/plugins`);
 check("撤销后列表不再有它", !gone.data.plugins.some((p) => p.id === THIRD), gone.data.plugins.map((p) => p.id));

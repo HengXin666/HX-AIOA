@@ -74,12 +74,12 @@ async function putAllow(c: ReqCtx): Promise<Response> {
   const by = admin(c);
   const id = pluginParam(c);
   if (c.core.kernel.get(id)?.meta.dev) return fail(409, `${id} 被一个开发插件占用, 主人可以先撤销它`, CODE_CONFLICT);
-  const src = await c.core.market.sourceOf(id);
+  // 官方源放行绕过缓存拿最新; 第三方按管理员看过的那份 (digest) 放行, 内容变了就拒绝
+  const cached = await c.core.market.sourceOf(id);
+  const { m: manifest, src } = await c.core.market.manifestAt(id, cached.official ? "fresh" : "latest");
   const was = c.core.kernel.get(id)?.meta.source ?? OFFICIAL_SOURCE;
   // 换源等于换作者: 必须先撤销旧的再放行, 不能当成 "更新"
   if (c.core.kernel.get(id) && was !== src.id) return fail(409, `${id} 现在来自另一个市场源 (${src.name}), 先撤销旧的再放行`, CODE_CONFLICT);
-  // 官方源放行绕过缓存拿最新; 第三方按管理员看过的那份 (digest) 放行, 内容变了就拒绝
-  const manifest = await c.core.market.manifest(id, src.official ? "fresh" : "latest");
   if (manifest.server && !isL2a(id)) return fail(409, `${id} 带服务端代码, 要先合进仓库并部署后才能放行`, CODE_NEEDS_DEPLOY);
   if (body.version && body.version !== manifest.version) return fail(409, `市场当前是 ${manifest.version}, 只能放行这个版本`, CODE_CONFLICT);
   const prompt = await c.core.market.file(id, manifest.prompt, src.official);

@@ -26,7 +26,7 @@
 | GET | `/api/v1/plugin-sources` | 管理员 | `{ sources }`: 官方源在前, 带最近拉取时间, 插件数, 失败原因, 被跳过的条目 |
 | POST | `/api/v1/plugin-sources` | 管理员 | `{ "link": "https://github.com/<用户>/<仓库>" }`, 也认 tree 目录链接与 raw 地址; 依次试仓库根目录与 `plugins/` 的 `index.json` (最多两次请求), 返回 201 与源; 最多 10 个 |
 | DELETE | `/api/v1/plugin-sources/{id}` | 管理员 | 移除源与它的缓存; 已放行的插件不受影响 |
-| POST | `/api/v1/plugin-sources-refresh` | 管理员 | 跳过缓存各源重拉一次索引 |
+| POST | `/api/v1/plugin-sources-refresh` | 管理员 | 各源强制重拉索引 (出错的源也立刻重试), 清掉介绍与提示词缓存 |
 
 合并规则: 先出现的源为准, 后面同 id 的跳过并记在源上; 第三方源的 id 必须是 `<作者>.<名字>`, 不能用官方命名空间 `hengxin666.*` 或旧 id 别名, 不能声明 `server: true` (放行时 400); 第三方插件同样要管理员逐个放行。列表条目带 `source` (源 id), 第三方的带 `sourceName`; 详情带 `source` (第三方源名)。
 

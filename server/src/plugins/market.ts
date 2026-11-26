@@ -139,7 +139,8 @@ export class Market {
         this.store.putSource(src);
         this.store.put(IDX + src.id, text, now);
         this.keep(src.id, text, now);
-        await this.merged();
+        // 只为算出接受数与跳过原因; 别的源坏了不影响这次添加
+        await this.merged().catch(() => []);
         return this.sources().find((s) => s.id === src.id)!;
       } catch (e) {
         last = e instanceof Error ? e.message : String(e);
@@ -240,25 +241,49 @@ export class Market {
   /**
    * cache: 全走缓存; latest: 重拉所在源的索引 (10 秒内复用), 文件版本没变仍用缓存, 管理员看详情用;
    * fresh: 全部重拉, 官方源放行时用。内嵌清单只信官方源 (CI 保证与 plugin.json 一致), 第三方一律读 plugin.json。
+   * 返回清单和它所在的源 (放行记来源用同一份, 不另查)。
    */
-  async manifest(id: string, mode: FetchMode = "cache"): Promise<PluginManifest> {
+  async manifestAt(id: string, mode: FetchMode = "cache"): Promise<{ m: PluginManifest; src: MarketSource }> {
     const fresh = mode === "fresh" || mode === "force";
     let { src, entry } = await this.locate(id, mode);
-    const raw = !fresh && src.official && entry.manifest ? entry.manifest : JSON.parse(await this.file(id, PLUGIN_MANIFEST_FILE, fresh));
+    if (!fresh && src.official && entry.manifest) return { m: this.check(id, entry.manifest, src), src };
+    const key = (e: Entry, s: MarketSource) => `f:${s.id}:${id}@${e.version}/${PLUGIN_MANIFEST_FILE}`;
+    const row = fresh ? null : this.store.get(key(entry, src));
+    if (row) return { m: this.check(id, JSON.parse(row.v), src), src };
+    let text = await fetchText(`${src.url}/${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
+    let m = this.check(id, JSON.parse(text), src);
+    // 索引和清单在 CDN 上各缓存各的, 可能一新一旧: 强制重拉索引和清单各一次再比, 对上了才写缓存
+    if (m.version !== entry.version) {
+      ({ src, entry } = await this.locate(id, "force"));
+      text = await fetchText(`${src.url}/${id}/${PLUGIN_MANIFEST_FILE}`, MAX_PLUGIN_TEXT);
+      m = this.check(id, JSON.parse(text), src);
+    }
+    if (m.version !== entry.version) {
+      const why = src.official ? "市场正在更新, 稍后再试" : "等源的作者修好";
+      throw new ApiFail(409, CODE_CONFLICT, `${id} 的索引版本 ${entry.version} 与清单 ${m.version} 不一致, ${why}`);
+    }
+    this.store.put(key(entry, src), text, Date.now());
+    return { m, src };
+  }
+
+  async manifest(id: string, mode: FetchMode = "cache"): Promise<PluginManifest> {
+    return (await this.manifestAt(id, mode)).m;
+  }
+
+  private check(id: string, raw: unknown, src: MarketSource): PluginManifest {
     const m = parseManifest(raw);
     if (typeof m === "string") throw new ApiFail(400, CODE_BAD_REQUEST, `插件 ${id} 的 plugin.json 有误: ${m}`);
     if (m.id !== id) throw new ApiFail(400, CODE_BAD_REQUEST, `插件目录 ${id} 与 plugin.json 的 id 不一致`);
     // 服务端代码只能编进部署, 第三方源不能带
     if (m.server && !src.official) throw new ApiFail(400, CODE_BAD_REQUEST, `${id} 声明了服务端代码, 只有官方源能提供`);
-    // 重拉的清单比复用的索引新: 强制重拉一次索引再比
-    if (fresh && m.version !== entry.version) ({ src, entry } = await this.locate(id, "force"));
-    if (m.version !== entry.version) throw new ApiFail(409, CODE_CONFLICT, `${id} 的索引版本 ${entry.version} 与清单 ${m.version} 不一致, 等源的作者修好`);
     return m;
   }
 
-  /** 插件目录里的文件, 按 "源 + 插件 + 索引里的版本" 缓存; fresh 时重拉并覆盖。 */
+  /**
+   * 介绍与提示词, 按 "源 + 插件 + 索引里的版本" 缓存; fresh 时重拉并覆盖。
+   * 版本内的文件无法自证版本: CDN 不同步时可能缓存到旧内容, 管理员在市场源页 "立即刷新" 会清掉文件缓存。
+   */
   async file(id: string, name: string, fresh = false): Promise<string> {
-    // fresh 前通常刚由 manifest 核对过索引与清单版本, 这里的索引就是最新的
     const { src, entry } = await this.locate(id, fresh ? "fresh" : "cache");
     const key = `f:${src.id}:${id}@${entry.version}/${name}`;
     const row = fresh ? null : this.store.get(key);
@@ -266,6 +291,12 @@ export class Market {
     const text = await fetchText(`${src.url}/${id}/${name}`, MAX_PLUGIN_TEXT);
     this.store.put(key, text, Date.now());
     return text;
+  }
+
+  /** 管理员手动刷新: 每个源强制重拉索引, 清掉文件缓存。 */
+  async refresh(): Promise<void> {
+    this.store.dropFiles();
+    await this.merged("force").catch(() => []);
   }
 
   /** 清单 + 提示词的摘要: 第三方插件放行时核对, 保证放行的就是管理员在详情里看过的那份。 */

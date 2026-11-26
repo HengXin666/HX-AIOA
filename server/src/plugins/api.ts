@@ -1,6 +1,7 @@
 import {
   MAX_CHAT_AGENTS,
   MAX_PLUGINS,
+  OFFICIAL_SOURCE,
   PATH_PLUGIN,
   PATH_PLUGIN_INSTALL,
   PATH_PLUGIN_UPDATE,
@@ -12,6 +13,7 @@ import {
   type PluginDetail,
   type PluginEntry,
   type PluginManifest,
+  type MarketSource,
   type PluginInstall,
   type PluginInstalled,
   type PluginList,
@@ -80,10 +82,10 @@ async function list(c: ReqCtx): Promise<Response> {
   return json({ plugins, ...(error ? { error } : {}), admin, owner: c.who.owner } satisfies PluginList);
 }
 
-const GONE_README = "市场里已经没有这个插件 (源被移除或下架), 这里显示的是放行时存下的版本。";
+const GONE_README = "市场里已经没有放行时那个源的这个插件 (源被移除, 下架或换了源), 这里显示的是放行时存下的版本。";
 
 // 管理员看详情要看到市场最新版本: 只重拉所在源的索引, 文件按版本缓存; 子号全走缓存, 免得放大请求
-const fromMarket = (c: ReqCtx, id: string) => c.core.market.manifest(id, isAdmin(c.who) ? "latest" : "cache");
+const fromMarket = (c: ReqCtx, id: string) => c.core.market.manifestAt(id, isAdmin(c.who) ? "latest" : "cache");
 
 async function detail(c: ReqCtx): Promise<Response> {
   const uid = viewer(c);
@@ -95,7 +97,7 @@ async function detail(c: ReqCtx): Promise<Response> {
   const devRow = row?.meta.dev && own ? row : undefined;
   // 市场里没了 (源被移除或下架) 但还在白名单: 用放行时存下的快照, 免得撤不掉也卸不了
   let snap = devRow;
-  let fresh: PluginManifest | undefined;
+  let fresh: { m: PluginManifest; src: MarketSource } | undefined;
   if (!snap) {
     try {
       fresh = await fromMarket(c, id);
@@ -104,9 +106,11 @@ async function detail(c: ReqCtx): Promise<Response> {
       snap = row;
     }
   }
+  // 放行时的源和现在市场里的不是同一个 (换源): 也显示快照, 不把别人的内容挂在 "已放行" 旁边
+  if (!snap && row && !row.meta.dev && (row.meta.source ?? OFFICIAL_SOURCE) !== fresh!.src.id) snap = row;
   const gone = !!snap && !devRow;
-  const manifest = snap?.manifest ?? fresh!;
-  const src = snap ? undefined : await c.core.market.sourceOf(id).catch(() => undefined);
+  const manifest = snap?.manifest ?? fresh!.m;
+  const src = snap ? undefined : fresh!.src;
   const readme = snap ? (gone ? GONE_README : (snap.readme ?? "")) : await c.core.market.file(id, manifest.readme);
   // 第三方插件放行时要带上它, 证明管理员看过的就是要放行的那份
   const digest = src && !src.official && isAdmin(c.who) ? await c.core.market.digest(id) : undefined;
