@@ -117,7 +117,8 @@ private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(p.name, c.text, NAME_SP, weight = FontWeight.SemiBold)
                 Text("v${p.installed?.version ?: p.version}", c.textSecondary, SMALL_SP)
-                if (p.dev) Text("开发中", c.accent, SMALL_SP)
+                if (p.foreign) Text("别人开发中", c.textSecondary, SMALL_SP)
+                else if (p.dev) Text("开发中", c.accent, SMALL_SP)
                 else if (p.outdated) Text("可更新到 v${p.allowed?.version}", c.accent, SMALL_SP)
                 else if (p.installed != null) Text("已安装", c.success, SMALL_SP)
                 else if (p.enabled) Text("已启用", c.success, SMALL_SP)

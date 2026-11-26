@@ -19,6 +19,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import com.hengxin.aioa.ui.settings.PluginEvents
+import com.hengxin.aioa.ui.settings.PluginTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,7 +64,12 @@ class MainActivity : ComponentActivity() {
         val uriHandler = BrowserUriHandler(this)
         setContent {
             var prefs by remember { mutableStateOf(AppearanceStore.load(this)) }
-            val appearance = prefs.resolve(isSystemInDarkTheme())
+            // 主题插件: 本地缓存先用, 连上或插件变化时重拉
+            PluginTheme.load(this)
+            val theme by PluginTheme.flow.collectAsState()
+            val pluginRev by PluginEvents.rev.collectAsState()
+            LaunchedEffect(pluginRev, chat.online) { if (chat.configured && chat.online) PluginTheme.refresh(this@MainActivity) }
+            val appearance = prefs.resolve(isSystemInDarkTheme()).copy(theme = theme)
             AioaTheme(appearance) {
                 MaterialTheme(colorScheme = materialScheme(Aioa.colors, appearance.dark)) {
                     // 文本里的链接 (Markdown 等) 也进内置浏览器

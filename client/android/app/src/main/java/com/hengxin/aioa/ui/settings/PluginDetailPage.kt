@@ -100,17 +100,21 @@ fun PluginDetailPage(id: String, onBack: () -> Unit, onChanged: () -> Unit, open
         if (p != null) Handoff(p)
         if (limited) SettingsGroup { NoteRow(compat?.msg ?: "App 版本过旧, 请更新", c.danger) }
         if (e.dev && d.admin) {
-            SettingsGroup("开发中", "开发模式装的本地插件, 只有你看得到。重新上传即换版本, 装了 Agent 的会立即换上新提示词。") {
+            val hint = if (e.foreign) "别的管理员在开发模式下装的本地插件, 只有开发者能用。主人可以撤掉它 (比如开发者已经不是管理员)。"
+            else "开发模式装的本地插件, 只有你看得到。重新上传即换版本, 装了 Agent 的会立即换上新提示词。"
+            SettingsGroup(if (e.foreign) "别人开发中" else "开发中", hint) {
                 ActionRow("撤掉", "trash-2", danger = true, enabled = !busy) {
                     busy = true
                     // 成功后再离开, 离开页面会取消这里的协程
-                    scope.launch { api.devRemove(id).onSuccess { onChanged(); onBack() }.onFailure { error = it.message; busy = false } }
+                    scope.launch { (if (e.foreign) api.revoke(id) else api.devRemove(id)).onSuccess { onChanged(); onBack() }.onFailure { error = it.message; busy = false } }
                 }
             }
         } else AllowGroup(d, busy || limited) { act ->
             if (act && d.risky.isNotEmpty()) { risky = ACT_ALLOW } else { perform { if (act) api.allow(id) else api.revoke(id) } }
         }
-        if (installed == null && e.allowed == null) {
+        if (e.foreign) {
+            Paragraph("这是别人的开发插件, 只能撤掉, 不能启用或安装。", c.textSecondary, BODY_SP)
+        } else if (installed == null && e.allowed == null) {
             if (!d.admin) Paragraph("管理员还没放行这个插件, 放行后才能启用。", c.textSecondary, BODY_SP)
         } else if (d.agentless || !d.owner) {
             EnableGroup(d, !busy && !limited) { on -> if (on && d.risky.isNotEmpty()) { risky = ACT_ENABLE } else { perform { api.setEnabled(id, on) } } }

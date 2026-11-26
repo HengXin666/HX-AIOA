@@ -112,6 +112,8 @@ export async function patchUser(a: Accounts, w: AcctWho, id: string, b: Body): P
   if (b.status === "active" || b.status === "disabled") next.status = b.status;
   a.dir.saveUser(next);
   if (next.status === "disabled" && u.status !== "disabled") await a.revokeAll(next);
+  // 撤开发插件出错不影响改角色; 残留的主人可以在插件页撤掉
+  if (u.role === "admin" && (next.role !== "admin" || next.status === "disabled")) await a.onRetire?.(u.id)?.catch((e) => console.error("撤开发插件失败:", e));
   a.dir.audit(w.actor, "patch_user", u.id, JSON.stringify({ role: next.role, status: next.status }));
   return json(next);
 }
@@ -130,6 +132,7 @@ export async function deleteUser(a: Accounts, w: AcctWho, id: string): Promise<R
   await a.revokeAll(u);
   a.dir.deleteUser(u.id);
   a.onDelete?.(u.id);
+  await a.onRetire?.(u.id)?.catch((e) => console.error("撤开发插件失败:", e));
   await a.userHub(u).wipe();
   a.dir.audit(w.actor, "delete_user", u.id, u.name);
   return json({ ok: true });

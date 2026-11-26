@@ -10,7 +10,7 @@ import { TodoStore } from "./plugins/todos";
 import { TranslateStore } from "./translate/store";
 import { GhService } from "./gh/service";
 import { HxoaService } from "./hxoa/service";
-import { pluginParts } from "./plugins/seed";
+import { pluginParts, retireDev } from "./plugins/seed";
 import { DurableObject } from "cloudflare:workers";
 import {
   ACCESS_PREFIX,
@@ -188,6 +188,7 @@ export class Hub extends DurableObject<Env> {
       this.accounts = new Accounts(this.ctx.storage.sql, this.env, (u, ids) => this.kickUser(u, ids));
       this.accounts.joinRoom = (uid, code) => joinRoom(this.core, uid, code);
       this.accounts.onDelete = (uid) => this.core.rooms.forget(uid);
+      this.accounts.onRetire = (uid) => retireDev(this.core, uid);
     }
     return this.accounts;
   }

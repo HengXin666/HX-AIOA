@@ -110,9 +110,9 @@ export class PluginKernel {
     return this.allow.get(id);
   }
 
-  /** 这个账号看得到的白名单: 别人的开发插件不算。 */
-  visible(uid: string | null): PluginAllow[] {
-    return this.list().filter((a) => !a.dev || a.by === uid);
+  /** 这个账号看得到的白名单: 别人的开发插件不算; all 为真 (主人) 时全给, 方便清理。 */
+  visible(uid: string | null, all = false): PluginAllow[] {
+    return this.list().filter((a) => all || !a.dev || a.by === uid);
   }
 
   // 不是别人的开发插件 (不查库)

@@ -22,6 +22,7 @@ const NOTES = "e2e.notes";
 const SERVER_CODE = "e2e.servercode";
 const GITHUB = "hengxin666.github";
 let failed = 0;
+let lastUser = null;
 
 const market = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(req.url ?? "/")).replace(/^(\.\.[/\\])+/, "");
@@ -76,7 +77,9 @@ async function member(role) {
   const inv = await api("POST", `${V1}/invites`, { role });
   if (!inv.data?.code) return null;
   const r = await fetch(`${server}${V1}/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: inv.data.code, name: `${role.slice(0, 2)}${RUN}`, password: "e2e-password-1", display: role }) });
-  return (await r.json().catch(() => null))?.access ?? null;
+  const j = await r.json().catch(() => null);
+  if (j?.access) lastUser = j.user?.id ?? null;
+  return j?.access ?? null;
 }
 
 const manifest = async (over = {}) => ({ ...JSON.parse(await readFile(join(ROOT, NOTES, "plugin.json"), "utf8")), id: DEV, name: "开发笔记", contributes: { collections: [{ id: "items", fields: { title: "string" } }] }, ...over });
@@ -115,8 +118,11 @@ try {
   check("开发插件详情用快照", det.status === 200 && det.data.readme === "# 开发中" && det.data.task?.includes("开发提示词"), det.data);
   const row = await api("PUT", `${V1}/pdata/${DEV}/items/a1`, { ver: 0, body: { title: "x" } });
   check("开发插件的 pdata 能用", row.status === 200, row.data);
-  const v2 = await api("PUT", `${V1}/plugin-dev/${DEV}`, { manifest: await manifest({ version: "1.0.1" }), prompt: "新提示词" });
+  const themed = { contributes: { collections: [{ id: "items", fields: { title: "string" } }], "core.theme.base": [{ id: `${DEV}.theme`, light: { accent: "#3366FF" }, dark: { accent: "#88AAFF" } }] }, permissions: ["data:own", "core.replace"] };
+  const v2 = await api("PUT", `${V1}/plugin-dev/${DEV}`, { manifest: await manifest({ version: "1.0.1", ...themed }), prompt: "新提示词" });
   check("换版本", v2.status === 200 && v2.data.allow.version === "1.0.1", v2.data);
+  const theme = await api("GET", `${V1}/plugin-contrib/core.theme.base`);
+  check("主题插件生效: 生效贡献带颜色", theme.data.card === "single" && theme.data.items?.[0]?.light?.accent === "#3366FF", theme.data);
   const srv = await api("PUT", `${V1}/plugin-dev/${DEV}`, { manifest: await manifest({ server: true, permissions: ["data:own", "net:x.com"] }) });
   check("开发模式不能带服务端代码", srv.status === 400, srv.data);
   await api("PUT", `${V1}/plugin-allow/${NOTES}`, {});
@@ -162,11 +168,21 @@ try {
     const mineA = await call(A, "PUT", `${V1}/plugin-dev/${AID}`, { manifest: await manifest({ id: AID }) });
     check("admin 子号装自己的开发插件", mineA.status === 200, mineA.data);
     const ownerSees = await api("GET", `${V1}/plugins/${AID}`);
-    check("主人打开别人的开发插件 404 (市场里没有)", ownerSees.status === 404 || ownerSees.status === 502, ownerSees.data);
+    check("主人打开别人的开发插件看到快照, 标 foreign", ownerSees.status === 200 && ownerSees.data.foreign === true && !ownerSees.data.installed, ownerSees.data);
     const cleaned = await api("DELETE", `${V1}/plugin-allow/${AID}`);
     const gone = await call(A, "GET", `${V1}/plugin-dev`);
     check("主人能撤掉别人的开发插件", cleaned.status === 200 && !gone.data.plugins?.some((p) => p.id === AID), [cleaned.data, gone.data]);
-    await call(A, "PUT", `${V1}/plugin-dev`, { on: false });
+    const AID2 = `e2e.adm2${RUN}`;
+    await call(A, "PUT", `${V1}/plugin-dev/${AID2}`, { manifest: await manifest({ id: AID2 }) });
+    const ownerList = await api("GET", `${V1}/plugins`);
+    check("主人列表看得到别人的开发插件 (foreign)", ownerList.data.plugins?.some((p) => p.id === AID2 && p.foreign === true), ownerList.data.plugins?.map((p) => p.id));
+    const fd = await api("GET", `${V1}/plugins/${AID2}`);
+    check("主人打开别人的开发插件看快照", fd.status === 200 && fd.data.foreign === true, fd.data);
+    const demote = await api("PATCH", `${V1}/users/${lastUser}`, { role: "member" });
+    const left = await api("GET", `${V1}/plugin-allow`);
+    check("admin 降为成员后他的开发插件被撤掉", demote.status === 200 && !(await api("GET", `${V1}/plugins`)).data.plugins.some((p) => p.id === AID2), [demote.status, left.data.allow?.map((a) => a.id)]);
+    const after = await call(A, "GET", `${V1}/plugin-dev`);
+    check("降级后不能再用开发模式", after.status === 403, after.data);
   } else check("建 admin 子号", false);
 
   const offAll = await api("PUT", `${V1}/plugin-dev`, { on: false });
