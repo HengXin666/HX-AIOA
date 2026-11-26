@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+  <rect width="960" height="380" fill="#ffffff"/>
+  <text x="480" y="40" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">三种处理, 请选一个</text>
+  <g font-size="14">
+    <rect x="30" y="70" width="280" height="270" rx="14" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="170" y="104" text-anchor="middle" font-size="18" font-weight="700" fill="#991b1b">A. 删掉</text>
+    <text x="50" y="140" fill="#7f1d1d">从 EXT_POINTS 去掉 push.route</text>
+    <text x="50" y="164" fill="#7f1d1d">(和 message.beforeSend)</text>
+    <text x="50" y="200" fill="#7f1d1d">+ 少一个没人用的概念</text>
+    <text x="50" y="224" fill="#7f1d1d">- 以后要再加回来, 清单版本 +1</text>
+    <text x="50" y="260" fill="#7f1d1d">工作量: 很小</text>
+    <rect x="340" y="70" width="280" height="270" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="3"/>
+    <text x="480" y="104" text-anchor="middle" font-size="18" font-weight="700" fill="#166534">B. 保留占位 (推荐)</text>
+    <text x="360" y="140" fill="#14532d">目录里留着, 文档标 "预留"</text>
+    <text x="360" y="176" fill="#14532d">+ 不动代码, 不影响任何功能</text>
+    <text x="360" y="200" fill="#14532d">+ 第一个真要它的插件出现时再接</text>
+    <text x="360" y="224" fill="#14532d">- 清单里能声明, 但不会生效</text>
+    <text x="360" y="260" fill="#14532d">工作量: 只改文档</text>
+    <rect x="650" y="70" width="280" height="270" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="790" y="104" text-anchor="middle" font-size="18" font-weight="700" fill="#1e3a8a">C. 现在就接</text>
+    <text x="670" y="140" fill="#1e3a8a">收推送时按账号跑 pipeline,</text>
+    <text x="670" y="164" fill="#1e3a8a">插件写 match → set 路由</text>
+    <text x="670" y="200" fill="#1e3a8a">+ 插件能管推送去哪, 响不响</text>
+    <text x="670" y="224" fill="#1e3a8a">- 推送是全局的, 按账号拆要改链路</text>
+    <text x="670" y="248" fill="#1e3a8a">- 没有用例, 容易做成空架子</text>
+    <text x="670" y="284" fill="#1e3a8a">工作量: 大, 碰推送延迟</text>
+  </g>
+</svg>

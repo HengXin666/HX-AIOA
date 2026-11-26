@@ -38,6 +38,12 @@ export async function dropDev(core: Core, uid: string, id: string): Promise<void
   pushPlugin(core, id, "revoked", { uid });
 }
 
+/** 账号不再是管理员 (降为成员, 停用, 删号): 撤掉他的开发插件并关掉开发模式。 */
+export async function retireDev(core: Core, uid: string): Promise<void> {
+  for (const a of mine(core, uid)) await dropDev(core, uid, a.id);
+  core.kernel.setDevMode(uid, false);
+}
+
 async function setMode(c: ReqCtx): Promise<Response> {
   const body = (await readJson(c.req)) as { on?: unknown } | undefined;
   const uid = dev(c);

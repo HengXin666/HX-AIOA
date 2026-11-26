@@ -42,7 +42,24 @@ data class Appearance(
     val accent: Color? = null,
     val radius: Dp = DEFAULT_RADIUS,
     val compact: Boolean = false,
+    // 主题插件 (core.theme.base) 覆盖的颜色; 没有就是默认的极简主题
+    val theme: ThemeOverride? = null,
 )
+
+/** 主题插件给的颜色覆盖: 令牌名 (AioaColors 的字段名) -> 颜色, 亮暗各一份, 没写的沿用默认。 */
+@Immutable
+data class ThemeOverride(val light: Map<String, Color>, val dark: Map<String, Color>)
+
+private fun AioaColors.with(o: Map<String, Color>): AioaColors {
+    if (o.isEmpty()) return this
+    fun c(name: String, d: Color) = o[name] ?: d
+    return AioaColors(
+        background = c("background", background), surface = c("surface", surface), surfaceAlt = c("surfaceAlt", surfaceAlt),
+        border = c("border", border), text = c("text", text), textSecondary = c("textSecondary", textSecondary),
+        accent = c("accent", accent), onAccent = c("onAccent", onAccent), success = c("success", success),
+        warning = c("warning", warning), danger = c("danger", danger),
+    )
+}
 
 val DEFAULT_RADIUS = 16.dp
 
@@ -78,7 +95,9 @@ object Minimal {
 
 /** 由外观设置算出最终令牌。 */
 fun tokensOf(a: Appearance): AioaTokens {
-    val base = if (a.dark) Minimal.dark else Minimal.light
+    val default = if (a.dark) Minimal.dark else Minimal.light
+    // 顺序: 默认主题 -> 主题插件 -> 用户自己选的强调色
+    val base = a.theme?.let { default.with(if (a.dark) it.dark else it.light) } ?: default
     val colors = a.accent?.let { base.copy(accent = it, onAccent = contrastOn(it)) } ?: base
     val metrics = if (a.compact) {
         AioaMetrics(radius = a.radius, gap = 8.dp, padding = 12.dp)

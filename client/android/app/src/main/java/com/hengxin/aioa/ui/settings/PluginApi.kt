@@ -30,6 +30,8 @@ data class PluginEntry(
     val enabled: Boolean = false,
     // 开发模式装的本地插件 (不在市场里, 只有自己看得到)
     val dev: Boolean = false,
+    // 别人的开发插件: 只有主人看得到, 只能撤
+    val foreign: Boolean = false,
 ) {
     val mine get() = installed != null || enabled
 
@@ -73,7 +75,7 @@ class PluginApi(private val context: Context) {
         val m = b.getJSONObject("manifest")
         m.put(KEY_INSTALLED, b.optJSONObject(KEY_INSTALLED) ?: JSONObject.NULL).put(KEY_ALLOWED, b.optJSONObject(KEY_ALLOWED) ?: JSONObject.NULL)
         // 开发插件的标记在白名单项里, 清单本身没有
-        m.put(KEY_DEV, b.optJSONObject(KEY_ALLOWED)?.optBoolean(KEY_DEV) == true)
+        m.put(KEY_DEV, b.optJSONObject(KEY_ALLOWED)?.optBoolean(KEY_DEV) == true).put(KEY_FOREIGN, b.optBoolean(KEY_FOREIGN))
         val agent = m.optJSONObject("agent")
         // 启用状态与单选改选在白名单视图里
         val view = Api.call(context, GET, listOf(PATH_ALLOW)).body
@@ -163,6 +165,7 @@ class PluginApi(private val context: Context) {
             installed = o.optJSONObject(KEY_INSTALLED)?.let(::install),
             enabled = o.optBoolean(KEY_ENABLED),
             dev = o.optBoolean(KEY_DEV),
+            foreign = o.optBoolean(KEY_FOREIGN),
             allowed = o.optJSONObject(KEY_ALLOWED)?.let { a ->
                 val risky = a.optJSONArray("risky")
                 PluginAllowed(a.optString("version"), (0 until (risky?.length() ?: 0)).mapNotNull { risky?.optString(it) })
@@ -198,6 +201,7 @@ class PluginApi(private val context: Context) {
         private const val KEY_ADMIN = "admin"
         private const val KEY_OWNER = "owner"
         private const val KEY_DEV = "dev"
+        private const val KEY_FOREIGN = "foreign"
         private const val SINGLE_PREFIX = "core."
         private const val PERM_DATA_OWN = "data:own"
         private const val PERM_PUSH = "push:send"

@@ -42,3 +42,6 @@ export function pluginParts(sql: SqlStorage, ownerId: () => string): { plugins: 
   const kernel = new PluginKernel(allow, () => legacySeed(plugins, ownerId()), () => seedBuiltins(allow, ownerId(), Date.now(), { has: (id) => !!plugins.get(id), remove: (id) => plugins.remove(id), hasTodos: () => hasTodos(sql) }));
   return { plugins, kernel, pdata: new PDataStore(sql) };
 }
+
+// Hub 账号回调用: 管理员降级, 停用或删号时撤掉他的开发插件
+export { retireDev } from "./api-dev";

@@ -86,7 +86,8 @@
 
 - id 必须是带命名空间的新 id, 不能是旧别名 (`todo`, `gh`), 不能占用已放行或市场里已有的 id。
 - 第一次上传时为开发者启用; 之后重新上传只换版本, 不改启用状态。开发者关掉开发模式后不能再启用。
-- 主人可以用 `DELETE /api/v1/plugin-allow/{id}` 撤掉任何人的开发插件 (开发者被降级或删除后留下的也能清)。别人打开同 id 的详情看到的是市场内容, 不暴露开发插件。
+- 主人在市场列表与详情里看得到别人的开发插件 (`foreign: true`, 只能撤, 不能用), 用 `DELETE /api/v1/plugin-allow/{id}` 撤掉; 其他人打开同 id 的详情看到的是市场内容。
+- admin 子号被降为成员, 停用或删除时, 他的开发插件自动撤掉, 开发模式关掉。
 - 主人给自己的开发插件装 Agent 时, 群, Agent 与工作台和普通安装一样建在共用库里, 群成员看得到; "只有开发者看得到" 指市场列表, 详情, 启用与数据。
 
 本地上传: `AIOA_SERVER=... AIOA_TOKEN=<管理员 access token> node tools/plugin-dev.mjs <插件目录>` (加 `--off` 撤掉)。
@@ -149,6 +150,18 @@
 待办变化时广播 `{ "t": "chat_sync", "topic": "todos", "channel" }` (旧客户端重拉该群待办) 与 `pdata_sync` (新客户端按 rev 增量拉)。待办接口自 #101 起转发到插件数据 pdata (`hengxin666.todo` 的 `items`), 只在调用者自己的账号启用了待办插件时可用, 保留一个大版本后删除, 新代码请用 `docs/api/plugins.md` 的 pdata 接口。类型见 `protocol/src/v1/plugin.ts`, `plugin-todo.ts`。
 
 - 回滚: 迁移不可逆 (旧表已删), 回滚旧版服务端会看到空的待办表; 需要回滚时先用 `GET /api/v1/pdata/hengxin666.todo/items` 导出。
+
+## 主题插件 (core.theme.base)
+
+默认主题内置在客户端 (不是插件)。启用了提供 `core.theme.base` 的插件 (需要 `core.replace` 权限) 时, 客户端用它的颜色覆盖默认值:
+
+```jsonc
+"contributes": { "core.theme.base": [{ "id": "a.ocean.theme", "title": "海蓝", "light": { "accent": "#1E6FD9" }, "dark": { "accent": "#7DB3FF", "background": "#0B1320" } }] }
+```
+
+- 令牌名见 `THEME_TOKENS` (background, surface, surfaceAlt, border, text, textSecondary, accent, onAccent, success, warning, danger), 值是 `#RRGGBB` 或 `#RRGGBBAA`; 没写的沿用默认。
+- 多个主题插件时按 "账号选择 > 管理员默认 > 唯一启用者" 裁决; 用户在设置里选的强调色仍然优先。
+- 安卓启动时先用本地缓存的主题, 连上服务端与收到 `plugin_update` 时按 `/plugin-contrib/core.theme.base` 重拉; 停用后回到默认主题。
 
 ## 事件与扩展点
 

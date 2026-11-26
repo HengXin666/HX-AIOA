@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker>
+  </defs>
+  <rect width="960" height="460" fill="#ffffff"/>
+  <text x="480" y="40" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">push.route 扩展点: 让插件在规则引擎前面排队改这条推送</text>
+  <rect x="30" y="170" width="150" height="70" rx="10" fill="#e0f2fe" stroke="#0284c7"/>
+  <text x="105" y="200" text-anchor="middle" font-size="15" fill="#0f172a">一条推送</text>
+  <text x="105" y="222" text-anchor="middle" font-size="12" fill="#475569">"CI 失败: main"</text>
+  <path d="M180 205 L220 205" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="220" y="110" width="500" height="190" rx="14" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="470" y="136" text-anchor="middle" font-size="15" font-weight="700" fill="#5b21b6">pipeline: 按 before / after 排好, 一个接一个改</text>
+  <g font-size="14">
+    <rect x="240" y="160" width="140" height="110" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="310" y="186" text-anchor="middle" fill="#4c1d95" font-weight="700">值班插件</text>
+    <text x="310" y="210" text-anchor="middle" fill="#4c1d95">我值班时</text>
+    <text x="310" y="230" text-anchor="middle" fill="#4c1d95">CI 失败改 alert</text>
+    <text x="310" y="254" text-anchor="middle" fill="#6d28d9" font-size="12">writes: priority</text>
+    <rect x="400" y="160" width="140" height="110" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="470" y="186" text-anchor="middle" fill="#4c1d95" font-weight="700">分群插件</text>
+    <text x="470" y="210" text-anchor="middle" fill="#4c1d95">按仓库</text>
+    <text x="470" y="230" text-anchor="middle" fill="#4c1d95">改投到项目群</text>
+    <text x="470" y="254" text-anchor="middle" fill="#6d28d9" font-size="12">writes: channel</text>
+    <rect x="560" y="160" width="140" height="110" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="630" y="186" text-anchor="middle" fill="#4c1d95" font-weight="700">专注插件</text>
+    <text x="630" y="210" text-anchor="middle" fill="#4c1d95">番茄钟期间</text>
+    <text x="630" y="230" text-anchor="middle" fill="#4c1d95">全部静默</text>
+    <text x="630" y="254" text-anchor="middle" fill="#6d28d9" font-size="12">writes: route</text>
+  </g>
+  <g stroke="#7c3aed" stroke-width="2" marker-end="url(#a)"><path d="M380 215 L400 215"/><path d="M540 215 L560 215"/></g>
+  <path d="M720 205 L760 205" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="760" y="170" width="170" height="70" rx="10" fill="#fef3c7" stroke="#d97706"/>
+  <text x="845" y="200" text-anchor="middle" font-size="15" fill="#92400e">规则引擎</text>
+  <text x="845" y="222" text-anchor="middle" font-size="12" fill="#92400e">照常兜底</text>
+  <g font-size="14" fill="#334155">
+    <text x="40" y="350">· 每个账号只跑自己启用了的插件 (个人归属), 插件只能改声明过的字段 (writes)。</text>
+    <text x="40" y="376">· 两个插件都写同一字段却没声明先后, 放行时就报冲突 (已实现, 有契约测试)。</text>
+    <text x="40" y="402">· 现状: 内核与校验都有, 但服务端收推送时没有调用它, 也没有任何插件提供它。</text>
+    <text x="40" y="428">· 它不是版本更新通知, 也不是你提过的需求, 是 #99 设计扩展点目录时我列进去的。</text>
+  </g>
+</svg>

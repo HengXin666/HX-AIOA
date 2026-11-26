@@ -60,7 +60,18 @@ export type Contribution = {
   index?: string[];
   // widgets: 工作台组件 schema 文件 (插件目录里的相对路径)
   schema?: string;
+  // core.theme.base: 亮色 / 暗色下覆盖的颜色令牌 (THEME_TOKENS 里的名字 -> #RRGGBB 或 #RRGGBBAA), 没写的沿用默认主题
+  light?: Record<string, string>;
+  dark?: Record<string, string>;
 };
+
+// 主题插件能覆盖的颜色令牌, 与安卓 kit/Tokens.kt 的 AioaColors 字段一致
+export const THEME_TOKENS = ["background", "surface", "surfaceAlt", "border", "text", "textSecondary", "accent", "onAccent", "success", "warning", "danger"] as const;
+export const THEME_POINT = "core.theme.base";
+const HEX_COLOR = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/;
+function palette(v: unknown): boolean {
+  return v === undefined || (isObj(v) && Object.entries(v).every(([k, c]) => (THEME_TOKENS as readonly string[]).includes(k) && typeof c === "string" && HEX_COLOR.test(c)));
+}
 
 export const PERM_DATA_OWN = "data:own";
 export const PERM_PUSH = "push:send";
@@ -139,6 +150,7 @@ function contribution(id: string, point: ExtPoint, c: unknown): string | null {
   }
   if (!c.id.startsWith(`${id}.`) || c.id.length > 96) return `${where}: id 必须以插件 id "${id}." 开头`;
   for (const k of ["before", "after", "reads", "writes"] as const) if (c[k] !== undefined && !strList(c[k], /^[\w.:-]{1,96}$/)) return `${where}: ${k} 必须是字符串数组`;
+  if (point === THEME_POINT && !(palette(c.light) && palette(c.dark))) return `${where}: light / dark 只能写 ${THEME_TOKENS.join(", ")}, 值是 #RRGGBB`;
   if (cardOf(point) === "layered" && c.type !== undefined && !(FIELD_TYPES as readonly unknown[]).includes(c.type)) return `${where}: type 不合法`;
   return null;
 }

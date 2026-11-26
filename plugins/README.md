@@ -39,6 +39,7 @@ plugins/
 | `requires` / `optional` / `provides` | 服务接口与版本, 例 `{ "service:calendar.events": "^1" }` |
 | `conflicts` | 声明与哪些插件的哪些版本不能共存 |
 | `contributes` | 扩展点贡献, 目录见 `docs/api/plugins.md`; 非集合的 id 必须以插件 id 加 `.` 开头 |
+| `contributes["core.theme.base"]` | 主题: `{ "id", "light": { "accent": "#1E6FD9" }, "dark": {...} }`, 令牌见 `docs/api/plugins.md` 主题插件一节, 需要 `core.replace` |
 | `contributes.collections` | 插件数据集合 `{ "id": "items", "fields": { "title": "string" }, "index": ["title"] }` |
 | `emits` / `listens` | 事件名; `emits` 必须以插件 id 开头 |
 | `permissions` | `data:own`, `data:read:<插件>.<集合>`, `push:send`, `net:<域名>`, `ui.webview`, `core.replace`; 除 `data:own` 与 `push:send` 外都是高危, 放行与启用时单独确认; `net:*` 只给 `server: true` 的插件 |

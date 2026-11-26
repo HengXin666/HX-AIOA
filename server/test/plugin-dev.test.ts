@@ -78,3 +78,10 @@ test("开发者关掉开发模式后开发插件不能再启用", () => {
   k.setDevMode(ADMIN, true);
   assert.ok(k.setEnabled(ADMIN, "d.y", true));
 });
+
+test("主题插件: 只收认识的颜色令牌与 #RRGGBB", () => {
+  const theme = (light: unknown) => parseManifest({ ...base, id: "t.x", permissions: [PERM_REPLACE], contributes: { "core.theme.base": [{ id: "t.x.t", light }] } });
+  assert.equal(typeof theme({ accent: "#3366FF", background: "#00000080" }), "object");
+  assert.match(String(theme({ nope: "#000000" })), /light \/ dark/);
+  assert.match(String(theme({ accent: "blue" })), /#RRGGBB/);
+});

@@ -48,11 +48,12 @@ async function list(c: ReqCtx): Promise<Response> {
   const uid = viewer(c);
   if (c.who.owner) for (const p of c.core.plugins.list()) await autoUpgrade(c.core, p.id);
   const installed = new Map(c.who.owner ? c.core.plugins.list().map((p) => [p.id, p]) : []);
-  const allow = new Map(c.core.kernel.visible(uid).map((a) => [a.id, a]));
+  // 主人看得到所有人的开发插件 (只能撤, 不能用)
+  const allow = new Map(c.core.kernel.visible(uid, c.who.owner).map((a) => [a.id, a]));
   // 开发插件不在市场里, 单独列出 (只有开发者自己看得到)
   const devs = [...allow.values()].filter((a) => a.dev).map((a) => {
     const m = c.core.kernel.get(a.id)!.manifest;
-    return { id: a.id, name: m.name, summary: m.summary, version: m.version, icon: m.icon, tags: m.tags, author: m.author, dev: true as const };
+    return { id: a.id, name: m.name, summary: m.summary, version: m.version, icon: m.icon, tags: m.tags, author: m.author, dev: true as const, ...(a.by !== uid ? { foreign: true as const } : {}) };
   });
   const admin = isAdmin(c.who);
   const on = (id: string) => !!uid && allow.has(id) && c.core.kernel.isEnabled(uid, id);
@@ -77,7 +78,8 @@ async function detail(c: ReqCtx): Promise<Response> {
   const id = pluginId(c);
   const row = c.core.kernel.get(id);
   // 开发插件不在市场里: 开发者自己用它的快照; 别人看到的是市场内容 (没有就 404), 不暴露开发插件
-  const own = row?.meta.dev ? row.meta.by === uid : true;
+  const own = row?.meta.dev ? row.meta.by === uid || c.who.owner : true;
+  const foreign = !!row?.meta.dev && row.meta.by !== uid && c.who.owner;
   const devRow = row?.meta.dev && own ? row : undefined;
   // 只有管理员绕过市场缓存, 免得子号打开详情放大对市场的请求
   const manifest = devRow?.manifest ?? (await c.core.market.manifest(id, isAdmin(c.who)));
@@ -102,6 +104,7 @@ async function detail(c: ReqCtx): Promise<Response> {
     ...(task ? { task } : {}),
     admin: isAdmin(c.who),
     owner: c.who.owner,
+    ...(foreign ? { foreign: true } : {}),
     ...(isL2a(id) && L2A[id].owner ? { deploy: true } : {}),
   };
   return json(body);

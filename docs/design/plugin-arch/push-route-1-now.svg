@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker>
+  </defs>
+  <rect width="960" height="420" fill="#ffffff"/>
+  <text x="480" y="40" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">现在: 一条推送从进来到手机响, 只经过规则引擎</text>
+  <g font-size="15" fill="#0f172a">
+    <rect x="30" y="90" width="170" height="54" rx="10" fill="#e0f2fe" stroke="#0284c7"/><text x="115" y="122" text-anchor="middle">GitHub webhook</text>
+    <rect x="30" y="160" width="170" height="54" rx="10" fill="#e0f2fe" stroke="#0284c7"/><text x="115" y="192" text-anchor="middle">Agent 发消息</text>
+    <rect x="30" y="230" width="170" height="54" rx="10" fill="#e0f2fe" stroke="#0284c7"/><text x="115" y="262" text-anchor="middle">邮件 / 福利源</text>
+    <rect x="30" y="300" width="170" height="54" rx="10" fill="#e0f2fe" stroke="#0284c7"/><text x="115" y="332" text-anchor="middle">探针告警</text>
+  </g>
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M200 117 C260 117 260 220 300 220"/><path d="M200 187 C250 187 260 220 300 220"/>
+    <path d="M200 257 C250 257 260 222 300 222"/><path d="M200 327 C260 327 260 224 300 224"/>
+  </g>
+  <rect x="300" y="150" width="300" height="150" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="450" y="182" text-anchor="middle" font-size="17" font-weight="700" fill="#92400e">规则引擎 (内置, 你在 App 里配)</text>
+  <g font-size="14" fill="#78350f">
+    <text x="320" y="212">1. 用户规则: 第一条命中生效</text>
+    <text x="320" y="236">2. 来源规则 → 3. 默认规则</text>
+    <text x="320" y="260">4. 降噪: 免打扰, 只推根因, 合并</text>
+    <text x="320" y="284">结果: alert / push / silent / drop</text>
+  </g>
+  <path d="M600 225 L680 225" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <g font-size="15" fill="#0f172a">
+    <rect x="690" y="110" width="240" height="54" rx="10" fill="#dcfce7" stroke="#16a34a"/><text x="810" y="142" text-anchor="middle">响铃 / 横幅 (alert)</text>
+    <rect x="690" y="198" width="240" height="54" rx="10" fill="#dcfce7" stroke="#16a34a"/><text x="810" y="230" text-anchor="middle">静默进群 (silent)</text>
+    <rect x="690" y="286" width="240" height="54" rx="10" fill="#f1f5f9" stroke="#94a3b8"/><text x="810" y="318" text-anchor="middle">只进摘要 / 丢弃</text>
+  </g>
+  <g stroke="#64748b" stroke-width="1.5" fill="none"><path d="M680 225 L690 137"/><path d="M680 225 L690 313"/></g>
+  <text x="480" y="395" text-anchor="middle" font-size="14" fill="#475569">"推送路由" 要插手的就是中间这一步。今天这一步只有规则引擎一家, 够用。</text>
+</svg>
