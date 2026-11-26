@@ -1,4 +1,5 @@
 import { API_V1 } from "./constants";
+import type { AgentTrigger, SkillReport } from "./agent-skill";
 import type { Envelope } from "./event";
 import type { FeedTag } from "./feed-tags";
 import type { ChatView } from "./mail";
@@ -53,6 +54,18 @@ export type ChatAgent = {
   client?: string;
   // 已在群里发过 "指令已更新" 通知的版本, 同一版本只通知一次
   notified?: string;
+  // 以下为 skill 版 Agent (agent-skill.ts): 处理游标 (seq 不大于它的人发消息都处理过) 与游标之后零散已处理的 seq
+  handled?: number;
+  handledSet?: number[];
+  // 最近上报的已装版本 (X-Aioa-Skill), 只在变化时写
+  skills?: SkillReport;
+  // 服务端要求的接入版本: 开关大更新自动执行或出现必须重新接入的改动时加 1
+  setup?: number;
+  autoMajor?: boolean;
+  trigger?: AgentTrigger;
+  lastRun?: number;
+  // 已在群里提醒过的大版本缺失, 形如 "hengxin666.todo@2:new" 或 ":remind"
+  warned?: string[];
 };
 // 接入时可选带上定时与任务, 只写进这次的接入语, 不存
 export type AgentJob = { interval?: number; task?: string };

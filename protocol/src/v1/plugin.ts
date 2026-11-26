@@ -1,3 +1,4 @@
+import type { MajorChange } from "./agent-skill";
 import { API_V1 } from "./constants";
 import type { Space } from "./space";
 import type { PluginAllow } from "./plugin-api";
@@ -48,7 +49,8 @@ export type PluginManifest = PluginEntry & {
   space?: Space;
 } & PluginExtras;
 
-export type PluginAgent = { name: string; schedule?: string; interval?: number; task?: string };
+// skill: 插件 skill 的版本 "大.小", 文件在插件目录 skill/ 下 (见 agent-skill.ts); changes: 每个大版本的说明
+export type PluginAgent = { name: string; schedule?: string; interval?: number; task?: string; skill?: string; changes?: MajorChange[] };
 
 export type PluginInstall = {
   id: string;
