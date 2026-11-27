@@ -17,6 +17,9 @@ export const BUNDLE_HEAD_TEXT = 60;
 export const BUNDLE_TEXT_PREFIX = "[聊天记录]";
 export const PATH_EVENTS_BY_SEQS = `${API_V1}/events/seq`;
 export const QUERY_SEQS = "seqs";
+// ?via=<卡片 seq>: 能读到这张卡片的人就能读它 refs 里的消息; 卡片里套的卡片用 via=外层,内层, 最多 BUNDLE_VIA_DEPTH 层
+export const QUERY_VIA = "via";
+export const BUNDLE_VIA_DEPTH = 2;
 export type EventsBySeqs = { events: Envelope[] };
 
 // 单聊 (#133): 群名由双方账号 id 字典序拼成, 两人都是普通成员

@@ -119,7 +119,8 @@ fun ChatScreen(model: ChatModel) {
     // 主人点系统发送者的头像可以改名换头像 (#123 #128); 真人与 Agent 点头像出资料卡 (#136)
     var sender by remember { mutableStateOf<ServerFrame.Msg?>(null) }
     var profile by remember { mutableStateOf<ServerFrame.Msg?>(null) }
-    var bundle by remember { mutableStateOf<com.hengxin.aioa.proto.Bundle?>(null) }
+    // 点开的合并转发卡片 (整条消息, 取详情时带它的 seq 作 via)
+    var bundle by remember { mutableStateOf<ServerFrame.Msg?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isOwner = remember { com.hengxin.aioa.config.Auth.load(context)?.role == com.hengxin.aioa.ui.chat.ROLE_OWNER }
     val dir = g.directory
@@ -144,7 +145,7 @@ fun ChatScreen(model: ChatModel) {
         onAvatar = { m -> if (com.hengxin.aioa.ui.chat.Senders.iconOf(m.sid) != null) { if (isOwner) sender = m } else if (targetOf(meta, members, m) != null) profile = m },
         onAvatarLong = { m -> targetOf(meta, members, m)?.let(composer::mention) },
         onSelect = { m -> if (picking.on) picking.toggle(m.seq) else picking.start(m.seq) },
-        onBundle = { m -> bundle = m.bundle },
+        onBundle = { m -> if (m.bundle != null) bundle = m },
         admin = meta?.canManage == true,
         look = { m -> SenderLook(roles[m.sid], m.sid in agentSids) },
         atNames = atNames,
@@ -183,7 +184,7 @@ fun ChatScreen(model: ChatModel) {
     } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
     profile?.let { m -> ProfileSheet(model, open, m, members, composer) { profile = null } }
-    bundle?.let { b -> com.hengxin.aioa.ui.chat.BundleView(b) { bundle = null } }
+    bundle?.let { m -> m.bundle?.let { b -> com.hengxin.aioa.ui.chat.BundleView(b, m.seq) { bundle = null } } }
     sender?.let { m -> com.hengxin.aioa.ui.chat.SenderEditSheet(m.sid.orEmpty(), com.hengxin.aioa.ui.chat.Names.of(m), dir) { sender = null } }
 }
 

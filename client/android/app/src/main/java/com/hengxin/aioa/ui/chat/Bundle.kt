@@ -52,12 +52,15 @@ fun BundleCard(b: Bundle) {
     }
 }
 
-/** 按 refs 取原消息: 本地库有的先用, 缺的一次批量问服务端 (GET /events/seq?seqs=)。 */
-suspend fun loadBundle(context: Context, refs: List<Long>): Map<Long, ServerFrame.Msg> = withContext(Dispatchers.IO) {
+/**
+ * 按 refs 取原消息: 本地库有的先用, 缺的一次批量问服务端 (GET /events/seq?seqs=&via=)。
+ * via 是卡片自己的 seq: 能读到卡片就能读它引用的别的群的消息 (#132)。
+ */
+suspend fun loadBundle(context: Context, refs: List<Long>, via: Long): Map<Long, ServerFrame.Msg> = withContext(Dispatchers.IO) {
     val local = MessageDb.get(context).bySeqs(refs).filter { it.deleted == null }.associateBy { it.seq }
     val missing = refs.filter { it !in local }.take(Constants.BUNDLE_MAX)
     if (missing.isEmpty()) return@withContext local
-    val r = Api.call(context, GET, listOf(Constants.EVENTS_SEQ_PATH), query = mapOf("seqs" to missing.joinToString(",")))
+    val r = Api.call(context, GET, listOf(Constants.EVENTS_SEQ_PATH), query = mapOf("seqs" to missing.joinToString(","), "via" to via.toString()))
     val arr = r.body?.optJSONArray("events")
     val remote = (0 until (arr?.length() ?: 0)).mapNotNull { i -> arr?.optJSONObject(i)?.let { runCatching { V1Decode.envelope(it).toMsg() }.getOrNull() } }
         .filter { it.deleted == null }.associateBy { it.seq }
@@ -66,10 +69,10 @@ suspend fun loadBundle(context: Context, refs: List<Long>): Map<Long, ServerFram
 
 /** 点开合并转发: 只读的小会话页, 盖住当前页, 返回关闭。 */
 @Composable
-fun BundleView(b: Bundle, close: () -> Unit) {
+fun BundleView(b: Bundle, via: Long, close: () -> Unit) {
     val c = Aioa.colors
     val context = LocalContext.current
-    val msgs by produceState<Map<Long, ServerFrame.Msg>?>(null, b) { value = runCatching { loadBundle(context, b.refs) }.getOrDefault(emptyMap()) }
+    val msgs by produceState<Map<Long, ServerFrame.Msg>?>(null, b, via) { value = runCatching { loadBundle(context, b.refs, via) }.getOrDefault(emptyMap()) }
     Dialog(close, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(c.background).safeDrawingPadding()) {
             SubBar("${b.from.ifEmpty { "群" }} 的聊天记录", "${b.count} 条", close, right = null)
