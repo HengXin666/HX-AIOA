@@ -24,7 +24,8 @@ private const val KEY_SKILL = "skill"
 private val VER = Regex("""^(\d+)\.(\d+)$""")
 private val DATE = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
 
-data class SkillReport(val setup: Int, val skills: Map<String, String>, val auto: Boolean = false)
+/** client 是 Agent 上报的命令行版本 (如 hxaioa 0.4.0); 旧 Agent 没有。 */
+data class SkillReport(val setup: Int, val skills: Map<String, String>, val auto: Boolean = false, val client: String? = null)
 /** 触发方式: expr 是 Agent 原样上报的定时表达式, every 是服务端推算的间隔秒数, tz 是 Agent 宿主的 IANA 时区。 */
 data class AgentTrigger(val expr: String, val every: Long?, val at: Long, val tz: String? = null)
 /** 插件清单 agent.changes 的一项: 某个大版本改了什么, 不升级会少什么, 旧版兼容到哪天。 */
@@ -100,7 +101,8 @@ fun parseSkillReport(o: JSONObject?): SkillReport? {
     o ?: return null
     val s = o.optJSONObject("skills")
     val skills = s?.keys()?.asSequence()?.associateWith { s.optString(it) }.orEmpty()
-    return SkillReport(o.optInt("setup"), skills, o.optBoolean("auto"))
+    val client = listOf("client", "cli").firstNotNullOfOrNull { k -> o.optString(k).takeIf { !o.isNull(k) && it.isNotEmpty() } }
+    return SkillReport(o.optInt("setup"), skills, o.optBoolean("auto"), client)
 }
 
 fun parseTrigger(o: JSONObject?): AgentTrigger? = o?.optString("expr")?.ifEmpty { null }?.let {

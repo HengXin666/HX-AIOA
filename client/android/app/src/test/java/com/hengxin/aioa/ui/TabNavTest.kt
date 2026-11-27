@@ -1,5 +1,7 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.ui.groupinfo.GsPage
+import com.hengxin.aioa.ui.groupinfo.GsStack
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -76,5 +78,20 @@ class TabNavTest {
     fun 侧栏进最近会话_返回原栏() {
         val n = path({ it.select(Tab.AGENT) }, { it.go(Tab.CHAT) })
         assertEquals(TabNav(Tab.AGENT), n.back())
+    }
+
+    // 群聊设置的子页 (#137): 成员 → Agent 设置逐级返回, 退到根交给外层 (群会话)
+    @Test
+    fun 群设置子页_逐级返回到根() {
+        val s = GsStack().push(GsPage.Members()).push(GsPage.Agent("k1"))
+        assertEquals(GsPage.Agent("k1"), s.top)
+        assertEquals(GsPage.Members(), s.pop().top)
+        assertFalse(s.pop().pop().canBack)
+    }
+
+    @Test
+    fun 群设置重复点同一子页_不叠两层() {
+        val s = GsStack().push(GsPage.Search).push(GsPage.Search)
+        assertEquals(1, s.pages.size)
     }
 }
