@@ -128,7 +128,7 @@ private fun GroupInfoRoot(model: ChatModel, group: String, onBack: () -> Unit, p
                 // 实时状态提示: 群主 / 管理员可关, 关了服务端不再推这类帧
                 if (!memo && (meta?.canTune ?: true)) {
                     GiToggle("显示 \"正在输入\"", meta?.hideTyping != true, true) { dir.setHideTyping(group, !it) }
-                    if (!dm) GiToggle("显示${Constants.CLOUD_AGENT}正在监听", meta?.hideListening != true, true) { dir.setHideListening(group, !it) }
+                    if (!dm) GiToggle("显示${Constants.CLOUD_AGENT} 正在监听", meta?.hideListening != true, true) { dir.setHideListening(group, !it) }
                 }
             }
             val leave = meta?.shared == true && meta.role != ROLE_OWNER

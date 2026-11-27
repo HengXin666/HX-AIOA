@@ -11,6 +11,9 @@ type Row = { sid: string; name: string; icon: string | null; alias: string | nul
 
 export const isSystemSender = (sid: string): boolean => sid === SRC_SYSTEM || sid.startsWith(SYSTEM_PREFIX) || sid === TERMINAL;
 
+/** 群 Agent 等非真人来源 (#121): 来源 id 与当前名字, 主人也能给它们改名换头像。 */
+export type AgentSource = { id: string; name: string; created?: number };
+
 /**
  * 系统发送者登记表 (#128): 第一次发言自动登记, 之后只更新最近出现; 主人在这里改名, 换头像。
  * 旧表 sender_meta (#123, 只有头像) 并进来; 历史消息里的系统来源第一次启动时补登。
@@ -60,10 +63,24 @@ export class SenderStore {
     return r ? toMeta(r) : null;
   }
 
-  /** 发消息前调用: 系统来源登记 / 更新最近出现; 主人改过名的换成别名。返回要存的信封。 */
-  see(ev: Envelope, now = Date.now()): Envelope {
+  /**
+   * Agent 来源 (#121) 补登: 现有的 Agent 来源都登记, 默认名跟着来源走, 别名与头像不动 (#123 旧表并过来的头像也留着);
+   * 来源删掉了的行留着不删, 免得丢主人设过的头像。列表与改名前调用, 这样没发过言的群 Agent 也能先设好头像。
+   */
+  syncAgents(agents: AgentSource[], now = Date.now()): void {
+    for (const a of agents) {
+      this.sql.exec(
+        `INSERT INTO sender (sid, name, first, last, updated) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(sid) DO UPDATE SET name = excluded.name WHERE name <> excluded.name`,
+        a.id, a.name || a.id, a.created ?? now, a.created ?? now, now,
+      );
+    }
+  }
+
+  /** 发消息前调用: 系统来源与 Agent 来源 (agent) 登记 / 更新最近出现; 主人改过名的换成别名。返回要存的信封。 */
+  see(ev: Envelope, now = Date.now(), agent = false): Envelope {
     const src = ev.source;
-    if (!src?.id || !isSystemSender(src.id)) return ev;
+    if (!src?.id || !(agent || isSystemSender(src.id))) return ev;
     const cur = this.get(src.id);
     if (!cur) {
       this.sql.exec("INSERT INTO sender (sid, name, icon, first, last, updated) VALUES (?, ?, ?, ?, ?, ?)", src.id, src.name || src.id, src.icon ?? null, now, now, now);

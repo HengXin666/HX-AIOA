@@ -77,8 +77,8 @@ private fun AgentLine(group: String, a: ChatAgent, state: AgentState, i: Int, no
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AgentGlyph(agentTone(i), GLYPH)
-            Text(a.name, c.text, 15, Modifier.padding(start = 4.dp), weight = FontWeight.Medium)
+            AgentGlyph(agentTone(i), GLYPH, a.sourceId)
+            Text(com.hengxin.aioa.ui.chat.MentionOps.agentName(a), c.text, 15, Modifier.padding(start = 4.dp), weight = FontWeight.Medium)
             Text(stateLine(a, state, now), c.textSecondary, 12, Modifier.weight(1f))
             if (a.reads.isNotEmpty()) {
                 Icon("eye", c.textSecondary, 12.dp)

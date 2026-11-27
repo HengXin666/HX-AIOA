@@ -48,7 +48,7 @@ private fun leftToday(upcoming: List<Long>, now: Long): Int {
 @Composable
 fun AgentRunSection(group: String, a: ChatAgent, now: Long) {
     val c = Aioa.colors
-    HomeSection("运行 (${Constants.CLOUD_AGENT}上报)") {
+    HomeSection("运行 (${Constants.CLOUD_AGENT} 上报)") {
         if (!isSkillAgent(a)) {
             GiNote("还没装 skill, 仍用旧的专属指令; 重新接入后改用 skill。")
             return@HomeSection

@@ -46,6 +46,9 @@ import com.hengxin.aioa.kit.pointerTap
 import com.hengxin.aioa.ui.agents.triggerView
 import com.hengxin.aioa.ui.chat.ChatAgent
 import com.hengxin.aioa.ui.chat.ChatMeta
+import com.hengxin.aioa.ui.chat.MentionOps
+import com.hengxin.aioa.ui.chat.SenderFace
+import com.hengxin.aioa.ui.chat.Senders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -124,7 +127,7 @@ private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier
         }
         Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
             Metric(all.sum(), "消息", 0, Modifier.weight(1f))
-            Metric(agent.sum(), "${Constants.CLOUD_AGENT}发言", 120, Modifier.weight(1f))
+            Metric(agent.sum(), "${Constants.CLOUD_AGENT} 发言", 120, Modifier.weight(1f))
             Metric(needMe, "等你处理", 240, Modifier.weight(1f))
         }
         Row(Modifier.padding(start = 16.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -178,12 +181,15 @@ private fun AgentTile(meta: ChatMeta, a: ChatAgent, i: Int, onClick: () -> Unit)
     Panel(Modifier.width(158.dp).pointerTap(onClick)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Ring(f, step.second, Modifier.size(52.dp), delayMs = 300 + i * 120) { Icon("bot", tone, 20.dp) }
+                Ring(f, step.second, Modifier.size(52.dp), delayMs = 300 + i * 120) {
+                    // 主人给群 Agent 设了头像 (#121) 就放头像, 否则 bot 图标
+                    if (Senders.avatarOf(a.sourceId) != null) SenderFace(a.sourceId, "", 32.dp, agent = true) else Icon("bot", tone, 20.dp)
+                }
                 Spacer(Modifier.weight(1f))
                 if (a.plugin != null) SoftTag("插件", c.textSecondary)
             }
             Spacer(Modifier.height(12.dp))
-            Text(a.name, c.text, 15, weight = FontWeight.SemiBold)
+            Text(MentionOps.agentName(a), c.text, 15, weight = FontWeight.SemiBold)
             Text(meta.title ?: meta.channel, c.textSecondary, 13)
             Text(step.first, step.second, 12, Modifier.padding(top = 6.dp), weight = FontWeight.Medium)
         }

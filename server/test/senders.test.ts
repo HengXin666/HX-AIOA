@@ -49,3 +49,24 @@ test("系统发送者: 旧 sender_meta 并入, 历史消息补登名字与出现
   s.backfill();
   assert.equal(s.get("system:new"), null);
 });
+
+test("Agent 来源 (#121): 补登与改名换头像, 发言按别名, 来源删了头像还在", () => {
+  const s = new SenderStore(memSql());
+  s.see(ev("src_a", "小助手"), 1);
+  assert.equal(s.get("src_a"), null);
+  s.syncAgents([{ id: "src_a", name: "小助手", created: 2 }], 3);
+  assert.equal(s.get("src_a")?.name, "小助手");
+  assert.equal(s.get("src_a")?.first, 2);
+  const p = s.patch("src_a", { alias: "研发助理", avatar: "c".repeat(24) }, 4);
+  assert.ok(p && typeof p !== "string");
+  assert.equal(s.get("src_a")?.avatar, "c".repeat(24));
+  assert.equal(s.see(ev("src_a", "小助手", 5), 5, true).source.name, "研发助理");
+  assert.equal(s.get("src_a")?.last, 5);
+  // 群里改了 Agent 名字: 默认名跟着走, 别名不动
+  s.syncAgents([{ id: "src_a", name: "整理员" }], 6);
+  assert.equal(s.get("src_a")?.name, "整理员");
+  assert.equal(s.get("src_a")?.alias, "研发助理");
+  // 来源删了也不丢主人设过的头像
+  s.syncAgents([], 8);
+  assert.equal(s.get("src_a")?.avatar, "c".repeat(24));
+});

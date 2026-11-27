@@ -43,7 +43,9 @@ import com.hengxin.aioa.kit.SpaceTabs
 import com.hengxin.aioa.kit.hxPalette
 import com.hengxin.aioa.ui.ChatModel
 import com.hengxin.aioa.ui.agents.AgentsSection
-import com.hengxin.aioa.ui.groupinfo.AgentGlyph
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import com.hengxin.aioa.ui.groupinfo.GiBar
 import com.hengxin.aioa.ui.groupinfo.GiNote
 import com.hengxin.aioa.ui.groupinfo.SearchBox
@@ -137,7 +139,7 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
             }
             if (manage && !dm) item {
                 HomeSection("邀请") {
-                    HomeRow("邀请链接", "生成一条链接发给对方, 注册或登录后进群", lead = { AgentGlyph(Aioa.colors.textSecondary) }, onClick = doInvite,
+                    HomeRow("邀请链接", "生成一条链接发给对方, 注册或登录后进群", lead = { InviteGlyph() }, onClick = doInvite,
                         end = { Icon("link", Aioa.colors.textSecondary, 16.dp) })
                 }
             }
@@ -168,7 +170,9 @@ private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, live: Boo
     val online = m.online || isMe || live
     Box {
         HomeRow(
-            if (isMe) "${m.display} (我)" else m.display, "@${m.name}", trail = if (online) "" else seen.orEmpty(), divider = divider,
+            // 副标题带入群日期 (#130), 群主没有
+            if (isMe) "${m.display} (我)" else m.display, "@${m.name}" + (joinedDay(m.joined)?.let { " · $it 入群" } ?: ""),
+            trail = if (online) "" else seen.orEmpty(), divider = divider,
             lead = {
                 Box {
                     ChatAvatar(m.display, m.avatar, FACE.dp)
@@ -187,6 +191,17 @@ private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, live: Boo
         }
     }
 }
+
+/** 邀请链接行的图标: 和 Agent 一样的圆角方块, 画 user-plus (之前误用了机器人)。 */
+@Composable
+private fun InviteGlyph() {
+    val c = Aioa.colors
+    Box(Modifier.size(INVITE_GLYPH.dp).clip(RoundedCornerShape(10.dp)).background(c.textSecondary.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+        Icon("user-plus", c.textSecondary, (INVITE_GLYPH / 2).dp)
+    }
+}
+
+private const val INVITE_GLYPH = 36
 
 /** 邀请链接: 分享或复制。 */
 @Composable

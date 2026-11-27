@@ -31,7 +31,10 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.hxPalette
 import com.hengxin.aioa.ui.ChatModel
 import com.hengxin.aioa.ui.chat.ChatAgent
+import com.hengxin.aioa.ui.chat.MentionOps
 import com.hengxin.aioa.ui.chat.Onboard
+import com.hengxin.aioa.ui.chat.SenderEditSheet
+import com.hengxin.aioa.ui.chat.Senders
 import com.hengxin.aioa.ui.groupinfo.AgentGlyph
 import com.hengxin.aioa.ui.groupinfo.GiDanger
 import com.hengxin.aioa.ui.groupinfo.GiPage
@@ -47,6 +50,7 @@ private sealed interface Layer {
     data object Edit : Layer
     data object Remove : Layer
     data class Auto(val on: Boolean) : Layer
+    data class Sender(val sid: String) : Layer
 }
 
 /** 本群 + 其它几个; 空为只能发不能读。 */
@@ -79,12 +83,14 @@ fun AgentSettingsPage(model: ChatModel, group: String, keyId: String, onBack: ()
     var layer by remember { mutableStateOf<Layer?>(null) }
     var copied by remember { mutableStateOf(false) }
     val fail = { e: Throwable -> dir.error = e.message }
-    GiPage("${Constants.CLOUD_AGENT}设置", "${a.name} · ${meta.title ?: group}", onBack) {
+    // 主人起的显示名 (发送者别名) 优先 (#121)
+    val shown = MentionOps.agentName(a)
+    GiPage("${Constants.CLOUD_AGENT} 设置", "$shown · ${meta.title ?: group}", onBack) {
         Panel(Modifier.padding(top = 14.dp).fillMaxWidth()) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                AgentGlyph(agentTone(index), 56)
+                AgentGlyph(agentTone(index), 56, a.sourceId)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(a.name, c.text, 20, weight = FontWeight.SemiBold)
+                    Text(shown, c.text, 20, weight = FontWeight.SemiBold)
                     Text(stateLine(a, state, now) + if (a.pending) " · 指令待更新" else if (a.joined != null) " · 指令已同步" else "", c.textSecondary, 13)
                 }
                 AgentStateTag(a, state)
@@ -93,6 +99,7 @@ fun AgentSettingsPage(model: ChatModel, group: String, keyId: String, onBack: ()
         dir.error?.let { e -> com.hengxin.aioa.ui.ErrorNote(e, Modifier.padding(top = 8.dp), onDismiss = { dir.error = null }) }
         HomeSection("基本") {
             GiValue("名字", a.name, false) { layer = Layer.Edit }
+            a.sourceId?.let { sid -> GiValue("显示名与头像", Senders.aliasOf(sid) ?: "跟随名字", true) { layer = Layer.Sender(sid) } }
             GiValue("可读的群", readsText(group, a.reads) + (a.plugin?.let { " · 插件 $it" } ?: ""), true) { layer = Layer.Edit }
         }
         AgentRunSection(group, a, now)
@@ -141,6 +148,7 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
             },
             dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
         )
+        is Layer.Sender -> SenderEditSheet(layer.sid, a.name, dir, close)
         null -> Unit
     }
 }

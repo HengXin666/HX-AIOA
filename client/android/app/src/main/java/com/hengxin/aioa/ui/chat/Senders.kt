@@ -127,11 +127,13 @@ fun SenderFace(sid: String?, name: String, size: Dp, modifier: Modifier = Modifi
 private const val AGENT_RATIO = 0.3f
 private const val ICON_RATIO = 0.55f
 
-/** 改系统发送者的名字和头像 (消息里点头像, 或系统发送者页点一行)。 */
+/** 改系统发送者与 Agent 的名字和头像 (消息里点头像, Agent 资料卡的 "名字与头像", 或系统发送者页点一行)。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SenderEditSheet(sid: String, fallbackName: String, dir: ChatDirectory, close: () -> Unit) {
     val info = Senders.list().find { it.sid == sid }
+    // 新接入的群 Agent 本机可能还没拉到登记 (#121), 打开时补拉一次
+    androidx.compose.runtime.LaunchedEffect(sid) { if (info == null) dir.refreshSenders() }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf(info?.alias ?: "") }
@@ -151,7 +153,7 @@ fun SenderEditSheet(sid: String, fallbackName: String, dir: ChatDirectory, close
                 }
             }
             if (info == null) {
-                Text("这个发送者还没登记 (不是系统发送者), 只能看。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("这个发送者还没登记 (不是系统发送者或 Agent), 只能看。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             } else {
                 OutlinedTextField(name, { name = it.take(NAME_MAX) }, Modifier.fillMaxWidth(), label = { Text("名字 (留空用默认名 ${info.name})") }, singleLine = true)
                 SheetRow("保存名字") {

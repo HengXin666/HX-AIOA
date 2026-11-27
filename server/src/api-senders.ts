@@ -2,15 +2,24 @@ import { PATH_SENDER, PATH_SENDERS, type ChatSyncFrame, type SenderPatch } from 
 import { GET, PATCH, PUT } from "./constants";
 import { OWNER, ROOM, type ReqCtx, type Route, route } from "./core";
 import { fail, json, pathParam, readJson } from "./http";
+import type { SenderStore } from "./senders";
 
 // 头像 id 是内容哈希的前 24 位十六进制 (见 api-chats putAvatar)
 const AVATAR_RE = /^[0-9a-f]{24}$/;
 
-/** 系统发送者 (#128): 列全部登记的 (第一次列时补登历史), 主人改名 / 换头像, 改了推 chat_sync senders。 */
+// 群 Agent 等 Agent 来源 (#121): 和系统发送者一样登记, 主人能改名换头像
+const AGENT_TYPE = "agent";
+
+function syncAgents(c: ReqCtx, s: SenderStore): void {
+  s.syncAgents(c.core.registry.sources().filter((x) => x.type === AGENT_TYPE).map((x) => ({ id: x.id, name: x.name, created: x.created })));
+}
+
+/** 系统发送者 (#128) 与 Agent 来源 (#121): 列全部登记的 (第一次列时补登历史), 主人改名 / 换头像, 改了推 chat_sync senders。 */
 function list(c: ReqCtx): Response {
   const s = c.core.pipeline.senders;
   if (!s) return json({ senders: [] });
   s.backfill();
+  syncAgents(c, s);
   return json({ senders: s.list() });
 }
 
@@ -35,8 +44,9 @@ async function patch(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   if (p.avatar && !c.core.chats.avatar(p.avatar)) return fail(400, "头像不存在, 先上传");
   s?.backfill();
+  if (s) syncAgents(c, s);
   const r = s?.patch(pathParam(c.params, 0), p) ?? null;
-  if (r === null) return fail(404, "没有这个系统发送者");
+  if (r === null) return fail(404, "没有这个系统发送者或 Agent");
   if (typeof r === "string") return fail(400, r);
   c.core.sockets.toAllClients({ t: "chat_sync", topic: "senders" } satisfies ChatSyncFrame);
   return json({ sender: r });

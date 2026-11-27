@@ -151,9 +151,13 @@ internal fun InviteTile(onClick: () -> Unit) {
     }
 }
 
-/** Agent 的头像: 圆角方块 + bot 图标 (Agent 不用正圆)。 */
+/** Agent 的头像: 圆角方块 + bot 图标 (Agent 不用正圆); 主人给这个来源 (sid) 设了图片头像 (#121) 就用图片, 同样圆角方块。 */
 @Composable
-internal fun AgentGlyph(tone: Color, size: Int = 36) {
+internal fun AgentGlyph(tone: Color, size: Int = 36, sid: String? = null) {
+    if (sid != null && com.hengxin.aioa.ui.chat.Senders.avatarOf(sid) != null) {
+        com.hengxin.aioa.ui.chat.SenderFace(sid, "", size.dp, agent = true)
+        return
+    }
     Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * 0.28f).dp)).background(tone.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
         Icon("bot", tone, (size / 2).dp)
     }

@@ -66,10 +66,16 @@ internal fun targetOf(meta: ChatMeta?, members: List<RoomMember>, msg: ServerFra
     return MentionTarget(uid, m?.display?.ifEmpty { null } ?: Names.of(msg), MentionOps.roleLabel(m?.role), sid = sid, avatar = m?.avatar)
 }
 
-/** 点头像的资料卡 (#136): 真人 身份, 群昵称, 最近发言, 发消息, @TA; Agent 状态, 版本, 可读的群, 下次触发, @它, Agent 设置。 */
+/**
+ * 点头像的资料卡 (#136): 真人 身份, 群昵称, 最近发言, 发消息, @TA; Agent 状态, 版本, 可读的群, 下次触发, @它, Agent 设置。
+ * onEditSender 只给主人: Agent 资料卡里多一个 "名字与头像", 打开发送者编辑 (#121, 旧版点头像就能改)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ProfileSheet(model: ChatModel, group: String, msg: ServerFrame.Msg, members: List<RoomMember>, composer: ComposerState, close: () -> Unit) {
+internal fun ProfileSheet(
+    model: ChatModel, group: String, msg: ServerFrame.Msg, members: List<RoomMember>, composer: ComposerState,
+    onEditSender: (() -> Unit)?, close: () -> Unit,
+) {
     val g = model.groups
     val meta = g.directory.metas[group]
     val sid = msg.sid.orEmpty()
@@ -77,7 +83,7 @@ internal fun ProfileSheet(model: ChatModel, group: String, msg: ServerFrame.Msg,
     val target = targetOf(meta, members, msg)
     ModalBottomSheet(close, containerColor = Aioa.colors.popover) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = 14.dp)) {
-            if (agent != null) AgentCard(model, group, agent, close) {
+            if (agent != null) AgentCard(model, group, agent, onEditSender, close) {
                 target?.let(composer::mention)
                 close()
             } else PersonCard(model, group, msg, members, target, composer, close)
@@ -134,7 +140,7 @@ private fun ColumnScope.PersonCard(model: ChatModel, group: String, msg: ServerF
 }
 
 @Composable
-private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent, close: () -> Unit, onAt: () -> Unit) {
+private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent, onEditSender: (() -> Unit)?, close: () -> Unit, onAt: () -> Unit) {
     val c = Aioa.colors
     val g = model.groups
     val now = com.hengxin.aioa.ui.agents.rememberNow()
@@ -163,12 +169,13 @@ private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent,
     Fact("最近活跃", a.active?.let { ago(it, now) } ?: "还没有动静")
     Row(Modifier.padding(top = 14.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         HxButton("@它", onAt, Modifier.weight(1f), icon = "at-sign")
-        HxButton("${Constants.CLOUD_AGENT}设置", {
+        HxButton("${Constants.CLOUD_AGENT} 设置", {
             g.settingsAgent = a.keyId
             close()
             g.page = ChatPage.SETTINGS
         }, Modifier.weight(1f), variant = HxButtonVariant.Secondary, icon = "settings")
     }
+    if (onEditSender != null) HxButton("名字与头像", onEditSender, Modifier.fillMaxWidth().padding(bottom = 6.dp), variant = HxButtonVariant.Outline, icon = "image")
 }
 
 @Composable
