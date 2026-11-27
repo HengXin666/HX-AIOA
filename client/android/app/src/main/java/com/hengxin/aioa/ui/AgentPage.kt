@@ -31,7 +31,7 @@ fun AgentPage(chat: ChatModel) {
     val answer = rememberAnswer(chat)
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
     val all = feed.tasks.values.sortedWith(compareBy<TaskSnapshot>({ rank(it.state) }, { -it.updated }))
-    PageColumn(Constants.HARNESS) {
+    PageColumn(Tab.AGENT.label) {
         feed.notice?.let { text ->
             Card {
                 Paragraph(text, Aioa.colors.warning, 14)

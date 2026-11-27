@@ -235,7 +235,7 @@ private fun Hosts(chat: ChatModel, open: (Tab) -> Unit, modifier: Modifier) {
     val hosts = m.hosts.take(HOSTS_SHOWN)
     if (hosts.isEmpty()) return
     Column(modifier) {
-        SectionTitle("资源", m.hosts.count { it.online }, action = "全部", onAction = { open(Tab.RESOURCES) })
+        SectionTitle(Tab.RESOURCES.label, m.hosts.count { it.online }, action = "全部", onAction = { open(Tab.RESOURCES) })
         Panel(Modifier.fillMaxWidth().pointerTap { open(Tab.RESOURCES) }) {
             hosts.forEachIndexed { i, h ->
                 if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))

@@ -26,8 +26,10 @@ import com.hengxin.aioa.ui.settings.SettingsPage
 enum class Tab(val label: String, val icon: String) {
     OVERVIEW("总览", "gauge"),
     CHAT("消息", "message-circle"),
-    AGENT(Constants.HARNESS, Constants.ICON_ACTIVITY),
-    RESOURCES("资源", "server"),
+    // 一级栏叫 "工作区" (#139), 任务本身仍叫 agent harness
+    AGENT("工作区", Constants.ICON_ACTIVITY),
+    // 资源页就是服务器页 (#139): 顶部只留一个 "服务器"
+    RESOURCES("服务器", "server"),
     ME("我的", "user"),
 }
 
