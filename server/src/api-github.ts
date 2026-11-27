@@ -1,4 +1,4 @@
-import { GITHUB_BRANCH_DEFAULT_DAYS, GITHUB_BRANCH_MAX_DAYS, PATH_GITHUB_BRANCHES, GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, GITHUB_HISTORY_KINDS, type GithubHistoryKind, PATH_GITHUB_HEATMAP, PATH_GITHUB_HISTORY, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
+import { GITHUB_BRANCH_DEFAULT_DAYS, GITHUB_BRANCH_MAX_DAYS, PATH_GITHUB_BRANCHES, GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, GITHUB_HISTORY_KINDS, type GithubHistoryKind, PATH_GITHUB_HEATMAP, PATH_GITHUB_HISTORY, PATH_GITHUB_TREND, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
 import { CODE_NOT_CONFIGURED, CODE_NOT_FOUND, ERR_NO_GITHUB_TOKEN, ERR_NO_RESOURCE, GET, POST, PUT } from "./constants";
 import { type Handler, type Need, OWNER, type Route, route } from "./core";
 import { gated } from "./github/gate";
@@ -63,6 +63,12 @@ export const GITHUB_ROUTES: Route[] = [
     const zone = c.url.searchParams.get("tz") ?? "";
     const h = await c.core.github.heatmap(validZone(zone) ? zone : await c.core.config.tz(), Date.now(), year);
     return etagged(c.req, h.tag, () => h.map);
+  }),
+  // 走势 (#142): GitHub 页全部折线 / 混合图与足迹一次给全, 只读库; tz=IANA 时区名, 不认识时用主人设置的; 没变 304
+  gh(GET, PATH_GITHUB_TREND, READ, async (c) => {
+    const zone = c.url.searchParams.get("tz") ?? "";
+    const t = await c.core.github.trend(validZone(zone) ? zone : await c.core.config.tz());
+    return etagged(c.req, t.tag, () => t.body);
   }),
   // 未合入分支: days 天内有提交 (默认 30, 最多 90); fresh=1 跳过 10 分钟缓存
   gh(GET, PATH_GITHUB_BRANCHES, READ, async (c) => {

@@ -109,3 +109,33 @@ export type GithubHistoryKind = (typeof GITHUB_HISTORY_KINDS)[number];
 export type GithubHistoryItem = { id: string; ts: number; kind: GithubHistoryKind; title: string; url: string; by?: string; number?: number; state?: string };
 export type GithubHistoryResult = { repo: string; kind: GithubHistoryKind; items: GithubHistoryItem[]; next?: string };
 export const GITHUB_HISTORY_PAGE = 30;
+
+// 走势 (#142): 一个接口给 GitHub 页全部折线 / 混合图; 按天 14 格与按周 (周一起) 12 格一起给, 切范围不再请求
+// label: 那一格第一天 YYYY-MM-DD (设备时区); *Comments 是我发的评论; received 是范围内我新开的 Issue / PR 收到的评论总数
+export type GithubTrendPoint = {
+  label: string;
+  commits: number;
+  prOpened: number;
+  prMerged: number;
+  prClosed: number;
+  issueOpened: number;
+  issueClosed: number;
+  prComments: number;
+  issueComments: number;
+  reviews: number;
+};
+export type GithubTrendSeries = { points: GithubTrendPoint[]; received: number };
+// 足迹: 我新建的仓库 (at 为创建时间) 与我 star 的仓库 (at 为 star 时间, stars 为仓库星数), 新的在前
+export type GithubFootprint = { repo: string; url: string; at: number; description?: string; private?: boolean; stars?: number };
+// backfill.done: Issue / PR 与评论都已补到 12 周前; syncedAt 为最近一次走势同步
+export type GithubTrendResult = {
+  login: string;
+  days: GithubTrendSeries;
+  weeks: GithubTrendSeries;
+  created: GithubFootprint[];
+  starred: GithubFootprint[];
+  backfill: { done: boolean };
+  syncedAt?: number;
+};
+export const GITHUB_TREND_DAYS = 14;
+export const GITHUB_TREND_WEEKS = 12;

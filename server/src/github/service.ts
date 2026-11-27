@@ -3,6 +3,8 @@ import type {
   GithubBranchesResult,
   GithubAvailableResult,
   GithubDailyResult,
+  GithubDay,
+  GithubTrendResult,
   GithubHeatmap,
   GithubHistoryKind,
   GithubHistoryResult,
@@ -23,6 +25,7 @@ import { type HeatState, HeatYears, KV_HEAT_STATE, backfillOf, backfillStep, emp
 import { type LegacyHeat, commitsByDate, dateIn, heatDates } from "./heatmap";
 import { HistoryFail, fetchHistory, historyTtl } from "./history";
 import { calendarStep } from "./calendar";
+import { type TrendState, TrendStore, emptyTrend, footprintOf, seriesOf, trendOf, trendSince, trendStep } from "./trend";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -39,11 +42,16 @@ const HEAT_SYNC_PAGES = 5;
 const SUBREQUESTS = 50;
 const SYNC_CALLS_PER_REPO = 4;
 const SUBREQ_RESERVED = 12;
+// 走势 (#142): 每次同步至少 1 次 GraphQL, 补历史时用剩余额度最多再翻 3 页
+const KV_TREND = "githubTrend";
+const TREND_PAGES = 4;
+const MIN_MS = 60_000;
 
 // GitHub 页面状态: webhook 增量更新, 有 GITHUB_TOKEN 时可回填, 并拉取本人的动态
 export class GithubService {
   readonly store: GithubStore;
   private readonly activityStore: ActivityStore;
+  private readonly trendStore: TrendStore;
   private heatLock: Promise<unknown> = Promise.resolve();
 
   constructor(
@@ -54,6 +62,7 @@ export class GithubService {
   ) {
     this.store = new GithubStore(sql);
     this.activityStore = new ActivityStore(sql);
+    this.trendStore = new TrendStore(sql);
   }
 
   apply(kind: string, body: unknown): void {
@@ -123,6 +132,7 @@ export class GithubService {
   async daily(days: number, tz: number, now = Date.now()): Promise<GithubDailyResult> {
     const since = dayStart(now, tz) - (days - 1) * 24 * 3600_000;
     const list = dailyOf(this.activityStore.range(since, now + 60_000), now, days, tz);
+    await this.dailyFromTrend(list, tz, since);
     const { repos } = await this.repos();
     const login = (await this.storage.get<string>(KV_GITHUB_LOGIN)) ?? "";
     const syncedAt = await this.storage.get<number>(KV_GITHUB_ACTIVITY_SYNCED);
@@ -134,6 +144,53 @@ export class GithubService {
       streak: streakOf(list),
       ...(syncedAt ? { syncedAt } : {}),
     };
+  }
+
+  /**
+   * 事件 API 只有最近 300 条, 推送也不带提交数, 热闹时连两天都盖不住 (#142): 走势同步过后,
+   * 提交 / PR / Issue / 评审 / 评论改用走势表的数, 推送次数仍来自动态。
+   */
+  private async dailyFromTrend(list: GithubDay[], tz: number, since: number): Promise<void> {
+    if (!(await this.storage.get<TrendState>(KV_TREND))?.at) return;
+    const labelOf = (ts: number) => new Date(ts + tz * MIN_MS).toISOString().slice(0, 10);
+    const idx = new Map(list.map((d, i) => [d.day, i]));
+    const s = seriesOf(this.trendStore.since(since - 24 * 3600_000), list.map((d) => d.day), (d) => idx.get(d) ?? -1, labelOf);
+    s.points.forEach((p, i) => {
+      const d = list[i];
+      if (!d) return;
+      Object.assign(d, { commits: p.commits, prOpened: p.prOpened, prMerged: p.prMerged, prClosed: p.prClosed, issueOpened: p.issueOpened, issueClosed: p.issueClosed, reviews: p.reviews, comments: p.prComments + p.issueComments });
+    });
+  }
+
+  /** 走势与 ETag (#142): 按天 14 格 + 按周 12 格 + 足迹, 只读库不调 GitHub; 同步时间与今天没变就 304。 */
+  async trend(tz: string, now = Date.now()): Promise<{ body: GithubTrendResult; tag: string }> {
+    const st = await this.storage.get<TrendState>(KV_TREND);
+    const login = (await this.storage.get<string>(KV_GITHUB_LOGIN)) ?? "";
+    const today = dateIn(now, tz);
+    const { days, weeks } = trendOf(this.trendStore.since(trendSince(now)), today, (ts) => dateIn(ts, tz));
+    const body: GithubTrendResult = {
+      login,
+      days,
+      weeks,
+      created: this.trendStore.footprints("repo").map(footprintOf),
+      starred: this.trendStore.footprints("star").map(footprintOf),
+      backfill: { done: Boolean(st?.caught && st.cmtDone) },
+      ...(st?.at ? { syncedAt: st.at } : {}),
+    };
+    return { body, tag: `t-${tz}-${today}-${st?.at ?? 0}` };
+  }
+
+  /** 走势同步: 一次 GraphQL 拿全, 补历史时多翻几页; 失败只记错误, 不影响仓库同步。 */
+  private async syncTrend(token: string, pages: number, now = Date.now()): Promise<string | null> {
+    try {
+      const login = await this.login(token);
+      const st = (await this.storage.get<TrendState>(KV_TREND)) ?? emptyTrend(now);
+      await trendStep(this.trendStore, token, login, st, now, pages);
+      await this.storage.put(KV_TREND, st);
+      return null;
+    } catch (e) {
+      return `走势: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
 
   /** 热力图状态与年份行的读改写串行执行, cron 与同步同时跑时不会重复累计。 */
@@ -258,9 +315,9 @@ export class GithubService {
 
   /** 停用插件并清除数据: 表与关注列表, 登录名, 同步时间一起清掉; 返回删掉的行数。 */
   async purge(): Promise<number> {
-    const n = this.store.clear() + this.activityStore.clear();
+    const n = this.store.clear() + this.activityStore.clear() + this.trendStore.clear();
     const heat = (await this.storage.get<HeatState>(KV_HEAT_STATE))?.years ?? [];
-    const keys = [KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_HEAT_STATE];
+    const keys = [KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_HEAT_STATE, KV_TREND];
     await this.storage.delete([...keys, ...heat.map(yearKey)]);
     return n;
   }
@@ -268,13 +325,15 @@ export class GithubService {
   async sync(): Promise<GithubSyncResult | null> {
     const token = this.env.GITHUB_TOKEN;
     if (!token) return null;
-    const [r, actErr] = await Promise.all([syncGithub(this.store, this.registry, token, await this.choice()), this.syncActivity(token)]);
-    if (r.repos > 0) await this.storage.put(KV_GITHUB_SYNCED, Date.now());
     const room = SUBREQUESTS - SYNC_CALLS_PER_REPO * Math.min((await this.tracked()).length, GITHUB_SYNC_MAX_REPOS) - SUBREQ_RESERVED;
-    await this.heatSync(Math.max(0, Math.min(HEAT_SYNC_PAGES, room))).catch((e) => console.error("热力图回填失败:", e));
-    if (actErr) {
+    const pages = Math.max(1, Math.min(TREND_PAGES, room + 1));
+    const [r, actErr, trendErr] = await Promise.all([syncGithub(this.store, this.registry, token, await this.choice()), this.syncActivity(token), this.syncTrend(token, pages)]);
+    if (r.repos > 0) await this.storage.put(KV_GITHUB_SYNCED, Date.now());
+    await this.heatSync(Math.max(0, Math.min(HEAT_SYNC_PAGES, room - pages + 1))).catch((e) => console.error("热力图回填失败:", e));
+    for (const err of [actErr, trendErr]) {
+      if (!err) continue;
       r.ok = false;
-      r.error = r.error ? `${r.error}; ${actErr}` : actErr;
+      r.error = r.error ? `${r.error}; ${err}` : err;
     }
     return r;
   }

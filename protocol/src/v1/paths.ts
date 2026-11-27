@@ -35,6 +35,7 @@ export const PATH_GITHUB_TRACKED = `${API_V1}/github/tracked`;
 export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
 export const PATH_GITHUB_DAILY = `${API_V1}/github/daily`;
 export const PATH_GITHUB_HEATMAP = `${API_V1}/github/heatmap`;
+export const PATH_GITHUB_TREND = `${API_V1}/github/trend`;
 export const PATH_GITHUB_BRANCHES = `${API_V1}/github/branches`;
 export const PATH_GITHUB_HISTORY = `${API_V1}/github/repos/{owner}/{name}/history`;
 export const PATH_FILES = `${API_V1}/files`;
