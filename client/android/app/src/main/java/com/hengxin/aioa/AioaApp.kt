@@ -13,7 +13,11 @@ class AioaApp : Application() {
         super.onCreate()
         CrashLog.install(this)
         com.hengxin.aioa.data.Me.load(this)
-        Thread { runCatching { Updater.cleanup(this) } }.start()
+        Thread {
+            runCatching { Updater.cleanup(this) }
+            // 拍照留下的旧原图 (#139)
+            runCatching { com.hengxin.aioa.ui.chat.Photos.clean(this) }
+        }.start()
         Channels.create(this)
         com.hengxin.aioa.config.SetupImport.apply(this)
     }

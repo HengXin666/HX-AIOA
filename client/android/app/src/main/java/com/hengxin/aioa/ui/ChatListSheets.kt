@@ -26,6 +26,7 @@ internal sealed interface ListDialog {
     data class Delete(val group: String) : ListDialog
     data class Tags(val group: String?) : ListDialog
     data class NewTag(val group: String?) : ListDialog
+    data class DropTag(val name: String) : ListDialog
 }
 
 @Composable
@@ -51,6 +52,14 @@ internal fun ListDialogs(g: ChatGroups, dialog: ListDialog?, set: (ListDialog?) 
             g.directory.refreshChats()
             g.openGroup(channel)
         }
+        // 删标签先确认 (#139), 删完回到管理标签
+        is ListDialog.DropTag -> AlertDialog(
+            onDismissRequest = { set(ListDialog.Tags(null)) },
+            title = { Text("删除标签 \"${d.name}\"?") },
+            text = { Text("${g.tags.tags[d.name]?.size ?: 0} 个会话会去掉这个标签, 会话本身不受影响; 其它设备同步。") },
+            confirmButton = { TextButton({ g.tags.drop(d.name); set(ListDialog.Tags(null)) }) { Text("删除") } },
+            dismissButton = { TextButton({ set(ListDialog.Tags(null)) }) { Text("取消") } },
+        )
         is ListDialog.DropFolder -> AlertDialog(
             onDismissRequest = close,
             title = { Text("删除域 \"${d.name}\"?") },
@@ -107,7 +116,7 @@ private fun TagSheet(g: ChatGroups, group: String?, set: (ListDialog?) -> Unit) 
     val list = all.keys.map { t ->
         if (group != null) SheetAction("tag", t, "${all[t]?.size ?: 0} 个会话", on = t in mine) {
             g.tags.assign(group, if (t in mine) mine - t else mine + t)
-        } else SheetAction("trash-2", "删除 \"$t\"", "${all[t]?.size ?: 0} 个会话, 会话本身不受影响", danger = true) { g.tags.drop(t) }
+        } else SheetAction("trash-2", "删除 \"$t\"", "${all[t]?.size ?: 0} 个会话, 会话本身不受影响", danger = true) { set(ListDialog.DropTag(t)) }
     } + SheetAction("plus", "新建标签") { set(ListDialog.NewTag(group)) }
     ActionSheet(group?.let { "给 \"${g.directory.title(it)}\" 打标签" } ?: "管理标签", list, { set(null) })
 }

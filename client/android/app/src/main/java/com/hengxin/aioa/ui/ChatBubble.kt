@@ -160,7 +160,7 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
                             Box(Modifier.align(Alignment.End)) { time() }
                         }
                     }
-                    if (actions != null && menu) MessageMenu(msg, actions, onCopy = { clipboard.setText(AnnotatedString(msg.text)) }) { menu = false }
+                    if (actions != null && menu) MessageMenu(msg, actions, onCopy = { clipboard.setText(AnnotatedString(com.hengxin.aioa.ui.chat.copyText(msg))) }) { menu = false }
                 }
             }
         }

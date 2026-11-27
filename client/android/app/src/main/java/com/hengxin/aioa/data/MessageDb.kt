@@ -141,11 +141,11 @@ class MessageDb private constructor(context: Context) :
         ).toInt()
     }
 
-    /** 今日脉搏: since 起每小时的消息数, 以及其中来源在 agentSids 里的条数; 只读本地, 总览图表用。 */
+    /** 今日脉搏: since 起每小时的消息数, 以及其中来源在 agentSids 里的条数; 只读本地, 总览图表用。撤回的不算 (#139)。 */
     fun hourly(since: Long, hours: Int, agentSids: Set<String>): Pair<IntArray, IntArray> {
         val all = IntArray(hours)
         val agent = IntArray(hours)
-        readableDatabase.rawQuery("SELECT $C_TS, $C_SID FROM $T_MSG WHERE $C_TS >= ?", arrayOf(since.toString())).use { c ->
+        readableDatabase.rawQuery("SELECT $C_TS, $C_SID FROM $T_MSG WHERE $C_TS >= ? AND $LIVE", arrayOf(since.toString())).use { c ->
             while (c.moveToNext()) {
                 val i = ((c.getLong(0) - since) / HOUR_MS).toInt()
                 if (i !in 0 until hours) continue

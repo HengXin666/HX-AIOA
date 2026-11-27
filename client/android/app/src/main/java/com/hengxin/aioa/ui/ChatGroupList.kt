@@ -60,8 +60,9 @@ fun GroupList(model: ChatModel) {
     val rows = g.rows()
     val filter = ListFilter(tag?.let { tags[it]?.toSet() }, unreadOnly)
     val entries = remember(rows, g.folders, filter, pinsOpen) { layoutList(rows, g.folders, filter, pinsOpen) }
-    val now by produceState(System.currentTimeMillis()) { while (true) { delay(TICK_MS); value = System.currentTimeMillis() } }
-    val live: (String) -> String? = { key -> if (model.online) g.presence.line(key, now) else null }
+    // 每秒的时钟只在行里读 (#139): 读 State 的是调用 live 的那一行, 不再每秒整表重组
+    val clock = produceState(System.currentTimeMillis()) { while (true) { delay(TICK_MS); value = System.currentTimeMillis() } }
+    val live: (String) -> String? = remember(g, model) { { key -> if (model.online) g.presence.line(key, clock.value) else null } }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             if (!LocalShellBar.current) Header("消息", model.online)
@@ -70,7 +71,7 @@ fun GroupList(model: ChatModel) {
             PullToRefreshBox(g.syncing, g::syncNow, Modifier.fillMaxSize()) {
                 LazyColumn(Modifier.fillMaxSize().padding(horizontal = LIST_PAD)) {
                     item(key = "tags") {
-                        TagBar(tags.keys.toList(), tag, unreadOnly, rows.sumOf { if (it.muted) 0 else it.unread }, { tag = it; unreadOnly = false }, { unreadOnly = !unreadOnly; tag = null }) { menu = true }
+                        TagBar(tags.keys.toList(), tag, unreadOnly, unreadCount(rows), { tag = it; unreadOnly = false }, { unreadOnly = !unreadOnly; tag = null }) { menu = true }
                     }
                     entries.forEachIndexed { i, e ->
                         item(key = e.key) {
@@ -114,9 +115,10 @@ fun GroupList(model: ChatModel) {
             offset = IntOffset(0, MENU_DROP),
         )
     }
-    domain?.let { name ->
-        if (g.folders.none { it.name == name }) domain = null
-        else DomainPage(model, name, live, { domain = null }) { dialog = ListDialog.Actions(it) }
+    // 域被删了就退出来; 放在副作用里改, 不在组合阶段改状态 (#139)
+    LaunchedEffect(domain, g.folders) { if (domain != null && g.folders.none { it.name == domain }) domain = null }
+    domain?.takeIf { name -> g.folders.any { it.name == name } }?.let { name ->
+        DomainPage(model, name, live, { domain = null }) { dialog = ListDialog.Actions(it) }
     }
     ListDialogs(g, dialog) { dialog = it }
 }

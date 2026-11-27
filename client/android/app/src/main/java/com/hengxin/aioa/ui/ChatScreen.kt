@@ -128,7 +128,8 @@ fun ChatScreen(model: ChatModel) {
     val meta = dir.metas[open]
     // 草稿跟着群存在 ChatGroups 里: 从 "更多" 进群设置 / 收藏再回来不丢 (#139)
     val composer = remember(open) { g.composerOf(open) }
-    val members by androidx.compose.runtime.produceState(emptyList<RoomMember>(), open, meta?.shared) {
+    // 群资料版本变了 (有人进出, 改身份, 改头像) 重拉; 第一页走 ETag, 没变是 304
+    val members by androidx.compose.runtime.produceState(emptyList<RoomMember>(), open, meta?.shared, meta?.updated) {
         // @ 候选与资料卡要认得全群 (#139): 按页拉完 (最多 MENTION_PAGES 页), 第一页走 ETag 缓存
         if (meta?.shared == true) {
             val api = RoomApi(context)
@@ -158,6 +159,8 @@ fun ChatScreen(model: ChatModel) {
         onRemove = g::remove,
         onAvatar = { m ->
             when {
+                // 多选中点头像只是勾选这条, 不弹资料卡 (#139)
+                picking.on -> picking.toggle(m.seq)
                 targetOf(meta, members, m) != null -> profile = m
                 isOwner && m.sid?.startsWith(MentionOps.USER_PREFIX) == false -> sender = m
             }
@@ -180,6 +183,8 @@ fun ChatScreen(model: ChatModel) {
         } else if (meta?.isFeed == true) {
             KeepState("chat:feed:$open:${g.visit}") { FeedView(g.messages, Modifier.weight(1f)) }
         } else {
+            // 不认识的展示方式 (规范 §11): 先按聊天显示, 提示升级 (#139)
+            meta?.view?.takeIf { it !in KNOWN_VIEWS }?.let { v -> ViewHint(v) }
             // 装了待办插件的群: 顶上切 聊天 / 待办
             var todo by rememberSaveable(open) { mutableStateOf(false) }
             if (meta?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
@@ -229,6 +234,18 @@ internal fun BackButton(onBack: () -> Unit) {
     Box(Modifier.size(36.dp).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
         Icon("chevron-down", MaterialTheme.colorScheme.onSurface, 22.dp, Modifier.rotate(BACK_ROTATE))
     }
+}
+
+private val KNOWN_VIEWS = setOf(com.hengxin.aioa.ui.chat.VIEW_CHAT, com.hengxin.aioa.ui.chat.VIEW_MAIL, com.hengxin.aioa.ui.chat.VIEW_FEED)
+
+@Composable
+private fun ViewHint(view: String) {
+    Text(
+        "这个群的展示方式 \"$view\" 需要新版 App 或插件, 先按聊天显示。",
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 8.dp),
+        fontSize = 12.sp,
+        color = MaterialTheme.colorScheme.outline,
+    )
 }
 
 // 待办插件迁移后群里 Agent 的 plugin 是新 id, 没升级的服务端仍是旧 id

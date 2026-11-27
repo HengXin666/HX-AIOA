@@ -20,8 +20,8 @@ import com.hengxin.aioa.ui.chat.SubBar
 internal fun DomainPage(model: ChatModel, name: String, live: (String) -> String?, close: () -> Unit, onLong: (String) -> Unit) {
     val g = model.groups
     val rows = g.rows()
-    val d = layoutList(rows, g.folders.filter { it.name == name }, ListFilter(), pinsOpen = true)
-        .filterIsInstance<ListEntry.Domain>().firstOrNull() ?: ListEntry.Domain(name, emptyList())
+    // 域这一行不算置顶的群 (它们在置顶区), 点进来仍列出全部 (#139)
+    val d = ListEntry.Domain(name, domainRows(rows, g.folders.firstOrNull { it.name == name }))
     Dialog(close, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(Aioa.colors.background).safeDrawingPadding()) {
             val unread = if (d.unread > 0) " · ${d.unread} 条未读" else ""

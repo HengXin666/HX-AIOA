@@ -40,4 +40,22 @@ class ChatListLayoutTest {
         assertEquals(listOf("g:b", "g:a"), layoutList(rows, folders, ListFilter(setOf("a", "b")), false).map { it.key })
         assertTrue(layoutList(rows, folders, ListFilter(emptySet()), false).isEmpty())
     }
+
+    @Test
+    fun 未读筛选与计数同口径_免打扰不算() {
+        val rows = listOf(row("a", 5, unread = 3, muted = true), row("b", 9, unread = 1))
+        assertEquals(listOf("g:b"), layoutList(rows, emptyList(), ListFilter(unread = true), false).map { it.key })
+        assertEquals(1, unreadCount(rows))
+    }
+
+    @Test
+    fun 域里置顶的群只出现一次_点进域仍列出() {
+        val rows = listOf(row("a", 5, pinned = true, unread = 2), row("b", 9, unread = 1))
+        val folders = listOf(ChatFolder("开发", listOf("a", "b")))
+        val out = layoutList(rows, folders, ListFilter(), false)
+        assertEquals(listOf("g:a", "d:开发"), out.map { it.key })
+        assertEquals(listOf("b"), (out[1] as ListEntry.Domain).rows.map { it.key })
+        assertEquals(1, (out[1] as ListEntry.Domain).unread)
+        assertEquals(listOf("a", "b"), domainRows(rows, folders[0]).map { it.key })
+    }
 }

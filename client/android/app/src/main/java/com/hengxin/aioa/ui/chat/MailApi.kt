@@ -2,6 +2,7 @@ package com.hengxin.aioa.ui.chat
 
 import android.content.Context
 import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.net.ApiCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -102,10 +103,15 @@ class MailApi(private val context: Context) {
         Unit
     }
 
-    /** 群列表 (转发时选群), 带 Agent。 */
+    /**
+     * 群列表 (转发时选群), 带 Agent (#139): 先用群目录里已有的 (长连接实时更新), 再退到磁盘缓存,
+     * 都没有才请求一次; 不再每次整表重拉 /chats。
+     */
     suspend fun chats(): Result<List<ChatMeta>> = io {
-        val r = Api.call(context, GET, listOf("api/v1/chats"))
-        parseChats(r.body ?: error(r.error ?: FAILED)).values.filter { it.deleted == 0L && !it.isMail }.sortedByDescending { it.updated }
+        val known = ChatDirectories.current?.metas?.takeIf { it.isNotEmpty() }
+            ?: ApiCache.read(context, CHATS_CACHE)?.let(::parseChats)?.takeIf { it.isNotEmpty() }
+            ?: Api.call(context, GET, listOf(CHATS_PATH)).let { r -> parseChats(r.body ?: error(r.error ?: FAILED)) }
+        known.values.filter { it.deleted == 0L && !it.isMail }.sortedByDescending { it.updated }
     }
 
     /** 删掉一封信 (群里的消息一起删)。 */
@@ -152,6 +158,9 @@ class MailApi(private val context: Context) {
         private const val POST = "POST"
         private const val FAILED = "加载失败"
         private const val DELETE_MODE = "delete"
+        // 与 ChatDirectory 同一份群列表缓存
+        private const val CHATS_PATH = "api/v1/chats"
+        private const val CHATS_CACHE = "chats"
     }
 }
 

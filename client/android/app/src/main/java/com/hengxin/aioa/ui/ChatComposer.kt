@@ -43,6 +43,7 @@ import com.hengxin.aioa.ui.chat.MentionList
 import com.hengxin.aioa.ui.chat.MentionOps
 import com.hengxin.aioa.ui.chat.MentionTarget
 import com.hengxin.aioa.ui.chat.Names
+import com.hengxin.aioa.ui.chat.Photos
 import com.hengxin.aioa.ui.chat.plainPreview
 import java.io.File
 
@@ -50,7 +51,6 @@ private val KEY = 40.dp
 private val PANEL_H = 220.dp
 private const val INPUT_SP = 15
 private const val MAX_LINES = 6
-private const val PHOTO_DIR = "att"
 // 常用表情: 输入法也能输, 这里放一排最常用的, 点了插到光标处
 private val EMOJI = "😀 😂 🤣 😊 😍 😘 😎 🤔 😅 😭 😡 😱 👍 👎 👏 🙏 💪 👌 ✌️ 🤝 👀 🎉 🔥 ✅ ❌ ⚠️ 💡 📌 🚀 ❤️ 💯 🙌 😴 🤖 ☕ 🍻 🐛 🛠️ 📦 ⏰".split(" ")
 
@@ -68,7 +68,8 @@ internal fun ChatComposer(g: ChatGroups, state: ComposerState, candidates: List<
         if (g.send(state.text, state.tokens())) state.clear()
     }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { g.sendFile(it, state.text); state.clear() } }
-    var shot by remember { mutableStateOf<Uri?>(null) }
+    // 拍照期间进程可能被回收 (#139): Uri 可存进 saved state, 回来还认得这张照片
+    var shot by rememberSaveable { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> shot?.takeIf { ok }?.let { g.sendFile(it, "") } }
     Column(Modifier.fillMaxWidth().background(c.sidebar)) {
         if (candidates.isNotEmpty()) state.query?.let { q -> MentionList(MentionOps.filter(candidates, q), state::pick) }
@@ -111,8 +112,8 @@ internal fun ChatComposer(g: ChatGroups, state: ComposerState, candidates: List<
             Key("smile", panel == Panel.EMOJI) { panel = if (panel == Panel.EMOJI) Panel.NONE else Panel.EMOJI }
             Key("image") { pick.launch("image/*") }
             Key("camera") {
-                val dir = File(context.filesDir, PHOTO_DIR).apply { mkdirs() }
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", File(dir, "photo_${System.currentTimeMillis()}.jpg"))
+                val dir = File(context.filesDir, Photos.DIR).apply { mkdirs() }
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", File(dir, "${Photos.PREFIX}${System.currentTimeMillis()}.jpg"))
                 shot = uri
                 runCatching { camera.launch(uri) }.onFailure { Toast.makeText(context, "没有可用的相机", Toast.LENGTH_SHORT).show() }
             }
