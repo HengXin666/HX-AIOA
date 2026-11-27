@@ -17,22 +17,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
-import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.AnimatedItems
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.AreaChart
 import com.hengxin.aioa.kit.CardState
-import com.hengxin.aioa.kit.CountUp
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.LiveDot
 import com.hengxin.aioa.kit.Meter
@@ -43,7 +39,7 @@ import com.hengxin.aioa.kit.SoftTag
 import com.hengxin.aioa.kit.TaskCard
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.enter
-import com.hengxin.aioa.kit.hxPalette
+import com.hengxin.aioa.kit.chartPalette
 import com.hengxin.aioa.kit.pointerTap
 import com.hengxin.aioa.ui.agents.triggerView
 import com.hengxin.aioa.ui.chat.ChatAgent
@@ -51,8 +47,6 @@ import com.hengxin.aioa.ui.chat.ChatMeta
 import com.hengxin.aioa.ui.chat.MentionOps
 import com.hengxin.aioa.ui.chat.SenderFace
 import com.hengxin.aioa.ui.chat.Senders
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,8 +54,6 @@ import java.util.Locale
 // 总览 v2 (#121): 概况, 今日脉搏, 需要我, Agent, 重点待办, 正在发生, 资源, 值得一看。
 // 图表数据全在本地算 (消息库, 群资料缓存, 已有的探针推送), 打开总览不多发请求。
 
-private const val HOURS = 24
-private const val HOUR_MS = 3_600_000L
 private const val MINUTE_MS = 60_000L
 private const val AGENTS_SHOWN = 8
 private const val HOSTS_SHOWN = 3
@@ -70,9 +62,6 @@ private const val KEY_MEMORY = "mem"
 private const val FULL_PCT = 100f
 private const val NEED_SHOWN = 5
 private const val LAYER_SHOWN = 3
-private const val STREAK_DAYS = 400
-private const val HUNDRED = 100
-private val CLOCK = 150.dp
 
 @Composable
 internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, openGithub: () -> Unit, show: (String) -> Unit) {
@@ -115,85 +104,12 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     Column(Modifier.enter(7)) { Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show) }
 }
 
-/**
- * 你和 Agent 一起做了多少 (#140): 只放事实数据, 不自定成就与里程碑。
- * 左边 24 小时放射钟 (每小时一根光线, 现在这一小时在呼吸), 右边累计消息与本机记录天数,
- * 下面连续活跃 / 最忙一天 / Agent 占比 / 等你处理。全部本地算, 新消息进来时重算。
- */
-@Composable
-private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier: Modifier, openReport: () -> Unit) {
-    val c = Aioa.colors
-    val pal = hxPalette()
-    val db = MessageDb.get(LocalContext.current)
-    val since = (System.currentTimeMillis() / HOUR_MS - (HOURS - 1)) * HOUR_MS
-    val data = produceState<Pair<IntArray, com.hengxin.aioa.data.Lifetime>?>(null, chat.messages.size, since, agentSids) {
-        value = withContext(Dispatchers.IO) { db.hourly(since, HOURS, agentSids).first to db.lifetime(agentSids, STREAK_DAYS) }
-    }.value ?: return
-    val (all, life) = data
-    val today = java.time.LocalDate.now()
-    val streak = streakOf(life.perDay, today)
-    val best = life.perDay.values.maxOrNull() ?: 0
-    val together = if (life.first <= 0) 0 else java.time.temporal.ChronoUnit.DAYS.between(
-        java.time.Instant.ofEpochMilli(life.first).atZone(java.time.ZoneId.systemDefault()).toLocalDate(), today,
-    ).toInt() + 1
-    val agentPct = if (life.total == 0) 0 else life.agent * HUNDRED / life.total
-    Panel(modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("你和 ${Constants.CLOUD_AGENT} 一起", c.text, 15, weight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            LiveDot(pal.chart2, 6.dp)
-            Text("实时", c.textSecondary, 12)
-            Spacer(Modifier.width(10.dp))
-            com.hengxin.aioa.kit.Chip("周报", true, openReport)
-        }
-        Row(Modifier.padding(start = 8.dp, end = 16.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            com.hengxin.aioa.kit.RadialBars(all.map { it.toFloat() }, pal.chart1, pal.chart2, Modifier.size(CLOCK), highlight = HOURS - 1, delayMs = 150) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CountUp(all.sum(), 22, c.text, delayMs = 150)
-                    Text("近 24 小时", c.textSecondary, 11)
-                }
-            }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CountUp(life.total, 32, c.text, delayMs = 250)
-                Text("条消息往来 · ${life.groups} 个群", c.textSecondary, 12)
-                Text(if (together > 1) "本机记录 $together 天" else "今天开始记录", pal.chart2, 13, weight = FontWeight.Medium)
-            }
-        }
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Feat(streak, "天连续活跃", pal.chart3, 300, Modifier.weight(1f))
-            Feat(best, "条最忙一天", pal.chart1, 380, Modifier.weight(1f))
-            Feat(agentPct, "% 是 Agent", pal.chart2, 460, Modifier.weight(1f))
-            Feat(needMe, "条等你", if (needMe > 0) c.danger else c.textSecondary, 540, Modifier.weight(1f))
-        }
-    }
-}
-
-/** 一项事实数据: 数字从 0 滚上来, 下面一行说明, 底色是它自己的颜色。 */
-@Composable
-private fun Feat(n: Int, label: String, tone: Color, delay: Int, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        CountUp(n, 18, tone, delayMs = delay)
-        Text(label, Aioa.colors.textSecondary, 11)
-    }
-}
-
-/** 到今天为止连续有消息的天数; 今天还没消息就从昨天往前数。 */
-internal fun streakOf(perDay: Map<String, Int>, today: java.time.LocalDate): Int {
-    var d = if ((perDay[today.toString()] ?: 0) > 0) today else today.minusDays(1)
-    var n = 0
-    while ((perDay[d.toString()] ?: 0) > 0) {
-        n++
-        d = d.minusDays(1)
-    }
-    return n
-}
-
 /** 一个 Agent: 环是 "从上次运行到下次触发" 走了多少; 逾期标红, 没上报触发方式时只显示名字。 */
 @Composable
 private fun AgentTile(meta: ChatMeta, a: ChatAgent, i: Int, onClick: () -> Unit) {
     val c = Aioa.colors
-    val pal = hxPalette()
-    val tone = listOf(pal.chart2, pal.chart3, pal.chart4, pal.chart5)[i % 4]
+    val pal = chartPalette()
+    val tone = listOf(pal.teal, pal.amber, pal.accent, pal.green)[i % 4]
     val now = System.currentTimeMillis()
     val view = a.trigger?.let { triggerView(it, a.lastRun, now) }
     val next = view?.next
@@ -227,7 +143,7 @@ private fun AgentTile(meta: ChatMeta, a: ChatAgent, i: Int, onClick: () -> Unit)
 @Composable
 private fun Hosts(chat: ChatModel, open: (Tab) -> Unit, modifier: Modifier) {
     val c = Aioa.colors
-    val pal = hxPalette()
+    val pal = chartPalette()
     val m = chat.metrics
     val hosts = m.hosts.take(HOSTS_SHOWN)
     if (hosts.isEmpty()) return
@@ -236,7 +152,7 @@ private fun Hosts(chat: ChatModel, open: (Tab) -> Unit, modifier: Modifier) {
         Panel(Modifier.fillMaxWidth().pointerTap { open(Tab.RESOURCES) }) {
             hosts.forEachIndexed { i, h ->
                 if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))
-                val tone = listOf(pal.chart2, pal.chart5, pal.chart3)[i % 3]
+                val tone = listOf(pal.teal, pal.green, pal.amber)[i % 3]
                 val cpu = m.series(h.subject, KEY_CPU).takeLast(TREND_POINTS)
                 // 推送还没到 (首屏, 离线主机) 就用主机卡片里探针的最后一次快照 (#139)
                 val mem = m.series(h.subject, KEY_MEMORY).lastOrNull()?.second ?: h.last?.values?.get(KEY_MEMORY)?.toFloat()
