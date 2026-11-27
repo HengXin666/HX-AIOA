@@ -73,6 +73,8 @@ sealed interface ServerFrame {
     data class PDataSync(val plugin: String, val coll: String, val rev: Long) : ServerFrame
     /** 群里谁在监听 / 输入; until 为 0 表示长连在线, 否则到点自动消失。 */
     data class Presence(val channel: String, val listening: List<PresenceEntry>, val typing: List<PresenceEntry>) : ServerFrame
+    /** 真人在线 (#139): full 为连上时的全量; 否则 online 的人上线了, seen 的人下线了 (值为最近在线时间)。 */
+    data class Online(val full: Boolean, val online: List<String>, val seen: Map<String, Long>) : ServerFrame
     data class TaskLog(val taskId: String, val role: String, val kind: String, val text: String?, val ts: Long) : ServerFrame
     // 终端: d 为 base64 字节, 原样交给 xterm
     data class TermReady(val sid: String) : ServerFrame
@@ -144,6 +146,11 @@ object Frames {
             "chat_read" -> ServerFrame.ChatRead(o.optString(KEY_CHANNEL), o.optLong("read"))
             "agent_active" -> ServerFrame.AgentActive(o.optString(KEY_CHANNEL), o.optString("keyId"), o.optLong("active"))
             "pdata_sync" -> ServerFrame.PDataSync(o.optString("plugin"), o.optString("coll"), o.optLong("rev"))
+            "online" -> ServerFrame.Online(
+                o.optBoolean("full"),
+                o.optJSONArray("online")?.let { a -> (0 until a.length()).mapNotNull { a.optString(it).ifEmpty { null } } }.orEmpty(),
+                o.optJSONObject("seen")?.let { s -> s.keys().asSequence().associateWith { s.optLong(it) }.filterValues { it > 0 } }.orEmpty(),
+            )
             "presence" -> ServerFrame.Presence(o.optString(KEY_CHANNEL), presence(o.optJSONArray("listening")), presence(o.optJSONArray("typing")))
             "agents" -> ServerFrame.Agents(V1Decode.agents(o.optJSONArray("agents")))
             "task_log" -> o.getJSONObject("entry").let { e ->

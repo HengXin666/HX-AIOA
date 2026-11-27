@@ -42,7 +42,7 @@ import com.hengxin.aioa.ui.chat.RoomApi
 import com.hengxin.aioa.ui.chat.RoomMember
 import com.hengxin.aioa.ui.chat.UploadingAvatar
 import com.hengxin.aioa.ui.chat.digestLabel
-import com.hengxin.aioa.ui.chat.rememberPresence
+import com.hengxin.aioa.ui.chat.PeopleOnline
 import com.hengxin.aioa.ui.chat.roleLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -116,7 +116,7 @@ internal fun MemberStrip(group: String, meta: ChatMeta?, canInvite: Boolean, onA
         // 和成员页同一份第一页缓存 (同样的 limit, ETag 才对得上)
         api.page(group).onSuccess { list = it.members }
     }
-    val presence = rememberPresence(group, meta?.shared == true)
+    val presence = PeopleOnline.snapshot()
     val shown = if (meta?.shared == true) list.take(STRIP) else listOfNotNull(Me.uid?.let { RoomMember(it, it, "我", com.hengxin.aioa.ui.chat.ROLE_OWNER) })
     Column(modifier) {
         SectionTitle("群成员", if (meta?.shared == true) meta.members else shown.size, action = "全部", onAction = onAll)

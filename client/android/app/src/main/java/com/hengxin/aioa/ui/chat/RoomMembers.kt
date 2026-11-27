@@ -88,7 +88,7 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var invite by remember { mutableStateOf<RoomInvite?>(null) }
-    val presence = rememberPresence(group, meta?.shared == true)
+    val presence = PeopleOnline.snapshot()
     val now = com.hengxin.aioa.ui.agents.rememberNow()
     val apply = { p: MemberPage, more: Boolean -> members = if (more) (members + p.members).distinctBy { it.id } else p.members; next = p.next; error = null }
     // 同一时间只跑一个请求 (#139): 搜索词变了先取消旧的, 晚到的旧结果也不认

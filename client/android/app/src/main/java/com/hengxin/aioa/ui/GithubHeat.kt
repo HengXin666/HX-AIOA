@@ -102,7 +102,9 @@ fun GithubHeatCard(gh: GithubState) {
     var years by remember { mutableStateOf<List<Int>>(emptyList()) }
     LaunchedEffect(year) {
         withContext(Dispatchers.IO) {
-            val q = if (year == RECENT) emptyMap() else mapOf("year" to year.toString())
+            // 按设备时区分天 (#139), 和 "本周提交" 一个口径
+            val zone = "tz" to java.util.TimeZone.getDefault().id
+            val q = if (year == RECENT) mapOf(zone) else mapOf("year" to year.toString(), zone)
             val name = if (year == RECENT) CACHE_HEATMAP else "$CACHE_HEATMAP-$year"
             ApiCache.get(context, name, listOf(Constants.GITHUB_HEATMAP_PATH), q) { body, _ ->
                 val m = parseHeatmap(body)

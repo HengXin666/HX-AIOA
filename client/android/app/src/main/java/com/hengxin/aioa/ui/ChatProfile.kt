@@ -49,7 +49,6 @@ import com.hengxin.aioa.ui.chat.RoomMember
 import com.hengxin.aioa.ui.chat.SenderFace
 import com.hengxin.aioa.ui.chat.colorOf
 import com.hengxin.aioa.ui.chat.joinedDay
-import com.hengxin.aioa.ui.chat.rememberPresence
 import com.hengxin.aioa.ui.chat.openDirect
 import kotlinx.coroutines.launch
 
@@ -105,7 +104,7 @@ private fun ColumnScope.PersonCard(model: ChatModel, group: String, msg: ServerF
     }
     val name = member?.display?.ifEmpty { null } ?: Names.of(msg)
     // 打开时问一次谁在线 (#130), 不轮询
-    val presence = rememberPresence(group, meta?.shared == true && uid != null)
+    val presence = com.hengxin.aioa.ui.chat.PeopleOnline.snapshot()
     val now = com.hengxin.aioa.ui.agents.rememberNow()
     val live = uid != null && (uid == Me.uid || presence.isOnline(uid))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {

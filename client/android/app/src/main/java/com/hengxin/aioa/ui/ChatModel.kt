@@ -152,6 +152,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         if (frame is ServerFrame.ChatRead) return groups.directory.applyRead(frame.channel, frame.read)
         if (frame is ServerFrame.AgentActive) return groups.directory.setAgentActive(frame.channel, frame.keyId, frame.active)
         if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
+        if (frame is ServerFrame.Online) return com.hengxin.aioa.ui.chat.PeopleOnline.apply(frame)
         if (frame is ServerFrame.PluginUpdate) {
             PluginEvents.bump()
             spaces.onPlugin(frame.id, frame.change)

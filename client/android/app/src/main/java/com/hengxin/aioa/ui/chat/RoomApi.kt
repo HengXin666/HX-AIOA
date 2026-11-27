@@ -58,12 +58,6 @@ class RoomApi(private val context: Context) {
 
     private fun cacheName(channel: String) = "room-members-" + channel.replace(UNSAFE, "_")
 
-    /** 群里谁在线, 最近在线时间 (#130); 实时值, 不缓存。 */
-    suspend fun presence(channel: String): Result<MemberPresence> = io {
-        val r = Api.call(context, GET, listOf(Constants.CHATS_API, channel, PRESENCE))
-        parsePresence(r.body ?: error(r.error ?: FAILED))
-    }
-
     suspend fun invite(channel: String): Result<RoomInvite> = io {
         val r = Api.call(context, POST, listOf(Constants.CHATS_API, channel, INVITES), JSONObject())
         val b = r.body ?: error(r.error ?: FAILED)
@@ -97,7 +91,6 @@ class RoomApi(private val context: Context) {
         private const val DELETE = "DELETE"
         private const val MEMBERS = "members"
         private const val INVITES = "invites"
-        private const val PRESENCE = "presence"
         private const val JOIN = "api/v1/rooms/join"
         private const val FAILED = "操作失败"
         const val PAGE_SIZE = 50

@@ -70,6 +70,7 @@ import { chatSend } from "./chat-send";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
 import { halfHourly, heatmapDaily, majorRemind } from "./cron";
+import { onlineChanged, onlineSnapshot } from "./online";
 import { buildOverview } from "./group";
 import { ChatStore } from "./chat-store";
 import { ApiFail, fail } from "./http";
@@ -300,6 +301,11 @@ export class Hub extends DurableObject<Env> {
     }
     if (role !== "client") return new Response(null, { status: 101, webSocket: client });
     if (!att.bg) this.core.presence.snapshot((f) => sendFrame(server, f));
+    // 真人在线只走长连接帧 (#139): 先给自己一帧全量, 再告诉同群的人我上线了
+    if (!att.bg && uid && v1) {
+      sendFrame(server, onlineSnapshot(this.core, uid));
+      onlineChanged(this.core, uid, true);
+    }
     if (att.member) {
       if (uid && Number.isFinite(since)) {
         const grps = this.core.rooms.roomsOf(uid).map((m) => m.grp);
@@ -456,6 +462,8 @@ export class Hub extends DurableObject<Env> {
   private release(ws: WebSocket): void {
     const att = attOf(ws);
     this.core.sockets.reset(ws);
+    // 这个人最后一条前台连接断了才算下线
+    if (att.role === "client" && !att.bg && att.uid && !this.core.sockets.onlineUids(this.core.users.ownerId()).has(att.uid)) onlineChanged(this.core, att.uid, false);
     ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [], host: undefined, terms: [] } satisfies Attachment);
     this.core.terms.release(ws, att);
     if (att.host) this.core.metrics.offline(att.host);

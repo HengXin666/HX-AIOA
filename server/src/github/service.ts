@@ -203,7 +203,7 @@ export class GithubService {
     const map: GithubHeatmap = { days, updated: state.updated, years: list, backfill: backfillOf(state, await this.tracked()) };
     if (year) map.year = year;
     const sum = [...live.values()].reduce((a, b) => a + b, 0);
-    return { map, tag: `${year ?? 0}-${today}-${state.updated}-${sum}` };
+    return { map, tag: `${year ?? 0}-${tz}-${today}-${state.updated}-${sum}` };
   }
 
   /** 仓库全部历史的一页 (#134): 只给关注的仓库, 按 (仓库, 类别, 游标) 放 Cache API, 不落库。 */

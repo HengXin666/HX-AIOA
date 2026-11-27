@@ -55,11 +55,13 @@ export const GITHUB_ROUTES: Route[] = [
     const tz = Math.max(-TZ_MAX_MIN, Math.min(TZ_MAX_MIN, Number(c.url.searchParams.get("tz")) || 0));
     return json(await c.core.github.daily(days, tz));
   }),
-  // 提交热力图 (#134): 默认最近 140 天, year=YYYY 看那一年 (全部历史靠回填); 按主人设置的时区分天, 没变时 304
+  // 提交热力图 (#134): 默认最近 140 天, year=YYYY 看那一年 (全部历史靠回填); 没变时 304
+  // tz=IANA 时区名 (#139): 按设备时区算今天与实时提交; 不传或不认识时用主人设置的时区
   gh(GET, PATH_GITHUB_HEATMAP, READ, async (c) => {
     const y = Number(c.url.searchParams.get("year"));
     const year = Number.isInteger(y) && y >= MIN_YEAR && y <= MAX_YEAR ? y : undefined;
-    const h = await c.core.github.heatmap(await c.core.config.tz(), Date.now(), year);
+    const zone = c.url.searchParams.get("tz") ?? "";
+    const h = await c.core.github.heatmap(validZone(zone) ? zone : await c.core.config.tz(), Date.now(), year);
     return etagged(c.req, h.tag, () => h.map);
   }),
   // 未合入分支: days 天内有提交 (默认 30, 最多 90); fresh=1 跳过 10 分钟缓存
@@ -83,3 +85,14 @@ export const GITHUB_ROUTES: Route[] = [
     }
   }),
 ];
+
+/** 是不是运行时认识的 IANA 时区名 (Asia/Shanghai); 空串与乱填都不算。 */
+export function validZone(zone: string): boolean {
+  if (!zone || zone.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
