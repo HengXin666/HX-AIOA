@@ -1,4 +1,3 @@
-import { attachFile } from "./files/api";
 import { Drive } from "./files/drive";
 import { Migrator } from "./files/migrate";
 import { storageOf } from "./files/storage";
@@ -19,8 +18,6 @@ import {
   PING_TEXT,
   PONG_TEXT,
   PROBE_DEVICE_PREFIX,
-  SOURCE_TYPE_USER,
-  USER_SOURCE_PREFIX,
   PROTOCOL_VERSION,
   QUERY_DEVICE,
   QUERY_ROLE,
@@ -34,7 +31,6 @@ import {
   type MailInput,
   type StreamClientFrame,
   type StreamRole,
-  type RouteInfo,
   type UserPublic,
 } from "@hx-aioa/protocol";
 import { handleAccounts } from "./accounts/api";
@@ -65,17 +61,16 @@ import {
   PROTO_LEGACY,
   PROTO_V1,
   UNKNOWN_DEVICE,
-  OWNER_NAME,
   BG_DEVICE_PREFIX,
 } from "./constants";
 import { type Core, type Principal, allowed } from "./core";
 import { joinPage } from "./join-page";
-import { authorOf } from "./room-access";
+import { authorOf, ownerSees } from "./room-access";
+import { chatSend } from "./chat-send";
 import type { Env } from "./env";
 import { GithubService } from "./github/service";
-import { halfHourly, majorRemind } from "./cron";
+import { halfHourly, heatmapDaily, majorRemind } from "./cron";
 import { buildOverview } from "./group";
-import { chatInput } from "./chat";
 import { ChatStore } from "./chat-store";
 import { ApiFail, fail } from "./http";
 import { toMsgFrame } from "./legacy";
@@ -86,7 +81,7 @@ import { SenderStore } from "./senders";
 import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
 import { EventStore, groupOf } from "./store";
 import { RoomStore } from "./rooms";
-import { joinRoom } from "./api-rooms";
+import { joinRoom, profileChanged } from "./api-rooms";
 import { chatBacklog, chatConnected, mayListen, typingFrom } from "./api-presence";
 import { Presence } from "./presence";
 import { memberKey } from "./member";
@@ -95,8 +90,6 @@ import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
 import { Timers } from "./timers";
 const TERM_SOURCE = "终端";
-const ROUTE_SELF: RouteInfo = { action: "silent", channels: ["ws"], reason: "本人发送" };
-const ROUTE_ROOM: RouteInfo = { action: "push", channels: ["ws"], reason: "群聊" };
 
 // 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
@@ -114,10 +107,14 @@ export class Hub extends DurableObject<Env> {
     const config = new Config(ctx.storage);
     const metrics = new MetricRouter(all, sql);
     const rooms = new RoomStore(sql);
-    const sockets = new Sockets(every, (ev) => {
-      const grp = groupOf(ev);
-      return new Set(grp ? rooms.members(grp).map((m) => m.member) : []);
-    });
+    const sockets = new Sockets(
+      every,
+      (ev) => {
+        const grp = groupOf(ev);
+        return new Set(grp ? rooms.members(grp).map((m) => m.member) : []);
+      },
+      (grp) => !ownerSees(this.core, grp),
+    );
     this.timers = new Timers(ctx.storage);
     const files = new FileStore(sql, env.FILES, Drive.from(env));
     const pipeline = new Pipeline(env, ctx.storage, store, config, metrics, sockets, this.timers, files, new SenderStore(sql));
@@ -168,8 +165,9 @@ export class Hub extends DurableObject<Env> {
     return (await mailIn(this.core, input, "cf")).id;
   }
 
-  // RPC (每天的清理 cron): 删掉消息已不在的邮件索引
+  // RPC (每天的清理 cron): 提交热力图累计, 大更新提醒, 删掉消息已不在的邮件索引
   async mailPrune(): Promise<number> {
+    await heatmapDaily(this.core).catch((e) => console.error("提交热力图累计失败:", e));
     return majorRemind(this.core).catch((e) => console.error("大更新提醒失败:", e)).then(() => this.core.mail.prune());
   }
 
@@ -186,7 +184,11 @@ export class Hub extends DurableObject<Env> {
     if (!this.accounts) {
       this.accounts = new Accounts(this.ctx.storage.sql, this.env, (u, ids) => this.kickUser(u, ids));
       this.accounts.joinRoom = (uid, code) => joinRoom(this.core, uid, code);
-      this.accounts.onDelete = (uid) => this.core.rooms.forget(uid);
+      this.accounts.onDelete = (uid) => {
+        this.core.rooms.forget(uid);
+        this.core.chats.reads.forget(uid);
+      };
+      this.accounts.onProfile = (uid) => profileChanged(this.core, uid);
       this.accounts.onRetire = (uid) => retireDev(this.core, uid);
     }
     return this.accounts;
@@ -202,6 +204,7 @@ export class Hub extends DurableObject<Env> {
   async kick(ids: string[]): Promise<void> {
     for (const id of ids) {
       for (const ws of this.ctx.getWebSockets(SESSION_TAG_PREFIX + id)) {
+        this.core.sockets.reset(ws);
         try {
           sendFrame(ws, { t: "err", code: CODE_UNAUTHORIZED, text: KICK_REASON });
           ws.close(KICK_CODE, KICK_REASON);
@@ -277,6 +280,7 @@ export class Hub extends DurableObject<Env> {
     if (!who.owner && who.member) att.member = true;
     if (device.startsWith(BG_DEVICE_PREFIX)) att.bg = true;
     server.serializeAttachment(att);
+    this.core.sockets.reset();
 
     const head = this.core.store.head();
     const user = who.owner ? who.user : who.member?.user;
@@ -309,7 +313,7 @@ export class Hub extends DurableObject<Env> {
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
     if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
     if (Number.isFinite(since)) {
-      const evs = resync ? this.core.store.recent(HISTORY_MAX_LIMIT) : this.core.store.since(since, HISTORY_MAX_LIMIT);
+      const evs = (resync ? this.core.store.recent(HISTORY_MAX_LIMIT) : this.core.store.since(since, HISTORY_MAX_LIMIT)).filter((ev) => ownerSees(this.core, groupOf(ev) ?? ""));
       for (const ev of evs) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));
     }
     return new Response(null, { status: 101, webSocket: client });
@@ -420,30 +424,9 @@ export class Hub extends DurableObject<Env> {
       case "term_resize":
       case "term_close":
         return this.core.terms.handle(ws, att, frame);
-      case "send": {
+      case "send":
         if (att.role !== "client") return;
-        const input = chatInput(this.core.store, frame);
-        if (typeof input === "string") return this.err(ws, CODE_BAD_REQUEST, input);
-        const sender = frame.file ? this.principalOf(att) : null;
-        if (frame.file && !sender) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
-        const file = sender ? attachFile(this.core, sender, frame.file, input.channel) : undefined;
-        if (typeof file === "string") return this.err(ws, CODE_BAD_REQUEST, file);
-        if (file && input.kind === "event") input.data = { ...input.data, file };
-        const grp = input.channel ?? "";
-        if (att.member && !(att.uid && this.core.rooms.member(grp, att.uid))) return this.err(ws, CODE_FORBIDDEN, ERR_FORBIDDEN);
-        // 多人群照常提醒其他人 (发送者自己的设备按 by 认出是自己发的); 只有自己的群不响铃, 也不触发兜底推送
-        const shared = !!grp && this.core.rooms.shared(grp);
-        const route = shared ? ROUTE_ROOM : ROUTE_SELF;
-        // 来源是人 (账号), 不是设备: 同一个人多台设备同一个来源, 名字取账号昵称
-        const user = att.uid ? this.core.users.get(att.uid) : undefined;
-        const source = att.uid
-          ? { id: USER_SOURCE_PREFIX + att.uid, name: user?.display || user?.name || OWNER_NAME, type: SOURCE_TYPE_USER }
-          : { id: att.device, name: OWNER_NAME, type: SOURCE_TYPE_USER };
-        const ev = await this.core.pipeline.fromInput(input, { source, cid: frame.cid, ...(att.uid ? { by: att.uid } : {}) }, route);
-        sendFrame(ws, { t: "sent", cid: frame.cid, seq: ev.seq, ts: ev.ts });
-        if (grp) this.core.presence.sent(grp, source.id);
-        return;
-      }
+        return chatSend(this.core, ws, att, frame, frame.file ? this.principalOf(att) : null);
       case "typing":
         return typingFrom(this.core, att, frame.channel);
       case "ack":
@@ -471,6 +454,7 @@ export class Hub extends DurableObject<Env> {
 
   private release(ws: WebSocket): void {
     const att = attOf(ws);
+    this.core.sockets.reset(ws);
     ws.serializeAttachment({ ...att, watch: [], offer: [], agents: [], host: undefined, terms: [] } satisfies Attachment);
     this.core.terms.release(ws, att);
     if (att.host) this.core.metrics.offline(att.host);

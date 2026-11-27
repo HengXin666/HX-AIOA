@@ -149,6 +149,13 @@ export class EventStore {
     return first(this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE seq = ?`, seq).toArray());
   }
 
+  /** 按 seq 批量取 (合并转发详情), 升序; 不存在的不返回。 */
+  bySeqs(seqs: number[]): Envelope[] {
+    if (!seqs.length) return [];
+    const marks = seqs.map(() => "?").join(", ");
+    return this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE seq IN (${marks}) ORDER BY seq`, ...seqs).toArray().map(parse);
+  }
+
   byDedupe(key: string): Envelope | null {
     return first(this.sql.exec<Row>(`SELECT ${COLS} FROM ev WHERE dedupe = ? ORDER BY seq DESC LIMIT 1`, key).toArray());
   }

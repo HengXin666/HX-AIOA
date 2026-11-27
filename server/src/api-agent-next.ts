@@ -2,6 +2,8 @@ import {
   AGENT_TRIGGER_MAX,
   HANDLED_SET_MAX,
   HEADER_SKILL,
+  MENTION_AGENT_PREFIX,
+  MENTION_ALL,
   PATH_AGENT_DONE,
   PATH_AGENT_NEXT,
   PATH_AGENT_TRIGGER,
@@ -12,6 +14,7 @@ import {
   type AgentNext,
   type AgentTrigger,
   type ChatAgent,
+  type Envelope,
   type Scope,
 } from "@hx-aioa/protocol";
 import { LEFT_MAX, advance, cursorOf, parseEvery, pendingOf, sameCursor, type Cursor } from "./agent-cursor";
@@ -32,6 +35,9 @@ const withCursor = (a: ChatAgent, c: Cursor): ChatAgent => {
   return { ...rest, handled: c.handled, ...(c.handledSet.length ? { handledSet: c.handledSet } : {}) };
 };
 
+// 消息 @ 了这个 Agent 或全体 (#131)
+const mentions = (ev: Envelope, keyId: string) => (ev.mentions ?? []).some((m) => m === MENTION_ALL || m === MENTION_AGENT_PREFIX + keyId);
+
 async function next(c: ReqCtx): Promise<Response> {
   const { channel, agent } = agentByKey(c);
   const now = Date.now();
@@ -50,7 +56,7 @@ async function next(c: ReqCtx): Promise<Response> {
   const fresh = meta?.agents?.find((a) => a.keyId === agent.keyId) ?? agent;
   const brief = meta ? briefOf(c.core, meta, fresh, have, now) : null;
   const body: AgentNext = {
-    pending: pendingOf(c.core, channel, cur),
+    pending: pendingOf(c.core, channel, cur).map((ev) => (mentions(ev, agent.keyId) ? { ...ev, mentioned: true as const } : ev)),
     head: c.core.store.head(),
     cursor: cur.handled,
     briefVersion: brief?.version ?? "",
