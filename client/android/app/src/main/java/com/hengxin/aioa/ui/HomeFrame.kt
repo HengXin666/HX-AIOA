@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 private const val RECENTS = 5
 private const val KEY_FAV = "#fav"
 private const val KEY_GITHUB = "#github"
+private const val KEY_HXOA = "#hxoa"
 private const val KEY_THEME = "#theme"
 private const val KEY_JOIN = "#join"
 private const val KEY_NEW_GROUP = "#new-group"
@@ -106,6 +107,11 @@ fun HomeFrame(
             myAvatar = it
         }
     }
+    // hxoa 插件是否启用 (#142): 本机没记过时连上问一次, 之后由服务器页与 plugin_update 更新
+    com.hengxin.aioa.ui.hxoa.HxoaGate.load(context)
+    androidx.compose.runtime.LaunchedEffect(chat.online) {
+        if (chat.online && com.hengxin.aioa.ui.hxoa.HxoaGate.on == null) com.hengxin.aioa.ui.hxoa.HxoaGate.probe(context.applicationContext)
+    }
     // 主题三态循环 (#139): 跟随系统 → 浅色 → 深色 → 跟随系统, 不会把 "跟随系统" 覆盖掉
     val nextMode = when (mode) {
         ThemeMode.SYSTEM -> ThemeMode.LIGHT
@@ -131,6 +137,8 @@ fun HomeFrame(
             key.startsWith(RECENT_PREFIX) -> onOpenGroup(key.removePrefix(RECENT_PREFIX))
             key == KEY_FAV -> onFavorites()
             key == KEY_GITHUB -> onGithub()
+            // hxoa 的全屏页挂在服务器页的 hxoa 分组上 (#142)
+            key == KEY_HXOA -> { onTab(Tab.RESOURCES); com.hengxin.aioa.ui.hxoa.HxoaNav.openList() }
             key == KEY_THEME -> setMode(nextMode)
             key == KEY_SEARCH -> searching = true
             key == KEY_JOIN -> { g.pendingInvite = ""; onGo(Tab.CHAT) }
@@ -161,7 +169,9 @@ fun HomeFrame(
         HomeSidebar(
             SideAccount(com.hengxin.aioa.data.Me.label, server, chat.online, avatar = myAvatar?.let { id -> { com.hengxin.aioa.ui.chat.ChatAvatar(com.hengxin.aioa.data.Me.uid ?: com.hengxin.aioa.data.Me.label, id, 40.dp) } }),
             // GitHub 入口跟着 GitHub 插件 (hengxin666.github) 是否启用 (#139), 停用了不再点进空页
-            listOfNotNull(SideLink(KEY_FAV, "收藏", "star"), SideLink(KEY_GITHUB, "GitHub", "github").takeIf { chat.github.enabled }),
+            listOfNotNull(SideLink(KEY_FAV, "收藏", "star"), SideLink(KEY_GITHUB, "GitHub", "github").takeIf { chat.github.enabled },
+                SideLink(KEY_HXOA, "hxoa", com.hengxin.aioa.ui.hxoa.HXOA_ICON).takeIf { com.hengxin.aioa.ui.hxoa.HxoaGate.on == true },
+            ),
             spaces,
             recents,
             listOf(SideLink(KEY_THEME, mode.label, modeIcon), SideLink(Tab.ME.name, "我的", "user")),

@@ -63,6 +63,8 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
         state.hosts.firstOrNull { it.subject == openHost }?.let { h -> HostPanel(state, h) { askFor = h.subject } }
         // 旧版探针不发主机卡片, 仍用原来的指标格子
         state.probes.filter { it !in carded }.forEach { Probe(state, it) }
+        // hxoa 插件 (hengxin666.hxoa) 往 "服务器" 加的分组 (home-spaces §3), 没启用不显示 (#142)
+        com.hengxin.aioa.ui.hxoa.HxoaSection()
     }
 }
 
