@@ -58,7 +58,10 @@ private val PILL = RoundedCornerShape(50)
 // 选中态与标签的底色透明度, 待办各页共用
 internal const val CHIP_ALPHA = 0.12f
 private const val PRIO_URGENT = 1
-private const val GUIDE_ALPHA = 0.45f
+private const val GUIDE_ALPHA = 0.5f
+private const val ROW_PAD = 8
+private const val MARK = 18
+private const val BAR_W = 28
 
 @Composable
 internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (String) -> Unit, open: (TodoRow) -> Unit, showRepo: Boolean = false, showArea: Boolean = false, lasts: TreePath = emptyList(), tick: (TodoRow) -> Unit) {
@@ -67,58 +70,62 @@ internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (Str
     val key = "n:${r.channel}:${r.id}"
     val parent = n.kids.isNotEmpty()
     val shut = key in closed
-    // 树形列表: 左边画层级连线 (#121), 位置参数与下面的缩进, 勾选框一致
-    Column(Modifier.fillMaxWidth().treeGuides(lasts, parent && !shut, c.textSecondary.copy(alpha = GUIDE_ALPHA), indent = INDENT.dp, top = 9.5.dp)) {
-    Box(Modifier.fillMaxWidth().padding(start = (12 + depth * INDENT).dp).height(0.5.dp).background(c.border))
-    Row(Modifier.fillMaxWidth().pressable { open(r) }.padding(start = (12 + depth * INDENT).dp, end = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-        if (parent) {
-            Box(Modifier.size(20.dp).clip(PILL).clickable { toggle(key) }, contentAlignment = Alignment.Center) { Icon(if (shut) "chevron-right" else "chevron-down", c.textSecondary, 16.dp) }
-        } else {
-            Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).clickable { tick(r) }, contentAlignment = Alignment.Center) {
-                Icon(if (r.finished) "square-check" else "square", if (r.finished) c.success else c.textSecondary, 19.dp)
+    // 树形列表, 一行一条 (#121): 左边层级连线, 勾选框 / 折叠箭头, issue 图标, 标题, 右边压成小标注
+    Column(Modifier.fillMaxWidth().treeGuides(lasts, parent && !shut, c.textSecondary.copy(alpha = GUIDE_ALPHA), indent = INDENT.dp, marker = MARK.dp, top = (ROW_PAD + 0.5f).dp)) {
+        Box(Modifier.fillMaxWidth().padding(start = (12 + depth * INDENT).dp).height(0.5.dp).background(c.border))
+        Row(
+            Modifier.fillMaxWidth().pressable { open(r) }.padding(start = (12 + depth * INDENT).dp, end = 12.dp, top = ROW_PAD.dp, bottom = ROW_PAD.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (parent) {
+                Box(Modifier.size(MARK.dp).clip(PILL).clickable { toggle(key) }, contentAlignment = Alignment.Center) { Icon(if (shut) "chevron-right" else "chevron-down", c.textSecondary, 15.dp) }
+            } else {
+                Box(Modifier.size(MARK.dp).clip(RoundedCornerShape(5.dp)).clickable { tick(r) }, contentAlignment = Alignment.Center) {
+                    Icon(if (r.finished) "square-check" else "square", if (r.finished) c.success else c.textSecondary, 17.dp)
+                }
             }
-        }
-        Column(Modifier.padding(start = 10.dp).weight(1f)) {
+            r.issue?.let { Icon(if (r.ghOpen == false) "circle-check" else "circle-dot", if (r.ghOpen == false) DONE_PURPLE else c.success, 14.dp) }
             Text(
                 r.title,
+                Modifier.weight(1f),
                 color = if (r.finished) c.textSecondary else c.text,
                 fontSize = 14.sp,
+                fontWeight = if (parent) FontWeight.SemiBold else null,
                 textDecoration = if (r.finished) TextDecoration.LineThrough else null,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
-            MetaLine(r, showRepo, showArea)
+            Marks(n, showRepo, showArea)
         }
-        if (parent) Text("${n.done}/${n.total}", Modifier.padding(start = 6.dp).clip(PILL).background(c.surfaceAlt).padding(horizontal = 6.dp, vertical = 1.dp), color = c.textSecondary, fontSize = 11.sp)
-    }
     }
     if (parent && !shut) n.kids.forEachIndexed { i, k -> NodeRows(k, depth + 1, closed, toggle, open, showRepo, showArea, lasts + (i == n.kids.lastIndex), tick) }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** 一行右边的小标注: 按要紧程度排, 放不下的往后省略 (标题先让位)。 */
 @Composable
-private fun MetaLine(r: TodoRow, showRepo: Boolean, showArea: Boolean) {
+private fun Marks(n: TodoNode, showRepo: Boolean, showArea: Boolean) {
     val c = Aioa.colors
-    // 一行放不下时换行, 截止和星标这类要紧的放前面
-    FlowRow(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    val r = n.row
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (!r.finished && r.prio == PRIO_URGENT) Icon("flame", c.danger, 12.dp)
         if (r.star && !r.finished) Icon("star", c.warning, 12.dp)
+        stateColor(r.state)?.let { Box(Modifier.size(6.dp).clip(RoundedCornerShape(2.dp)).background(it)) }
         if (!r.finished) r.due?.let { due ->
             val (text, hot) = countdown(due, LocalNow.current)
-            Pill(text, if (hot) c.danger else c.accent, if (r.alarm) "alarm-clock" else "clock")
+            Pill(text.removePrefix("还剩 "), if (hot) c.danger else c.accent, if (r.alarm) "alarm-clock" else "clock")
         }
-        everyText(r.everyUnit, r.everyN)?.let { Pill(it, c.textSecondary, "repeat") }
+        if (r.everyUnit != null) Icon("repeat", c.textSecondary, 12.dp)
         if (showArea) Text(r.areaKey, color = c.textSecondary, fontSize = 11.sp)
-        // 总览的待办组件不按仓库分组, 每条标出仓库
         if (showRepo) r.repo?.let { repo ->
-            Box(Modifier.size(7.dp).clip(RoundedCornerShape(2.dp)).background(repoColor(repo)))
+            Icon("github", repoColor(repo), 12.dp)
             Text(repoName(repo), color = c.textSecondary, fontSize = 11.sp)
         }
-        if (!r.finished) Text("P${r.prio}", color = if (r.prio == PRIO_URGENT) c.danger else c.textSecondary, fontSize = 11.sp)
-        stateColor(r.state)?.let { Pill(stateLabel(r.state), it) }
-        r.issue?.let { n -> Pill("#$n", if (r.ghOpen == false) DONE_PURPLE else c.success, if (r.ghOpen == false) "circle-check" else "circle-dot") }
-        if (r.ghComments > 0 && r.ghOpen != false) Text("${r.ghComments} 评论", color = c.textSecondary, fontSize = 11.sp)
-        val time = r.doneAt?.takeIf { r.finished }?.let { "${shortDay(it)} ${clock(it)} 完成" } ?: r.created.takeIf { it > 0 && r.due == null }?.let { "${clock(it)} 创建" }
-        time?.let { Text(it, color = c.textSecondary, fontSize = 11.sp) }
+        r.issue?.let { Text("#$it", color = c.textSecondary, fontSize = 11.sp) }
+        if (n.kids.isNotEmpty()) {
+            Box(Modifier.width(BAR_W.dp).height(4.dp).clip(PILL).background(c.surfaceAlt)) {
+                Box(Modifier.fillMaxWidth(if (n.total > 0) n.done.toFloat() / n.total else 0f).height(4.dp).clip(PILL).background(if (n.done == n.total) c.success else c.accent))
+            }
+            Text("${n.done}/${n.total}", color = c.textSecondary, fontSize = 11.sp)
+        }
     }
 }
 
