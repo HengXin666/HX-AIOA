@@ -14,6 +14,7 @@ private const val SCALE = 3f
 private const val W = 390
 private const val H = 844
 private const val FULL_H = 1880
+private const val GROUP_H = 1420
 private const val SETTLE_MS = 1800L
 private const val FRAME_MS = 50L
 
@@ -29,12 +30,17 @@ fun main(args: Array<String>) {
         "6-dev" to { HomeDemo(start = "dev") },
         "7-server" to { HomeDemo(start = "server") },
         "8-todo" to { HomeDemo(start = "todo") },
+        "9-room" to { ChatRoomDemo() },
+        "10-direct" to { DirectDemo() },
+        "11-group" to { GroupInfoDemo() },
+        "12-members" to { MembersDemo() },
     )
     for (dark in listOf(true, false)) {
         val mode = if (dark) "dark" else "light"
         states.forEach { (name, content) -> shot(File(out, "$name-$mode.png"), dark, content = content) }
         // 总览整页 (不滚动, 一次看全)
         shot(File(out, "0-overview-full-$mode.png"), dark, FULL_H) { HomeDemo() }
+        shot(File(out, "11-group-full-$mode.png"), dark, GROUP_H) { GroupInfoDemo() }
         listOf(0f, 0.2f, 0.4f, 0.6f, 0.8f, 1f).forEachIndexed { i, f ->
             shot(File(out, "drawer-$mode-$i.png"), dark) { HomeDemo(drawer = f) }
         }

@@ -27,7 +27,7 @@ import com.hengxin.aioa.kit.enter
 import com.hengxin.aioa.kit.hxPalette
 import com.hengxin.aioa.kit.pointerTap
 
-// 消息空间: Telegram 式会话列表, 顶部筛选; 点进去才是 QQ 式会话页
+// 消息空间: Telegram 式会话列表, 顶部是 "域" (几个群收成一组, 存账号设置, 不多发请求); 点进去是 QQ 式会话页
 
 private data class Chat(
     val name: String,
@@ -46,6 +46,7 @@ private val CHATS = listOf(
     Chat("DSH", "镜像已推送, 等你确认部署", "20:49", "D", 4, unread = 1, agent = true, pinned = true),
     Chat("oa_1", "正在输入…", "20:48", "1", 2, agent = true, typing = true, pinned = true),
     Chat("点子待办", "イデア: 已建 issue #121 安卓 UI 专项", "00:21", "点", 3, unread = 2),
+    Chat("小明", "好, 我也进那个群看看", "20:40", "小", 3),
     Chat("GitHub 动态", "HX-AIOA 推送 2 个提交到 main", "00:04", "G", 5),
     Chat("家里服务器", "nas-01: 夜间备份完成, 用时 14 分钟", "昨天", "家", 2),
     Chat("福利", "Steam 冬促清单已更新, 3 个史低", "昨天", "福", 3, muted = true),
@@ -56,7 +57,7 @@ private val CHATS = listOf(
 internal fun ChatSpace() {
     val c = Aioa.colors
     Row(Modifier.padding(top = 12.dp, bottom = 6.dp).enter(0), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("全部" to true, "未读 3" to false, "群" to false, "Agent" to false).forEach { (t, on) ->
+        listOf("全部" to true, "开发" to false, "生活" to false, "系统" to false, "未读 3" to false).forEach { (t, on) ->
             Text(
                 t, if (on) c.background else c.textSecondary, 13,
                 Modifier.clip(RoundedCornerShape(9.dp)).background(if (on) c.text else c.surface).padding(horizontal = 12.dp, vertical = 6.dp),
