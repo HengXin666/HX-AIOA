@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,16 +98,9 @@ fun HomeFrame(
     val context = LocalContext.current
     // 换服务端要重连, 连接状态一变就重读 (#139: 以前没带 key, 换了服务端侧栏还是旧地址)
     val server = remember(chat.online) { ConfigStore.load(context)?.server?.substringAfter("://")?.trimEnd('/').orEmpty() }
-    // 侧栏账号头用我的头像与昵称 (#139): 本机记过就直接用, 没有时连上后问一次 /me
-    var myAvatar by remember { mutableStateOf(com.hengxin.aioa.data.Me.avatar) }
-    androidx.compose.runtime.LaunchedEffect(chat.online) {
-        if (!chat.online || myAvatar != null) return@LaunchedEffect
-        val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.hengxin.aioa.net.Api.call(context, "GET", listOf(com.hengxin.aioa.Constants.ME_PATH)) }
-        r.body?.optJSONObject("user")?.optString("avatar")?.ifEmpty { null }?.let {
-            com.hengxin.aioa.data.Me.setAvatar(context, it)
-            myAvatar = it
-        }
-    }
+    // 侧栏账号头用账号的头像 (#139 #142): 连上时 welcome 帧带来 user.avatar (成员列表读的同一个), 没有再用旧设置里的;
+    // 不再另问 /me (以前只在本机没记过时问, 账号上换了头像这里不跟)
+    val myAvatar by com.hengxin.aioa.data.Me.face.collectAsState()
     // hxoa 插件是否启用 (#142): 本机没记过时连上问一次, 之后由服务器页与 plugin_update 更新
     com.hengxin.aioa.ui.hxoa.HxoaGate.load(context)
     androidx.compose.runtime.LaunchedEffect(chat.online) {
@@ -169,7 +163,7 @@ fun HomeFrame(
             SideRecent(RECENT_PREFIX + r.key, title, r.last?.text?.let(::plainPreview).orEmpty(), title.take(1), r.unread)
         }
         HomeSidebar(
-            SideAccount(com.hengxin.aioa.data.Me.label, server, chat.online, avatar = myAvatar?.let { id -> { com.hengxin.aioa.ui.chat.ChatAvatar(com.hengxin.aioa.data.Me.uid ?: com.hengxin.aioa.data.Me.label, id, 40.dp) } }),
+            SideAccount(com.hengxin.aioa.data.Me.label, server, chat.online, avatar = myAvatar?.let { id -> { com.hengxin.aioa.ui.chat.ChatAvatar(com.hengxin.aioa.data.Me.label, id, 40.dp) } }),
             // GitHub 入口跟着 GitHub 插件 (hengxin666.github) 是否启用 (#139), 停用了不再点进空页
             listOfNotNull(SideLink(KEY_FAV, "收藏", "star"), SideLink(KEY_GITHUB, "GitHub", "github").takeIf { chat.github.enabled },
                 SideLink(KEY_HXOA, "hxoa", com.hengxin.aioa.ui.hxoa.HXOA_ICON).takeIf { com.hengxin.aioa.ui.hxoa.HxoaGate.on == true },

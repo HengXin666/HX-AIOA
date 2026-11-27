@@ -73,7 +73,11 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val github = GithubState(app, viewModelScope)
     val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g ->
         g.directory.onMetas = { g.applyReads() }
-        g.onSettings = spaces.tabs::apply
+        g.onSettings = { s ->
+            spaces.tabs.apply(s)
+            // 旧版头像只存在设置里 (#142): 账号上没头像时侧栏用它兜底
+            Me.setSettingsAvatar(getApplication(), s.optString("avatar").ifEmpty { null })
+        }
         g.onCleared = { key, upTo -> messages.removeAll { it.seq <= upTo && it.groupKey() == key } }
     }
 
@@ -160,6 +164,8 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
             return if (frame.id == Constants.GITHUB_PLUGIN) github.onPlugin(frame.change) else Unit
         }
         if (frame is ServerFrame.Welcome) Me.set(getApplication(), frame.uid, frame.name)
+        // 侧栏账号头的头像跟账号走 (#142): welcome 带了账号就以它为准 (没头像即清掉)
+        if (frame is ServerFrame.Welcome && frame.hasUser) Me.setAvatar(getApplication(), frame.avatar)
         if (frame is ServerFrame.Welcome) PluginEvents.setCompat(frame.compat)
         if (frame is ServerFrame.Welcome && frame.resync && frame.floor > 0) groups.dropBefore(frame.floor)
         if (frame is ServerFrame.Settings) runCatching { org.json.JSONObject(frame.raw) }.getOrNull()?.let(groups::applySettings)

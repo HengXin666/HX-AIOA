@@ -25,7 +25,7 @@ sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
     /** resync: 断线太久, 本地 seq < floor 的缓存可能漏了删除, 要丢掉。 */
     /** uid: 当前账号 id, 与消息的 by 比较认出自己发的。 */
-    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null, val resync: Boolean = false, val floor: Long = 0, val uid: String? = null, val name: String? = null, val compat: Compat? = null) : ServerFrame
+    data class Welcome(val head: Long, val v: Int = 0, val now: Long = 0, val session: String? = null, val resync: Boolean = false, val floor: Long = 0, val uid: String? = null, val name: String? = null, val compat: Compat? = null, val hasUser: Boolean = false, val avatar: String? = null) : ServerFrame
     // group: 事件的 channel, 即消息所在的群; 旧消息与本机发出的没有
     data class Msg(
         val seq: Long,
@@ -123,7 +123,9 @@ object Frames {
 
     private fun decode(o: JSONObject): ServerFrame? {
         return when (o.optString(KEY_T)) {
-            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null }, o.optBoolean("resync"), o.optLong("floor"), o.optString("uid").ifEmpty { null }, o.optJSONObject("user")?.optString("display")?.ifEmpty { null }, o.optJSONObject("compat")?.let { Compat(it.optString("level"), it.optString("msg").ifEmpty { null }) })
+            "welcome" -> ServerFrame.Welcome(o.optLong("head"), o.optInt("v"), o.optLong("now"), o.optString("session").ifEmpty { null }, o.optBoolean("resync"), o.optLong("floor"), o.optString("uid").ifEmpty { null }, o.optJSONObject("user")?.optString("display")?.ifEmpty { null }, o.optJSONObject("compat")?.let { Compat(it.optString("level"), it.optString("msg").ifEmpty { null }) },
+                // 账号的头像 (#142): 侧栏账号头用, 不用另问 /me
+                o.has("user"), o.optJSONObject("user")?.optString("avatar")?.ifEmpty { null })
             "msg" -> ServerFrame.Msg(
                 seq = o.getLong(KEY_SEQ),
                 ts = o.getLong(KEY_TS),
