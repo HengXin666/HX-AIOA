@@ -62,6 +62,8 @@ internal fun ChatComposer(g: ChatGroups, state: ComposerState, candidates: List<
     val c = Aioa.colors
     val context = LocalContext.current
     var panel by rememberSaveable { mutableStateOf(Panel.NONE) }
+    // 表情 / 更多面板开着时, 返回先收起面板, 不退出会话 (#139)
+    androidx.activity.compose.BackHandler(enabled = panel != Panel.NONE) { panel = Panel.NONE }
     val send = {
         if (g.send(state.text, state.tokens())) state.clear()
     }

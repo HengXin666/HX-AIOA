@@ -6,6 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,13 +76,26 @@ suspend fun loadBundle(context: Context, refs: List<Long>, via: Long): Map<Long,
 fun BundleView(b: Bundle, via: Long, close: () -> Unit) {
     val c = Aioa.colors
     val context = LocalContext.current
-    val msgs by produceState<Map<Long, ServerFrame.Msg>?>(null, b, via) { value = runCatching { loadBundle(context, b.refs, via) }.getOrDefault(emptyMap()) }
+    // 取不到 (离线, 出错) 和 "已撤回" 分开显示, 可以重试 (#139)
+    var tries by remember { mutableIntStateOf(0) }
+    var failed by remember { mutableStateOf<String?>(null) }
+    val msgs by produceState<Map<Long, ServerFrame.Msg>?>(null, b, via, tries) {
+        value = null
+        failed = null
+        runCatching { loadBundle(context, b.refs, via) }.onSuccess { value = it }.onFailure { failed = it.message ?: "取不到原消息" }
+    }
     Dialog(close, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(c.background).safeDrawingPadding()) {
             SubBar("${b.from.ifEmpty { "群" }} 的聊天记录", "${b.count} 条", close, right = null)
             val got = msgs
             LazyColumn(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                if (got == null) item { Text("正在取原消息…", c.textSecondary, 13, Modifier.padding(vertical = 16.dp)) }
+                val err = failed
+                if (err != null) item {
+                    Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("取原消息失败: $err", c.danger, 13)
+                        com.hengxin.aioa.kit.HxButton("重试", { tries++ }, icon = "refresh-cw")
+                    }
+                } else if (got == null) item { Text("正在取原消息…", c.textSecondary, 13, Modifier.padding(vertical = 16.dp)) }
                 else b.refs.forEach { seq ->
                     item(key = seq) {
                         val m = got[seq]

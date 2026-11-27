@@ -49,6 +49,7 @@ private sealed interface Layer {
     data class Send(val ob: Onboard) : Layer
     data object Edit : Layer
     data object Remove : Layer
+    data object Rotate : Layer
     data class Auto(val on: Boolean) : Layer
     data class Sender(val sid: String) : Layer
 }
@@ -112,17 +113,17 @@ fun AgentSettingsPage(model: ChatModel, group: String, keyId: String, onBack: ()
             HomeRow("查看指令", "按段展示当前接入语", divider = true, end = { Icon("file-text", c.textSecondary, 16.dp) }, onClick = {
                 scope.launch { dir.savedPrompt(group, a.keyId).onSuccess { layer = Layer.Guide(it) }.onFailure(fail) }
             })
-            HomeRow("重新接入", "作废旧密钥, 换一份新的接入语", divider = true, end = { Icon("refresh-cw", hxPalette().chart3, 16.dp) }, onClick = {
-                scope.launch { dir.rotate(group, a.keyId).onSuccess { layer = Layer.Send(it) }.onFailure(fail) }
-            })
+            // 会作废旧密钥, 先确认 (#139)
+            HomeRow("重新接入", "作废旧密钥, 换一份新的接入语", divider = true, end = { Icon("refresh-cw", hxPalette().chart3, 16.dp) }, onClick = { layer = Layer.Rotate })
         }
         HomeSection("") { GiDanger("移出本群", false) { layer = Layer.Remove } }
     }
-    AgentLayers(model, group, a, layer, { layer = null }) { copied = false }
+    val rotate: () -> Unit = { scope.launch { dir.rotate(group, a.keyId).onSuccess { layer = Layer.Send(it) }.onFailure(fail) } }
+    AgentLayers(model, group, a, layer, rotate, { layer = null }) { copied = false }
 }
 
 @Composable
-private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: Layer?, close: () -> Unit, onAuto: () -> Unit) {
+private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: Layer?, rotate: () -> Unit, close: () -> Unit, onAuto: () -> Unit) {
     val dir = model.groups.directory
     val scope = rememberCoroutineScope()
     val danger = MaterialTheme.colorScheme.error
@@ -130,6 +131,13 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
         is Layer.Guide -> GuideSheet(a.name, layer.text, close)
         is Layer.Send -> SendSheet(model, group, a.name, layer.ob, close)
         Layer.Edit -> EditDialog(model, group, a, { name, reads -> scope.launch { dir.editAgent(group, a.keyId, name, reads)?.let { dir.error = it } } }, close)
+        Layer.Rotate -> AlertDialog(
+            onDismissRequest = close,
+            title = { androidx.compose.material3.Text("重新接入 ${a.name}?") },
+            text = { androidx.compose.material3.Text("旧密钥立即作废, 要把新的接入语发给 Agent 才能继续工作。") },
+            confirmButton = { TextButton({ close(); rotate() }) { androidx.compose.material3.Text("重新接入", color = danger) } },
+            dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
+        )
         Layer.Remove -> AlertDialog(
             onDismissRequest = close,
             title = { androidx.compose.material3.Text("移出 ${a.name}?") },

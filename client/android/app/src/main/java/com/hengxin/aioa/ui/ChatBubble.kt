@@ -55,7 +55,7 @@ import androidx.compose.foundation.border
 
 private val BUBBLE_R = 16.dp
 private val BUBBLE_TAIL = 4.dp
-private val SENDER_AVATAR = 40.dp
+private val SENDER_AVATAR = com.hengxin.aioa.ui.chat.MESSAGE_AVATAR
 private val PICK_W = 36.dp
 private const val AGENT_BORDER = 0.35f
 const val ROLE_MEMBER_LABEL = "成员"

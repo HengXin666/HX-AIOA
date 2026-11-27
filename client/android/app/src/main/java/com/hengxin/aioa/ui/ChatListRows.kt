@@ -66,7 +66,7 @@ internal fun ConvRow(r: GroupRowData, pinned: Boolean, divider: Boolean, live: S
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val last = r.last
-                    val atMe = last != null && r.unread > 0 && Mentions.hits(last.mentions, Me.uid)
+                    val atMe = r.atMe
                     if (atMe) Text("[有人@我]", c.danger, 14)
                     val who = if (last == null || r.key == last.src || r.key == MessageDb.MEMO_GROUP || meta?.isDm == true) "" else "${Names.of(last)}: "
                     val preview = live ?: last?.let { who + plainPreview(it.text) } ?: "还没有消息"

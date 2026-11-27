@@ -211,7 +211,8 @@ private fun Hosts(chat: ChatModel, open: (Tab) -> Unit, modifier: Modifier) {
                 if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))
                 val tone = listOf(pal.chart2, pal.chart5, pal.chart3)[i % 3]
                 val cpu = m.series(h.subject, KEY_CPU).takeLast(TREND_POINTS)
-                val mem = m.series(h.subject, KEY_MEMORY).lastOrNull()?.second
+                // 推送还没到 (首屏, 离线主机) 就用主机卡片里探针的最后一次快照 (#139)
+                val mem = m.series(h.subject, KEY_MEMORY).lastOrNull()?.second ?: h.last?.values?.get(KEY_MEMORY)?.toFloat()
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(h.hostname ?: h.subject, c.text, 15, weight = FontWeight.SemiBold)
@@ -220,7 +221,7 @@ private fun Hosts(chat: ChatModel, open: (Tab) -> Unit, modifier: Modifier) {
                     }
                     Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Load("CPU", cpu.lastOrNull()?.second, tone)
+                            Load("CPU", cpu.lastOrNull()?.second ?: h.last?.values?.get(KEY_CPU)?.toFloat(), tone)
                             Load("内存", mem, tone)
                         }
                         if (cpu.size >= 2) AreaChart(cpu.map { it.second }, tone, Modifier.width(96.dp).height(44.dp), delayMs = 500, grid = false)

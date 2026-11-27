@@ -66,6 +66,7 @@ internal val PAD = 12.dp
 private val ONLINE = Color(0xFF34C759)
 private val OFFLINE = Color(0xFFFF9500)
 private val PILL = RoundedCornerShape(50)
+private const val MENTION_PAGES = 20
 private const val BACK_ROTATE = 90f
 // 同一个人连续发且间隔不超过这个时间, 合并成一串, 只在第一条显示名字与头像
 private const val RUN_GAP_MS = 3 * 60_000L
@@ -125,9 +126,21 @@ fun ChatScreen(model: ChatModel) {
     val isOwner = remember { com.hengxin.aioa.config.Auth.load(context)?.role == com.hengxin.aioa.ui.chat.ROLE_OWNER }
     val dir = g.directory
     val meta = dir.metas[open]
-    val composer = remember(open) { ComposerState() }
+    // 草稿跟着群存在 ChatGroups 里: 从 "更多" 进群设置 / 收藏再回来不丢 (#139)
+    val composer = remember(open) { g.composerOf(open) }
     val members by androidx.compose.runtime.produceState(emptyList<RoomMember>(), open, meta?.shared) {
-        if (meta?.shared == true) value = RoomApi(context).members(open).getOrNull().orEmpty()
+        // @ 候选与资料卡要认得全群 (#139): 按页拉完 (最多 MENTION_PAGES 页), 第一页走 ETag 缓存
+        if (meta?.shared == true) {
+            val api = RoomApi(context)
+            val all = mutableListOf<RoomMember>()
+            var cursor: String? = null
+            for (i in 0 until MENTION_PAGES) {
+                val p = api.page(open, cursor = cursor).getOrNull() ?: break
+                all += p.members
+                value = all.distinctBy { it.id }
+                cursor = p.next ?: break
+            }
+        }
     }
     val candidates = remember(meta, members) { MentionOps.candidates(meta, members, Me.uid) }
     val atNames = remember(candidates) { MentionOps.names(candidates) }

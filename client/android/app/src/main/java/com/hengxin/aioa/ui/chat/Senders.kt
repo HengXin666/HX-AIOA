@@ -97,6 +97,9 @@ object Senders {
     }
 }
 
+/** 消息头像统一尺寸 (#127): 气泡, 收藏, 横幅都用它, 主人设的图片在这个尺寸下也看得清。 */
+val MESSAGE_AVATAR = 40.dp
+
 /** 消息里的发送者头像: 主人设的图片 > 系统来源图标 > 群 Agent 的圆角方块 > 字母头像。 */
 @Composable
 fun SenderAvatar(msg: ServerFrame.Msg, size: Dp, modifier: Modifier = Modifier, avatar: String? = null) =

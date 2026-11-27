@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.proto.FwdInfo
+import com.hengxin.aioa.proto.Mentions
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import org.json.JSONObject
@@ -18,7 +19,7 @@ fun ServerFrame.Msg.replacedBy(n: ServerFrame.Msg): Boolean =
     seq != n.seq && ((n.id != null && id == n.id) || (n.deletedSeq > 0 && seq == n.deletedSeq))
 
 /** 群列表的一行: 最后一条消息与未读数。 */
-data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int)
+data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int, val atMe: Boolean = false)
 
 // 两个进程共用的本地消息库: :link 收到即落库, 界面打开时先读库, 再只向服务端补拉增量
 class MessageDb private constructor(context: Context) :
@@ -71,6 +72,19 @@ class MessageDb private constructor(context: Context) :
             db.endTransaction()
         }
     }
+
+    /** 未读区间里有没有 @我 或 @所有人 的 (#139): 不只看最后一条, 被 @ 之后又来消息也还提示。 */
+    private fun atMeSince(key: String, uid: String?): Boolean =
+        readableDatabase.rawQuery(
+            "SELECT $C_EXTRA FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE AND $C_EXTRA LIKE '%\"$X_MENTIONS\"%'",
+            arrayOf(key, groupRead(key).toString()),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val a = runCatching { JSONObject(c.getString(0)).optJSONArray(X_MENTIONS) }.getOrNull() ?: continue
+                if (Mentions.hits((0 until a.length()).map { a.optString(it) }, uid)) return@use true
+            }
+            false
+        }
 
     /** 只删本机 (#139): 删掉这一行并记下序号, 之后同步或向云端翻页拉回来也不再入库。 */
     fun hideLocal(seq: Long) {
@@ -151,7 +165,7 @@ class MessageDb private constructor(context: Context) :
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */
-    fun groups(): List<GroupSummary> {
+    fun groups(uid: String? = null): List<GroupSummary> {
         val lasts = query(
             "SELECT m.* FROM $T_MSG m JOIN (SELECT MAX($C_SEQ) s FROM $T_MSG GROUP BY $C_GRP) t ON m.$C_SEQ = t.s ORDER BY m.$C_SEQ DESC",
             emptyArray(),
@@ -162,7 +176,7 @@ class MessageDb private constructor(context: Context) :
                 "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE",
                 arrayOf(key, groupRead(key).toString()),
             )
-            GroupSummary(key, m, unread.toInt())
+            GroupSummary(key, m, unread.toInt(), unread > 0 && atMeSince(key, uid))
         }
     }
 

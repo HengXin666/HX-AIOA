@@ -74,11 +74,17 @@ internal fun SelectBar(model: ChatModel, group: String, picking: Picking) {
     }
     when (batch) {
         Batch.EACH -> ForwardSheet(model, "逐条转发到", { batch = null }) { key ->
-            chosen.forEach { g.forward(it, key) }
+            // 没连上时 socket 发不出去, 要告诉用户 (#139)
+            if (!chosen.all { g.forward(it, key) }) g.notify(FORWARD_FAIL)
             picking.stop()
         }
         Batch.BUNDLE -> ForwardSheet(model, "合并转发到", { batch = null }) { key ->
-            g.sendBundle(key, dir.title(group), chosen.map { it.seq }.take(Constants.BUNDLE_MAX))
+            val ok = g.sendBundle(key, dir.title(group), chosen.map { it.seq }.take(Constants.BUNDLE_MAX))
+            when {
+                !ok -> FORWARD_FAIL
+                chosen.size > Constants.BUNDLE_MAX -> "合并转发最多 ${Constants.BUNDLE_MAX} 条, 只转了前 ${Constants.BUNDLE_MAX} 条"
+                else -> null
+            }?.let(g::notify)
             picking.stop()
         }
         Batch.DELETE -> { val admin = dir.metas[group]?.canManage == true; AlertDialog(
@@ -109,4 +115,6 @@ internal fun ForwardSheet(model: ChatModel, title: String, close: () -> Unit, on
 /** 转发一条 (气泡长按, 收藏页)。 */
 @Composable
 internal fun ForwardDialog(model: ChatModel, msg: ServerFrame.Msg, close: () -> Unit) =
-    ForwardSheet(model, "转发到", close) { key -> model.groups.forward(msg, key) }
+    ForwardSheet(model, "转发到", close) { key -> if (!model.groups.forward(msg, key)) model.groups.notify(FORWARD_FAIL) }
+
+private const val FORWARD_FAIL = "没连上服务器, 转发没发出去, 联网后再试"

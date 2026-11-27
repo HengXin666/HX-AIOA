@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.data.GroupSummary
+import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.data.replacedBy
@@ -30,7 +31,7 @@ import java.util.UUID
 data class ChatFolder(val name: String, val groups: List<String>)
 
 /** 群列表的一行: 有消息的群与只建了资料还没消息的群合在一起。 */
-data class GroupRowData(val key: String, val meta: ChatMeta?, val last: ServerFrame.Msg?, val unread: Int) {
+data class GroupRowData(val key: String, val meta: ChatMeta?, val last: ServerFrame.Msg?, val unread: Int, val atMe: Boolean = false) {
     val pinned get() = meta?.pinned == true
     val muted get() = meta?.muted == true
     val order get() = last?.ts ?: meta?.updated ?: 0L
@@ -82,6 +83,10 @@ class ChatGroups(
     var pendingInvite by mutableStateOf<String?>(null)
     /** 外壳右上菜单的 "新建群聊" (#139): 群列表看到后弹出新建框。 */
     var pendingNewGroup by mutableStateOf(false)
+    private val composers = mutableMapOf<String, com.hengxin.aioa.ui.chat.ComposerState>()
+
+    /** 每个群一份输入栏状态 (草稿, @ 列表), 离开会话页再回来还在。 */
+    fun composerOf(key: String): com.hengxin.aioa.ui.chat.ComposerState = composers.getOrPut(key) { com.hengxin.aioa.ui.chat.ComposerState() }
     /** 别的页要求打开某个群时加一, 主界面据此切到消息栏。 */
     var focusTick by mutableStateOf(0)
         private set
@@ -96,6 +101,9 @@ class ChatGroups(
     var jump by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
         private set
+
+    /** 页面上的一次性提示 (转发失败等), 显示在会话页顶部的错误条。 */
+    fun notify(msg: String) { error = msg }
     var syncing by mutableStateOf(false)
         private set
     private var loadingOlder = false
@@ -119,7 +127,7 @@ class ChatGroups(
 
     fun rows(): List<GroupRowData> {
         val metas = directory.metas
-        val fromDb = summaries.map { GroupRowData(it.key, metas[it.key], it.last, it.unread) }
+        val fromDb = summaries.map { GroupRowData(it.key, metas[it.key], it.last, it.unread, it.atMe) }
         val known = fromDb.map { it.key }.toSet()
         // 没消息的群在建过资料或清空过时显示
         // 清空过的群也留着: 清空只删消息, 不删群
@@ -128,7 +136,7 @@ class ChatGroups(
     }
 
     fun reload() {
-        scope.launch { summaries = withContext(Dispatchers.IO) { db.groups() } }
+        scope.launch { summaries = withContext(Dispatchers.IO) { db.groups(Me.uid) } }
     }
 
     fun loadFolders() = scope.launch(Dispatchers.IO) {

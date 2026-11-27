@@ -91,20 +91,24 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     val presence = rememberPresence(group, meta?.shared == true)
     val now = com.hengxin.aioa.ui.agents.rememberNow()
     val apply = { p: MemberPage, more: Boolean -> members = if (more) (members + p.members).distinctBy { it.id } else p.members; next = p.next; error = null }
-    val reload: () -> Unit = {
-        scope.launch {
+    // 同一时间只跑一个请求 (#139): 搜索词变了先取消旧的, 晚到的旧结果也不认
+    val job = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    val run: (Boolean, String?) -> Unit = { append, cur ->
+        val want = q
+        job[0]?.cancel()
+        job[0] = scope.launch {
             loading = true
-            api.page(group, q = q).onSuccess { apply(it, false) }.onFailure { error = it.message }
-            loading = false
+            try {
+                api.page(group, cursor = cur, q = want).onSuccess { if (want == q) apply(it, append) }.onFailure { if (want == q) error = it.message }
+            } finally {
+                if (want == q) loading = false
+            }
         }
     }
+    val reload: () -> Unit = { run(false, null) }
     val more: () -> Unit = {
         val cur = next
-        if (cur != null && !loading) scope.launch {
-            loading = true
-            api.page(group, cursor = cur, q = q).onSuccess { apply(it, true) }.onFailure { error = it.message }
-            loading = false
-        }
+        if (cur != null && !loading) run(true, cur)
     }
     LaunchedEffect(group, meta?.updated, q) {
         if (meta?.shared != true) return@LaunchedEffect
