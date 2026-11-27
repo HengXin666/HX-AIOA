@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -103,9 +104,10 @@ fun HomeRow(
     lead: (@Composable () -> Unit)? = null,
     end: (@Composable () -> Unit)? = null,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val c = Aioa.colors
-    Column(Modifier.fillMaxWidth().pointerTap {}) {
+    Column(Modifier.fillMaxWidth().pointerTap { onClick?.invoke() }) {
         if (divider) {
             Box(Modifier.padding(start = if (lead != null) LEAD_INSET else 14.dp).fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))
         }
@@ -136,6 +138,17 @@ fun Glyph(icon: String, tint: Color = Aioa.colors.text) {
     Box(Modifier.size(LEAD.dp).clip(RoundedCornerShape(10.dp)).background(Aioa.colors.surfaceAlt), contentAlignment = Alignment.Center) {
         Icon(icon, tint, 18.dp)
     }
+}
+
+/** 开关: 圆角矩形轨道 + 圆角方块滑块 (不用正圆)。 */
+@Composable
+fun FlatSwitch(on: Boolean, enabled: Boolean = true, onChange: ((Boolean) -> Unit)? = null) {
+    val c = Aioa.colors
+    Box(
+        Modifier.width(44.dp).height(26.dp).clip(RoundedCornerShape(8.dp)).background(if (on) c.accent else c.surfaceAlt)
+            .pointerTap { if (enabled) onChange?.invoke(!on) }.padding(3.dp),
+        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+    ) { Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) c.onAccent else c.textSecondary)) }
 }
 
 /** 小标签: 语义色的淡底 + 同色字。 */

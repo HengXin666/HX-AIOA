@@ -3,12 +3,31 @@ package com.hengxin.aioa.ui.chat
 import android.content.Context
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.net.Api
+import com.hengxin.aioa.net.ApiCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** 多人群成员。 */
-data class RoomMember(val id: String, val name: String, val display: String, val role: String)
+/** 多人群成员; avatar 是头像 id (#130), online 为服务端给了在线状态时的值。 */
+data class RoomMember(val id: String, val name: String, val display: String, val role: String, val avatar: String? = null, val online: Boolean = false)
+
+/** 成员一页 (#130): next 为下一页游标, 旧服务端不分页时为空。 */
+data class MemberPage(val members: List<RoomMember>, val next: String?)
+
+fun parseMember(o: JSONObject): RoomMember = RoomMember(
+    o.optString("id"),
+    o.optString("name"),
+    o.optString("display").ifEmpty { o.optString("name") },
+    o.optString("role"),
+    o.optString("avatar").takeIf { !o.isNull("avatar") && it.isNotEmpty() },
+    o.optBoolean("online"),
+)
+
+fun parseMemberPage(b: JSONObject): MemberPage {
+    val arr = b.optJSONArray("members")
+    val list = (0 until (arr?.length() ?: 0)).mapNotNull { i -> arr?.optJSONObject(i)?.let(::parseMember) }
+    return MemberPage(list, b.optString("next").takeIf { !b.isNull("next") && it.isNotEmpty() })
+}
 
 /** 邀请: link 给浏览器, appLink 由 App 直接接住。 */
 data class RoomInvite(val code: String, val link: String, val appLink: String, val expires: Long)
@@ -16,13 +35,27 @@ data class RoomInvite(val code: String, val link: String, val appLink: String, v
 /** 多人群的成员与邀请接口。 */
 class RoomApi(private val context: Context) {
 
-    suspend fun members(channel: String): Result<List<RoomMember>> = io {
-        val r = Api.call(context, GET, listOf(Constants.CHATS_API, channel, MEMBERS))
-        val arr = r.body?.optJSONArray(MEMBERS) ?: error(r.error ?: FAILED)
-        (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.let { RoomMember(it.optString("id"), it.optString("name"), it.optString("display").ifEmpty { it.optString("name") }, it.optString("role")) }
+    /** 第一页成员 (@ 选择等只要前几十个的地方用)。 */
+    suspend fun members(channel: String): Result<List<RoomMember>> = page(channel).map { it.members }
+
+    /** 分页取成员 (#130); 第一页且不搜索时带 ETag 走磁盘缓存, 没变就是 304。 */
+    suspend fun page(channel: String, cursor: String? = null, q: String? = null, limit: Int = PAGE_SIZE): Result<MemberPage> = io {
+        val query = buildMap {
+            put("limit", limit.toString())
+            cursor?.let { put("cursor", it) }
+            q?.trim()?.takeIf { it.isNotEmpty() }?.let { put("q", it) }
         }
+        val segs = listOf(Constants.CHATS_API, channel, MEMBERS)
+        val body = if (cursor == null && q.isNullOrBlank()) {
+            ApiCache.refresh(context, cacheName(channel), segs, query).let { it.body ?: error(it.error ?: FAILED) }
+        } else Api.call(context, GET, segs, query = query).let { it.body ?: error(it.error ?: FAILED) }
+        parseMemberPage(body)
     }
+
+    /** 上次缓存的第一页, 打开页面先显示。后台线程调用。 */
+    fun cached(channel: String): MemberPage? = ApiCache.read(context, cacheName(channel))?.let(::parseMemberPage)
+
+    private fun cacheName(channel: String) = "room-members-" + channel.replace(UNSAFE, "_")
 
     suspend fun invite(channel: String): Result<RoomInvite> = io {
         val r = Api.call(context, POST, listOf(Constants.CHATS_API, channel, INVITES), JSONObject())
@@ -59,6 +92,8 @@ class RoomApi(private val context: Context) {
         private const val INVITES = "invites"
         private const val JOIN = "api/v1/rooms/join"
         private const val FAILED = "操作失败"
+        const val PAGE_SIZE = 50
+        private val UNSAFE = Regex("[^A-Za-z0-9_-]")
         private val CODE_RE = Regex("hxr_[A-Za-z0-9_-]+")
 
         /** 从链接或粘贴的文字里取出群邀请码。 */
