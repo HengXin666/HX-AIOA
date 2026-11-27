@@ -41,15 +41,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-// 总览用的图表与动效: 只用 HX-UI 的语义色与图表色, 不写死色值
+// 总览用的图表与动效: 颜色只从 chartPalette() / hxPalette() 取 (#142), 不写死色值
 
 private const val STAGGER_MS = 70
 private const val ENTER_MS = 520
 private const val DRAW_MS = 1100
 
-/** 当前明暗对应的 HX-UI 色板 (图表色 chart1..5 从这里取)。 */
+/**
+ * 当前明暗对应的 HX-UI 色板。chart1..5 换成图表调色板里补过对比度的色 (#142):
+ * chart1 = 主色 (原 ink 皮肤是纯黑 / 纯白, 当系列色很怪), chart2 青, chart3 琥珀, chart4 品红, chart5 绿。
+ * 新代码直接用 chartPalette() 按语义取。
+ */
 @Composable
-fun hxPalette(): HxPalette = if (Aioa.tokens.dark) HxUi.dark else HxUi.light
+fun hxPalette(): HxPalette {
+    val base = if (Aioa.tokens.dark) HxUi.dark else HxUi.light
+    val p = chartPalette()
+    return remember(base, p) { base.copy(chart1 = p.primary, chart2 = p.teal, chart3 = p.amber, chart4 = p.accent, chart5 = p.green) }
+}
 
 /** 首次出现时 0 到 1 的进度。 */
 @Composable
@@ -160,11 +168,12 @@ fun Ring(fraction: Float, color: Color, modifier: Modifier = Modifier, stroke: D
     }
 }
 
-/** 热力格 (GitHub 贡献图那种), 按列从左往右亮起来。levels 每格 0..4, 按列填。 */
+/** 热力格 (GitHub 贡献图那种), 按列从左往右亮起来。levels 每格 0..4, 按列填; 1..4 级是 color 的单色阶 (实色, 见 heatTint)。 */
 @Composable
 fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Modifier, delayMs: Int = 0, highlight: Int = -1) {
     val p = rememberReveal(delayMs)
     val empty = Aioa.colors.surfaceAlt
+    val steps = remember(empty, color) { (1..4).map { heatTint(empty, color, it) } }
     // 今天那格 (#140): 描一圈会呼吸的边
     val glow by rememberInfiniteTransition().animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)))
     Canvas(modifier) {
@@ -175,7 +184,7 @@ fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Mod
         levels.forEachIndexed { i, lv ->
             val col = i / rows
             val shown = col.toFloat() / cols <= p
-            val tint = if (lv == 0 || !shown) empty else color.copy(alpha = 0.25f + 0.75f * lv / 4f)
+            val tint = if (lv <= 0 || !shown) empty else steps[(lv - 1).coerceAtMost(steps.lastIndex)]
             val at = Offset(col * (cell + gap), (i % rows) * (cell + gap))
             drawRoundRect(tint, at, Size(cell, cell), r)
             if (i == highlight && p >= 0.99f) {

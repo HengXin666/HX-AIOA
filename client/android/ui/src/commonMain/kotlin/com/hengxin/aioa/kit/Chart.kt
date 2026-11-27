@@ -57,12 +57,15 @@ fun LineChart(
 ) {
     if (points.size < 2) return
     val c = Aioa.colors
+    // 线与气泡用图表主色 (#142); ink 皮肤的 accent 是纯黑 / 纯白, 当线色太重
+    val tone = chartPalette().primary
+    val onTone = contrastOn(tone)
     val measurer = rememberTextMeasurer()
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(DRAW_IN_MS)) }
     var touch by remember { mutableStateOf<Float?>(null) }
     val small = TextStyle(color = c.textSecondary, fontSize = 10.sp)
-    val bubble = TextStyle(color = c.onAccent, fontSize = 11.sp)
+    val bubble = TextStyle(color = onTone, fontSize = 11.sp)
 
     Canvas(
         modifier.fillMaxWidth().height(height)
@@ -117,8 +120,8 @@ fun LineChart(
             close()
         }
         clipRect(left = left, right = left + w * progress.value) {
-            drawPath(area, Brush.verticalGradient(listOf(c.accent.copy(alpha = AREA_ALPHA), c.accent.copy(alpha = 0f)), top, bottom))
-            drawPath(line, c.accent, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(area, Brush.verticalGradient(listOf(tone.copy(alpha = AREA_ALPHA), tone.copy(alpha = 0f)), top, bottom))
+            drawPath(line, tone, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
         }
         threshold?.let {
             drawLine(
@@ -135,7 +138,7 @@ fun LineChart(
             val loY = minOf(y(points[lo].value) + 3.dp.toPx(), bottom - loText.size.height)
             label(loText, x(lo) + 8.dp.toPx() + loText.size.width / 2, loY)
         }
-        if (progress.value >= 1f) drawCircle(c.accent, 3.dp.toPx(), Offset(x(last), y(points[last].value)))
+        if (progress.value >= 1f) drawCircle(tone, 3.dp.toPx(), Offset(x(last), y(points[last].value)))
 
         active?.let { i ->
             val px = x(i)
@@ -143,14 +146,14 @@ fun LineChart(
             drawLine(c.textSecondary.copy(alpha = 0.5f), Offset(px, top), Offset(px, bottom), 1.dp.toPx())
             drawLine(c.textSecondary.copy(alpha = 0.3f), Offset(left, py), Offset(size.width, py), 1.dp.toPx())
             drawCircle(c.background, 6.dp.toPx(), Offset(px, py))
-            drawCircle(c.accent, 4.dp.toPx(), Offset(px, py))
+            drawCircle(tone, 4.dp.toPx(), Offset(px, py))
             val text = measurer.measure("${points[i].label}  ${fmt(points[i].value)}$unit", bubble)
             val pad = 6.dp.toPx()
             val bw = text.size.width + pad * 2
             val bh = text.size.height + pad
             val bx = (px - bw / 2).coerceIn(left, size.width - bw)
             val by = (py - bh - 10.dp.toPx()).let { if (it < 0f) py + 10.dp.toPx() else it }
-            drawRoundRect(c.accent, Offset(bx, by), Size(bw, bh), CornerRadius(bh / 2))
+            drawRoundRect(tone, Offset(bx, by), Size(bw, bh), CornerRadius(bh / 2))
             drawText(text, topLeft = Offset(bx + pad, by + pad / 2))
         }
     }
@@ -165,7 +168,7 @@ private fun DrawScope.label(t: androidx.compose.ui.text.TextLayoutResult, cx: Fl
 @Composable
 fun Sparkline(values: List<Float>, modifier: Modifier = Modifier) {
     if (values.size < 2) return
-    val c = Aioa.colors
+    val tone = chartPalette().primary
     Canvas(modifier) {
         val mn = values.min()
         val span = (values.max() - mn).takeIf { it > 0f } ?: 1f
@@ -175,7 +178,7 @@ fun Sparkline(values: List<Float>, modifier: Modifier = Modifier) {
             val py = size.height - (v - mn) / span * size.height
             if (i == 0) p.moveTo(px, py) else p.lineTo(px, py)
         }
-        drawPath(p, c.accent, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(p, tone, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
     }
 }
 

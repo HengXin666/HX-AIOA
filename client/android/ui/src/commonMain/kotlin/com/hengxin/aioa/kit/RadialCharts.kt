@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -27,16 +26,18 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// 放射柱 (#140): 一圈光线看一天 24 小时或两周每天; 只用 HX-UI 图表色
+// 放射柱 (#140): 一圈光线看一天 24 小时或两周每天; 单色 (#142): 光线是 from 的深浅, 只有高亮那根用 to
 
 private const val INNER = 0.42f
 private const val RAY_STAGGER = 0.5f
+private const val RAY_MIN = 0.55f
 private const val FULL_DEG = 360f
 private const val TOP_DEG = -90f
 
 /**
  * 放射柱: values 一项一根光线, 从 12 点顺时针排开, 长度按平方根 (小数也看得见);
- * 出现时一根根长出来, highlight 那根末端有呼吸光点。点一下回调 onPick(序号)。
+ * 出现时一根根长出来, 越长越实 (from 与轨道色混合, 不再从 from 渐变到 to);
+ * highlight 那根用 to 并在末端有呼吸光点。点一下回调 onPick(序号)。
  */
 @Composable
 fun RadialBars(
@@ -84,7 +85,8 @@ fun RadialBars(
                 drawCircle(track, w / 3, o + dir * (inner + span), alpha = 0.8f)
                 if (len <= 0f) return@forEachIndexed
                 val k = (v / mx).coerceIn(0f, 1f)
-                drawLine(Brush.linearGradient(listOf(from, lerpColor(from, to, k)), s, e), s, e, w, StrokeCap.Round)
+                val tone = if (i == highlight) to else lerpColor(track, from, RAY_MIN + (1 - RAY_MIN) * k)
+                drawLine(tone, s, e, w, StrokeCap.Round)
                 if (i == highlight) {
                     drawCircle(to.copy(alpha = 0.35f * (1 - pulse)), w * (1.2f + 1.6f * pulse), e)
                     drawCircle(to, w * 0.75f, e)
