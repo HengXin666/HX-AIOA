@@ -16,6 +16,7 @@ private const val KEY_ICON = "icon"
 private const val KEY_ORDER = "order"
 private const val KEY_SIZES = "sizes"
 private const val KEY_HIDDEN_PANELS = "hiddenPanels"
+private const val KEY_PINNED = "pinned"
 
 // 工作台 JSON → 组件库模型, 只在界面进程使用 (:link 进程只转发原文); 对应 protocol/src/v1/space.ts
 object SpaceDecode {
@@ -33,6 +34,7 @@ object SpaceDecode {
         val sizes = o.optJSONObject(KEY_SIZES)
         return SpaceLayout(
             hidden = o.optBoolean("hidden"),
+            pinned = if (o.has(KEY_PINNED) && !o.isNull(KEY_PINNED)) o.optBoolean(KEY_PINNED) else null,
             hiddenPanels = strings(o.optJSONArray(KEY_HIDDEN_PANELS)),
             order = strings(o.optJSONArray(KEY_ORDER)),
             sizes = sizes?.keys()?.asSequence()?.mapNotNull { k -> PanelSize.of(sizes.optString(k))?.let { k to it } }?.toMap().orEmpty(),

@@ -85,6 +85,10 @@ test("显示状态: 尺寸与排序合并保存, 未知面板与非法尺寸被�
   assert.match(String(parseSpaceState({ order: ["ghost"] }, s)), /不存在的面板: ghost/);
   assert.match(String(parseSpaceState({ order: [P_NAS, P_NAS] }, s)), /重复/);
   assert.match(String(parseSpaceState([], s)), /必须是对象/);
+  // 置顶到顶部标签 (#139): 布尔值, 与隐藏一起合并保存
+  const pin = parseSpaceState({ pinned: true }, s, { hidden: false });
+  assert.deepEqual(pin, { hidden: false, pinned: true });
+  assert.match(String(parseSpaceState({ pinned: "yes" }, s)), /pinned 必须是布尔值/);
   assert.equal(stepSize(FULL, 1), FULL);
   assert.equal(stepSize("m", -1), "s");
 });

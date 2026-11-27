@@ -36,9 +36,11 @@ export function parseSpaceState(raw: unknown, space: Space, cur: SpaceState = {}
   const unknown = (ids: string[]) => ids.filter((id) => !known.has(id));
   const errs: string[] = [];
   const next: SpaceState = { ...cur };
-  if (raw.hidden !== undefined) {
-    if (typeof raw.hidden !== "boolean") errs.push("hidden 必须是布尔值");
-    else next.hidden = raw.hidden;
+  for (const key of ["hidden", "pinned"] as const) {
+    const v = raw[key];
+    if (v === undefined) continue;
+    if (typeof v !== "boolean") errs.push(`${key} 必须是布尔值`);
+    else next[key] = v;
   }
   for (const key of ["hiddenPanels", "order"] as const) {
     const v = raw[key];

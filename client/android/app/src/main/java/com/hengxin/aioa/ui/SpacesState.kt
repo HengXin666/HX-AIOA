@@ -49,6 +49,7 @@ private const val CHANGE_DISABLED = "disabled"
 private const val CHANGE_REVOKED = "revoked"
 private const val PREFS_TABS = "home-tabs"
 private const val KEY_TAB_ORDER = "order"
+private const val KEY_TAB_PINS = "pins"
 // todos 里这个键放本账号全部群的待办
 const val ALL_TODOS = "*"
 
@@ -126,6 +127,31 @@ class SpacesState(
 
     private fun loadTabOrder(): List<String> =
         context.getSharedPreferences(PREFS_TABS, Context.MODE_PRIVATE).getString(KEY_TAB_ORDER, null)?.split("\n")?.filter { it.isNotEmpty() }.orEmpty()
+
+    /** 内置页面 (总览以外) 置顶到顶部标签的开关 (#139): id → 开 / 关, 存本机; 没设过按默认 (内置置顶)。 */
+    var tabPins by mutableStateOf(loadPins())
+        private set
+
+    private fun loadPins(): Map<String, Boolean> =
+        context.getSharedPreferences(PREFS_TABS, Context.MODE_PRIVATE).getString(KEY_TAB_PINS, null)?.split("\n")
+            ?.mapNotNull { l -> l.split("=").takeIf { it.size == 2 }?.let { (k, v) -> k to (v == "1") } }?.toMap().orEmpty()
+
+    /** 每个一级页面显式设过的置顶: 内置的存本机, 插件空间的在服务端 state.pinned。 */
+    fun pins(): Map<String, Boolean> = tabPins + spaces.mapNotNull { s -> s.layout.pinned?.let { s.id to it } }
+
+    /** 置顶 / 取消置顶 (#139): 插件空间 PUT spaces/{id}/state 的 pinned, 内置页面存本机; 上限由调用方检查。 */
+    fun setPinned(id: String, on: Boolean) {
+        val i = spaces.indexOfFirst { it.id == id }
+        if (i >= 0) {
+            val s = spaces[i]
+            spaces[i] = s.copy(layout = s.layout.copy(pinned = on))
+            io { call(url(Constants.SPACES_PATH, id, "state"), "PUT", JSONObject().put("pinned", on)) }
+            return
+        }
+        tabPins = tabPins + (id to on)
+        context.getSharedPreferences(PREFS_TABS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_TAB_PINS, tabPins.entries.joinToString("\n") { "${it.key}=${if (it.value) 1 else 0}" }).apply()
+    }
 
     /** 插件空间显示 / 隐藏 (#139): 本地立即生效, 再 PUT spaces/{id}/state。 */
     fun setHidden(space: Space, hidden: Boolean) {

@@ -87,9 +87,10 @@ data class SpacePanel(
     val items: List<SpaceItem> = emptyList(),
 )
 
-/** 用户自己的显示状态, 与布局分开存。 */
+/** 用户自己的显示状态, 与布局分开存; pinned 为 null 表示没设过 (插件空间默认不置顶)。 */
 data class SpaceLayout(
     val hidden: Boolean = false,
+    val pinned: Boolean? = null,
     val hiddenPanels: List<String> = emptyList(),
     val order: List<String> = emptyList(),
     val sizes: Map<String, PanelSize> = emptyMap(),

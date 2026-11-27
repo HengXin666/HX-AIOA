@@ -26,13 +26,37 @@ fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
  * 新外壳的一级页面 (顶部标签与侧栏 "空间" 同一份, #139): 总览, 消息, 工作区, 开发, 服务器, 各插件空间。
  * "服务器" 直接是完整的资源页 (原来的服务器看板与资源页重叠); 看板类的 id 是看板 key, 其余是 [Tab] 名。
  */
-fun homeTabs(spaces: List<Space>, unread: Int, order: List<String> = emptyList(), withHidden: Boolean = false): List<HomeSpace> {
+fun homeTabs(
+    spaces: List<Space>,
+    unread: Int,
+    order: List<String> = emptyList(),
+    withHidden: Boolean = false,
+    pins: Map<String, Boolean> = emptyMap(),
+): List<HomeSpace> {
     val boards = boardSpaces(spaces)
     val tab = { t: Tab -> HomeSpace(t.name, t.label, t.icon) }
     val plugins = if (withHidden) spaces.map { HomeSpace(it.id, it.title, it.icon ?: SPACE_ICON, plugin = it.origin ?: it.id) } else pluginSpaces(spaces)
     val all = listOf(boards[0], HomeSpace(Tab.CHAT.name, Tab.CHAT.label, Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
         boards.filter { it.id == BOARD_DEV } + tab(Tab.RESOURCES) + plugins
-    return ordered(all, order)
+    val hidden = spaces.filter { it.layout.hidden }.map { it.id }.toSet()
+    return pinTabs(ordered(all, order), pins, hidden)
+}
+
+/** 顶部标签最多置顶这么多个 (#139, home-spaces §2), 其余在侧栏 "更多空间" 与标题下的切换里。 */
+const val MAX_PINNED = 5
+
+/**
+ * 按顺序标出哪些置顶 (#139): 总览永远置顶; 设过的按设的, 没设过的内置页面置顶, 插件空间不置顶 (home-spaces §3 规则 1);
+ * 隐藏的不置顶; 置顶的数到 [MAX_PINNED] 为止, 再往后的就算设过也先不进标签。
+ */
+fun pinTabs(tabs: List<HomeSpace>, pins: Map<String, Boolean>, hidden: Set<String> = emptySet()): List<HomeSpace> {
+    var n = 0
+    return tabs.mapIndexed { i, s ->
+        val want = i == 0 || (s.id !in hidden && (pins[s.id] ?: (s.plugin == null)))
+        val on = want && n < MAX_PINNED
+        if (on) n++
+        s.copy(pinned = on)
+    }
 }
 
 /** 按用户排过的顺序 (#139): 总览永远第一, 排过的按那个顺序, 新出现的接在后面保持默认顺序。 */

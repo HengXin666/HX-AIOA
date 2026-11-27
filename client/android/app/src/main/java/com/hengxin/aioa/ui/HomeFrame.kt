@@ -86,7 +86,8 @@ fun HomeFrame(
     val rows by remember { derivedStateOf { g.rows() } }
     val unread by remember { derivedStateOf { rows.sumOf { if (it.muted) 0 else it.unread } } }
     // 一级页面: 总览, 消息, 开发, 服务器, 插件空间, agent harness, 资源; 顶部标签与侧栏 "空间" 列同一份 (#121)
-    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder)
+    // 置顶最多 5 个 (#139): 标签只放置顶的, 其余在侧栏 "更多空间" 与标题下的切换里
+    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins())
     val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces)
     val board: (String) -> Unit = { key ->
         chat.spaces.board = key
@@ -175,7 +176,7 @@ fun HomeFrame(
             if (bars) {
                 val title = if (tab == Tab.OVERVIEW) boardTitle(chat.spaces.board, chat.spaces.spaces) else tab.label
                 HomeTopBar(title, switcher, { scope.launch { shell.open() } }, { switcher = !switcher }, menu, { menu = !menu }, dot = unread > 0)
-                SpaceTabs(spaces, selected, pick)
+                SpaceTabs(spaces.filter { it.pinned }, selected, pick)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalShellBar provides bars) { content() }
@@ -195,10 +196,10 @@ fun HomeFrame(
             { menu = false },
             offset = IntOffset(0, barPx),
         )
-        // 标题下的空间切换 (#138) 保留: 总览 (日常), 开发, 服务器, 插件空间; 选中就切到总览并显示那个看板
-        SpaceSwitcher(switcher, boardSpaces(chat.spaces.spaces), if (tab == Tab.OVERVIEW) selected else "", { key ->
+        // 标题下的空间切换 (#138): 全部一级页面 (含没置顶的), 侧栏 "更多空间" 也打开它
+        SpaceSwitcher(switcher, spaces, selected, { key ->
             switcher = false
-            board(key)
+            pick(key)
         }, { switcher = false; managing = true }, { switcher = false }, IntOffset(0, barPx))
         // 管理空间与排序 (#139): 以前内置看板上点了没反应
         if (managing) SpaceManageSheet(chat.spaces, unread) { managing = false }
