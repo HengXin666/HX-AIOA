@@ -17,8 +17,8 @@ data class AppearancePrefs(
     val accent: Int? = null,
     val radius: Int = DEFAULT_RADIUS.value.toInt(),
     val compact: Boolean = false,
-    // 预览新外壳 (侧栏 + 顶部标签, 无底栏, #121); 默认关, 只在手机宽度生效
-    val newShell: Boolean = false,
+    // 新外壳 (侧栏 + 顶部标签, 无底栏, #121); 默认开, 只在手机宽度生效; 关掉回到底部五栏 (过渡期保留)
+    val newShell: Boolean = true,
 ) {
     fun resolve(systemDark: Boolean) = Appearance(
         dark = when (mode) {

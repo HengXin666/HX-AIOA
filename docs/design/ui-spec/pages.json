@@ -1,5 +1,5 @@
 {
-  "$comment": "安卓页面关系唯一来源. 加页面 / 改跳转时改这里, 再运行 python3 gen.py 生成 sitemap.svg 与 prototype.html. 类型: tab 底部栏根页; block 根页里的区块 (不是导航); page 子页 (右侧推入, 有标题栏和返回); sheet 底部抽屉; dialog 确认 / 短输入; full 全屏 Dialog (待改成 page); activity 独立界面; go 跨栏跳转 (to=目标栏). rt: live 秒级推送, near 进页拉取 + 推送失效, static 本机或低频.",
+  "$comment": "安卓页面关系唯一来源. 加页面 / 改跳转时改这里, 再运行 python3 gen.py 生成 sitemap.svg 与 prototype.html. 类型: tab 顶层页 (手机: 顶部标签 + 侧栏, 平板: 左侧导航; #121); block 根页里的区块 (不是导航); page 子页 (右侧推入, 有标题栏和返回); sheet 底部抽屉; dialog 确认 / 短输入; full 全屏 Dialog (待改成 page); activity 独立界面; go 跨栏跳转 (to=目标栏). rt: live 秒级推送, near 进页拉取 + 推送失效, static 本机或低频.",
   "boot": [
     {"id": "boot-setup", "t": "page", "label": "连接服务端", "sub": "地址 · 令牌 · 订阅 · 保存并连接", "rt": "static"},
     {"id": "boot-login", "t": "page", "label": "登录 / 注册", "sub": "邀请码预填 (hxaioa://join)", "rt": "static"},

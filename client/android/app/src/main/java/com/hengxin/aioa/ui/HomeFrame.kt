@@ -44,6 +44,9 @@ private const val KEY_JOIN = "#join"
 private const val RECENT_PREFIX = "g:"
 private val BAR_OFFSET = 52.dp
 
+/** 外壳顶栏是否正显示页名: 为 true 时页面自己的大标题不再画。 */
+val LocalShellBar = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 private val TABS = listOf(Tab.OVERVIEW, Tab.CHAT, Tab.AGENT, Tab.RESOURCES)
 
 @Composable
@@ -107,7 +110,9 @@ fun HomeFrame(
                 HomeTopBar(tab.label, switcher, { scope.launch { shell.open() } }, { switcher = !switcher }, menu, { menu = !menu }, dot = unread > 0)
                 SpaceTabs(spaces, tab.name, { onTab(Tab.valueOf(it)) })
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalShellBar provides bars) { content() }
+            }
         }
         DropMenu(
             menu,

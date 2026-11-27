@@ -19,7 +19,7 @@ C = {
 }
 TAB_NAME = {t["id"]: t["label"] for t in DATA["tabs"]}
 TYPE_NAME = {
-    "tab": "底部栏根页", "block": "根页区块 (不是导航)", "page": "子页: 右侧推入, 标题栏 + 返回",
+    "tab": "顶层页: 顶部标签 + 侧栏", "block": "根页区块 (不是导航)", "page": "子页: 右侧推入, 标题栏 + 返回",
     "sheet": "底部抽屉: 预览 / 快捷操作", "dialog": "对话框: 只做确认与 1-2 项输入",
     "full": "全屏 Dialog: 待改 (终端除外)", "activity": "独立界面 / 系统入口", "go": "跨栏跳转: 返回回来源栏",
 }
@@ -133,7 +133,7 @@ def edge_svg(a, b):
 
 
 def legend():
-    items = [("tab", "底部栏根页"), ("block", "根页区块"), ("page", "子页 (推入)"), ("sheet", "底部抽屉"),
+    items = [("tab", "顶层页 (顶部标签)"), ("block", "根页区块"), ("page", "子页 (推入)"), ("sheet", "底部抽屉"),
              ("dialog", "对话框"), ("full", "全屏 Dialog (待改)"), ("activity", "独立界面"), ("go", "跨栏跳转")]
     s, x = [], 32
     for t, name in items:

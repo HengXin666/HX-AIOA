@@ -25,7 +25,8 @@ fun PageColumn(title: String, content: @Composable ColumnScope.() -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(Aioa.metrics.gap),
     ) {
-        Text(title, Aioa.colors.text, TITLE_SP)
+        // 新外壳的顶栏已经写了页名, 这里不再重复
+        if (!LocalShellBar.current) Text(title, Aioa.colors.text, TITLE_SP)
         content()
         Spacer(Modifier.height(8.dp))
     }

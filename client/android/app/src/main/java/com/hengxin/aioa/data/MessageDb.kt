@@ -115,6 +115,21 @@ class MessageDb private constructor(context: Context) :
         ).toInt()
     }
 
+    /** 今日脉搏: since 起每小时的消息数, 以及其中来源在 agentSids 里的条数; 只读本地, 总览图表用。 */
+    fun hourly(since: Long, hours: Int, agentSids: Set<String>): Pair<IntArray, IntArray> {
+        val all = IntArray(hours)
+        val agent = IntArray(hours)
+        readableDatabase.rawQuery("SELECT $C_TS, $C_SID FROM $T_MSG WHERE $C_TS >= ?", arrayOf(since.toString())).use { c ->
+            while (c.moveToNext()) {
+                val i = ((c.getLong(0) - since) / HOUR_MS).toInt()
+                if (i !in 0 until hours) continue
+                all[i]++
+                if (!c.isNull(1) && c.getString(1) in agentSids) agent[i]++
+            }
+        }
+        return all to agent
+    }
+
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */
@@ -223,6 +238,7 @@ class MessageDb private constructor(context: Context) :
 
     companion object {
         const val MEMO_GROUP = "备忘"
+        private const val HOUR_MS = 3_600_000L
         private const val DB_NAME = "messages.db"
         private const val DB_VERSION = 6
         const val DELETE_MODE = "delete"

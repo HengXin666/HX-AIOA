@@ -64,4 +64,17 @@ class TabNavTest {
         val n = path({ it.select(Tab.ME) }, { it.go(Tab.RESOURCES) }, { it.select(Tab.AGENT) })
         assertEquals(TabNav(Tab.AGENT), n)
     }
+
+    // 新外壳 (#121): 侧栏进 "我的" 或某个群是 go, 返回回到打开侧栏时所在的栏
+    @Test
+    fun 侧栏进我的_返回原栏() {
+        val n = path({ it.select(Tab.RESOURCES) }, { it.go(Tab.ME) })
+        assertEquals(TabNav(Tab.RESOURCES), n.back())
+    }
+
+    @Test
+    fun 侧栏进最近会话_返回原栏() {
+        val n = path({ it.select(Tab.AGENT) }, { it.go(Tab.CHAT) })
+        assertEquals(TabNav(Tab.AGENT), n.back())
+    }
 }

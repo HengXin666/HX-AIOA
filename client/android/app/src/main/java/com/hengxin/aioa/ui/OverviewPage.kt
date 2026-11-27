@@ -66,7 +66,7 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
         else EventSheet(ev, { detail = null }) { detail = null; chat.groups.openAt(ev.toMsg().groupKey(), ev.seq) }
     }
     PageColumn("总览") {
-        Status(chat.online, chat.metrics.probes.size, feed.v1)
+        if (!feed.v1) Status(chat.online, chat.metrics.probes.size, feed.v1)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             BOARDS.forEach { (id, label) -> Chip(label, board == id) { board = id } }
             spaces.forEach { s -> Chip(s.title, board == s.id) { board = s.id } }
@@ -75,7 +75,7 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
             picked != null -> SpacesSection(chat, picked.id)
             board == BOARD_DEV -> DevBoard(chat, openGithub, open)
             board == BOARD_SERVERS -> ServerBoard(chat, open)
-            feed.v1 -> V1Layers(chat, state, open) { id -> detail = findEvent(feed, id) }
+            feed.v1 -> OverviewV2(chat, state, open) { id -> detail = findEvent(feed, id) }
             else -> LegacyLayers(chat, state, open)
         }
     }
@@ -88,24 +88,9 @@ private val BOARDS = listOf(BOARD_DAILY to "日常", BOARD_DEV to "开发", BOAR
 
 private fun findEvent(feed: FeedState, id: String): Envelope? = feed.layers.values.flatten().firstOrNull { it.ev.id == id }?.ev
 
-@Composable
-private fun V1Layers(chat: ChatModel, state: CardState, open: (Tab) -> Unit, show: (String) -> Unit) {
-    val feed = chat.feed
-    val answer = rememberAnswer(chat)
-    AnimatedItems(feed.tasks.values.filter { it.state == Constants.TASK_WAITING }.sortedByDescending { it.updated }, { it.id }) { task ->
-        TaskCard(task.toCard(feed.pending[task.id]), onOption = { answer(task, it) }) { open(Tab.AGENT) }
-    }
-    Layer(chat, TITLE_NEED_ME, "少而重要", Constants.PRIORITY_NEED_ME, state, "一切正常, 没有需要处理的事", NEED_ME_SHOWN, show)
-    // 重点待办 (星标, P1, 快到期, 已逾期), 点开是全部待办的看板
-    com.hengxin.aioa.ui.todo.TodoFocus(chat.spaces) { ch, seq -> chat.groups.openAt(ch, seq) }
-    Layer(chat, TITLE_HAPPENING, "不必立即处理", Constants.PRIORITY_HAPPENING, state, "暂时风平浪静", LAYER_SHOWN, show)
-    ResourceTiles(chat, open)
-    Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show)
-}
-
 // 点开看过或点 x 划掉的不再占位置; 新来的照常出现
 @Composable
-private fun Layer(chat: ChatModel, title: String, hint: String, priority: String, state: CardState, empty: String, limit: Int, show: (String) -> Unit) {
+internal fun Layer(chat: ChatModel, title: String, hint: String, priority: String, state: CardState, empty: String, limit: Int, show: (String) -> Unit) {
     val list = items(chat.feed, priority).filter { !chat.seen.has(it.id) }
     // 总览里看过的同一条, 群里也算已读
     val seqs = chat.feed.layers[priority].orEmpty().associate { it.ev.id to it.ev.seq }
@@ -132,7 +117,7 @@ fun layerState(online: Boolean, loaded: Boolean, updatedAt: Long): CardState = w
 }
 
 // 任务由任务卡与 Agent 页展示, 层里只放事件与报告
-private fun items(feed: FeedState, priority: String): List<FeedItem> =
+internal fun items(feed: FeedState, priority: String): List<FeedItem> =
     feed.layers[priority].orEmpty().filter { it.ev.kind != Constants.KIND_TASK }.map { it.toFeed() }
 
 // 旧服务端只有消息: 近 24 小时的探针告警算 "需要我", 其余照旧
@@ -150,7 +135,7 @@ private fun LegacyLayers(chat: ChatModel, state: CardState, open: (Tab) -> Unit)
 
 // 装过的探针都列出来 (离线的也在), 一张卡看完; 没装过就什么都不放, 添加入口在资源页
 @Composable
-private fun ResourceTiles(chat: ChatModel, open: (Tab) -> Unit) {
+internal fun ResourceTiles(chat: ChatModel, open: (Tab) -> Unit) {
     val metrics = chat.metrics
     val carded = metrics.hosts.map { it.subject }.toSet()
     val legacy = metrics.probes.filter { it !in carded }
