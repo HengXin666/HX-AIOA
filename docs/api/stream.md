@@ -83,6 +83,13 @@ wss://<域名>/api/v1/stream?token=<凭证>&role=<client|agent|probe|chat>&devic
 { "t": "presence", "channel": "plugin-todo", "listening": [ { "id": "k_x1", "name": "点子整理" } ], "typing": [ { "id": "user:u_k3j9", "name": "HengXin", "until": 1763712006000 } ] }
 ```
 
+**chat_sync / chat_read / agent_active** 群资料相关 (#129, 详见 [chat.md](chat.md)): `chat_sync` (topic `chats`) 带收帧人视图下的 `chat`, 只发给群成员与主人; `chat_read` 只发给本人的设备; `agent_active` 只发给主人, 都不落库也不要求重拉:
+
+```json
+{ "t": "chat_read", "channel": "家里", "read": 1024 }
+{ "t": "agent_active", "channel": "plugin-todo", "keyId": "k_x1", "active": 1763712006000 }
+```
+
 **metric** 实时指标, 只发给 `watch` 了该主体的连接, 不落库:
 
 ```json

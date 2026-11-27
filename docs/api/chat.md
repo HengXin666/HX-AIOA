@@ -4,11 +4,20 @@
 
 ## 群资料
 
-- `GET /api/v1/chats` → `{ chats: [ChatMeta] }`, 带 `ETag`, 没变时 304。带 `events:read` 的 key 只看到白名单内的群, 且不含 `agents`。
-- `PATCH /api/v1/chats/{channel}` (母号) `{ title, avatar, pinned, muted, read, digest }`; 群不存在时即新建。值为 `null` / 空串 / `false` 表示清除。`read` 只前进。`digest` 为 `daily` / `weekly`, 标记日报 / 周报群。`hideListening` / `hideTyping` 为 true 时不再推 "正在监听" / "正在输入" (群主, 多人群管理员可改), 见 [stream.md](stream.md) 的 `presence`。
+- `GET /api/v1/chats` → `{ chats: [ChatMeta] }`, 带 `ETag`, 没变时 304。带 `events:read` 的 key 只看到白名单内的群, 且不含 `agents`。ETag 由群资料版本号 (任何一行群资料写入 +1, 存在行里) 与本人已读算出, 304 时不读全表; Agent 活跃时间不进 ETag (靠 `agent_active` 帧更新)。别人之间的单聊不出现在主人的列表里。
+- `PATCH /api/v1/chats/{channel}` (母号) `{ title, avatar, notice, pinned, muted, read, digest }`; 群不存在时即新建。值为 `null` / 空串 / `false` 表示清除。`notice` 为群公告, 最多 500 字 (群主与管理员可改)。返回 `{ chat }` (本人视图)。
+- 已读 (#129): `read` 只前进, 存在每人每群一行的已读表里, 不改群资料也不改 `updated`, 不触发 `chat_sync`; 只给本人的设备推 `{ t: "chat_read", channel, read }`。主人与子号都一样, 旧数据 (群资料里的 `read`, 成员表里的 `read`) 读取时取较大者。`digest` 为 `daily` / `weekly`, 标记日报 / 周报群。`hideListening` / `hideTyping` 为 true 时不再推 "正在监听" / "正在输入" (群主, 多人群管理员可改), 见 [stream.md](stream.md) 的 `presence`。
 - `DELETE /api/v1/chats/{channel}` (母号) 删除群: 消息, 文件, 接入的 Agent (key 作废), 插件安装与工作台, 待办, 多人群成员与邀请全删, 返回 `{ deleted, cleared }`。群资料只留墓碑 `{ channel, cleared, deleted: <时间> }`, 各端据此删本地记录并隐藏; 之后再有消息进来群会重新出现, 再 `PATCH` 同名群即复活为新群。
 - `POST /api/v1/chats/{channel}/typing` (群 Agent 的 key) 报 "正在输入"; 人走长连接的 `typing` 帧。`GET /api/v1/chat-agent/me` (群 Agent 的 key) 返回 `{ me: { keyId, name, channel, sourceId, reads } }`。命令行见 [cli.md](../client/cli.md)。
-- 变化后向客户端广播 `{ t: "chat_sync", topic: "chats", channel }`。
+- 群资料变化后推 `{ t: "chat_sync", topic: "chats", channel, chat }`, `chat` 是收帧人视图下的整份资料 (主人含 Agent, 子号是成员视图), 客户端直接替换, 不必重拉 `/chats`。只发给该群成员与主人; 只改了主人私有字段 (置顶, 免打扰, 日报, Agent) 时只发主人; 子号改自己的置顶 / 免打扰只发他自己。被移出群或群被删时, 相关的人收到不带 `chat` 的帧, 应重拉列表。
+- Agent 活跃 (#129): 内存记录, 同一个 Agent 每 2 分钟最多推一帧 `{ t: "agent_active", channel, keyId, active }` 给主人; 库里的值比现在早 30 分钟以上才写一次, 每 30 分钟的 cron 再把内存里较新的落库。`GET /chats` 里主人视图的 `agents[].active` 已合并内存值。
+
+## 单聊 (#133)
+
+- `POST /api/v1/dms` `{ peer: "<账号 id>" }` (主人或子号) → `{ chat }`。群名为 `dm:<字典序小的 uid>:<大的 uid>` (主人用自己的账号 id), 已有就直接返回, 不重复写。`peer` 必须是已存在且启用的账号, 不能是自己 (400)。
+- 单聊里两人都是普通成员: `ChatMeta.kind = "dm"`, `peer` 为对方 uid (按看的人算), `role` 为 `member`, `members` 为 2; 没起名时 `title` 用对方昵称。
+- 单聊不能接 Agent, 邀请, 加人, 设管理员, 踢人, 也不能改标题 / 头像 / 公告 / 提示开关, 一律 400 `单聊不能...`; 置顶, 免打扰, 已读照常。
+- 主人不是一方的单聊: 主人的群列表, `chat_sync` 与消息推送里都没有。
 
 ## 读群消息
 
@@ -39,13 +48,17 @@
 - `group` 写入的群, `reads` 额外可读的群, `source` 绑定的来源, `agents` 用这把 key 注册的交互 Agent 及在线状态, `lastActive` 最近一次发消息或心跳。
 - 作废: 群里的 Agent 用 `DELETE /chats/{channel}/agents/{keyId}`, 其它用 `DELETE /keys/{id}`。
 
-## 引用与转发 (长连接 send 帧)
+## 引用, 转发, @ 与合并转发 (长连接 send 帧)
 
-`{ t: "send", cid, body: { kind: "text", text }, reply?: seq, fwd?: seq, channel?: 群 }`
+`{ t: "send", cid, body: { kind: "text", text }, reply?: seq, fwd?: seq, channel?: 群, file?: 文件 id, mentions?: [..], bundle?: { from, seqs } }`
 
 - `reply`: 新消息带 `reply: { seq, id, src, text }` 快照 (摘要 200 字)。
 - `fwd`: 正文取原消息全文, 带 `fwd: { src, ts, channel? }`。
 - `channel`: 发到哪个群, 不写为备忘。
+- 子号只能引用, 转发, 合并自己所在群的消息, 看不到的当不存在。
+- `mentions` (#131): 被 @ 的, 元素为账号 id, `agent:<keyId>` 或 `all`, 去重后最多 50 个, 原样存进消息 `Envelope.mentions`。客户端 (安卓 `:link`) 收到 `ev` 时看 `mentions` 里有没有自己的 uid 或 `all`, 有就即使群免打扰也提醒。云 Agent 的 `GET /api/v1/chat-agent/next` 里, `mentions` 含 `agent:<它的 keyId>` 或 `all` 的条目带 `mentioned: true`。
+- `bundle` (#132): 合并转发, `seqs` 最多 100 条。服务端生成新消息, 正文 `[聊天记录] <from>`, `data.bundle = { from, count, refs: [seq], head: [{ src, text }] }`: `refs` 按 seq 升序, 已撤回 / 删除 / 看不到的不算; `head` 为前 4 条, `text` 截 60 字。一条都没有时返回 err。
+- 详情: `GET /api/v1/events/seq?seqs=1,2,3` (最多 100 个) → `{ events: [Envelope] }`, 按 seq 升序。主人都能取; 子号与 `events:read` 的 key 只返回自己能读的群里的; 撤回 / 删除 / 不存在的不出现在结果里。
 
 ## 收藏
 
@@ -54,15 +67,23 @@
 
 ## 头像
 
-- `PUT /api/v1/avatars` (母号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。
+- `PUT /api/v1/avatars` (主人或子号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。
+- 本人头像 (#130): `PATCH /api/v1/me` `{ display?, avatar?: "<头像 id>" | null }` → `{ user }`, 存在账号资料 `UserPublic.avatar`, 只在改的时候写一次; 改了昵称或头像, 他所在群的资料版本 +1, 成员列表与群列表的 ETag 随之失效。
 - `GET /api/v1/avatars/{id}` → 图片, `Cache-Control: immutable`, 客户端按 id 永久缓存。
 - 系统发送者 (#123 #128): 服务端自己发言用的来源 (`system`, `system:*`, `终端`) 第一次发言时自动登记。`GET /api/v1/senders` → `{ senders: [{ sid, name, icon, alias, avatar, first, last, updated }] }` (第一次请求时补登历史消息里的); `PATCH` (或 `PUT`) `/api/v1/senders/{sid}` (母号) `{ "alias": "名字" | null, "avatar": "<头像 id>" | null }`, 没登记的 404, 改了推 `chat_sync` topic `senders`。改了名的新消息 `source.name` 直接是别名; 客户端旧消息也按别名显示, 没设头像的用内置图标。安卓入口: 我的 → 管理 → 系统发送者。
 - 没有所属群的系统通知 (CF 额度, GitHub 授权到期) 发进 `system` 群 ("系统通知"), 发送者按用途命名 (指令更新, GitHub 同步, GitHub 授权, 待办提醒, CF 额度)。
-- 群头像写进群资料 `avatar`; 本人头像写进设置 `avatar`。
+- 群头像写进群资料 `avatar`; 本人头像写进账号资料 `avatar` (旧版写在设置 `avatar`)。
+
+## 群成员 (#130)
+
+- `GET /api/v1/chats/{channel}/members?cursor=&limit=&q=` (群里任何人) → `{ members: [RoomMember], next? }`。`RoomMember`: `{ id, name, display, role, joined, avatar? }`。
+- 按 (joined, id) 翻页, 默认 50 条, 最多 200; `next` 是下一页的 `cursor`, 没有下一页时不给。群主 (主人) 只在第一页最前面; 别人之间的单聊不列主人。`q` 按用户名与昵称过滤 (不分大小写)。
+- 带 `ETag` (成员数 + 该群资料版本), 没变时 304; 有人进出群, 改身份, 改昵称 / 头像都会让它变。
+- 推送按账号给在线连接分组 (只在连上 / 断开时重建), 一条消息只查本群成员的连接, 不再逐个解析全部连接。
 
 ## 其它
 
-- `GET /api/v1/events/seq/{seq}` → 单条消息, 用于跳转到本地没有的被引用消息。
+- `GET /api/v1/events/seq/{seq}` → 单条消息, 用于跳转到本地没有的被引用消息。批量见上面的合并转发。
 
 ## HTML 卡片
 
