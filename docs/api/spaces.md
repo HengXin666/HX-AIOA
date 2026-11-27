@@ -83,7 +83,7 @@ label_replace(100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[
 ## 3. 接口
 
 - `GET /api/v1/spaces` (访问令牌) → `{ "spaces": [Space & { "state": SpaceState }] }`
-- `POST /api/v1/spaces` (访问令牌或 `spaces:write` key): 请求体为 `Space`, 或 `{ "space": Space, "to": ["group:family"] }`。同 id 覆盖布局, 保留用户的显示状态。校验失败返回 400, `errors` 列出所有问题: `{ "error": "布局校验失败", "code": "bad_request", "errors": ["panels[0].items[1]: 图表 sparkline 需要 question, 写明它回答什么问题"] }`。成功返回 `{ "ok": true, "delivered": 1 }`, 在线设备收到 `space_update` 帧。
+- `POST /api/v1/spaces` (访问令牌或 `spaces:write` key): 请求体为 `Space`, 或 `{ "space": Space, "to": ["group:family"] }`。同 id 覆盖布局, 保留用户的显示状态。可选 `tab` (`primary` / `auto` / `none`) 提示顶部标签怎么自动补空位 (规则见 `docs/design/ui-spec/home-spaces.md`), Agent 下发的 `primary` 按 `auto` 存。校验失败返回 400, `errors` 列出所有问题: `{ "error": "布局校验失败", "code": "bad_request", "errors": ["panels[0].items[1]: 图表 sparkline 需要 question, 写明它回答什么问题"] }`。成功返回 `{ "ok": true, "delivered": 1 }`, 在线设备收到 `space_update` 帧。
 - `DELETE /api/v1/spaces/{id}` (访问令牌)
-- `PUT /api/v1/spaces/{id}/state` `{ "hidden": false, "hiddenPanels": ["daily"], "order": ["nas", "daily"], "sizes": { "nas": "full" } }`: 只传要改的字段, `sizes` 与已有的按面板合并。面板 id 必须存在, 尺寸只能是 `s/m/l/full`, 否则 400。成功后其他在线设备收到 `space_update`。
+- `PUT /api/v1/spaces/{id}/state` `{ "hidden": false, "hiddenPanels": ["daily"], "order": ["nas", "daily"], "sizes": { "nas": "full" } }`: 只传要改的字段, `sizes` 与已有的按面板合并; `pinned` (置顶到顶部标签) 与 `hidden` 传 `null` 表示清掉回到默认。面板 id 必须存在, 尺寸只能是 `s/m/l/full`, 否则 400。成功后其他在线设备收到 `space_update`。
 - `GET /api/v1/spaces/{id}/data` → `{ "id", "generatedAt", "values": [{ "subject", "field", "value", "ts", "unit"? }], "events": [Envelope] }`: 服务端按绑定解析的当前值 (指标取各主体最新值, 列表与报告取最近事件), 客户端打开工作台时先用它填充, 之后由实时推送接管。

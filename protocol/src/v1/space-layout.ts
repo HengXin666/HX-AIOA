@@ -39,7 +39,9 @@ export function parseSpaceState(raw: unknown, space: Space, cur: SpaceState = {}
   for (const key of ["hidden", "pinned"] as const) {
     const v = raw[key];
     if (v === undefined) continue;
-    if (typeof v !== "boolean") errs.push(`${key} 必须是布尔值`);
+    // null: 清掉用户的设置, 回到默认 (#139 管理抽屉的 "恢复默认")
+    if (v === null) delete next[key];
+    else if (typeof v !== "boolean") errs.push(`${key} 必须是布尔值或 null`);
     else next[key] = v;
   }
   for (const key of ["hiddenPanels", "order"] as const) {

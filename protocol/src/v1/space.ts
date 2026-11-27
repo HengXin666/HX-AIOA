@@ -53,16 +53,21 @@ export type Panel = {
   refresh: Refresh;
   items: Item[];
 };
+// 对顶部标签的提示 (#139): primary 优先补空位 (只给可信来源的插件), auto 缺省, none 从不自动置顶; 用户设过的永远优先
+export const SPACE_TABS = ["primary", "auto", "none"] as const;
+export type SpaceTab = (typeof SPACE_TABS)[number];
+export const isSpaceTab = (v: unknown): v is SpaceTab => (SPACE_TABS as readonly unknown[]).includes(v);
 export type Space = {
   id: string;
   title: string;
   icon?: string;
   origin?: string;
+  tab?: SpaceTab;
   updated?: number;
   panels: Panel[];
   state?: SpaceState;
 };
-// 用户自己的显示状态: 隐藏, 置顶到顶部标签 (客户端限 5 个, 没设过按客户端默认), 排序, 尺寸; 与布局分开存, Agent 重新下发不覆盖
+// 用户自己的显示状态: 隐藏, 置顶到顶部标签 (客户端限 5 个, 没设过按 tab 提示补空位; PUT 时 null 表示清掉), 排序, 尺寸; 与布局分开存, Agent 重新下发不覆盖
 export type SpaceState = { hidden?: boolean; pinned?: boolean; hiddenPanels?: string[]; order?: string[]; sizes?: Record<string, PanelSize> };
 export type SpaceWithState = Space & { state: SpaceState };
 
@@ -125,6 +130,7 @@ export function validateSpace(raw: unknown): string[] {
   if (JSON.stringify(raw).length > MAX_SPACE_BYTES) errs.push("space 过大 (上限 32KB)");
   if (!idOk(raw.id)) errs.push("id 只能包含字母数字和 _ . : -");
   if (!titleOk(raw.title)) errs.push("需要 title");
+  if (raw.tab !== undefined && !isSpaceTab(raw.tab)) errs.push(`tab 只能是 ${SPACE_TABS.join("/")}`);
   if (!Array.isArray(raw.panels) || raw.panels.length > MAX_PANELS) return [...errs, `panels 必须是数组 (最多 ${MAX_PANELS} 个)`];
   const ids = new Set<string>();
   const itemIds = new Set<string>();
@@ -148,4 +154,9 @@ export function validateSpace(raw: unknown): string[] {
     });
   });
   return errs;
+}
+
+// 不可信的来源 (第三方源, 开发模式, Agent 下发) 不能声明 primary, 降为 auto; 其余原样返回
+export function demoteTab<T>(raw: T): T {
+  return isObj(raw) && raw.tab === "primary" ? { ...raw, tab: "auto" } : raw;
 }

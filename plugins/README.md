@@ -30,6 +30,7 @@ plugins/
 | `agent.name` | 接入 Agent 的名字 (api 2 可以不写 `agent`, 这类插件不安装只启用, 如 `hengxin666.github`, `hengxin666.gh`); `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
 | `base`, `deps` | 旧格式 (api 1) 的基础插件与依赖, 照常能解析; `base` 插件按无 Agent 插件处理。新插件改用 `provides` / `optional` 声明服务, 例 GitHub issue 代办是 `service:gh.issues` |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
+| `space.tab` | 可选, 顶部标签怎么自动补空位: `primary` 优先 (排在 "消息" 之后, 其它内置页之前), `auto` (缺省) 排在内置页之后, `none` 从不自动置顶 (用户仍可手动置顶)。只有官方源与主人私有源能用 `primary`, 其它来源服务端按 `auto` 处理。用户自己设过置顶的永远按用户的, 规则见 `docs/design/ui-spec/home-spaces.md` §3 |
 
 ### v2 字段 (`"api": "2"`, 只加不改, 不写 api 的旧清单照常能用)
 

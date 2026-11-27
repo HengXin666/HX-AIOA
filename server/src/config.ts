@@ -1,4 +1,4 @@
-import { parseRule, parseWindow, type Rule, type Settings } from "@hx-aioa/protocol";
+import { SETTING_HOME_TABS, parseHomeTabs, parseRule, parseWindow, type Rule, type Settings } from "@hx-aioa/protocol";
 import { randomId } from "./auth";
 import { DEFAULT_TZ, KV_RULES, KV_SETTINGS, MAX_SETTING_BYTES, MAX_SETTING_KEYS, MAX_USER_RULES } from "./constants";
 import { isValidTz } from "./rules/window";
@@ -83,6 +83,13 @@ export class Config {
         if (typeof w === "string") return `quiet: ${w}`;
       }
       if (k === "wxpusherUid" && typeof v !== "string") return "wxpusherUid 必须是字符串";
+      // 首页标签的顺序与置顶 (#139): 只存规整后的值
+      if (k === SETTING_HOME_TABS) {
+        const h = parseHomeTabs(v);
+        if (typeof h === "string") return `homeTabs: ${h}`;
+        next[k] = h;
+        continue;
+      }
       next[k] = v;
     }
     if (Object.keys(next).length > MAX_SETTING_KEYS) return `设置最多 ${MAX_SETTING_KEYS} 个键`;

@@ -1,6 +1,7 @@
 import type { Priority, Role, Scope } from "./constants";
 import type { Rule, TimeWindow } from "./rule";
 import type { Envelope, EventGroup, RouteInfo } from "./event";
+import type { HomeTabs } from "./home-tabs";
 
 export type UserStatus = "active" | "pending" | "disabled";
 // avatar: 头像 id (先 PUT /avatars 上传), 本人用 PATCH /me 改
@@ -103,7 +104,7 @@ export type EventGroupsResult = { groups: EventGroup[] };
 export type MetricLatest = { ts: number; values: Record<string, number>; units?: Record<string, string> };
 export type ActResult = { aid: string; state: "queued" | "delivered" | "duplicate" };
 export type RuleTestResult = { route: RouteInfo };
-export type Settings = { tz?: string; quiet?: TimeWindow; wxpusherUid?: string } & Record<string, unknown>;
+export type Settings = { tz?: string; quiet?: TimeWindow; wxpusherUid?: string; homeTabs?: HomeTabs } & Record<string, unknown>;
 export type ApiError = { error: string; code: string; errors?: string[] };
 
 // 接入总览: 每把 key 一行。push = 定时任务等单向推送的消息源; interactive = Codex 这类可双向交互的 Agent

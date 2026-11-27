@@ -7,6 +7,7 @@ export * from "./v1/feed-tags";
 export * from "./v1/task";
 export * from "./v1/space";
 export * from "./v1/space-layout";
+export * from "./v1/home-tabs";
 export * from "./v1/metric-fields";
 export * from "./v1/rule";
 export * from "./v1/frames";

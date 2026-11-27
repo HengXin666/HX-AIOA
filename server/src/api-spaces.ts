@@ -1,4 +1,4 @@
-import { PATH_SPACE, PATH_SPACE_DATA, PATH_SPACE_STATE, PATH_SPACES } from "@hx-aioa/protocol";
+import { PATH_SPACE, PATH_SPACE_DATA, PATH_SPACE_STATE, PATH_SPACES, demoteTab } from "@hx-aioa/protocol";
 import { CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, POST, PUT, RECENT_SCAN } from "./constants";
 import { OWNER, type ReqCtx, type Route, keyIdOf, route } from "./core";
 import { fail, json, readJson } from "./http";
@@ -12,7 +12,8 @@ async function putSpace(c: ReqCtx): Promise<Response> {
   const body = (await readJson(c.req)) as Record<string, unknown> | undefined;
   const raw = body && typeof body === "object" && "space" in body ? body.space : body;
   const origin = c.who.owner ? "manual" : `key:${keyIdOf(c.who)}`;
-  const r = await c.core.spaces.put(raw, origin);
+  // Agent 下发的空间不能抢顶部标签 (tab: "primary" 降为 auto, #139); 主人手动的照收
+  const r = await c.core.spaces.put(c.who.owner ? raw : demoteTab(raw), origin);
   if ("errors" in r) return fail(400, "布局校验失败", undefined, { errors: r.errors });
   c.core.sockets.toV1Clients({ t: "space_update", id: r.space.id, space: r.space });
   return json({ ok: true, delivered: 1 });

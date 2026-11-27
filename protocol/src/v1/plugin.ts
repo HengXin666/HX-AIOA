@@ -1,6 +1,6 @@
 import type { MajorChange } from "./agent-skill";
 import { API_V1 } from "./constants";
-import type { Space } from "./space";
+import { SPACE_TABS, isSpaceTab, type Space } from "./space";
 import type { PluginAllow } from "./plugin-api";
 import { PLUGIN_API_LEGACY, checkExtras, isPluginId, type PluginExtras } from "./plugin-v2";
 
@@ -281,6 +281,7 @@ export function parseManifest(raw: unknown): PluginManifest | string {
     if (!isObj(raw.agent) || typeof raw.agent.name !== "string" || !raw.agent.name) return "缺少 agent.name";
   }
   if (raw.space !== undefined && !isObj(raw.space)) return "space 必须是工作台布局对象";
+  if (isObj(raw.space) && raw.space.tab !== undefined && !isSpaceTab(raw.space.tab)) return `space.tab 只能是 ${SPACE_TABS.join("/")}`;
   const extra = checkExtras(raw);
   if (extra) return extra;
   return raw as unknown as PluginManifest;

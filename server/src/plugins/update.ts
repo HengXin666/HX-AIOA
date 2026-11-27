@@ -1,9 +1,10 @@
-import { PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, pluginSpaceId, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
+import { PLUGIN_VAR_CHANNEL, PLUGIN_VAR_TITLE, demoteTab, pluginSpaceId, type PluginInstall, type PluginManifest } from "@hx-aioa/protocol";
 import { SEED_BY } from "./builtins";
 import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
 import { pushPlugin } from "./notify";
+import { trustedPlugin } from "./private";
 import { bumpSetup, pluginSkill } from "../agent-want";
 
 export const CODE_NOT_ALLOWED = "plugin_not_allowed";
@@ -12,7 +13,9 @@ export const CODE_NOT_ALLOWED = "plugin_not_allowed";
 export async function applySpace(core: Core, id: string, m: PluginManifest, channel: string, title: string): Promise<string | undefined> {
   if (!m.space) return undefined;
   const raw = JSON.parse(JSON.stringify(m.space).replaceAll(PLUGIN_VAR_CHANNEL, channel).replaceAll(PLUGIN_VAR_TITLE, title));
-  const r = await core.spaces.put({ ...raw, id: pluginSpaceId(id) }, `plugin:${id}`);
+  // tab: "primary" 只给可信来源, 其余降为 auto (#139)
+  const space = trustedPlugin(core, id) ? raw : demoteTab(raw);
+  const r = await core.spaces.put({ ...space, id: pluginSpaceId(id) }, `plugin:${id}`);
   if ("errors" in r) throw new ApiFail(400, CODE_BAD_REQUEST, `插件布局有误: ${r.errors.join("; ")}`);
   core.sockets.toV1Clients({ t: "space_update", id: r.space.id, space: r.space });
   return r.space.id;

@@ -2,7 +2,7 @@
   "id": "hengxin666.todo",
   "name": "点子待办",
   "summary": "在群里随手丢想法, Agent 整理成待办, 并对值得做的点子写可行性分析; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "api": "2",
   "server": true,
   "engines": {
@@ -70,6 +70,7 @@
     "id": "todo",
     "title": "点子待办",
     "icon": "list-checks",
+    "tab": "primary",
     "panels": [
       {
         "id": "todos",
