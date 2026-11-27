@@ -40,8 +40,11 @@ private const val KEY_FAV = "#fav"
 private const val KEY_GITHUB = "#github"
 private const val KEY_THEME = "#theme"
 private const val KEY_JOIN = "#join"
+private const val KEY_NEW_GROUP = "#new-group"
+private const val KEY_EDIT_SPACE = "#edit-space"
 private const val RECENT_PREFIX = "g:"
 private val BAR_OFFSET = 52.dp
+private const val MORE_SPACES = "#more"
 
 /** 外壳顶栏是否正显示页名: 为 true 时页面自己的大标题不再画。 */
 val LocalShellBar = androidx.compose.runtime.staticCompositionLocalOf { false }
@@ -77,6 +80,14 @@ fun HomeFrame(
     val server = remember { ConfigStore.load(context)?.server?.substringAfter("://")?.trimEnd('/').orEmpty() }
     val dark = Aioa.tokens.dark
     val close: () -> Unit = { scope.launch { shell.close() } }
+    // 编辑空间 (#139): 自建 / 插件空间进入区块编辑 (排序, 尺寸); 内置看板没有可编辑的区块, 先弹出空间切换选一个
+    val editSpaces: () -> Unit = {
+        val current = chat.spaces.spaces.firstOrNull { it.id == chat.spaces.board }
+        if (current != null) {
+            if (tab != Tab.OVERVIEW) onTab(Tab.OVERVIEW)
+            chat.spaces.editing = true
+        } else switcher = true
+    }
     val pick: (String) -> Unit = { key ->
         when {
             key.startsWith(RECENT_PREFIX) -> onOpenGroup(key.removePrefix(RECENT_PREFIX))
@@ -84,9 +95,13 @@ fun HomeFrame(
             key == KEY_GITHUB -> onGithub()
             key == KEY_THEME -> setMode(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)
             key == KEY_JOIN -> { g.pendingInvite = ""; onGo(Tab.CHAT) }
+            key == KEY_NEW_GROUP -> { if (g.open != null) g.close(); g.pendingNewGroup = true; onGo(Tab.CHAT) }
+            key == KEY_EDIT_SPACE -> editSpaces()
             key == Tab.ME.name -> onGo(Tab.ME)
             Tab.entries.any { it.name == key } -> onTab(Tab.valueOf(key))
             spaces.any { it.id == key } -> board(key)
+            // 侧栏 "更多空间": 没置顶的都在标题下的空间切换里
+            key == MORE_SPACES -> switcher = true
         }
         close()
     }
@@ -109,7 +124,7 @@ fun HomeFrame(
             listOf(SideLink(KEY_THEME, if (dark) "浅色" else "深色", if (dark) "sun" else "moon"), SideLink(Tab.ME.name, "我的", "user")),
             selected,
             onSelect = pick,
-            onEditSpaces = {},
+            onEditSpaces = { close(); editSpaces() },
             onAccount = { pick(Tab.ME.name) },
         )
     }) {
@@ -126,8 +141,10 @@ fun HomeFrame(
         DropMenu(
             menu,
             listOf(
-                MenuEntry(KEY_JOIN, "加入群聊", "scan-line"),
-                MenuEntry(KEY_FAV, "收藏", "star"),
+                // 右上菜单只放动作 (#139, home-spaces §4): 新建, 加入, 编辑空间; 收藏与我的在侧栏
+                MenuEntry(KEY_NEW_GROUP, "新建群聊", "message-square-plus"),
+                MenuEntry(KEY_JOIN, "加入群聊", "user-plus"),
+                MenuEntry(KEY_EDIT_SPACE, "编辑这个空间", "sliders-horizontal"),
                 MenuEntry(KEY_THEME, if (dark) "切到浅色" else "切到深色", if (dark) "sun" else "moon", divider = true),
                 MenuEntry(Tab.ME.name, "我的与设置", "settings"),
             ),
@@ -139,6 +156,6 @@ fun HomeFrame(
         SpaceSwitcher(switcher, boardSpaces(chat.spaces.spaces), if (tab == Tab.OVERVIEW) selected else "", { key ->
             switcher = false
             board(key)
-        }, { switcher = false }, { switcher = false }, IntOffset(0, barPx))
+        }, { switcher = false; if (chat.spaces.spaces.any { it.id == chat.spaces.board }) editSpaces() }, { switcher = false }, IntOffset(0, barPx))
     }
 }

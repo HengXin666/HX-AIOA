@@ -113,7 +113,7 @@ fun AgentVersionSection(group: String, a: ChatAgent, now: Long, setAuto: (Boolea
             HomeRow("接入版本", "${s.setupHave} -> ${s.setupWant}", divider = !first, end = { SoftTag(RELINK, c.danger) })
             first = false
         }
-        HomeRow("命令行", a.skills?.client ?: "还没上报", divider = !first)
+        HomeRow("命令行", (a.client ?: a.skills?.client) ?: "还没上报", divider = !first)
         GiToggle("大更新自动执行", a.autoMajor, true, "开启后要重发一次接入语才生效") { setAuto(it) }
     }
 }

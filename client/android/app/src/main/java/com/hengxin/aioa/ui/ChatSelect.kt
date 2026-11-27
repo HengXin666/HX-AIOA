@@ -81,19 +81,19 @@ internal fun SelectBar(model: ChatModel, group: String, picking: Picking) {
             g.sendBundle(key, dir.title(group), chosen.map { it.seq }.take(Constants.BUNDLE_MAX))
             picking.stop()
         }
-        Batch.DELETE -> AlertDialog(
+        Batch.DELETE -> { val admin = dir.metas[group]?.canManage == true; AlertDialog(
             onDismissRequest = { batch = null },
             title = { Text("删除 ${chosen.size} 条消息?") },
-            text = { Text("所有设备上都会删除, 不能恢复。") },
+            text = { Text(if (admin) "群里所有人都看不到了, 不能恢复。" else "只从本机删除, 群里其他人仍能看到。") },
             confirmButton = {
                 TextButton({
-                    chosen.forEach { g.remove(it, MessageDb.DELETE_MODE) }
+                    chosen.forEach { g.remove(it, if (admin) MessageDb.DELETE_MODE else MessageDb.LOCAL_MODE) }
                     batch = null
                     picking.stop()
                 }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton({ batch = null }) { Text("取消") } },
-        )
+        ) }
         null -> Unit
     }
 }

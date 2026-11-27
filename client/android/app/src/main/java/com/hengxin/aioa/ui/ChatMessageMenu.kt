@@ -63,9 +63,10 @@ internal fun MessageMenu(msg: ServerFrame.Msg, a: BubbleActions, onCopy: () -> U
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false; close() },
+            // 管理员删全员, 其他人只删本机 (#139, 规范 message-pages §8; 服务端也只放行管理员的全员删除)
             title = { androidx.compose.material3.Text("删除这条消息?") },
-            text = { androidx.compose.material3.Text("所有设备上都会删除, 不能恢复。") },
-            confirmButton = { TextButton({ confirm = false; close(); a.onRemove(msg, MessageDb.DELETE_MODE) }) { androidx.compose.material3.Text("删除", color = MaterialTheme.colorScheme.error) } },
+            text = { androidx.compose.material3.Text(if (a.admin) "群里所有人都看不到了, 不能恢复。" else "只从本机删除, 群里其他人仍能看到。") },
+            confirmButton = { TextButton({ confirm = false; close(); a.onRemove(msg, if (a.admin) MessageDb.DELETE_MODE else MessageDb.LOCAL_MODE) }) { androidx.compose.material3.Text("删除", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton({ confirm = false; close() }) { androidx.compose.material3.Text("取消") } },
         )
         return

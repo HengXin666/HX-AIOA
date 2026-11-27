@@ -45,6 +45,8 @@ export function chatInput(store: EventStore, f: SendFrame, canSee: CanSee = () =
     // 转发带上原消息的附件 (同一个文件, 引用数 +1)
     if (orig?.kind === "event" && orig.data.file) input.data = { ...input.data, file: orig.data.file };
     if (bundle) input.data = { ...input.data, bundle };
+    // 转发合并转发卡片 (#139): 卡片本身跟着走 (只是引用, 不复制正文), 否则对方只看到 "[聊天记录]" 一行字
+    else if (orig?.kind === "event" && orig.data.bundle) input.data = { ...input.data, bundle: orig.data.bundle };
   }
   if (f.reply) {
     const r = store.bySeq(f.reply);

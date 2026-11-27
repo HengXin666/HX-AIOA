@@ -45,6 +45,20 @@ function isAuthor(core: Core, who: Principal, ev: Envelope): boolean {
   return who.key.scopes.includes(SEND_SCOPE) && ev.source.id === originOf(core, who).source.id;
 }
 
+function mayRecall(core: Core, who: Principal, ev: Envelope, now: number): boolean {
+  if (who.owner || mayAdmin(core, who, ev)) return true;
+  if (!isAuthor(core, who, ev)) return false;
+  // Agent 撤回自己的不限时; 真人 (子号) 限 2 分钟
+  const human = "member" in who && !!who.member;
+  return !human || now - ev.ts <= RECALL_WINDOW_MS;
+}
+
+function mayAdmin(core: Core, who: Principal, ev: Envelope): boolean {
+  if (who.owner) return true;
+  const grp = groupOf(ev);
+  return !!who.member && !!grp && rank(roleIn(core, who, grp) ?? "member") >= rank("admin");
+}
+
 // 删除: 主人任何消息; 群管理员本群; Agent 自己所在的群
 function mayDelete(core: Core, who: Principal, ev: Envelope): boolean {
   if (who.owner) return true;
@@ -53,13 +67,16 @@ function mayDelete(core: Core, who: Principal, ev: Envelope): boolean {
   return who.key.scopes.includes(SEND_SCOPE) && !!ev.channel && ev.channel === who.key.channels[0];
 }
 
-/** 撤回: 作者随时可撤; 删除: 主人删任何消息, 群管理员删本群的, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
+// 真人撤回自己的消息限 2 分钟 (规范 message-pages §8); 管理员与 Agent 不限
+export const RECALL_WINDOW_MS = 2 * 60_000;
+
+/** 撤回 (#139): 真人作者 2 分钟内, 主人 / 群管理员 / Agent 自己的随时; 删除: 主人删任何消息, 群管理员删本群的, Agent 删自己所在群的。墓碑换新 seq, 断线设备补拉时也能收到。 */
 export async function removeMessage(core: Core, who: Principal, seq: number, mode: DeleteMode, now = Date.now()): Promise<Envelope> {
   const ev = core.store.bySeq(seq);
   if (!ev) throw new ApiFail(404, CODE_NOT_FOUND, ERR_NO_RESOURCE);
   if (ev.deleted?.mode === mode || ev.deleted?.mode === "delete") return ev;
   if (ev.kind === "metric" || ev.kind === "task") throw new ApiFail(400, CODE_BAD_REQUEST, "指标和任务不能撤回或删除");
-  if (mode === "recall" && !ev.deleted && !isAuthor(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只能撤回自己发的消息");
+  if (mode === "recall" && !ev.deleted && !mayRecall(core, who, ev, now)) throw new ApiFail(403, CODE_FORBIDDEN, "只能撤回自己 2 分钟内发的消息, 管理员不限");
   if (mode === "delete" && !mayDelete(core, who, ev)) throw new ApiFail(403, CODE_FORBIDDEN, "只有群主, 管理员和本群的 Agent 能删除消息");
   const saved = core.store.put(tombstoneOf(ev, mode, now));
   await core.files.track(ev, saved);

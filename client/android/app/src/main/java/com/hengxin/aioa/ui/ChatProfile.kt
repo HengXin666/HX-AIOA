@@ -158,7 +158,7 @@ private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent,
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(name, c.text, 20, weight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { SoftTag(Constants.CLOUD_AGENT, tone); SoftTag(label, stateTone) }
-            Text(a.skills?.skills?.entries?.joinToString(" · ") { "${it.key} ${it.value}" }?.ifEmpty { null } ?: "还没上报版本", c.textSecondary, 13)
+            Text((listOfNotNull(a.client) + a.skills?.skills?.entries?.map { "${it.key} ${it.value}" }.orEmpty()).joinToString(" · ").ifEmpty { "还没上报版本" }, c.textSecondary, 13)
         }
     }
     Spacer(Modifier.height(14.dp))

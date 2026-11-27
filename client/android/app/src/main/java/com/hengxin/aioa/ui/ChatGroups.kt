@@ -80,6 +80,8 @@ class ChatGroups(
     var favoritesOpen by mutableStateOf(false)
     // 从邀请链接拉起 App 时带来的邀请码, 群列表看到后弹出加入框
     var pendingInvite by mutableStateOf<String?>(null)
+    /** 外壳右上菜单的 "新建群聊" (#139): 群列表看到后弹出新建框。 */
+    var pendingNewGroup by mutableStateOf(false)
     /** 别的页要求打开某个群时加一, 主界面据此切到消息栏。 */
     var focusTick by mutableStateOf(0)
         private set
@@ -266,7 +268,7 @@ class ChatGroups(
                 remote.forEach { db.insert(it) }
                 // 云端也翻到头了才算没有更多
                 cloudEnd = remote.size < Constants.HISTORY_PAGE - local.size
-                remote.filter { it.deleted != MessageDb.DELETE_MODE } + local
+                remote.filter { it.deleted != MessageDb.DELETE_MODE && !db.isHidden(it.seq) } + local
             }
             if (open == key) {
                 messages.addAll(0, list.filter { m -> messages.none { it.seq == m.seq } })
@@ -278,9 +280,20 @@ class ChatGroups(
 
     /** 撤回或删除一条消息: 成功后按服务端返回的墓碑直接更新, 其它设备由推送同步。 */
     fun remove(msg: ServerFrame.Msg, mode: String) {
+        if (mode == MessageDb.LOCAL_MODE) return hideLocal(msg)
         scope.launch {
             val r = withContext(Dispatchers.IO) { history.remove(msg.seq, mode).onSuccess { db.insert(it) } }
             r.onSuccess { onMessage(it) }.onFailure { error = it.message }
+        }
+    }
+
+    /** 只删本机这条 (#139): 不发服务端, 群里别人照样能看到; 之后翻页或补拉也不再显示。 */
+    private fun hideLocal(msg: ServerFrame.Msg) {
+        messages.removeAll { it.seq == msg.seq }
+        if (replyTo?.seq == msg.seq) replyTo = null
+        scope.launch {
+            withContext(Dispatchers.IO) { db.hideLocal(msg.seq) }
+            reload()
         }
     }
 

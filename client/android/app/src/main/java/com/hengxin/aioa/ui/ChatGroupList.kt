@@ -54,6 +54,7 @@ fun GroupList(model: ChatModel) {
     // 打开的域: 存成可保存状态, 从域里进群再退出时回到域里 (像 QQ 群助手)
     var domain by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(g.pendingInvite) { if (g.pendingInvite != null) dialog = ListDialog.Join }
+    LaunchedEffect(g.pendingNewGroup) { if (g.pendingNewGroup) { g.pendingNewGroup = false; dialog = ListDialog.NewGroup } }
     val tags = g.tags.tags
     LaunchedEffect(tags.keys) { if (tag != null && tag !in tags) tag = null }
     val rows = g.rows()

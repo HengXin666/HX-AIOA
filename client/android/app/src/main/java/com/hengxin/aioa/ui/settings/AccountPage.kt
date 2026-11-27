@@ -79,7 +79,13 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     val job = AvatarUploads.jobs[AvatarUploads.ME]
     val upload = { bytes: ByteArray ->
         AvatarUploads.start(context, AvatarUploads.ME, bytes) { id ->
-            withContext(Dispatchers.IO) { Api.call(app, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(SETTING_AVATAR, id)) }.error
+            // 账号头像走 PATCH /me (#139): 成员列表, 资料卡读的是账号上的 avatar; settings 里那份留给旧版客户端
+            withContext(Dispatchers.IO) {
+                Api.call(app, PATCH, listOf(Constants.ME_PATH), JSONObject().put(SETTING_AVATAR, id)).error
+                    ?.also { return@withContext it }
+                Api.call(app, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(SETTING_AVATAR, id))
+                null
+            }
         }
     }
     val pickAvatar = rememberAvatarPicker({ message = it }) { upload(it) }
@@ -106,6 +112,7 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
             }
         }
         val r = withContext(Dispatchers.IO) { Api.call(context, GET, listOf(Constants.ME_PATH)) }
+        r.body?.optJSONObject("user")?.optString(SETTING_AVATAR)?.ifEmpty { null }?.let { avatar = it }
         val arr = r.body?.optJSONArray("devices")
         devices = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it) }.map {
             Device(it.optString("id"), it.optString("name"), it.optString("platform"), it.optBoolean("current"))

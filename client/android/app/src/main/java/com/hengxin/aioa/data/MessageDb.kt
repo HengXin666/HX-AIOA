@@ -58,6 +58,7 @@ class MessageDb private constructor(context: Context) :
 
     /** 入库: 同 id 的旧版本和墓碑指向的旧序号先删掉; 删除墓碑本身不留行, 撤回墓碑留一行显示 "已撤回"。 */
     fun insert(msg: ServerFrame.Msg): Boolean {
+        if (isHidden(msg.seq)) return false
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -70,6 +71,14 @@ class MessageDb private constructor(context: Context) :
             db.endTransaction()
         }
     }
+
+    /** 只删本机 (#139): 删掉这一行并记下序号, 之后同步或向云端翻页拉回来也不再入库。 */
+    fun hideLocal(seq: Long) {
+        writableDatabase.delete(T_MSG, "$C_SEQ = ?", arrayOf(seq.toString()))
+        putKv(K_HIDDEN + seq, 1)
+    }
+
+    fun isHidden(seq: Long): Boolean = seq > 0 && getKv(K_HIDDEN + seq) == 1L
 
     /** 断线太久: floor 之前的缓存可能漏了删除, 丢掉, 需要时再向云端翻页。 */
     fun dropBefore(floor: Long): Int = writableDatabase.delete(T_MSG, "$C_SEQ < ?", arrayOf(floor.toString()))
@@ -254,6 +263,8 @@ class MessageDb private constructor(context: Context) :
         private const val DB_VERSION = 6
         const val DELETE_MODE = "delete"
         const val RECALL_MODE = "recall"
+        /** 只删本机, 不发服务端 (#139)。 */
+        const val LOCAL_MODE = "local"
         private const val C_ID = "id"
         private const val X_DELETED = "deleted"
         // 撤回留下的墓碑不算未读, 也不进通知
@@ -295,6 +306,7 @@ class MessageDb private constructor(context: Context) :
         private const val C_SEEN = "seen"
         private const val K_READ_SEQ = "read_seq"
         private const val K_GROUP_READ = "read:"
+        private const val K_HIDDEN = "hide:"
         private const val GRP_INDEX = "CREATE INDEX IF NOT EXISTS msg_grp ON $T_MSG ($C_GRP, $C_SEQ)"
         // 升级时给旧消息补群键, 规则与 groupKey() 一致
         private val GROUP_EXPR = "CASE WHEN $C_SRC LIKE '${Constants.DEVICE_PREFIX}%' THEN '$MEMO_GROUP' ELSE $C_SRC END"

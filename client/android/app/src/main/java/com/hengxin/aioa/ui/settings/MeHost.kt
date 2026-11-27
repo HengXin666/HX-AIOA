@@ -56,7 +56,7 @@ class MeDeps(
  * 宽屏列表一直在, 返回不再把右侧换成 "关于" (看起来像没反应), 交给外层 (回总览或退出)。
  */
 @Composable
-fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT, onLeave: (() -> Unit)? = null) {
+fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT, onLeave: (() -> Unit)? = null, onRootBack: (() -> Unit)? = null) {
     var page by rememberSaveable(initial) { mutableStateOf(initial) }
     val entered = onLeave != null && initial != SettingsPage.ROOT
     val back: () -> Unit = { if (entered && page == initial) onLeave?.invoke() else page = SettingsPage.ROOT }
@@ -91,7 +91,7 @@ fun MeHost(deps: MeDeps, initial: SettingsPage = SettingsPage.ROOT, onLeave: (()
                 label = "me",
             ) { p ->
                 KeepState("me:${p.name}") {
-                    if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace) else Detail(p, deps, back, back)
+                    if (p == SettingsPage.ROOT) MeRoot(summary, null, { page = it }, deps.openWorkspace, onRootBack) else Detail(p, deps, back, back)
                 }
             }
         }

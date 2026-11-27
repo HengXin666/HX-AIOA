@@ -58,6 +58,8 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     // 工作台里点待办: 跳到消息栏的原消息
     androidx.compose.runtime.LaunchedEffect(chat.groups.focusTick) { if (chat.groups.focusTick > 0) { github = null; nav = nav.go(Tab.CHAT) } }
     BackHandler(enabled = nav.canBack) { nav = nav.back() }
+    // 平板才用侧边导航; 按最短边判断, 手机横屏仍是新外壳, 转屏不换整套导航 (#139)
+    val phoneShell = prefs.newShell && androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp < COMPACT_MAX.value
     val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
@@ -92,7 +94,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                         nav = nav.back()
                         github = ""
                     }
-                } else null)
+                } else null, if (phoneShell) ({ nav = nav.back() }) else null)
             }
             }
             }
@@ -100,7 +102,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
         // 子页 (群里, 收藏, GitHub, 我的) 自带顶栏, 这时不叠外壳的顶栏与标签
         val atRoot = github == null && tab != Tab.ME && (tab != Tab.CHAT || (chat.groups.open == null && !chat.groups.favoritesOpen))
         BoxWithConstraints(Modifier.safeDrawingPadding()) {
-            if (prefs.newShell && maxWidth < COMPACT_MAX) {
+            if (phoneShell) {
                 HomeFrame(
                     tab, atRoot, chat, select, { nav = nav.go(it) }, { chat.groups.favoritesOpen = true; nav = nav.go(Tab.CHAT) },
                     openGithub, { key -> chat.groups.openGroup(key); nav = nav.go(Tab.CHAT) }, { setPrefs(prefs.copy(mode = it)) }, page,

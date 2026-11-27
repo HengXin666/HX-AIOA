@@ -74,6 +74,8 @@ data class ChatAgent(
     val lastRun: Long? = null,
     /** 已在群里提醒过的大版本缺失, 如 "hengxin666.todo@2:new"。 */
     val warned: List<String> = emptyList(),
+    // 最近一次报到的客户端, 如 "hxaioa 0.4.1", 直接调接口为 "接口" (#139: 命令行版本在这里, 不在 skills 里)
+    val client: String? = null,
 )
 
 /** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
@@ -119,6 +121,7 @@ fun parseAgent(o: JSONObject): ChatAgent = ChatAgent(
     trigger = com.hengxin.aioa.ui.agents.parseTrigger(o.optJSONObject("trigger")),
     lastRun = optLongOrNull(o, "lastRun"),
     warned = strings(o.optJSONArray("warned")),
+    client = o.optStr("client"),
 )
 
 private fun optLongOrNull(o: JSONObject, k: String): Long? = if (o.has(k) && !o.isNull(k)) o.optLong(k) else null

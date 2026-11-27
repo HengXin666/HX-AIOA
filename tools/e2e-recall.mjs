@@ -66,14 +66,15 @@ check("撤回自己的消息", recalled.status === 200 && recalled.data.deleted?
 const live = await a.next((f) => f.t === "ev" && f.ev.id === m1.id && f.ev.deleted);
 check("墓碑实时下发, 带原 seq", live?.ev.deleted.seq === m1.seq && !live.ev.data.summary, live);
 
+// 管理员 (主人) 随时可撤回别人的消息 (#139, 规范 message-pages §8)
 const notMine = await api(DELETE, `${V1}/events/seq/${m3.seq}?mode=recall`);
-check("别人发的消息不能撤回", notMine.status === 403, notMine.data);
-const removed = await api(DELETE, `${V1}/events/seq/${m3.seq}?mode=delete`);
-check("删除任意消息", removed.status === 200 && removed.data.deleted?.mode === "delete", removed.data);
-const gone = await api(GET, `${V1}/events/seq/${m3.seq}`);
-check("原 seq 不再存在", gone.status === 404, gone.data);
+check("主人能撤回别人发的消息", notMine.status === 200 && notMine.data.deleted?.mode === "recall", notMine.data);
 const badMode = await api(DELETE, `${V1}/events/seq/${m2.seq}?mode=nuke`);
 check("mode 取值校验", badMode.status === 400, badMode.data);
+const removed = await api(DELETE, `${V1}/events/seq/${m2.seq}?mode=delete`);
+check("删除任意消息", removed.status === 200 && removed.data.deleted?.mode === "delete", removed.data);
+const gone = await api(GET, `${V1}/events/seq/${m2.seq}`);
+check("原 seq 不再存在", gone.status === 404, gone.data);
 
 const OTHER = `other-${RUN}`;
 const made = await api(POST, `${V1}/chats/${enc(GROUP)}/agents`, { name: "撤回测试" });
@@ -83,7 +84,9 @@ const own = await api(POST, `${V1}/messages`, { text: "Agent 的消息" }, agent
 const ownEv = (await a.next((f) => f.t === "ev" && f.ev.id === own.data?.id))?.ev;
 const agentRecall = await api(DELETE, `${V1}/events/seq/${ownEv?.seq}?mode=recall`, undefined, agentKey);
 check("Agent 随时撤回自己的消息", agentRecall.status === 200 && agentRecall.data.deleted?.mode === "recall", agentRecall.data);
-const agentDel = await api(DELETE, `${V1}/events/seq/${m2.seq}?mode=delete`, undefined, agentKey);
+const target = await api(POST, `${V1}/messages`, { text: "给 Agent 删的", channel: GROUP });
+const targetEv = (await a.next((f) => f.t === "ev" && f.ev.id === target.data?.id))?.ev;
+const agentDel = await api(DELETE, `${V1}/events/seq/${targetEv?.seq}?mode=delete`, undefined, agentKey);
 check("Agent 删除本群别人的消息", agentDel.status === 200 && agentDel.data.deleted?.mode === "delete", agentDel.data);
 const outside = await api(POST, `${V1}/messages`, { text: "别的群", channel: OTHER });
 const outsideEv = (await a.next((f) => f.t === "ev" && f.ev.id === outside.data?.id))?.ev;
