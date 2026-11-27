@@ -28,6 +28,7 @@ import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.HxButton
 import com.hengxin.aioa.kit.HxButtonVariant
+import com.hengxin.aioa.kit.LiveDot
 import com.hengxin.aioa.kit.SoftTag
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.hxPalette
@@ -48,6 +49,8 @@ import com.hengxin.aioa.ui.chat.Names
 import com.hengxin.aioa.ui.chat.RoomMember
 import com.hengxin.aioa.ui.chat.SenderFace
 import com.hengxin.aioa.ui.chat.colorOf
+import com.hengxin.aioa.ui.chat.joinedDay
+import com.hengxin.aioa.ui.chat.rememberPresence
 import com.hengxin.aioa.ui.chat.openDirect
 import kotlinx.coroutines.launch
 
@@ -96,6 +99,10 @@ private fun ColumnScope.PersonCard(model: ChatModel, group: String, msg: ServerF
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { MessageDb.get(context).spoke(group, msg.sid.orEmpty()) }
     }
     val name = member?.display?.ifEmpty { null } ?: Names.of(msg)
+    // 打开时问一次谁在线 (#130), 不轮询
+    val presence = rememberPresence(group, meta?.shared == true && uid != null)
+    val now = com.hengxin.aioa.ui.agents.rememberNow()
+    val live = uid != null && (uid == Me.uid || presence.isOnline(uid))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         SenderFace(msg.sid, name, FACE.dp)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -103,12 +110,15 @@ private fun ColumnScope.PersonCard(model: ChatModel, group: String, msg: ServerF
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (member != null) SoftTag(MentionOps.roleLabel(member.role), c.textSecondary)
                 SoftTag("真人", hxPalette().chart3)
+                if (live) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { LiveDot(c.success, 7.dp); Text(ONLINE, c.success, 12) }
             }
             Text(member?.name ?: uid.orEmpty(), c.textSecondary, 13)
         }
     }
     Spacer(Modifier.height(14.dp))
     if (member != null && member.display != member.name) Fact("群昵称", member.display)
+    member?.joined?.let(::joinedDay)?.let { Fact("入群", it) }
+    if (uid != null) (if (live) ONLINE else presence.label(uid, now))?.let { Fact(ONLINE, it) }
     Fact("最近发言", if (spoke.second == 0) "本机还没有记录" else "${DateFormat.format(TIME_FMT, spoke.first)} · 本群共 ${spoke.second} 条")
     Row(Modifier.padding(top = 14.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (uid != null && uid != Me.uid && meta?.isDm != true) HxButton("发消息", {
@@ -171,3 +181,4 @@ private fun Fact(label: String, value: String) {
 }
 
 private const val TIME_FMT = "MM-dd HH:mm"
+private const val ONLINE = "在线"

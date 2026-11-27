@@ -59,6 +59,7 @@
 - `mentions` (#131): 被 @ 的, 元素为账号 id, `agent:<keyId>` 或 `all`, 去重后最多 50 个, 原样存进消息 `Envelope.mentions`。客户端 (安卓 `:link`) 收到 `ev` 时看 `mentions` 里有没有自己的 uid 或 `all`, 有就即使群免打扰也提醒。云 Agent 的 `GET /api/v1/chat-agent/next` 里, `mentions` 含 `agent:<它的 keyId>` 或 `all` 的条目带 `mentioned: true`。
 - `bundle` (#132): 合并转发, `seqs` 最多 100 条。服务端生成新消息, 正文 `[聊天记录] <from>`, `data.bundle = { from, count, refs: [seq], head: [{ src, text }] }`: `refs` 按 seq 升序, 已撤回 / 删除 / 看不到的不算; `head` 为前 4 条, `text` 截 60 字。一条都没有时返回 err。
 - 详情: `GET /api/v1/events/seq?seqs=1,2,3` (最多 100 个) → `{ events: [Envelope] }`, 按 seq 升序。主人都能取; 子号与 `events:read` 的 key 只返回自己能读的群里的; 撤回 / 删除 / 不存在的不出现在结果里。
+- 详情带 `via=<卡片 seq>`: 能读到这张卡片的人, 就能取它 `data.bundle.refs` 里的消息, 不管原消息在哪个群 (像 QQ 的聊天记录)。不在 refs 里的 seq 仍按上面的规则。卡片里套的卡片用 `via=<外层>,<内层>` (最多 2 层): 第一张自己要能读, 后面每张都要在上一张的 refs 里, 返回最后一张的 refs。via 格式不对 400, via 不是能读到的卡片 (被撤回, 不是合并转发, 读不到, 不在上一层 refs 里) 403。安卓的聊天记录详情只展开一层, 请求带 `via=<卡片 seq>`。
 
 ## 收藏
 
@@ -79,6 +80,8 @@
 - `GET /api/v1/chats/{channel}/members?cursor=&limit=&q=` (群里任何人) → `{ members: [RoomMember], next? }`。`RoomMember`: `{ id, name, display, role, joined, avatar? }`。
 - 按 (joined, id) 翻页, 默认 50 条, 最多 200; `next` 是下一页的 `cursor`, 没有下一页时不给。群主 (主人) 只在第一页最前面; 别人之间的单聊不列主人。`q` 按用户名与昵称过滤 (不分大小写)。
 - 带 `ETag` (成员数 + 该群资料版本), 没变时 304; 有人进出群, 改身份, 改昵称 / 头像都会让它变。
+- 群主 (主人) 没有入群时间, `joined` 为 0。
+- 在线状态: `GET /api/v1/chats/{channel}/presence` (群里任何人与主人) → `{ online: [uid], seen: { uid: 时间 } }`。`online` 为现在有前台长连接的人 (安卓后台常驻连接不算), 主人记成主人的账号 id; `seen` 为最近在线时间, 取本进程里前台连接最近断开的时间与账号设备会话 `seen` (刷新令牌时更新) 的较大者, 读不到的不给。只读内存与会话表, 不落库, 不带 ETag; 客户端打开成员页 / 资料卡时请求一次, 不轮询。
 - 推送按账号给在线连接分组 (只在连上 / 断开时重建), 一条消息只查本群成员的连接, 不再逐个解析全部连接。
 
 ## 其它

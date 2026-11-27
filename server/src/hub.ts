@@ -128,6 +128,7 @@ export class Hub extends DurableObject<Env> {
       get: (id: string) => this.acct().dir.user(id),
       find: (ref: string) => this.acct().dir.find(ref),
       ownerId: () => this.acct().dir.owner()?.id ?? OWNER_ID,
+      seen: (id: string) => this.acct().dir.lastSeen(id),
     };
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);

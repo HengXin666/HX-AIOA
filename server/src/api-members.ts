@@ -1,6 +1,6 @@
-import { MEMBERS_DEFAULT_LIMIT, MEMBERS_MAX_LIMIT, QUERY_CURSOR, QUERY_LIMIT, QUERY_Q, dmPeers, type RoomMember, type RoomMembers, type RoomRole, type UserPublic } from "@hx-aioa/protocol";
+import { MEMBERS_DEFAULT_LIMIT, MEMBERS_MAX_LIMIT, QUERY_CURSOR, QUERY_LIMIT, QUERY_Q, dmPeers, type ChatPresence, type RoomMember, type RoomMembers, type RoomRole, type UserPublic } from "@hx-aioa/protocol";
 import type { Core, ReqCtx } from "./core";
-import { clampInt, etagged } from "./http";
+import { clampInt, etagged, json } from "./http";
 import { mustRole } from "./room-access";
 import type { Membership } from "./rooms";
 
@@ -49,6 +49,29 @@ export function membersPage(core: Core, grp: string, q: string, after: After | n
   }
   if (!q && rows.length > want) more = true;
   return { members: out, ...(more && last ? { next: cursorOf(last) } : {}) };
+}
+
+/** 群里的人: 成员, 加上群主 (主人); 单聊里主人不是一方时不算。 */
+function peopleOf(core: Core, grp: string): string[] {
+  const ownerId = core.users.ownerId();
+  const pair = dmPeers(grp);
+  const ids = core.rooms.members(grp).map((m) => m.member);
+  return !pair || pair.includes(ownerId) ? [ownerId, ...ids.filter((id) => id !== ownerId)] : ids;
+}
+
+/** GET /chats/{c}/presence (#130): 在线的人与最近在线时间, 现算不缓存; 群成员与主人能看。 */
+export function chatPresence(c: ReqCtx): Response {
+  const grp = decodeURIComponent(c.params[0] ?? "");
+  mustRole(c.core, c.who, grp, "member");
+  const ownerId = c.core.users.ownerId();
+  const live = c.core.sockets.onlineUids(ownerId);
+  const out: ChatPresence = { online: [], seen: {} };
+  for (const id of peopleOf(c.core, grp)) {
+    if (live.has(id)) out.online.push(id);
+    const at = Math.max(c.core.sockets.leftAt(id, ownerId), c.core.users.seen?.(id) ?? 0);
+    if (at > 0) out.seen[id] = at;
+  }
+  return json(out);
 }
 
 /** GET /chats/{c}/members?cursor=&limit=&q= (#130): ETag 为成员数 + 群资料版本 (成员变动与成员改头像都会让它 +1)。 */

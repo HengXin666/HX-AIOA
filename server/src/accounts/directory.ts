@@ -113,6 +113,11 @@ export class Directory {
       .map((r) => ({ id: r.id, name: r.name, platform: r.platform, created: r.created, seen: r.seen, ...(r.id === current ? { current: true } : {}) }));
   }
 
+  /** 这个账号各设备会话里最近的 seen (刷新令牌时更新), 没有会话返回 0。 */
+  lastSeen(userId: string): number {
+    return this.sql.exec<{ seen: number | null }>("SELECT MAX(seen) AS seen FROM acct_session WHERE user = ?", userId).toArray()[0]?.seen ?? 0;
+  }
+
   deleteSession(id: string): boolean {
     return this.sql.exec("DELETE FROM acct_session WHERE id = ?", id).rowsWritten > 0;
   }

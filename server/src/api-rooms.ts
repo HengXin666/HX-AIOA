@@ -4,6 +4,7 @@ import {
   PATH_CHAT_INVITES,
   PATH_CHAT_MEMBER,
   PATH_CHAT_MEMBERS,
+  PATH_CHAT_PRESENCE,
   PATH_JOIN_PAGE,
   PATH_ROOM_JOIN,
   QUERY_CODE,
@@ -15,7 +16,7 @@ import {
   type RoomInviteCreated,
   type RoomJoined,
 } from "@hx-aioa/protocol";
-import { listMembers } from "./api-members";
+import { chatPresence, listMembers } from "./api-members";
 import { syncChat } from "./chat-sync";
 import { CODE_CONFLICT, CODE_EXPIRED, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_BAD_CHANNEL, ERR_DM, ERR_FORBIDDEN, GET, PATCH, POST } from "./constants";
 import { type Core, type ReqCtx, ROOM, type Route, route } from "./core";
@@ -142,4 +143,5 @@ export const ROOM_ROUTES: Route[] = [
   route(DELETE, PATH_CHAT_MEMBER, ROOM, removeMember),
   route(POST, PATH_CHAT_INVITES, ROOM, createInvite),
   route(POST, PATH_ROOM_JOIN, ROOM, join),
+  route(GET, PATH_CHAT_PRESENCE, ROOM, chatPresence),
 ];

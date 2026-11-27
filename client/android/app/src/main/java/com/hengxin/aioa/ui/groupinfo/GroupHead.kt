@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.LiveDot
 import com.hengxin.aioa.kit.Panel
 import com.hengxin.aioa.kit.SectionTitle
 import com.hengxin.aioa.kit.SoftTag
@@ -40,6 +41,7 @@ import com.hengxin.aioa.ui.chat.RoomApi
 import com.hengxin.aioa.ui.chat.RoomMember
 import com.hengxin.aioa.ui.chat.UploadingAvatar
 import com.hengxin.aioa.ui.chat.digestLabel
+import com.hengxin.aioa.ui.chat.rememberPresence
 import com.hengxin.aioa.ui.chat.roleLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,13 +115,17 @@ internal fun MemberStrip(group: String, meta: ChatMeta?, canInvite: Boolean, onA
         // 和成员页同一份第一页缓存 (同样的 limit, ETag 才对得上)
         api.page(group).onSuccess { list = it.members }
     }
+    val presence = rememberPresence(group, meta?.shared == true)
     val shown = if (meta?.shared == true) list.take(STRIP) else listOfNotNull(Me.uid?.let { RoomMember(it, it, "我", com.hengxin.aioa.ui.chat.ROLE_OWNER) })
     Column(modifier) {
         SectionTitle("群成员", if (meta?.shared == true) meta.members else shown.size, action = "全部", onAction = onAll)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             shown.forEach { m ->
                 Column(Modifier.width(60.dp).pointerTap(onAll), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ChatAvatar(m.display, m.avatar, FACE)
+                    Box {
+                        ChatAvatar(m.display, m.avatar, FACE)
+                        if (m.id == Me.uid || presence.isOnline(m.id)) Box(Modifier.align(Alignment.BottomEnd)) { LiveDot(c.success, 8.dp) }
+                    }
                     Text(if (m.id == Me.uid) "我" else m.display, c.text, 12)
                     if (m.role.isNotEmpty() && m.role != com.hengxin.aioa.ui.chat.ROLE_MEMBER) Text(roleLabel(m.role), c.textSecondary, 10)
                 }

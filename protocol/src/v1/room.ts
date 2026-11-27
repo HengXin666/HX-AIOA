@@ -28,6 +28,9 @@ export const QUERY_SERVER = "server";
 
 export const PATH_CHAT_MEMBERS = `${API_V1}/chats/{channel}/members`;
 export const PATH_CHAT_MEMBER = `${API_V1}/chats/{channel}/members/{id}`;
+// 成员在线状态 (#130): online 为有前台连接的账号 id, seen 为最近在线时间 (ms), 读不到的不给; 只在内存, 不落库
+export const PATH_CHAT_PRESENCE = `${API_V1}/chats/{channel}/presence`;
+export type ChatPresence = { online: string[]; seen: Record<string, number> };
 export const PATH_CHAT_INVITES = `${API_V1}/chats/{channel}/invites`;
 export const PATH_ROOM_JOIN = `${API_V1}/rooms/join`;
 // 邀请链接在浏览器里打开的说明页, 不需要登录

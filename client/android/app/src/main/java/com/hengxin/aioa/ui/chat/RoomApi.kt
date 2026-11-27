@@ -8,8 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** 多人群成员; avatar 是头像 id (#130), online 为服务端给了在线状态时的值。 */
-data class RoomMember(val id: String, val name: String, val display: String, val role: String, val avatar: String? = null, val online: Boolean = false)
+/** 多人群成员; avatar 是头像 id (#130), online 为服务端给了在线状态时的值, joined 为入群时间 (群主为 0)。 */
+data class RoomMember(val id: String, val name: String, val display: String, val role: String, val avatar: String? = null, val online: Boolean = false, val joined: Long = 0)
 
 /** 成员一页 (#130): next 为下一页游标, 旧服务端不分页时为空。 */
 data class MemberPage(val members: List<RoomMember>, val next: String?)
@@ -21,6 +21,7 @@ fun parseMember(o: JSONObject): RoomMember = RoomMember(
     o.optString("role"),
     o.optString("avatar").takeIf { !o.isNull("avatar") && it.isNotEmpty() },
     o.optBoolean("online"),
+    o.optLong("joined"),
 )
 
 fun parseMemberPage(b: JSONObject): MemberPage {
@@ -57,6 +58,12 @@ class RoomApi(private val context: Context) {
 
     private fun cacheName(channel: String) = "room-members-" + channel.replace(UNSAFE, "_")
 
+    /** 群里谁在线, 最近在线时间 (#130); 实时值, 不缓存。 */
+    suspend fun presence(channel: String): Result<MemberPresence> = io {
+        val r = Api.call(context, GET, listOf(Constants.CHATS_API, channel, PRESENCE))
+        parsePresence(r.body ?: error(r.error ?: FAILED))
+    }
+
     suspend fun invite(channel: String): Result<RoomInvite> = io {
         val r = Api.call(context, POST, listOf(Constants.CHATS_API, channel, INVITES), JSONObject())
         val b = r.body ?: error(r.error ?: FAILED)
@@ -90,6 +97,7 @@ class RoomApi(private val context: Context) {
         private const val DELETE = "DELETE"
         private const val MEMBERS = "members"
         private const val INVITES = "invites"
+        private const val PRESENCE = "presence"
         private const val JOIN = "api/v1/rooms/join"
         private const val FAILED = "操作失败"
         const val PAGE_SIZE = 50

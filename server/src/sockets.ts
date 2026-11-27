@@ -39,6 +39,7 @@ export const sendFrame = (ws: WebSocket, frame: unknown) => trySend(ws, JSON.str
 export const attOf = (ws: WebSocket) => ws.deserializeAttachment() as Attachment;
 
 type Conn = { ws: WebSocket; a: Attachment };
+const OWNER_KEY = "";
 // 人的连接按账号分好: 主人的 (非子号) 与各子号的; 只在连上 / 断开时重建, 推消息不再逐个解 attachment
 type Index = { owner: Conn[]; byUid: Map<string, Conn[]> };
 
@@ -57,10 +58,15 @@ export class Sockets {
   /** 有连接连上或断开: 下次推送时重建分组。gone 是正在关的那条 (关闭回调里它还在列表中)。 */
   reset(gone?: WebSocket): void {
     this.index = null;
-    if (gone) this.gone.add(gone);
+    if (!gone) return;
+    this.gone.add(gone);
+    const a = attOf(gone);
+    if (a.role === "client" && !a.bg) this.left.set(a.member ? (a.uid ?? "") : OWNER_KEY, Date.now());
   }
 
   private readonly gone = new WeakSet<WebSocket>();
+  // 人的前台连接最近断开的时间 (#130), 只在内存; 主人记在 OWNER_KEY 下
+  private readonly left = new Map<string, number>();
 
   private idx(): Index {
     if (this.index) return this.index;
@@ -74,6 +80,20 @@ export class Sockets {
     }
     this.index = out;
     return out;
+  }
+
+  /** 有前台连接 (安卓后台常驻连接不算) 的账号; 主人的连接记成 ownerId。 */
+  onlineUids(ownerId: string): Set<string> {
+    const { owner, byUid } = this.idx();
+    const out = new Set<string>();
+    if (owner.some((x) => !x.a.bg)) out.add(ownerId);
+    for (const [uid, conns] of byUid) if (conns.some((x) => !x.a.bg)) out.add(uid);
+    return out;
+  }
+
+  /** 这个账号的前台连接最近一次断开的时间, 没记过返回 0。 */
+  leftAt(uid: string, ownerId: string): number {
+    return this.left.get(uid === ownerId ? OWNER_KEY : uid) ?? 0;
   }
 
   clients(): WebSocket[] {

@@ -85,6 +85,8 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var invite by remember { mutableStateOf<RoomInvite?>(null) }
+    val presence = rememberPresence(group, meta?.shared == true)
+    val now = com.hengxin.aioa.ui.agents.rememberNow()
     val apply = { p: MemberPage, more: Boolean -> members = if (more) (members + p.members).distinctBy { it.id } else p.members; next = p.next; error = null }
     val reload: () -> Unit = {
         scope.launch {
@@ -127,8 +129,8 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
                 item { HomeSection(MEMBERS, 1) { GiNote("现在只有你自己。生成邀请链接发给别人, 对方注册或登录后就进群; 消息只存一份, 所有人实时收到。") } }
             } else {
                 val (heads, rest) = members.partition { it.role == ROLE_OWNER || it.role == ROLE_ADMIN }
-                if (heads.isNotEmpty()) item { MemberGroup("群主 · 管理员", heads, myRole, act, group, api) }
-                if (rest.isNotEmpty()) item { MemberGroup(MEMBERS, rest, myRole, act, group, api) }
+                if (heads.isNotEmpty()) item { MemberGroup("群主 · 管理员", heads, myRole, act, group, api, presence, now) }
+                if (rest.isNotEmpty()) item { MemberGroup(MEMBERS, rest, myRole, act, group, api, presence, now) }
                 if (members.isEmpty() && !loading) item { GiNote(if (q.isBlank()) "还没有成员" else "没找到 \"$q\"") }
                 if (next != null || loading) item { GiNote("正在加载...") }
             }
@@ -144,16 +146,16 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
 }
 
 @Composable
-private fun MemberGroup(title: String, list: List<RoomMember>, myRole: String, act: (suspend () -> Result<Unit>) -> Unit, group: String, api: RoomApi) {
+private fun MemberGroup(title: String, list: List<RoomMember>, myRole: String, act: (suspend () -> Result<Unit>) -> Unit, group: String, api: RoomApi, presence: MemberPresence, now: Long) {
     HomeSection(title, list.size) {
         list.forEachIndexed { i, m ->
-            MemberRow(m, myRole, i > 0, onRole = { role -> act { api.setRole(group, m.id, role) } }, onKick = { act { api.remove(group, m.id) } })
+            MemberRow(m, myRole, i > 0, presence.isOnline(m.id), presence.label(m.id, now), onRole = { role -> act { api.setRole(group, m.id, role) } }, onKick = { act { api.remove(group, m.id) } })
         }
     }
 }
 
 @Composable
-private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, onRole: (String) -> Unit, onKick: () -> Unit) {
+private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, live: Boolean, seen: String?, onRole: (String) -> Unit, onKick: () -> Unit) {
     val c = Aioa.colors
     val pal = hxPalette()
     var menu by remember { mutableStateOf(false) }
@@ -161,13 +163,15 @@ private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, onRole: (
     // 群主能改身份和踢任何人; 管理员只能踢普通成员
     val canRole = myRole == ROLE_OWNER && m.role != ROLE_OWNER
     val canKick = !isMe && (canRole || (myRole == ROLE_ADMIN && m.role == ROLE_MEMBER))
+    // 在线的头像带绿点, 不在线的行尾写最近在线 (#130)
+    val online = m.online || isMe || live
     Box {
         HomeRow(
-            if (isMe) "${m.display} (我)" else m.display, "@${m.name}", divider = divider,
+            if (isMe) "${m.display} (我)" else m.display, "@${m.name}", trail = if (online) "" else seen.orEmpty(), divider = divider,
             lead = {
                 Box {
                     ChatAvatar(m.display, m.avatar, FACE.dp)
-                    if (m.online || isMe) Box(Modifier.align(Alignment.BottomEnd)) { LiveDot(c.success, 6.dp) }
+                    if (online) Box(Modifier.align(Alignment.BottomEnd)) { LiveDot(c.success, 6.dp) }
                 }
             },
             end = { if (m.role != ROLE_MEMBER) SoftTag(roleLabel(m.role), if (m.role == ROLE_OWNER) c.warning else pal.chart2) },
