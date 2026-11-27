@@ -56,6 +56,14 @@ fun GroupSettingsPage(model: ChatModel, group: String, onBack: () -> Unit) {
     BackHandler(enabled = stack.canBack) { stack = stack.pop() }
     val push: (GsPage) -> Unit = { stack = stack.push(it) }
     val pop: () -> Unit = { stack = stack.pop() }
+    // 资料卡上的 "Agent 设置" (#136) 先记下 keyId 再打开群设置: 直接叠上 Agent 设置, 返回回群设置
+    val wanted = model.groups.settingsAgent
+    LaunchedEffect(wanted) {
+        if (wanted != null) {
+            stack = GsStack().push(GsPage.Agent(wanted))
+            model.groups.settingsAgent = null
+        }
+    }
     when (val top = stack.top) {
         null -> GroupInfoRoot(model, group, onBack, push)
         is GsPage.Members -> RoomMembersPage(model, group, top.agents, pop) { push(GsPage.Agent(it)) }
