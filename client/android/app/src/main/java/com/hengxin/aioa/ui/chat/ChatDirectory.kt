@@ -44,12 +44,29 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    fun onSync(topic: String) {
+    /** chat 为帧里带的那一行 (#129): 直接合并, 不带时照旧整表重拉。 */
+    fun onSync(topic: String, chat: JSONObject? = null) {
         when (topic) {
             TOPIC_FAVORITES -> refreshFavorites()
             Senders.TOPIC -> refreshSenders()
-            else -> refreshChats()
+            else -> chat?.let(::parseChat)?.let(::applyChat) ?: refreshChats()
         }
+    }
+
+    /** 合并一行群资料 (chat_sync 带的, 或新开的单聊)。 */
+    fun applyChat(meta: ChatMeta) = applyMetas(metas + (meta.channel to meta))
+
+    /** 本人其它设备的已读位置 (#129 chat_read 帧): 只前进, 不重拉。 */
+    fun applyRead(channel: String, read: Long) {
+        val cur = metas[channel] ?: return
+        if (read > cur.read) applyMetas(metas + (channel to cur.copy(read = read)))
+    }
+
+    /** Agent 活跃时间 (#129 agent_active 帧): 只改内存。 */
+    fun setAgentActive(channel: String, keyId: String, active: Long) {
+        val cur = metas[channel] ?: return
+        if (cur.agents.none { it.keyId == keyId }) return
+        metas = metas + (channel to cur.copy(agents = cur.agents.map { if (it.keyId == keyId) it.copy(active = active) else it }))
     }
 
     /** 发送者头像 (#123): 先用缓存, 再问服务端。 */
@@ -64,12 +81,20 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         val id = Avatars.upload(context, bytes).getOrElse { return "头像上传失败: ${it.message}" }
         val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", id)) }
         if (r.error != null) return "没保存: ${r.error}"
-        Senders.setLocal(sid, id)
+        Senders.setLocal(sid) { it.copy(avatar = id) }
+        return null
+    }
+
+    /** 改系统发送者的名字; null 恢复默认名。返回错误文字, 成功为 null。 */
+    suspend fun renameSender(sid: String, alias: String?): String? {
+        val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("alias", alias ?: JSONObject.NULL)) }
+        if (r.error != null) return "没保存: ${r.error}"
+        Senders.setLocal(sid) { it.copy(alias = alias) }
         return null
     }
 
     fun clearSenderAvatar(sid: String) {
-        Senders.setLocal(sid, null)
+        Senders.setLocal(sid) { it.copy(avatar = null) }
         scope.launch {
             val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", JSONObject.NULL)) }
             if (r.error != null) {
@@ -100,6 +125,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     private fun applyMetas(next: Map<String, ChatMeta>) {
         metas = next
         onMetas?.invoke()
+        Names.agents(next.values.filter { it.deleted == 0L }.flatMap { it.agents }.mapNotNull { a -> a.sourceId?.let { it to a.name } }.toMap())
         val muted = next.values.filter { it.muted }.map { it.channel }.toSet()
         val titles = next.values.mapNotNull { m -> m.title?.let { m.channel to it } }.toMap()
         scope.launch(Dispatchers.IO) {

@@ -1,7 +1,6 @@
 package com.hengxin.aioa.kit
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,10 +68,8 @@ data class TodoRow(
 }
 
 private const val DEFAULT_TODO_LIMIT = 20
-private const val PRIO_URGENT = 1
-private const val PRIO_LATER = 3
 
-/** 待办组件: 未完成的按优先级排, 勾选即完成; 已完成的折叠在底部, 点开可以撤销。 */
+/** 待办组件 (App 没给看板时的简版): 与看板同一种行, 父子树可折叠, 勾选即完成; 已完成的折叠在底部, 点开可以撤销。 */
 @Composable
 fun TodoView(item: SpaceItem, source: SpaceSource, handler: SpaceHandler) {
     val c = Aioa.colors
@@ -80,10 +77,13 @@ fun TodoView(item: SpaceItem, source: SpaceSource, handler: SpaceHandler) {
     source.todoView?.let { return it(subject, item.num("limit")?.toInt() ?: DEFAULT_TODO_LIMIT) }
     val rows = source.todos(subject)
     if (rows == null) return StateBody(CardState.Loading) {}
-    val open = rows.filter { !it.finished }.sortedWith(compareBy<TodoRow> { it.prio }.thenByDescending { it.updated })
+    val limit = item.num("limit")?.toInt() ?: DEFAULT_TODO_LIMIT
+    val open = rows.filter { !it.finished }
     val done = rows.filter { it.finished }.sortedByDescending { it.updated }
+    var closed by rememberSaveable(item.id) { mutableStateOf(setOf<String>()) }
+    val line = TodoLines(subject, source.now, handler, closed) { k -> closed = if (k in closed) closed - k else closed + k }
     if (open.isEmpty()) StateBody(CardState.Empty, "没有待办, 去群里丢个想法吧") {}
-    open.take(item.num("limit")?.toInt() ?: DEFAULT_TODO_LIMIT).forEach { TodoLine(subject, it, handler) }
+    Column(Modifier.fillMaxWidth()) { todoForest(open).take(limit).forEach { line.Draw(it, emptyList()) } }
     if (done.isEmpty()) return
     var shown by rememberSaveable(item.id) { mutableStateOf(false) }
     Row(Modifier.clickable { shown = !shown }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -91,27 +91,32 @@ fun TodoView(item: SpaceItem, source: SpaceSource, handler: SpaceHandler) {
         Spacer(Modifier.width(4.dp))
         Text("已完成 ${done.size} 条", c.textSecondary, 12)
     }
-    if (shown) done.take(DEFAULT_TODO_LIMIT).forEach { TodoLine(subject, it, handler) }
+    if (shown) Column(Modifier.fillMaxWidth()) { done.take(limit).forEach { line.Draw(TodoTree(it, emptyList()), emptyList()) } }
 }
 
-@Composable
-private fun TodoLine(subject: String, row: TodoRow, handler: SpaceHandler) {
-    val c = Aioa.colors
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
-        Row(Modifier.clickable { handler.todo(subject, row, !row.finished) }.padding(top = 1.dp, end = 8.dp)) {
-            Icon(if (row.finished) "square-check" else "square", if (row.finished) c.success else c.textSecondary, 18.dp)
-        }
-        Column(Modifier.weight(1f).clickable(enabled = row.src != null) { handler.openTodo(subject, row) }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                when {
-                    row.finished -> Unit
-                    row.prio == PRIO_URGENT -> { Dot(c.danger); Spacer(Modifier.width(6.dp)) }
-                    row.state == TodoRow.STATE_DOING -> { Dot(c.accent); Spacer(Modifier.width(6.dp)) }
-                    row.state == TodoRow.STATE_HOLD -> { Dot(c.textSecondary); Spacer(Modifier.width(6.dp)) }
-                }
-                Text(row.title, if (row.finished || row.prio == PRIO_LATER) c.textSecondary else c.text, 14, Modifier.weight(1f, fill = false))
-            }
-            row.note?.let { Paragraph(it, c.textSecondary, 12, maxLines = 2) }
-        }
+/** 待办父子树的一个节点; done / total 数的是全部后代。 */
+class TodoTree(val row: TodoRow, val kids: List<TodoTree>) {
+    val total: Int get() = kids.sumOf { 1 + it.total }
+    val done: Int get() = kids.sumOf { (if (it.row.finished) 1 else 0) + it.done }
+}
+
+/** 按 parent 搭树: 父项不在列表里的算根; 急的, 新的在前。 */
+fun todoForest(rows: List<TodoRow>): List<TodoTree> {
+    val ids = rows.map { it.id }.toSet()
+    val byParent = rows.groupBy { it.parent?.takeIf { p -> p in ids } }
+    val order = compareBy<TodoRow> { it.prio }.thenByDescending { it.updated }
+    fun build(r: TodoRow, seen: Set<String>): TodoTree =
+        TodoTree(r, byParent[r.id].orEmpty().filter { it.id !in seen }.sortedWith(order).map { build(it, seen + it.id) })
+    return byParent[null].orEmpty().sortedWith(order).map { build(it, setOf(it.id)) }
+}
+
+private class TodoLines(val subject: String, val now: Long, val handler: SpaceHandler, val closed: Set<String>, val toggle: (String) -> Unit) {
+    @Composable
+    fun Draw(n: TodoTree, lasts: TreePath) {
+        val r = n.row
+        val shut = r.id in closed
+        val fold = if (n.kids.isNotEmpty()) TodoFold(n.done, n.total, shut) { toggle(r.id) } else null
+        TodoLine(r, now, { handler.openTodo(subject, r) }, { handler.todo(subject, r, !r.finished) }, lasts = lasts, fold = fold, showRepo = true)
+        if (fold != null && !shut) n.kids.forEachIndexed { i, k -> Draw(k, lasts + (i == n.kids.lastIndex)) }
     }
 }

@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.proto.FwdInfo
+import com.hengxin.aioa.proto.Mentions
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
 import org.json.JSONObject
@@ -18,7 +19,10 @@ fun ServerFrame.Msg.replacedBy(n: ServerFrame.Msg): Boolean =
     seq != n.seq && ((n.id != null && id == n.id) || (n.deletedSeq > 0 && seq == n.deletedSeq))
 
 /** 群列表的一行: 最后一条消息与未读数。 */
-data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int)
+/** 本机消息库的累计 (#140), perDay 按设备时区分天。 */
+data class Lifetime(val total: Int, val agent: Int, val groups: Int, val first: Long, val perDay: Map<String, Int>)
+
+data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int, val atMe: Boolean = false)
 
 // 两个进程共用的本地消息库: :link 收到即落库, 界面打开时先读库, 再只向服务端补拉增量
 class MessageDb private constructor(context: Context) :
@@ -58,6 +62,7 @@ class MessageDb private constructor(context: Context) :
 
     /** 入库: 同 id 的旧版本和墓碑指向的旧序号先删掉; 删除墓碑本身不留行, 撤回墓碑留一行显示 "已撤回"。 */
     fun insert(msg: ServerFrame.Msg): Boolean {
+        if (isHidden(msg.seq)) return false
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -70,6 +75,27 @@ class MessageDb private constructor(context: Context) :
             db.endTransaction()
         }
     }
+
+    /** 未读区间里有没有 @我 或 @所有人 的 (#139): 不只看最后一条, 被 @ 之后又来消息也还提示。 */
+    private fun atMeSince(key: String, uid: String?): Boolean =
+        readableDatabase.rawQuery(
+            "SELECT $C_EXTRA FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE AND $C_EXTRA LIKE '%\"$X_MENTIONS\"%'",
+            arrayOf(key, groupRead(key).toString()),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val a = runCatching { JSONObject(c.getString(0)).optJSONArray(X_MENTIONS) }.getOrNull() ?: continue
+                if (Mentions.hits((0 until a.length()).map { a.optString(it) }, uid)) return@use true
+            }
+            false
+        }
+
+    /** 只删本机 (#139): 删掉这一行并记下序号, 之后同步或向云端翻页拉回来也不再入库。 */
+    fun hideLocal(seq: Long) {
+        writableDatabase.delete(T_MSG, "$C_SEQ = ?", arrayOf(seq.toString()))
+        putKv(K_HIDDEN + seq, 1)
+    }
+
+    fun isHidden(seq: Long): Boolean = seq > 0 && getKv(K_HIDDEN + seq) == 1L
 
     /** 断线太久: floor 之前的缓存可能漏了删除, 丢掉, 需要时再向云端翻页。 */
     fun dropBefore(floor: Long): Int = writableDatabase.delete(T_MSG, "$C_SEQ < ?", arrayOf(floor.toString()))
@@ -115,10 +141,53 @@ class MessageDb private constructor(context: Context) :
         ).toInt()
     }
 
+    /** 今日脉搏: since 起每小时的消息数, 以及其中来源在 agentSids 里的条数; 只读本地, 总览图表用。 */
+    fun hourly(since: Long, hours: Int, agentSids: Set<String>): Pair<IntArray, IntArray> {
+        val all = IntArray(hours)
+        val agent = IntArray(hours)
+        readableDatabase.rawQuery("SELECT $C_TS, $C_SID FROM $T_MSG WHERE $C_TS >= ?", arrayOf(since.toString())).use { c ->
+            while (c.moveToNext()) {
+                val i = ((c.getLong(0) - since) / HOUR_MS).toInt()
+                if (i !in 0 until hours) continue
+                all[i]++
+                if (!c.isNull(1) && c.getString(1) in agentSids) agent[i]++
+            }
+        }
+        return all to agent
+    }
+
+    /**
+     * 总览成就 (#140): 本机消息库里一共多少条, Agent 说了多少, 涉及几个群, 最早一条的时间,
+     * 以及最近 days 天每天的条数 (按设备时区分天, key 为 yyyy-MM-dd)。撤回的不算。
+     */
+    fun lifetime(agentSids: Set<String>, days: Int): Lifetime {
+        val since = System.currentTimeMillis() - days * DAY_MS
+        val ag = if (agentSids.isEmpty()) "0" else "SUM(CASE WHEN $C_SID IN (${agentSids.joinToString(",") { "?" }}) THEN 1 ELSE 0 END)"
+        val head = readableDatabase.rawQuery(
+            "SELECT COUNT(*), IFNULL($ag, 0), COUNT(DISTINCT $C_GRP), IFNULL(MIN($C_TS), 0) FROM $T_MSG WHERE $LIVE",
+            agentSids.toTypedArray(),
+        ).use { if (it.moveToFirst()) listOf(it.getLong(0), it.getLong(1), it.getLong(2), it.getLong(3)) else listOf(0L, 0L, 0L, 0L) }
+        val perDay = LinkedHashMap<String, Int>()
+        readableDatabase.rawQuery(
+            "SELECT strftime('%Y-%m-%d', $C_TS / 1000, 'unixepoch', 'localtime') d, COUNT(*) FROM $T_MSG WHERE $C_TS >= ? AND $LIVE GROUP BY d ORDER BY d",
+            arrayOf(since.toString()),
+        ).use { c -> while (c.moveToNext()) perDay[c.getString(0)] = c.getInt(1) }
+        return Lifetime(head[0].toInt(), head[1].toInt(), head[2].toInt(), head[3], perDay)
+    }
+
+    /** 按 seq 批量取 (合并转发详情先用本地有的)。 */
+    fun bySeqs(seqs: Collection<Long>): List<ServerFrame.Msg> =
+        if (seqs.isEmpty()) emptyList() else query("SELECT * FROM $T_MSG WHERE $C_SEQ IN (${seqs.joinToString(",")}) ORDER BY $C_SEQ", emptyArray())
+
+    /** 某个来源在群里的最近发言时间与条数 (资料卡用, 只算本地)。 */
+    fun spoke(key: String, sid: String): Pair<Long, Int> =
+        readableDatabase.rawQuery("SELECT IFNULL(MAX($C_TS), 0), COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SID = ? AND $LIVE", arrayOf(key, sid))
+            .use { if (it.moveToFirst()) it.getLong(0) to it.getInt(1) else 0L to 0 }
+
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */
-    fun groups(): List<GroupSummary> {
+    fun groups(uid: String? = null): List<GroupSummary> {
         val lasts = query(
             "SELECT m.* FROM $T_MSG m JOIN (SELECT MAX($C_SEQ) s FROM $T_MSG GROUP BY $C_GRP) t ON m.$C_SEQ = t.s ORDER BY m.$C_SEQ DESC",
             emptyArray(),
@@ -129,7 +198,7 @@ class MessageDb private constructor(context: Context) :
                 "SELECT COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SEQ > ? AND $C_MINE = 0 AND $C_SEEN = 0 AND $LIVE",
                 arrayOf(key, groupRead(key).toString()),
             )
-            GroupSummary(key, m, unread.toInt())
+            GroupSummary(key, m, unread.toInt(), unread > 0 && atMeSince(key, uid))
         }
     }
 
@@ -216,17 +285,23 @@ class MessageDb private constructor(context: Context) :
                     val del = x?.optString(X_DELETED)?.ifEmpty { null }
                     val file = com.hengxin.aioa.proto.FileRef.parse(x?.optJSONObject(X_FILE))
                     val feed = x?.optJSONObject(X_FEED)?.toString()
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid), feed = feed))
+                    val mentions = x?.optJSONArray(X_MENTIONS)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty()
+                    val bundle = com.hengxin.aioa.proto.Bundle.parse(x?.optJSONObject(X_BUNDLE))
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid), feed = feed, mentions = mentions, bundle = bundle))
                 }
             }
         }
 
     companion object {
         const val MEMO_GROUP = "备忘"
+        private const val HOUR_MS = 3_600_000L
+        private const val DAY_MS = 86_400_000L
         private const val DB_NAME = "messages.db"
         private const val DB_VERSION = 6
         const val DELETE_MODE = "delete"
         const val RECALL_MODE = "recall"
+        /** 只删本机, 不发服务端 (#139)。 */
+        const val LOCAL_MODE = "local"
         private const val C_ID = "id"
         private const val X_DELETED = "deleted"
         // 撤回留下的墓碑不算未读, 也不进通知
@@ -238,10 +313,12 @@ class MessageDb private constructor(context: Context) :
         private const val X_HTML = "html"
         private const val X_FILE = "file"
         private const val X_FEED = "feed"
+        private const val X_MENTIONS = "mentions"
+        private const val X_BUNDLE = "bundle"
 
         // 引用与转发的快照存成一列 JSON, 没有就是 null
         private fun extraOf(m: ServerFrame.Msg): String? {
-            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null && m.feed == null) return null
+            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null && m.feed == null && m.mentions.isEmpty() && m.bundle == null) return null
             val o = JSONObject()
             m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
             m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
@@ -249,6 +326,8 @@ class MessageDb private constructor(context: Context) :
             m.file?.let { o.put(X_FILE, it.toJson()) }
             m.feed?.let { runCatching { o.put(X_FEED, JSONObject(it)) } }
             m.deleted?.let { o.put(X_DELETED, it) }
+            if (m.mentions.isNotEmpty()) o.put(X_MENTIONS, org.json.JSONArray(m.mentions))
+            m.bundle?.let { o.put(X_BUNDLE, it.toJson()) }
             return o.toString()
         }
         private const val T_MSG = "msg"
@@ -264,6 +343,7 @@ class MessageDb private constructor(context: Context) :
         private const val C_SEEN = "seen"
         private const val K_READ_SEQ = "read_seq"
         private const val K_GROUP_READ = "read:"
+        private const val K_HIDDEN = "hide:"
         private const val GRP_INDEX = "CREATE INDEX IF NOT EXISTS msg_grp ON $T_MSG ($C_GRP, $C_SEQ)"
         // 升级时给旧消息补群键, 规则与 groupKey() 一致
         private val GROUP_EXPR = "CASE WHEN $C_SRC LIKE '${Constants.DEVICE_PREFIX}%' THEN '$MEMO_GROUP' ELSE $C_SRC END"

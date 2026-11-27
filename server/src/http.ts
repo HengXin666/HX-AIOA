@@ -27,6 +27,18 @@ export function clampInt(raw: string | null, fallback: number, max: number): num
   return Math.min(n, max);
 }
 
+const HEADER_ETAG = "ETag";
+const HEADER_IF_NONE_MATCH = "If-None-Match";
+
+/** 带弱 ETag 的响应: 没变时 304, 不必算 body。 */
+export function etagged(req: Request, tag: string, body: () => unknown): Response {
+  const etag = `W/"${tag}"`;
+  if (req.headers.get(HEADER_IF_NONE_MATCH) === etag) return new Response(null, { status: 304, headers: { [HEADER_ETAG]: etag } });
+  const res = json(body());
+  res.headers.set(HEADER_ETAG, etag);
+  return res;
+}
+
 export async function readJson(req: Request): Promise<unknown> {
   return req.json().catch(() => undefined);
 }

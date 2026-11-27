@@ -1,266 +1,124 @@
 package com.hengxin.aioa.ui
 
-import android.text.format.DateFormat
-import android.text.format.DateUtils
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hengxin.aioa.data.MessageDb
+import com.hengxin.aioa.kit.DropMenu
+import com.hengxin.aioa.kit.MenuEntry
+import com.hengxin.aioa.kit.enter
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.hengxin.aioa.kit.Icon
-import com.hengxin.aioa.ui.chat.ChatAvatar
-import com.hengxin.aioa.ui.chat.digestLabel
-import com.hengxin.aioa.ui.chat.plainPreview
 
-private const val UNGROUPED = "未分组"
-private const val BADGE_MAX = 99
-private val AVATAR = 48.dp
+private val LIST_PAD = 14.dp
+private const val MENU_DROP = 150
+private const val TICK_MS = 1000L
+private const val MAX_ENTER = 12
+private const val K_NEW_GROUP = "new-group"
+private const val K_NEW_FOLDER = "new-folder"
+private const val K_JOIN = "join"
+private const val K_FAV = "fav"
+private const val K_TAGS = "tags"
 
-// 正在操作的对象: 给某个群挪组, 新建群, 新建组, 或删除某个组
-private sealed interface Dialog {
-    data class Move(val group: String) : Dialog
-    data object NewGroup : Dialog
-    data object NewFolder : Dialog
-    data class DropFolder(val name: String) : Dialog
-    data object Join : Dialog
-    data class Actions(val group: String) : Dialog
-    data class Rename(val group: String) : Dialog
-    data class Delete(val group: String) : Dialog
-}
-
-/** 群列表: 置顶在前, 组在上 (可收起), 未分组的在下; 长按群改名 / 挪组 / 删除, 长按组标题删组。 */
+/** 消息列表 v2 (#135): 一列; 置顶超过 3 个折叠; 域是一行, 点进去是一组群; 顶部按标签筛选。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupList(model: ChatModel) {
     val g = model.groups
-    var dialog by remember { mutableStateOf<Dialog?>(null) }
+    var dialog by remember { mutableStateOf<ListDialog?>(null) }
     var menu by remember { mutableStateOf(false) }
-    var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    androidx.compose.runtime.LaunchedEffect(g.pendingInvite) { if (g.pendingInvite != null) dialog = Dialog.Join }
+    var tag by rememberSaveable { mutableStateOf<String?>(null) }
+    var unreadOnly by rememberSaveable { mutableStateOf(false) }
+    var pinsOpen by rememberSaveable { mutableStateOf(false) }
+    // 打开的域: 存成可保存状态, 从域里进群再退出时回到域里 (像 QQ 群助手)
+    var domain by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(g.pendingInvite) { if (g.pendingInvite != null) dialog = ListDialog.Join }
+    LaunchedEffect(g.pendingNewGroup) { if (g.pendingNewGroup) { g.pendingNewGroup = false; dialog = ListDialog.NewGroup } }
+    val tags = g.tags.tags
+    LaunchedEffect(tags.keys) { if (tag != null && tag !in tags) tag = null }
     val rows = g.rows()
-    val byKey = rows.associateBy { it.key }
-    val grouped = g.folders.flatMap { it.groups }.toSet()
-    val loose = rows.filter { it.key !in grouped }
-    Column(Modifier.fillMaxSize()) {
-        Header("消息", model.online) {
-            Box {
-                Box(Modifier.size(36.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-                DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text("新建群") }, { dialog = Dialog.NewGroup; menu = false })
-                    DropdownMenuItem({ Text("新建组") }, { dialog = Dialog.NewFolder; menu = false })
-                    DropdownMenuItem({ Text("加入群") }, { dialog = Dialog.Join; menu = false })
-                }
-            }
-        }
-        val err = g.error ?: g.directory.error
-        if (err != null) Text(err, Modifier.clickable { g.clearError() }.padding(horizontal = PAD), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-        PullToRefreshBox(g.syncing, g::syncNow, Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) {
-            item(key = "fav") { FavoritesRow(g.directory.favorites.size) { g.favoritesOpen = true } }
-            g.folders.forEach { f ->
-                val inFolder = f.groups.mapNotNull { byKey[it] }.sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
-                val shut = f.name in collapsed
-                item(key = "f:${f.name}") {
-                    FolderHeader(Modifier.animateItem(), f.name, inFolder.sumOf { if (it.muted) 0 else it.unread }, shut, { collapsed = if (shut) collapsed - f.name else collapsed + f.name }) {
-                        dialog = Dialog.DropFolder(f.name)
+    val filter = ListFilter(tag?.let { tags[it]?.toSet() }, unreadOnly)
+    val entries = remember(rows, g.folders, filter, pinsOpen) { layoutList(rows, g.folders, filter, pinsOpen) }
+    val now by produceState(System.currentTimeMillis()) { while (true) { delay(TICK_MS); value = System.currentTimeMillis() } }
+    val live: (String) -> String? = { key -> if (model.online) g.presence.line(key, now) else null }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            if (!LocalShellBar.current) Header("消息", model.online)
+            val err = g.error ?: g.directory.error ?: g.tags.error
+            if (err != null) ErrorNote(err, Modifier.fillMaxWidth().padding(horizontal = LIST_PAD, vertical = 4.dp), onDismiss = { g.clearError() })
+            PullToRefreshBox(g.syncing, g::syncNow, Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize().padding(horizontal = LIST_PAD)) {
+                    item(key = "tags") {
+                        TagBar(tags.keys.toList(), tag, unreadOnly, rows.sumOf { if (it.muted) 0 else it.unread }, { tag = it; unreadOnly = false }, { unreadOnly = !unreadOnly; tag = null }) { menu = true }
+                    }
+                    entries.forEachIndexed { i, e ->
+                        item(key = e.key) {
+                            val mod = Modifier.animateItem().enter(minOf(i, MAX_ENTER))
+                            when (e) {
+                                is ListEntry.Conv -> ConvRow(e.row, e.pinned, i > 0 && entries[i - 1] !is ListEntry.Fold, live(e.row.key), { g.openGroup(e.row.key) }, { dialog = ListDialog.Actions(e.row.key) }, mod)
+                                is ListEntry.Domain -> DomainRow(e, i > 0 && entries[i - 1] !is ListEntry.Fold, { domain = e.name }, { dialog = ListDialog.DomainActions(e.name) }, mod)
+                                is ListEntry.Fold -> FoldRow(e, { pinsOpen = !pinsOpen }, mod)
+                            }
+                        }
+                    }
+                    if (entries.isEmpty()) item(key = "empty") {
+                        ListNote(
+                            if (filter.active) "没有符合筛选的会话。长按会话可以打标签。"
+                            else "还没有群。右上角 + 新建群, 再在群设置里接入 Agent; 推送时带上 channel 也会自动进对应的群。",
+                        )
                     }
                 }
-                if (!shut) inFolder.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Actions(r.key) } } }
-            }
-            if (g.folders.isNotEmpty() && loose.isNotEmpty()) item(key = "loose") { FolderHeader(Modifier, UNGROUPED, 0, false, null, null) }
-            loose.forEach { r -> item(key = "g:${r.key}") { GroupRow(Modifier.animateItem(), r, { g.openGroup(r.key) }) { dialog = Dialog.Actions(r.key) } } }
-            if (rows.isEmpty()) item(key = "empty") {
-                Text(
-                    "还没有群。右上角 + 新建群, 再在群设置里接入 Agent; 推送时带上 channel 也会自动进对应的群。",
-                    Modifier.padding(24.dp),
-                    color = MaterialTheme.colorScheme.outline,
-                    fontSize = 13.sp,
-                )
             }
         }
-        }
-    }
-    when (val d = dialog) {
-        is Dialog.Move -> MoveDialog(d.group, g) { dialog = null }
-        is Dialog.Actions -> GroupActions(g, d.group, { dialog = it }) { dialog = null }
-        is Dialog.Rename -> NameDialog("群名称", d.group, { dialog = null }, g.directory.title(d.group)) { g.directory.rename(d.group, it); true }
-        is Dialog.Delete -> DeleteGroupDialog(g, d.group) { dialog = null }
-        Dialog.NewGroup -> NameDialog("新建群", "例如 新闻", { dialog = null }) { name ->
-            g.directory.createGroup(name).also { if (it) g.openGroup(name.trim()) }
-        }
-        Dialog.NewFolder -> NameDialog("新建组", "例如 工作", { dialog = null }) { g.addFolder(it) }
-        Dialog.Join -> JoinDialog(g.pendingInvite.orEmpty(), { dialog = null; g.pendingInvite = null }) { channel ->
-            dialog = null
-            g.pendingInvite = null
-            g.directory.refreshChats()
-            g.openGroup(channel)
-        }
-        is Dialog.DropFolder -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text("删除组 \"${d.name}\"?") },
-            text = { Text("组里的群会回到未分组, 消息不受影响。") },
-            confirmButton = { TextButton({ g.removeFolder(d.name); dialog = null }) { Text("删除") } },
-            dismissButton = { TextButton({ dialog = null }) { Text("取消") } },
+        DropMenu(
+            menu,
+            listOf(
+                MenuEntry(K_NEW_GROUP, "新建群", "message-square-plus"),
+                MenuEntry(K_NEW_FOLDER, "新建域", "layers", "把几个群收成一行"),
+                MenuEntry(K_JOIN, "加入群", "scan-line"),
+                MenuEntry(K_FAV, "收藏", "star", divider = true),
+                MenuEntry(K_TAGS, "管理标签", "tag"),
+            ),
+            { e ->
+                menu = false
+                when (e.key) {
+                    K_NEW_GROUP -> dialog = ListDialog.NewGroup
+                    K_NEW_FOLDER -> dialog = ListDialog.NewFolder
+                    K_JOIN -> dialog = ListDialog.Join
+                    K_FAV -> g.favoritesOpen = true
+                    K_TAGS -> dialog = ListDialog.Tags(null)
+                }
+            },
+            { menu = false },
+            offset = IntOffset(0, MENU_DROP),
         )
-        null -> Unit
     }
-}
-
-@Composable
-private fun FavoritesRow(count: Int, onOpen: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = PAD, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(Modifier.size(AVATAR).background(c.primary, CircleShape), contentAlignment = Alignment.Center) { Icon("star", c.onPrimary, 22.dp) }
-        Column(Modifier.weight(1f)) {
-            Text("收藏", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            Text(if (count == 0) "长按消息可以收藏" else "$count 条", fontSize = 13.sp, color = c.outline)
-        }
+    domain?.let { name ->
+        if (g.folders.none { it.name == name }) domain = null
+        else DomainPage(model, name, live, { domain = null }) { dialog = ListDialog.Actions(it) }
     }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FolderHeader(modifier: Modifier, name: String, unread: Int, collapsed: Boolean, onToggle: (() -> Unit)?, onLong: (() -> Unit)?) {
-    val c = MaterialTheme.colorScheme
-    val mod = if (onToggle != null) modifier.combinedClickable(onClick = onToggle, onLongClick = onLong) else modifier
-    Row(mod.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = PAD, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onToggle != null) Text(if (collapsed) "▸ " else "▾ ", fontSize = 12.sp, color = c.outline)
-        Text(name, Modifier.weight(1f), fontSize = 12.sp, color = c.outline, fontWeight = FontWeight.Medium)
-        if (collapsed && unread > 0) Badge(unread, false)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun GroupRow(modifier: Modifier, r: GroupRowData, onOpen: () -> Unit, onLong: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Row(
-        modifier.fillMaxWidth()
-            .background(if (r.pinned) c.surfaceVariant.copy(alpha = 0.35f) else c.surface)
-            .combinedClickable(onClick = onOpen, onLongClick = onLong)
-            .padding(horizontal = PAD, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        ChatAvatar(r.key, r.meta?.avatar, AVATAR)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // 名字区占满剩余宽度, 时间始终贴右
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Text(r.meta?.title ?: r.key, Modifier.weight(1f, fill = false), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    digestLabel(r.meta?.digest)?.let { Tag(it) }
-                }
-                r.last?.let { Text(timeOfDay(it.ts), Modifier.padding(start = 8.dp), fontSize = 11.sp, color = c.outline) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val last = r.last
-                val who = if (last == null || r.key == last.src || r.key == MessageDb.MEMO_GROUP) "" else "${last.src}: "
-                val preview = last?.let { who + plainPreview(it.text) } ?: "还没有消息"
-                Text(preview, Modifier.weight(1f), fontSize = 13.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (r.muted) Text("🔕", fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
-                if (r.unread > 0) Badge(r.unread, r.muted)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Tag(text: String) {
-    val c = MaterialTheme.colorScheme
-    Text(text, Modifier.padding(start = 6.dp).background(c.primary.copy(alpha = 0.12f), CircleShape).padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = c.primary)
-}
-
-@Composable
-private fun Badge(n: Int, quiet: Boolean) {
-    val c = MaterialTheme.colorScheme
-    Box(Modifier.padding(start = 6.dp).background(if (quiet) c.outline else c.error, CircleShape).padding(horizontal = 6.dp, vertical = 1.dp)) {
-        Text(if (n > BADGE_MAX) "$BADGE_MAX+" else "$n", color = c.onError, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun MoveDialog(group: String, g: ChatGroups, close: () -> Unit) {
-    var creating by remember { mutableStateOf(false) }
-    if (creating) {
-        NameDialog("新建组并移入", "例如 工作", close) { name -> g.addFolder(name).also { if (it) g.moveTo(group, name) } }
-        return
-    }
-    val current = g.folderOf(group)
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text("把 \"${g.directory.title(group)}\" 移到") },
-        text = {
-            Column {
-                g.folders.forEach { f ->
-                    val mark = if (f.name == current) "✓ " else ""
-                    Text(mark + f.name, Modifier.fillMaxWidth().clickable { g.moveTo(group, f.name); close() }.padding(vertical = 10.dp))
-                }
-                if (current != null) Text(UNGROUPED, Modifier.fillMaxWidth().clickable { g.moveTo(group, null); close() }.padding(vertical = 10.dp))
-                Text("+ 新建组", Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        confirmButton = { TextButton(close) { Text("取消") } },
-    )
-}
-
-/** 长按群: 改名, 挪组, 删除 (只有群主能删, 备忘不能删)。 */
-@Composable
-private fun GroupActions(g: ChatGroups, group: String, next: (Dialog) -> Unit, close: () -> Unit) {
-    val meta = g.directory.metas[group]
-    val owner = meta?.role == null || meta.role == com.hengxin.aioa.ui.chat.ROLE_OWNER
-    val canEdit = meta?.canTune ?: true
-    val memo = group == com.hengxin.aioa.data.MessageDb.MEMO_GROUP
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text(g.directory.title(group), maxLines = 1) },
-        text = {
-            Column {
-                if (canEdit && !memo) Text("重命名", Modifier.fillMaxWidth().clickable { next(Dialog.Rename(group)) }.padding(vertical = 10.dp))
-                Text("移到组", Modifier.fillMaxWidth().clickable { next(Dialog.Move(group)) }.padding(vertical = 10.dp))
-                if (owner && !memo) Text("删除群", Modifier.fillMaxWidth().clickable { next(Dialog.Delete(group)) }.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.error)
-            }
-        },
-        confirmButton = { TextButton(close) { Text("取消") } },
-    )
+    ListDialogs(g, dialog) { dialog = it }
 }
 
 /** 删除群确认: 说清楚会删掉什么。 */
@@ -295,16 +153,9 @@ internal fun NameDialog(title: String, hint: String, close: () -> Unit, initial:
     )
 }
 
-@Composable
-private fun timeOfDay(ts: Long): String {
-    val context = LocalContext.current
-    return if (DateUtils.isToday(ts)) DateFormat.getTimeFormat(context).format(ts)
-    else DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH)
-}
-
 /** 粘贴邀请链接或邀请码进群; 成功后打开那个群, 历史由云端补。 */
 @Composable
-private fun JoinDialog(initial: String, close: () -> Unit, joined: (String) -> Unit) {
+internal fun JoinDialog(initial: String, close: () -> Unit, joined: (String) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var text by remember { mutableStateOf(initial) }

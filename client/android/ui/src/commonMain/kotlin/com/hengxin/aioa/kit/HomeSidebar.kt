@@ -40,11 +40,14 @@ data class HomeSpace(
     val pinned: Boolean = true,
 )
 
-/** 侧栏顶部的固定入口 (总览, 消息, Agent, 资源)。 */
+/** 侧栏里的固定入口 (消息, Agent, 资源...) 或底部工具钮。 */
 data class SideLink(val key: String, val title: String, val icon: String, val badge: Int = 0)
 
 /** 侧栏 "最近" 里的一个群或会话。 */
 data class SideRecent(val key: String, val title: String, val sub: String, val initial: String, val unread: Int = 0)
+
+/** 侧栏头部的账号: 名字, 连的服务端, 是否在线。 */
+data class SideAccount(val name: String, val server: String, val online: Boolean)
 
 /** 点按, 不带缩放动效 (列表行用; 卡片才用 pressable)。 */
 fun Modifier.pointerTap(onTap: () -> Unit): Modifier = this.then(
@@ -54,48 +57,39 @@ fun Modifier.pointerTap(onTap: () -> Unit): Modifier = this.then(
 private val ROW_SHAPE = RoundedCornerShape(10.dp)
 private const val MORE_KEY = "#more"
 
-/** ChatGPT 式侧栏: 搜索 + 新建, 固定入口, 空间 (可编辑), 最近, 底部账号。 */
+/** Telegram 结构 + ChatGPT 样子的侧栏: 账号头, 搜索, 固定入口, 空间 (可编辑), 最近, 底部工具钮。 */
 @Composable
 fun HomeSidebar(
+    account: SideAccount,
     links: List<SideLink>,
     spaces: List<HomeSpace>,
     recents: List<SideRecent>,
+    tools: List<SideLink>,
     selected: String,
-    account: String,
-    accountSub: String,
     onSelect: (String) -> Unit,
-    onNew: () -> Unit,
     onEditSpaces: () -> Unit,
     onAccount: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Aioa.colors
     Column(modifier.fillMaxSize().background(c.sidebar)) {
+        AccountHead(account, onAccount)
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+            Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(12.dp))
+                .background(c.surface).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(c.surface.copy(alpha = 0.7f))
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon("search", c.textSecondary, 17.dp)
-                Text("搜索消息, 待办, 设置", c.textSecondary, 14)
-            }
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).pointerTap(onNew), contentAlignment = Alignment.Center) {
-                Icon("square-pen", c.text, 20.dp)
-            }
+            Icon("search", c.textSecondary, 17.dp)
+            Text("搜索消息, 待办, 设置", c.textSecondary, 14)
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp)) {
             links.forEach { SideRow(it.icon, it.title, it.badge, it.key == selected) { onSelect(it.key) } }
             SectionHead("空间", "编辑", onEditSpaces)
             val pinned = spaces.filter { it.pinned }
             pinned.forEach { s -> SpaceRow(s, s.id == selected) { onSelect(s.id) } }
             val rest = spaces.size - pinned.size
-            if (rest > 0) SideRow("ellipsis", "更多空间 ($rest)", 0, false) { onSelect(MORE_KEY) }
+            if (rest > 0) SideRow("layers", "更多空间", rest, false, muted = true) { onSelect(MORE_KEY) }
             if (recents.isNotEmpty()) {
                 SectionHead("最近", "", null)
                 recents.forEach { r -> RecentRow(r, r.key == selected) { onSelect(r.key) } }
@@ -104,17 +98,42 @@ fun HomeSidebar(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))
         Row(
-            Modifier.fillMaxWidth().pointerTap(onAccount).padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Initial(account.take(1), 32)
-            Column(Modifier.weight(1f)) {
-                Text(account, c.text, 15, weight = FontWeight.Medium)
-                Text(accountSub, c.textSecondary, 12)
+            tools.forEach { t ->
+                Row(
+                    Modifier.weight(1f).height(40.dp).clip(ROW_SHAPE).pointerTap { onSelect(t.key) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                ) {
+                    Icon(t.icon, c.textSecondary, 17.dp)
+                    Text(t.title, c.textSecondary, 13)
+                }
             }
-            Icon("settings", c.textSecondary, 18.dp)
         }
+    }
+}
+
+@Composable
+private fun AccountHead(a: SideAccount, onClick: () -> Unit) {
+    val c = Aioa.colors
+    Row(
+        Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 14.dp, bottom = 6.dp).clip(RoundedCornerShape(12.dp))
+            .pointerTap(onClick).padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Initial(a.name.take(1), 40)
+        Column(Modifier.weight(1f)) {
+            Text(a.name, c.text, 16, weight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(if (a.online) c.success else c.textSecondary))
+                Text(a.server, c.textSecondary, 12)
+            }
+        }
+        Icon("chevrons-up-down", c.textSecondary, 16.dp)
     }
 }
 
@@ -128,17 +147,18 @@ private fun SectionHead(title: String, action: String, onAction: (() -> Unit)?) 
 }
 
 @Composable
-private fun SideRow(icon: String, title: String, badge: Int, on: Boolean, onClick: () -> Unit) {
+private fun SideRow(icon: String, title: String, badge: Int, on: Boolean, muted: Boolean = false, onClick: () -> Unit) {
     val c = Aioa.colors
+    val tint = if (muted) c.textSecondary else c.text
     Row(
         Modifier.fillMaxWidth().clip(ROW_SHAPE).background(if (on) c.surface else c.sidebar).pointerTap(onClick)
             .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, c.text, 19.dp)
-        Text(title, c.text, 15, Modifier.weight(1f))
-        if (badge > 0) Count(badge)
+        Icon(icon, tint, 19.dp)
+        Text(title, tint, 15, Modifier.weight(1f))
+        if (badge > 0) CountChip(badge)
     }
 }
 
@@ -147,17 +167,20 @@ private fun SpaceRow(s: HomeSpace, on: Boolean, onClick: () -> Unit) {
     val c = Aioa.colors
     Row(
         Modifier.fillMaxWidth().clip(ROW_SHAPE).background(if (on) c.surface else c.sidebar).pointerTap(onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(s.icon, c.text, 19.dp)
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(if (on) c.surfaceAlt else c.surface),
+            contentAlignment = Alignment.Center,
+        ) { Icon(s.icon, c.text, 16.dp) }
         Column(Modifier.weight(1f)) {
             Text(s.title, c.text, 15)
             if (s.hint.isNotEmpty()) Text(s.hint, c.textSecondary, 12)
         }
         if (s.plugin != null) Text("插件", c.textSecondary, 11, Modifier.clip(RoundedCornerShape(5.dp)).background(c.surfaceAlt).padding(horizontal = 5.dp, vertical = 1.dp))
-        if (s.badge > 0) Count(s.badge)
+        if (s.badge > 0) CountChip(s.badge)
     }
 }
 
@@ -166,31 +189,26 @@ private fun RecentRow(r: SideRecent, on: Boolean, onClick: () -> Unit) {
     val c = Aioa.colors
     Row(
         Modifier.fillMaxWidth().clip(ROW_SHAPE).background(if (on) c.surface else c.sidebar).pointerTap(onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 9.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
-        Initial(r.initial, 24)
+        Initial(r.initial, 28)
         Column(Modifier.weight(1f)) {
             Text(r.title, c.text, 14)
             Text(r.sub, c.textSecondary, 12)
         }
-        if (r.unread > 0) Count(r.unread)
+        if (r.unread > 0) CountChip(r.unread)
     }
-}
-
-@Composable
-private fun Count(n: Int) {
-    val c = Aioa.colors
-    Text(if (n > 99) "99+" else n.toString(), c.textSecondary, 12, weight = FontWeight.Medium)
 }
 
 /** 头像占位: 首字, 圆形 (头像是唯一用正圆的地方)。 */
 @Composable
-fun Initial(text: String, sizeDp: Int) {
+fun Initial(text: String, sizeDp: Int, tint: androidx.compose.ui.graphics.Color? = null) {
     val c = Aioa.colors
-    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(c.surfaceAlt), contentAlignment = Alignment.Center) {
-        Text(text, c.text, (sizeDp * 0.45f).toInt(), weight = FontWeight.Medium)
+    val bg = tint?.copy(alpha = 0.18f) ?: c.surfaceAlt
+    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+        Text(text, tint ?: c.text, (sizeDp * 0.45f).toInt(), weight = FontWeight.Medium)
     }
 }
 
@@ -220,13 +238,13 @@ fun SpaceSwitcher(
 
 private const val MANAGE_KEY = "#manage"
 
-/** 底部输入条: 记点子或交给 Agent, ChatGPT 式全圆角胶囊。 */
+/** 底部输入条: 记点子或交给 Agent, 圆角矩形, 发送键是圆角方块 (不用正圆)。 */
 @Composable
 fun HomeComposer(placeholder: String, modifier: Modifier = Modifier) {
     val c = Aioa.colors
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(50))
-            .background(c.surface).border(1.dp, c.border, RoundedCornerShape(50)).padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(22.dp))
+            .background(c.surface).border(1.dp, c.border, RoundedCornerShape(22.dp)).padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -234,7 +252,7 @@ fun HomeComposer(placeholder: String, modifier: Modifier = Modifier) {
         Text(placeholder, c.textSecondary, 15, Modifier.weight(1f))
         Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Icon("mic", c.text, 19.dp) }
         Box(
-            Modifier.size(36.dp).clip(CircleShape).background(c.accent),
+            Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.accent),
             contentAlignment = Alignment.Center,
         ) { Icon("arrow-up", c.onAccent, 19.dp) }
     }

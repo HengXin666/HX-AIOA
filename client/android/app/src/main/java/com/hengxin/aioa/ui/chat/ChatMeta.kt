@@ -31,7 +31,13 @@ data class ChatMeta(
     val deleted: Long = 0,
     /** 信息流标签表; 空为默认四类。 */
     val feedTags: List<com.hengxin.aioa.ui.feed.FeedTag> = emptyList(),
+    /** 群公告 (#133), 群主 / 管理员可改。 */
+    val notice: String? = null,
+    /** dm 为真人单聊 (#133), peer 为对方 uid; 空为群。 */
+    val kind: String? = null,
+    val peer: String? = null,
 ) {
+    val isDm get() = kind == KIND_DM
     val tags get() = feedTags.ifEmpty { com.hengxin.aioa.ui.feed.DEFAULT_TAGS }
     val isMail get() = view == VIEW_MAIL
     val isFeed get() = view == VIEW_FEED
@@ -41,6 +47,8 @@ data class ChatMeta(
     val canTune get() = role == null || canManage
     val configured get() = deleted == 0L && title != null || avatar != null || pinned || digest != null || agents.isNotEmpty() || role != null
 }
+
+const val KIND_DM = "dm"
 
 /** 群里接入的 Agent; reads 是它能读的群, joined 是最近报到时间, pending 表示指令变了还没重新报到。 */
 data class ChatAgent(
@@ -66,6 +74,8 @@ data class ChatAgent(
     val lastRun: Long? = null,
     /** 已在群里提醒过的大版本缺失, 如 "hengxin666.todo@2:new"。 */
     val warned: List<String> = emptyList(),
+    // 最近一次报到的客户端, 如 "hxaioa 0.4.1", 直接调接口为 "接口" (#139: 命令行版本在这里, 不在 skills 里)
+    val client: String? = null,
 )
 
 /** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
@@ -111,37 +121,43 @@ fun parseAgent(o: JSONObject): ChatAgent = ChatAgent(
     trigger = com.hengxin.aioa.ui.agents.parseTrigger(o.optJSONObject("trigger")),
     lastRun = optLongOrNull(o, "lastRun"),
     warned = strings(o.optJSONArray("warned")),
+    client = o.optStr("client"),
 )
 
 private fun optLongOrNull(o: JSONObject, k: String): Long? = if (o.has(k) && !o.isNull(k)) o.optLong(k) else null
 
 fun parseChats(body: JSONObject?): Map<String, ChatMeta> {
     val arr = body?.optJSONArray("chats") ?: return emptyMap()
-    return (0 until arr.length()).mapNotNull { i ->
-        val o = arr.optJSONObject(i) ?: return@mapNotNull null
-        val agents = o.optJSONArray("agents")
-        runCatching {
-            ChatMeta(
-                channel = o.getString("channel"),
-                title = o.optStr("title"),
-                avatar = o.optStr("avatar"),
-                pinned = o.optBoolean("pinned"),
-                muted = o.optBoolean("muted"),
-                read = o.optLong("read"),
-                digest = o.optStr("digest"),
-                agents = (0 until (agents?.length() ?: 0)).mapNotNull { j -> agents?.optJSONObject(j)?.let { runCatching { parseAgent(it) }.getOrNull() } },
-                updated = o.optLong("updated"),
-                cleared = o.optLong("cleared"),
-                role = o.optStr("role"),
-                members = o.optInt("members"),
-                view = o.optStr("view"),
-                hideListening = o.optBoolean("hideListening"),
-                hideTyping = o.optBoolean("hideTyping"),
-                deleted = o.optLong("deleted"),
-                feedTags = com.hengxin.aioa.ui.feed.parseFeedTags(o.optJSONArray("feedTags")),
-            )
-        }.getOrNull()
-    }.associateBy { it.channel }
+    return (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let(::parseChat) }.associateBy { it.channel }
+}
+
+/** 一行群资料; chat_sync 帧带的单行也走这里 (#129)。 */
+fun parseChat(o: JSONObject): ChatMeta? {
+    val agents = o.optJSONArray("agents")
+    return runCatching {
+        ChatMeta(
+            channel = o.getString("channel"),
+            title = o.optStr("title"),
+            avatar = o.optStr("avatar"),
+            pinned = o.optBoolean("pinned"),
+            muted = o.optBoolean("muted"),
+            read = o.optLong("read"),
+            digest = o.optStr("digest"),
+            agents = (0 until (agents?.length() ?: 0)).mapNotNull { j -> agents?.optJSONObject(j)?.let { runCatching { parseAgent(it) }.getOrNull() } },
+            updated = o.optLong("updated"),
+            cleared = o.optLong("cleared"),
+            role = o.optStr("role"),
+            members = o.optInt("members"),
+            view = o.optStr("view"),
+            hideListening = o.optBoolean("hideListening"),
+            hideTyping = o.optBoolean("hideTyping"),
+            deleted = o.optLong("deleted"),
+            feedTags = com.hengxin.aioa.ui.feed.parseFeedTags(o.optJSONArray("feedTags")),
+            notice = o.optStr("notice"),
+            kind = o.optStr("kind"),
+            peer = o.optStr("peer"),
+        )
+    }.getOrNull()
 }
 
 fun parseFavorites(body: JSONObject?): List<Favorite> {

@@ -142,7 +142,7 @@ private fun LazyListScope.section(s: TodoSection, closed: Set<String>, toggle: (
             val shut = g.key in closed && g.title.isNotEmpty()
             Column(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(CARD).background(c.surface).animateContentSize()) {
                 if (g.title.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable { toggle(g.key) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (g.repo != null) Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(repoColor(g.repo)))
+                    if (g.repo != null) Icon("github", repoColor(g.repo), 15.dp)
                     else Icon("layers", c.textSecondary, 14.dp)
                     Text(g.title, Modifier.padding(start = 8.dp).weight(1f), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${g.count}", color = c.textSecondary, fontSize = 12.sp)

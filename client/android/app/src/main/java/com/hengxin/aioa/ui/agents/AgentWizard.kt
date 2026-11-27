@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.agents
 
+import com.hengxin.aioa.Constants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -82,7 +83,7 @@ fun AgentWizard(model: ChatModel, group: String, close: () -> Unit) {
     var done by remember { mutableStateOf<Onboard?>(null) }
     ModalBottomSheet(onDismissRequest = { if (!busy) close() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("接入 Agent · 第 $step / $STEPS 步", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+            Text("接入${Constants.CLOUD_AGENT} · 第 $step / $STEPS 步", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             when (step) {
                 1 -> {
                     Text("叫什么, 能读哪些群", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)

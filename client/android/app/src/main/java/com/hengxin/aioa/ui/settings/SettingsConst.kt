@@ -30,6 +30,7 @@ enum class SettingsPage(val title: String, val icon: String) {
     APPEARANCE("外观", "palette"),
     SYSTEM("系统权限", "shield-check"),
     CF_USAGE("CF 总览", "gauge"),
+    SENDERS("系统发送者", "bell"),
     STORAGE("存储", "hard-drive"),
     UPDATE("更新", ICON_REFRESH),
     ABOUT("关于", "bot"),

@@ -57,7 +57,10 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
         CfUsageCard()
         val carded = state.hosts.map { it.subject }.toSet()
         Card { SettingRow("server", "添加主机", "一行命令安装探针", { adding = true }) }
-        state.hosts.forEach { h -> HostPanel(state, h) { askFor = h.subject } }
+        // 主机一行一台, 点开才显示详细面板 (#138)
+        var openHost by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        HostLines(state, openHost) { s -> openHost = if (openHost == s) null else s }
+        state.hosts.firstOrNull { it.subject == openHost }?.let { h -> HostPanel(state, h) { askFor = h.subject } }
         // 旧版探针不发主机卡片, 仍用原来的指标格子
         state.probes.filter { it !in carded }.forEach { Probe(state, it) }
     }

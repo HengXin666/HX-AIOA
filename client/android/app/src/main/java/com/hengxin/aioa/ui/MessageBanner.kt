@@ -31,7 +31,7 @@ import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.chat.ChatAvatar
 
-private val AVATAR = 36.dp
+private val AVATAR = com.hengxin.aioa.ui.chat.MESSAGE_AVATAR
 private val CORNER = 16.dp
 private val EDGE = 12.dp
 

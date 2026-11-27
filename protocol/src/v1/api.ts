@@ -3,7 +3,10 @@ import type { Rule, TimeWindow } from "./rule";
 import type { Envelope, EventGroup, RouteInfo } from "./event";
 
 export type UserStatus = "active" | "pending" | "disabled";
-export type UserPublic = { id: string; name: string; display: string; role: Role; status: UserStatus; created: number };
+// avatar: 头像 id (先 PUT /avatars 上传), 本人用 PATCH /me 改
+export type UserPublic = { id: string; name: string; display: string; role: Role; status: UserStatus; created: number; avatar?: string };
+// PATCH /me: 改自己的昵称与头像 (avatar 为 null 表示去掉)
+export type MePatch = { display?: string; avatar?: string | null };
 export type DeviceSession = { id: string; name: string; platform: string; created: number; seen: number; current?: boolean };
 export type DeviceInput = { name?: string; platform?: string };
 

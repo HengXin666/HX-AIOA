@@ -34,7 +34,9 @@ export const PATH_GITHUB_AVAILABLE = `${API_V1}/github/available`;
 export const PATH_GITHUB_TRACKED = `${API_V1}/github/tracked`;
 export const PATH_GITHUB_ACTIVITY = `${API_V1}/github/activity`;
 export const PATH_GITHUB_DAILY = `${API_V1}/github/daily`;
+export const PATH_GITHUB_HEATMAP = `${API_V1}/github/heatmap`;
 export const PATH_GITHUB_BRANCHES = `${API_V1}/github/branches`;
+export const PATH_GITHUB_HISTORY = `${API_V1}/github/repos/{owner}/{name}/history`;
 export const PATH_FILES = `${API_V1}/files`;
 // 迁移任务 (主人): GET 状态, POST { to } 开始, DELETE 停止
 export const PATH_FILES_MIGRATE = `${API_V1}/files/migrate`;

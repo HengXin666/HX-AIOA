@@ -71,7 +71,8 @@ export type Core = {
   dbSize: () => number;
 };
 
-export type Users = { get: (id: string) => UserPublic | null; find: (ref: string) => UserPublic | null; ownerId: () => string };
+// seen: 账号设备会话最近的活动时间 (#130), 没有账号目录时不给
+export type Users = { get: (id: string) => UserPublic | null; find: (ref: string) => UserPublic | null; ownerId: () => string; seen?: (id: string) => number };
 
 export type ReqCtx = { req: Request; url: URL; params: string[]; who: Principal; core: Core };
 // ROOM: 主人, 子号, key 都放行, 由处理函数按群身份再判

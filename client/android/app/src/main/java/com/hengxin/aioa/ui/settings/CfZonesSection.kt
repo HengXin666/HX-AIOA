@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -252,20 +253,22 @@ private fun StatusBar(status: Map<String, Long>) {
     }
 }
 
+/** 一行一条 (#138): 名字, 小字说明, 数值, 最右一根短条 (占最大值的比例)。 */
 @Composable
 private fun BarRow(label: String, ratio: Float, value: String, color: Color, sub: String? = null, subColor: Color? = null) {
     val c = Aioa.colors
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, c.text, 13, Modifier.weight(1f))
-            if (sub != null) Text("$sub  ", subColor ?: c.textSecondary, 11)
-            Text(value, c.textSecondary, 12)
-        }
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(BAR_SHAPE).background(c.surfaceAlt)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, c.text, 13, Modifier.weight(1f))
+        if (sub != null) Text(sub, subColor ?: c.textSecondary, 11, Modifier.widthIn(max = SUB_MAX))
+        Text(value, c.textSecondary, 12)
+        Box(Modifier.width(BAR_W).height(4.dp).clip(BAR_SHAPE).background(c.surfaceAlt)) {
             Box(Modifier.fillMaxWidth(ratio.coerceIn(0.01f, 1f)).fillMaxHeight().background(color))
         }
     }
 }
+
+private val BAR_W = 48.dp
+private val SUB_MAX = 140.dp
 
 /** 主机名排行: 条长是请求数, 标出挂的服务, 5xx 多的标红。 */
 @Composable
@@ -297,9 +300,9 @@ private fun WorkerGroup(workers: List<Worker>) {
                 val sub = buildString {
                     append(String.format(Locale.US, "CPU %.1f / %.1f ms", w.cpuP50 / US_PER_MS, w.cpuP99 / US_PER_MS))
                     if (w.err > 0) append(" · 错误 ${pct(w.err, w.req)}")
+                    if (w.hosts.isNotEmpty()) append(" · ${w.hosts.size} 个域名")
                 }
                 BarRow(w.name, w.req.toFloat() / top, count(w.req), if (w.err > 0) c.danger else c.accent, sub, if (w.err > 0) c.danger else null)
-                if (w.hosts.isNotEmpty()) Text(w.hosts.joinToString(", "), c.textSecondary, 11)
             }
         }
     }

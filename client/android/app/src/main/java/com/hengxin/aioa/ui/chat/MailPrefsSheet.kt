@@ -58,7 +58,7 @@ fun MailPrefsSheet(s: MailState, close: () -> Unit) {
                 tp.muted.sorted().forEach { site -> Line(site, "不提示翻译") { tp.setMuted(site, false) } }
             }
             Head("自动转发 (${s.rules.size})")
-            if (s.rules.isEmpty()) Empty("在邮件详情里 \"转进群\" / \"交给 Agent\" 时打开 \"以后自动转\" 即可添加")
+            if (s.rules.isEmpty()) Empty("在邮件详情里 \"转进群\" / \"交给群 Agent\" 时打开 \"以后自动转\" 即可添加")
             s.rules.forEach { r ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = PAD.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

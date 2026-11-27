@@ -29,7 +29,7 @@ import com.hengxin.aioa.ui.settings.CfUsageCard
 
 private const val TASKS_SHOWN = 5
 
-/** "开发" 看板: GitHub 动态, 等我确认的任务, 最近的 Agent 任务。 */
+/** "开发" 看板: GitHub 动态, 等我确认的任务, 最近的 agent harness 任务。 */
 @Composable
 fun DevBoard(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
@@ -45,7 +45,7 @@ fun DevBoard(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
         FeedItem(t.id, Constants.ICON_ACTIVITY, t.title, t.step ?: t.summary, t.agent, ago(t.updated), tone)
     }
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
-    LayerSection("Agent 任务", "进行中与最近结束", recent, state, "还没有任务") { open(Tab.AGENT) }
+    LayerSection("${Constants.HARNESS} 任务", "进行中与最近结束", recent, state, "还没有任务") { open(Tab.AGENT) }
 }
 
 /** "服务器" 看板: 设备在线与心跳, 磁盘, CF 额度; 点进去到资源页看完整卡片。 */

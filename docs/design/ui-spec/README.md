@@ -86,3 +86,12 @@
 2. 改 `docs/client/android-navigation.md` 的入口表与 `TabNav` 用例 (原有要求不变)。
 3. 只用组件库实现; 画廊里加这一页的截图。
 4. 权限有变化同步 `docs/client/android-permissions.md`。
+
+## 8. 术语
+
+本项目有两种 "Agent", 界面文案不要只写 "Agent", 按语义写全:
+
+- **群 Agent** (也叫 "云 Agent"): 接入某个群的 Agent, 在群里收发消息, 有名字, 头像, 可读的群, 触发方式; 群设置, 成员与群 Agent, 资料卡, @ 选择里的都是它。插件 (点子待办等) 装的也是群 Agent。
+- **agent harness** (也叫 "agent loop"): 电脑上交互式的 CLI, 如 Codex, Claude Code (接入里 kind=interactive 的那类); 干完活推任务卡, 你在卡上回复, 批准或叫停。顶部标签与侧栏的 "agent harness" 页展示的是它的任务。
+
+一个 agent harness 可以拿着接入语去当某个群的群 Agent, 这时在群里按群 Agent 显示。

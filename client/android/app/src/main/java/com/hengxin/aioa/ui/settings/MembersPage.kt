@@ -13,7 +13,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.Auth
+import com.hengxin.aioa.ui.OneRow
+import com.hengxin.aioa.ui.RowAction
 import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.net.Api
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -108,17 +111,16 @@ fun MembersPage(onBack: (() -> Unit)?) {
             if (list == null) NoteRow("加载中...", c.textSecondary)
             list?.forEachIndexed { i, m ->
                 if (i > 0) RowDivider()
-                val label = "${m.display.ifEmpty { m.name }} (${m.name}) · ${roleText(m.role)}"
-                when {
-                    m.role == ROLE_OWNER -> InfoRow(label, statusText(m.status))
-                    m.status == STATUS_PENDING -> ActionRow(label, value = "通过审批") {
-                        act(listOf(Constants.USERS_PATH, m.id, "approve"), POST, null, "已通过 ${m.name}")
-                    }
-                    m.status == STATUS_DISABLED -> ActionRow(label, value = "已停用, 点击启用") {
-                        act(listOf(Constants.USERS_PATH, m.id), PATCH, JSONObject().put("status", STATUS_ACTIVE), "已启用 ${m.name}")
-                    }
-                    else -> ActionRow(label, value = "停用", danger = true) {
-                        act(listOf(Constants.USERS_PATH, m.id), PATCH, JSONObject().put("status", STATUS_DISABLED), "已停用 ${m.name}, 其设备已下线")
+                // 一行一条 (#138): 图标, 名字, 账号与身份压到右边, 最右操作
+                val icon = if (m.role == ROLE_MEMBER) "user" else "shield-check"
+                val meta = "${m.name} · ${roleText(m.role)}"
+                val path = listOf(Constants.USERS_PATH, m.id)
+                OneRow(icon, m.display.ifEmpty { m.name }, meta, pad = 16) {
+                    when {
+                        m.role == ROLE_OWNER -> Text(statusText(m.status), c.textSecondary, 12)
+                        m.status == STATUS_PENDING -> RowAction("通过审批") { act(path + "approve", POST, null, "已通过 ${m.name}") }
+                        m.status == STATUS_DISABLED -> RowAction("已停用 · 启用") { act(path, PATCH, JSONObject().put("status", STATUS_ACTIVE), "已启用 ${m.name}") }
+                        else -> RowAction("停用", danger = true) { act(path, PATCH, JSONObject().put("status", STATUS_DISABLED), "已停用 ${m.name}, 其设备已下线") }
                     }
                 }
             }
@@ -157,9 +159,8 @@ fun MembersPage(onBack: (() -> Unit)?) {
             SettingsGroup("未使用的邀请", "撤销后邀请码立即失效。") {
                 invites.forEachIndexed { i, inv ->
                     if (i > 0) RowDivider()
-                    val label = "${roleText(inv.role)}${if (inv.needsApproval) " · 需审批" else ""} · ${clock(inv.expires)} 过期"
-                    ActionRow(label, value = "撤销", danger = true) {
-                        act(listOf(Constants.INVITES_PATH, inv.id), DELETE, null, "邀请已撤销")
+                    OneRow("key-round", roleText(inv.role) + if (inv.needsApproval) " · 需审批" else "", "${clock(inv.expires)} 过期", pad = 16) {
+                        RowAction("撤销", danger = true) { act(listOf(Constants.INVITES_PATH, inv.id), DELETE, null, "邀请已撤销") }
                     }
                 }
             }

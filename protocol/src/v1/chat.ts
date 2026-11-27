@@ -31,6 +31,12 @@ export type ChatMeta = {
   hideTyping?: boolean;
   // 群被删除的时间: 只留这一行墓碑让各端删本地记录并隐藏; 之后再有消息进来群会重新出现
   deleted?: number;
+  // 群公告 (#133), 群主与管理员可改
+  notice?: string;
+  // 单聊 (#133): kind 为 dm, peer 为对方账号 id (按看的人算)
+  kind?: "dm";
+  peer?: string;
+  // 群资料改动时间; 已读与 Agent 活跃不改它
   updated: number;
 };
 // 群里接入的 Agent: 一个来源 + 一把 key; 主人只定名字和可读的群, 指令由服务端下发
@@ -69,7 +75,7 @@ export type ChatAgent = {
 };
 // 接入时可选带上定时与任务, 只写进这次的接入语, 不存
 export type AgentJob = { interval?: number; task?: string };
-export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view" | "feedTags">>;
+export type ChatPatch = Partial<Pick<ChatMeta, "title" | "avatar" | "pinned" | "muted" | "read" | "digest" | "hideListening" | "hideTyping" | "view" | "feedTags" | "notice">>;
 export type AgentRequest = { name: string; reads?: string[] } & AgentJob;
 export const AGENT_ACTIVE_STEP_MS = 120_000;
 export const MAX_AGENT_TASK = 2000;
@@ -81,9 +87,14 @@ export type OnboardResult = { agent: ChatAgent; prompt: string; key: string };
 export type ChatMessages = { messages: Envelope[]; head: number };
 export type ChatCleared = { deleted: number; cleared: number };
 // 资料 / 收藏变化时广播, 客户端据此增量拉取
-export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos" | "senders"; channel?: string };
-// 发送者资料 (#123): 主人给某个来源 (sid) 设的头像, 各端消息里按它画; 没设的系统来源用内置图标
-export type SenderMeta = { sid: string; avatar?: string; updated: number };
+// topic=chats 带 chat 时为收帧人视图下的整份群资料, 客户端直接替换不必重拉; 只发给群成员与主人
+export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "todos" | "senders"; channel?: string; chat?: ChatMeta };
+/**
+ * 系统发送者登记 (#123 #128): 服务端自己发消息用的来源 (system, system:*, 终端) 第一次发言时自动登记。
+ * name 是发送时的默认名, alias 是主人改的名 (新消息按它发, 客户端旧消息也按它显示), avatar 是主人设的头像 id。
+ */
+export type SenderMeta = { sid: string; name: string; icon?: string; alias?: string; avatar?: string; first: number; last: number; updated: number };
+export type SenderPatch = { alias?: string | null; avatar?: string | null };
 export const PATH_SENDERS = `${API_V1}/senders`;
 export const PATH_SENDER = `${API_V1}/senders/{sid}`;
 // 没带群的系统消息进这个群 (原先按发送者名字归成 "系统" 组, 和发送者重名)

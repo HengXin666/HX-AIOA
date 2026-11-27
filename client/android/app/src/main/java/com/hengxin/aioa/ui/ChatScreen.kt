@@ -19,11 +19,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -53,12 +50,14 @@ import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.proto.ServerFrame
-import com.hengxin.aioa.ui.chat.ChatAvatar
 import com.hengxin.aioa.ui.chat.NewMessagesChip
 import com.hengxin.aioa.ui.chat.sendIn
 import com.hengxin.aioa.ui.chat.MailView
-import com.hengxin.aioa.ui.chat.digestLabel
-import com.hengxin.aioa.ui.chat.plainPreview
+import com.hengxin.aioa.ui.chat.ComposerState
+import com.hengxin.aioa.ui.chat.MentionOps
+import com.hengxin.aioa.ui.chat.RoomApi
+import com.hengxin.aioa.ui.chat.RoomMember
+import com.hengxin.aioa.ui.chat.SubBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.TimeZone
@@ -66,8 +65,8 @@ import java.util.TimeZone
 internal val PAD = 12.dp
 private val ONLINE = Color(0xFF34C759)
 private val OFFLINE = Color(0xFFFF9500)
-private val HEADER_AVATAR = 38.dp
 private val PILL = RoundedCornerShape(50)
+private const val MENTION_PAGES = 20
 private const val BACK_ROTATE = 90f
 // 同一个人连续发且间隔不超过这个时间, 合并成一串, 只在第一条显示名字与头像
 private const val RUN_GAP_MS = 3 * 60_000L
@@ -115,12 +114,39 @@ fun ChatScreen(model: ChatModel) {
         return
     }
     BackHandler { g.close() }
+    val picking = remember(open) { Picking() }
+    BackHandler(enabled = picking.on) { picking.stop() }
     var forwarding by remember { mutableStateOf<ServerFrame.Msg?>(null) }
-    // 主人点发送者头像可以换头像 (#123)
+    // 真人与群 Agent 点头像出资料卡 (#136), 主人在 Agent 资料卡里改名换头像; 主人点其它非真人发送者的头像直接改 (#123 #128 #121)
     var sender by remember { mutableStateOf<ServerFrame.Msg?>(null) }
+    var profile by remember { mutableStateOf<ServerFrame.Msg?>(null) }
+    // 点开的合并转发卡片 (整条消息, 取详情时带它的 seq 作 via)
+    var bundle by remember { mutableStateOf<ServerFrame.Msg?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val isOwner = remember { com.hengxin.aioa.config.Auth.load(context)?.role == com.hengxin.aioa.ui.chat.ROLE_OWNER }
     val dir = g.directory
+    val meta = dir.metas[open]
+    // 草稿跟着群存在 ChatGroups 里: 从 "更多" 进群设置 / 收藏再回来不丢 (#139)
+    val composer = remember(open) { g.composerOf(open) }
+    val members by androidx.compose.runtime.produceState(emptyList<RoomMember>(), open, meta?.shared) {
+        // @ 候选与资料卡要认得全群 (#139): 按页拉完 (最多 MENTION_PAGES 页), 第一页走 ETag 缓存
+        if (meta?.shared == true) {
+            val api = RoomApi(context)
+            val all = mutableListOf<RoomMember>()
+            var cursor: String? = null
+            for (i in 0 until MENTION_PAGES) {
+                val p = api.page(open, cursor = cursor).getOrNull() ?: break
+                all += p.members
+                value = all.distinctBy { it.id }
+                cursor = p.next ?: break
+            }
+        }
+    }
+    val candidates = remember(meta, members) { MentionOps.candidates(meta, members, Me.uid) }
+    val atNames = remember(candidates) { MentionOps.names(candidates) }
+    val roles = remember(members) { members.associate { MentionOps.USER_PREFIX + it.id to MentionOps.roleLabel(it.role) } }
+    val faces = remember(members) { members.mapNotNull { m -> m.avatar?.let { MentionOps.USER_PREFIX + m.id to it } }.toMap() }
+    val agentSids = meta?.agents?.mapNotNull { it.sourceId }?.toSet().orEmpty()
     val actions = BubbleActions(
         onReply = { g.replyTo = it },
         onForward = { forwarding = it },
@@ -130,33 +156,55 @@ fun ChatScreen(model: ChatModel) {
         onDigest = { m, key -> g.forward(m, key) },
         onJump = g::jumpTo,
         onRemove = g::remove,
-        onSender = if (isOwner) ({ sender = it }) else null,
+        onAvatar = { m ->
+            when {
+                targetOf(meta, members, m) != null -> profile = m
+                isOwner && m.sid?.startsWith(MentionOps.USER_PREFIX) == false -> sender = m
+            }
+        },
+        onAvatarLong = { m -> targetOf(meta, members, m)?.let(composer::mention) },
+        onSelect = { m -> if (picking.on) picking.toggle(m.seq) else picking.start(m.seq) },
+        onBundle = { m -> if (m.bundle != null) bundle = m },
+        admin = meta?.canManage == true,
+        look = { m -> SenderLook(roles[m.sid], m.sid in agentSids || com.hengxin.aioa.ui.chat.Names.isAgent(m.sid), faces[m.sid]) },
+        atNames = atNames,
     )
-    CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (dir.metas[open]?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
-        ChatTopBar(model, open) { g.close() }
+    CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (meta?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
+        if (picking.on) SubBar("已选 ${picking.seqs?.size ?: 0} 条", "", { picking.stop() }, right = null, back = "x")
+        else RoomBar(model, open) { g.close() }
         val err = g.error ?: dir.error
         if (err != null) ErrorNote(err, Modifier.fillMaxWidth().padding(horizontal = PAD, vertical = 4.dp), onDismiss = { g.clearError() })
         // 进群设置再回来时停在原来的位置; 换群或退出群后是新的一页
-        if (dir.metas[open]?.isMail == true) {
+        if (meta?.isMail == true) {
             KeepState("chat:mail:${g.visit}") { MailView(g.messages.lastOrNull()?.seq, Modifier.weight(1f)) }
-        } else if (dir.metas[open]?.isFeed == true) {
+        } else if (meta?.isFeed == true) {
             KeepState("chat:feed:$open:${g.visit}") { FeedView(g.messages, Modifier.weight(1f)) }
         } else {
             // 装了待办插件的群: 顶上切 聊天 / 待办
             var todo by rememberSaveable(open) { mutableStateOf(false) }
-            if (dir.metas[open]?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
+            if (meta?.agents?.any { it.plugin in TODO_PLUGINS } == true) com.hengxin.aioa.ui.todo.ChatTodoTabs(todo) { todo = it }
             if (todo) KeepState("chat:todo:$open") {
                 // 看 "全部待办" 时来源消息可能在别的群: 本群就地定位, 别的群进去再定位
                 com.hengxin.aioa.ui.todo.TodoBoard(model.spaces, open, { ch, seq -> todo = false; if (ch == open) g.jumpTo(seq) else model.groups.openAt(ch, seq) }, Modifier.weight(1f))
             }
             else {
-                KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, Modifier.weight(1f)) }
-                Composer(g)
+                KeepState("chat:msg:$open:${g.visit}") { MessageList(model, open, actions, picking, Modifier.weight(1f)) }
+                if (picking.on) SelectBar(model, open, picking)
+                else ChatComposer(
+                    g, composer, candidates, if (meta?.isDm == true) "发消息" else "发消息, 输入 @ 叫人或 Agent",
+                    listOf(
+                        "list-checks" to ("多选" to { picking.start(null) }),
+                        "star" to ("收藏" to { g.favoritesOpen = true }),
+                        "settings" to ((if (meta?.isDm == true) "聊天设置" else "群设置") to { g.page = ChatPage.SETTINGS }),
+                    ),
+                )
             }
         }
     } }
     forwarding?.let { m -> ForwardDialog(model, m) { forwarding = null } }
-    sender?.let { m -> com.hengxin.aioa.ui.chat.SenderAvatarSheet(m, dir) { sender = null } }
+    profile?.let { m -> ProfileSheet(model, open, m, members, composer, if (isOwner) ({ profile = null; sender = m }) else null) { profile = null } }
+    bundle?.let { m -> m.bundle?.let { b -> com.hengxin.aioa.ui.chat.BundleView(b, m.seq) { bundle = null } } }
+    sender?.let { m -> com.hengxin.aioa.ui.chat.SenderEditSheet(m.sid.orEmpty(), com.hengxin.aioa.ui.chat.Names.of(m), dir) { sender = null } }
 }
 
 /** 普通页面标题行 (群列表等在用)。 */
@@ -183,43 +231,8 @@ internal fun BackButton(onBack: () -> Unit) {
     }
 }
 
-private const val PRESENCE_TICK_MS = 1000L
 // 待办插件迁移后群里 Agent 的 plugin 是新 id, 没升级的服务端仍是旧 id
 private val TODO_PLUGINS = setOf(com.hengxin.aioa.Constants.TODO_PLUGIN, "todo")
-
-@Composable
-private fun ChatTopBar(model: ChatModel, group: String, onBack: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    val meta = model.groups.directory.metas[group]
-    Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            BackButton(onBack)
-            Row(Modifier.weight(1f).clickable { model.groups.page = ChatPage.SETTINGS }, verticalAlignment = Alignment.CenterVertically) {
-                ChatAvatar(group, meta?.avatar, HEADER_AVATAR)
-                Column(Modifier.padding(start = 10.dp)) {
-                    Text(meta?.title ?: group, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val tags = listOfNotNull(
-                        if (model.online) null else stringResource(R.string.status_offline),
-                        digestLabel(meta?.digest),
-                        if (meta?.muted == true) "免打扰" else null,
-                        meta?.agents?.size?.takeIf { it > 0 }?.let { "$it 个 Agent" },
-                    )
-                    // 有人在输入 / 监听时顶替状态行; 每秒重算一次, 到期自动消失
-                    val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
-                        while (true) {
-                            kotlinx.coroutines.delay(PRESENCE_TICK_MS)
-                            value = System.currentTimeMillis()
-                        }
-                    }
-                    val live = if (model.online) model.groups.presence.line(group, now) else null
-                    if (live != null) Text(live, fontSize = 12.sp, color = c.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    else Text(tags.joinToString(" · ").ifEmpty { "点这里设置群" }, fontSize = 12.sp, color = if (model.online) c.outline else OFFLINE)
-                }
-            }
-        }
-        Box(Modifier.fillMaxWidth().size(0.5.dp).background(c.outlineVariant))
-    }
-}
 
 private fun dayOf(ts: Long): Long = (ts + TimeZone.getDefault().getOffset(ts)) / DateUtils.DAY_IN_MILLIS
 
@@ -244,7 +257,7 @@ private fun buildRows(messages: List<ServerFrame.Msg>, pending: List<Pending>): 
 }
 
 @Composable
-private fun MessageList(model: ChatModel, group: String, actions: BubbleActions, modifier: Modifier) {
+private fun MessageList(model: ChatModel, group: String, actions: BubbleActions, picking: Picking, modifier: Modifier) {
     val g = model.groups
     val messages = g.messages
     val rows = remember(messages.size, messages.firstOrNull()?.seq, messages.lastOrNull()?.seq, g.pending.toList()) {
@@ -287,14 +300,14 @@ private fun MessageList(model: ChatModel, group: String, actions: BubbleActions,
                 is ChatRow.Day -> DayChip(row.ts, mod)
                 is ChatRow.Bubble -> Column(mod) {
                     val mine = model.isMine(row.msg)
-                    MessageBubble(row.msg, mine, BubbleSpot(row.head, showSender, highlight == row.msg.seq), actions, Modifier)
+                    MessageBubble(row.msg, mine, BubbleSpot(row.head, showSender, highlight == row.msg.seq, picking.on, picking.seqs?.contains(row.msg.seq) == true), actions, Modifier)
                     // 待办群: 消息下面挂它生出来的待办, 点开看详情 (#122)
                     if (todoGroup) com.hengxin.aioa.ui.todo.TodoChips(model.spaces, group, row.msg.seq, mine) { seq -> g.jumpTo(seq) }
                 }
                 is ChatRow.Local -> {
                     val p = row.p
                     MessageBubble(
-                        ServerFrame.Msg(-1, p.ts, Me.label, p.text, p.cid, group, p.reply, mine = true),
+                        ServerFrame.Msg(-1, p.ts, Me.label, p.text, p.cid, group, p.reply, mine = true, mentions = p.mentions),
                         true,
                         BubbleSpot(head = true, showSender = false, highlight = false),
                         null,
@@ -337,82 +350,4 @@ private fun DayChip(ts: Long, modifier: Modifier) {
             color = MaterialTheme.colorScheme.outline,
         )
     }
-}
-
-@Composable
-private fun Composer(g: ChatGroups) {
-    val c = MaterialTheme.colorScheme
-    var text by remember { mutableStateOf("") }
-    Column {
-        g.replyTo?.let { r ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(3.dp).size(3.dp, 32.dp).background(c.primary, PILL))
-                Column(Modifier.padding(start = 8.dp).weight(1f)) {
-                    Text("回复 ${r.src}", fontSize = 12.sp, color = c.primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text(plainPreview(r.text), fontSize = 12.sp, color = c.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Text("✕", Modifier.clickable { g.replyTo = null }.padding(8.dp), color = c.outline)
-            }
-        }
-        // 附件: 选中就上传, 输入框里的字作为说明一起发
-        val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
-            if (uri != null) {
-                g.sendFile(uri, text)
-                text = ""
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
-            Box(Modifier.padding(end = 6.dp).size(42.dp).clickable { pick.launch("*/*") }, contentAlignment = Alignment.Center) {
-                Text("+", fontSize = 26.sp, color = c.outline)
-            }
-            Box(Modifier.weight(1f).background(c.surfaceVariant, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                if (text.isEmpty()) Text(stringResource(R.string.input_hint), color = c.outline, fontSize = 15.sp)
-                BasicTextField(
-                    text,
-                    {
-                        if (it.length > text.length) g.typing()
-                        text = it
-                    },
-                    Modifier.fillMaxWidth(),
-                    textStyle = TextStyle(color = c.onSurface, fontSize = 15.sp),
-                    cursorBrush = SolidColor(c.primary),
-                    maxLines = 6,
-                )
-            }
-            val ready = text.isNotBlank()
-            Box(
-                Modifier.padding(start = 8.dp).size(42.dp).background(if (ready) c.primary else c.surfaceVariant, CircleShape)
-                    .clickable(enabled = ready) { if (g.send(text)) text = "" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon("send", if (ready) c.onPrimary else c.outline, 20.dp)
-            }
-        }
-    }
-}
-
-/** 选一个群转发过去。 */
-@Composable
-internal fun ForwardDialog(model: ChatModel, msg: ServerFrame.Msg, close: () -> Unit) {
-    val g = model.groups
-    val rows = remember { g.rows() }
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text("转发到") },
-        text = {
-            LazyColumn {
-                items(rows.size) { i ->
-                    val r = rows[i]
-                    Row(
-                        Modifier.fillMaxWidth().clickable { g.forward(msg, r.key); close() }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ChatAvatar(r.key, r.meta?.avatar, 32.dp)
-                        Text(r.meta?.title ?: r.key, Modifier.padding(start = 10.dp), maxLines = 1)
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(close) { Text("取消") } },
-    )
 }

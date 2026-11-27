@@ -179,7 +179,7 @@ fun Dot(color: Color) {
     Box(Modifier.size(8.dp).clip(CircleShape).background(color))
 }
 
-/** 统一文字入口, 数字用等宽数字。 */
+/** 统一文字入口, 数字用等宽数字; 默认单行省略, 气泡等长文传 maxLines。 */
 @Composable
 fun Text(
     text: String,
@@ -187,12 +187,13 @@ fun Text(
     sizeSp: Int,
     modifier: Modifier = Modifier,
     weight: FontWeight = FontWeight.Normal,
+    maxLines: Int = 1,
 ) {
     BasicText(
         text,
         modifier,
-        style = TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = weight, fontFeatureSettings = "tnum"),
+        style = TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = weight, fontFeatureSettings = "tnum", lineHeight = if (maxLines > 1) (sizeSp * 1.45f).sp else androidx.compose.ui.unit.TextUnit.Unspecified),
         overflow = TextOverflow.Ellipsis,
-        maxLines = 1,
+        maxLines = maxLines,
     )
 }

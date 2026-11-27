@@ -71,40 +71,28 @@ private fun AioaColors.with(o: Map<String, Color>): AioaColors {
 
 val DEFAULT_RADIUS = 16.dp
 
-/** 极简风格 (对标 ChatGPT): 中性黑白灰, 强调色只用在关键处。 */
+/** 默认主题: 取锁定版本 HX-UI 的皮肤 (HxUi.SKIN, 现为 ink, ChatGPT 式), 由 HxPalette 映射到 App 的令牌名。 */
 object Minimal {
-    val light = AioaColors(
-        background = Color(0xFFFFFFFF),
-        surface = Color(0xFFF4F4F4),
-        surfaceAlt = Color(0xFFEAEAEA),
-        border = Color(0xFFE5E5E5),
-        text = Color(0xFF0D0D0D),
-        textSecondary = Color(0xFF6B6B6B),
-        accent = Color(0xFF0D0D0D),
-        onAccent = Color(0xFFFFFFFF),
-        success = Color(0xFF1A9F4B),
-        warning = Color(0xFFE08600),
-        danger = Color(0xFFD93025),
-        sidebar = Color(0xFFF9F9F9),
-        popover = Color(0xFFFFFFFF),
-    )
-    // 深色取 ChatGPT App 实测色 (2026): 纯黑底, 控件 #212121 + 细描边
-    val dark = AioaColors(
-        background = Color(0xFF000000),
-        surface = Color(0xFF212121),
-        surfaceAlt = Color(0xFF2B2B2B),
-        border = Color(0xFF373737),
-        text = Color(0xFFFFFFFF),
-        textSecondary = Color(0xFFAFAFAF),
-        accent = Color(0xFFFFFFFF),
-        onAccent = Color(0xFF000000),
-        success = Color(0xFF34C759),
-        warning = Color(0xFFFF9F0A),
-        danger = Color(0xFFFF453A),
-        sidebar = Color(0xFF0D0D0D),
-        popover = Color(0xFF212121),
-    )
+    val light = HxUi.light.toAioa()
+    // 深色内容是纯黑, 黑遮罩压不出层次, 取 ChatGPT 的灰 (#616161)
+    val dark = HxUi.dark.toAioa().copy(scrim = Color(0xFF616161))
 }
+
+fun HxPalette.toAioa() = AioaColors(
+    background = background,
+    surface = muted,
+    surfaceAlt = accent,
+    border = border,
+    text = foreground,
+    textSecondary = mutedForeground,
+    accent = primary,
+    onAccent = primaryForeground,
+    success = success,
+    warning = warning,
+    danger = destructive,
+    sidebar = sidebar,
+    popover = popover,
+)
 
 /** 由外观设置算出最终令牌。 */
 fun tokensOf(a: Appearance): AioaTokens {

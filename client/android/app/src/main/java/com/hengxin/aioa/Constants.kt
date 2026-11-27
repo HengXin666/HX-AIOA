@@ -126,6 +126,9 @@ object Constants {
     // 插件数据 pdata 与待办插件 (#101): 待办存在 hengxin666.todo 的 items 集合, 与 protocol/src/v1/plugin-todo.ts 一致
     const val PDATA_API = "api/v1/pdata"
     const val TODO_PLUGIN = "hengxin666.todo"
+    // 两种 Agent (#121): 群里接入的叫 "群 Agent"; 电脑上交互式的 CLI (Codex, Claude Code) 叫 "agent harness"
+    const val CLOUD_AGENT = "群 Agent"
+    const val HARNESS = "agent harness"
     const val TODO_COLL = "items"
     // 群邀请链接: hxaioa://join?server=..&code=.., 与服务端 APP_SCHEME 一致
     const val APP_SCHEME = "hxaioa"
@@ -143,6 +146,7 @@ object Constants {
     const val GITHUB_TRACKED_PATH = "api/v1/github/tracked"
     const val GITHUB_ACTIVITY_PATH = "api/v1/github/activity"
     const val GITHUB_DAILY_PATH = "api/v1/github/daily"
+    const val GITHUB_HEATMAP_PATH = "api/v1/github/heatmap"
     const val GITHUB_BRANCHES_PATH = "api/v1/github/branches"
     const val AUTH_LOGIN_PATH = "api/v1/auth/login"
     const val AUTH_REFRESH_PATH = "api/v1/auth/refresh"
@@ -156,6 +160,14 @@ object Constants {
     const val SETTINGS_PATH = "api/v1/settings"
     // 消息分组 (群放进组) 存在账号设置里, 多端同步
     const val SETTING_CHAT_FOLDERS = "chatFolders"
+    // 标签 (#135): { 标签: [channel] }, 同样存账号设置
+    const val SETTING_CHAT_TAGS = "chatTags"
+    // 单聊 (#133) 与合并转发详情批量取 (#132)
+    const val DMS_PATH = "api/v1/dms"
+    const val EVENTS_SEQ_PATH = "api/v1/events/seq"
+    const val BUNDLE_MAX = 100
+    // 自己的消息 2 分钟内可撤回, 管理员随时 (对齐 QQ)
+    const val RECALL_WINDOW_MS = 2 * 60_000L
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"

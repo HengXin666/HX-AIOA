@@ -21,6 +21,7 @@ import com.hengxin.aioa.proto.Envelope
 import com.hengxin.aioa.proto.Frames
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.proto.shouldNotify
+import com.hengxin.aioa.proto.Mentions
 import com.hengxin.aioa.proto.toMsg
 import java.io.FileDescriptor
 import java.io.PrintWriter
@@ -110,7 +111,7 @@ class LinkService : Service(), LinkSocket.Listener {
                 Me.set(this, frame.uid, frame.name)
                 if (frame.resync && frame.floor > 0) db.dropBefore(frame.floor)
             }
-            is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !MutedGroups.contains(this, frame.groupKey())) notifier.message(frame)
+            is ServerFrame.Msg -> if (store(frame) && !AioaApp.uiForeground(application) && !quiet(frame)) notifier.message(frame)
             is ServerFrame.Ev -> if (frame.ev.kind != Constants.KIND_METRIC) onEvent(frame.ev)
             is ServerFrame.Task -> notifier.task(frame.task)
             else -> Unit
@@ -127,9 +128,12 @@ class LinkService : Service(), LinkSocket.Listener {
             return notifier.retract(ev, msg)
         }
         if (!store(msg) || ev.seq <= replayHead) return
-        val muted = MutedGroups.contains(this, msg.groupKey())
-        notifier.event(ev, msg, loud = ev.shouldNotify() && !muted && !AioaApp.uiForeground(application))
+        notifier.event(ev, msg, loud = ev.shouldNotify() && !quiet(msg) && !AioaApp.uiForeground(application))
     }
+
+    // 免打扰的群不响, 但 @ 到我或 @全体 的照样提醒 (#131)
+    private fun quiet(msg: ServerFrame.Msg): Boolean =
+        MutedGroups.contains(this, msg.groupKey()) && !Mentions.hits(msg.mentions, Me.uid)
 
     // 入库并确认; 返回是否是别处发来的新消息
     private fun store(msg: ServerFrame.Msg): Boolean {

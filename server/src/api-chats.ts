@@ -1,6 +1,4 @@
 import {
-  parseFeedTags,
-  DIGEST_KINDS,
   MAX_AGENT_READS,
   MAX_AVATAR_BYTES,
   MAX_CHAT_AGENTS,
@@ -8,7 +6,6 @@ import {
   MAX_TITLE_LENGTH,
   PATH_AVATAR,
   PATH_AVATARS,
-  PATH_CHAT,
   PATH_CHAT_AGENT,
   PATH_AGENT_GUIDE,
   PATH_AGENT_GUIDE_ACK,
@@ -17,7 +14,6 @@ import {
   PATH_CHAT_AGENT_ROTATE,
   PATH_CHAT_AGENTS,
   PATH_CHAT_MESSAGES,
-  PATH_CHATS,
   PATH_EVENT_BY_SEQ,
   PATH_FAVORITE,
   PATH_FAVORITES,
@@ -25,13 +21,13 @@ import {
   QUERY_SLIM,
   QUERY_LIMIT,
   QUERY_SINCE,
+  dmPeers,
   globMatch,
   type AgentJob,
   MAX_AGENT_TASK,
   type ChatAgent,
   type ChatCleared,
   type ChatMeta,
-  type ChatPatch,
   type Envelope,
   type ChatSyncFrame,
   type OnboardResult,
@@ -39,19 +35,18 @@ import {
 } from "@hx-aioa/protocol";
 import { agentSetup } from "./agent-prompt";
 import { acked, guideFor } from "./agent-sync";
-import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
+import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_DM, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
 import { type Core, OWNER, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
-import { memberView, ownerView, roleIn } from "./room-access";
+import { roleIn } from "./room-access";
 import { autoUpgrade } from "./plugins/update";
 import { notePoll, touchAgent } from "./api-presence";
-import { ApiFail, clampInt, fail, json, readJson } from "./http";
+import { ApiFail, clampInt, etagged, fail, json, readJson } from "./http";
+import { syncChat } from "./chat-sync";
 
 const AGENT_SCOPES: Scope[] = ["messages:send", "events:write"];
 const READ_SCOPE: Scope = "events:read";
 const AVATAR_ID_HEX = 24;
 const IMMUTABLE = "public, max-age=31536000, immutable";
-const HEADER_ETAG = "ETag";
-const HEADER_IF_NONE_MATCH = "If-None-Match";
 const IMAGE_PREFIX = "image/";
 
 const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
@@ -61,103 +56,15 @@ const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-function sync(core: Core, topic: ChatSyncFrame["topic"], channel?: string): void {
-  const frame = { t: "chat_sync", topic, ...(channel ? { channel } : {}) } satisfies ChatSyncFrame;
-  // 群资料子号也要知道, 收藏只是主人的
-  if (topic === "chats") core.sockets.toAllClients(frame);
-  else core.sockets.toV1Clients(frame);
-}
-
-// 资料带弱 ETag, 没变时 304, 客户端缓存直接用
-function cached(req: Request, tag: string, body: unknown): Response {
-  const etag = `W/"${tag}"`;
-  if (req.headers.get(HEADER_IF_NONE_MATCH) === etag) return new Response(null, { status: 304, headers: { [HEADER_ETAG]: etag } });
-  const res = json(body);
-  res.headers.set(HEADER_ETAG, etag);
-  return res;
+// 收藏只是主人的
+function syncFavorites(core: Core): void {
+  core.sockets.toV1Clients({ t: "chat_sync", topic: "favorites" } satisfies ChatSyncFrame);
 }
 
 export function canRead(core: Core, who: Principal, channel: string): boolean {
   if (who.owner) return true;
   if (who.member) return roleIn(core, who, channel) !== null;
   return who.key.scopes.includes(READ_SCOPE) && who.key.channels.some((p) => globMatch(p, channel));
-}
-
-function visibleChats(c: ReqCtx): ChatMeta[] {
-  if (c.who.owner) return c.core.chats.chats().map((m) => ownerView(c.core, m));
-  const member = c.who.member;
-  if (member) return c.core.rooms.roomsOf(member.user.id).flatMap((m) => memberView(c.core, m.grp, member.user.id) ?? []);
-  return c.core.chats.chats().filter((m) => canRead(c.core, c.who, m.channel)).map(({ agents: _a, ...rest }) => rest);
-}
-
-function listChats(c: ReqCtx): Response {
-  if (!c.who.owner && !c.who.member && !c.who.key.scopes.includes(READ_SCOPE)) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  const visible = visibleChats(c);
-  const tag = `${visible.length}-${Math.max(0, ...visible.map((m) => m.updated))}`;
-  return cached(c.req, tag, { chats: visible });
-}
-
-function parsePatch(raw: unknown): ChatPatch | string {
-  if (!isObj(raw)) return "资料必须是对象";
-  const out: ChatPatch = {};
-  if ("title" in raw) {
-    if (raw.title !== null && !(typeof raw.title === "string" && raw.title.length <= MAX_TITLE_LENGTH)) return "title 过长";
-    out.title = (raw.title as string | null) ?? "";
-  }
-  if ("avatar" in raw) {
-    if (raw.avatar !== null && typeof raw.avatar !== "string") return "avatar 必须是头像 id";
-    out.avatar = (raw.avatar as string | null) ?? "";
-  }
-  for (const k of ["pinned", "muted", "hideListening", "hideTyping"] as const) if (k in raw) out[k] = raw[k] === true;
-  if ("read" in raw) {
-    if (typeof raw.read !== "number") return "read 必须是 seq";
-    out.read = raw.read;
-  }
-  if ("view" in raw) {
-    // 邮件视图只由服务端设置, 主人只能在聊天与信息流之间切
-    if (raw.view !== "chat" && raw.view !== "feed") return "view 只能是 chat 或 feed";
-    out.view = raw.view;
-  }
-  if ("feedTags" in raw) {
-    // null 表示恢复默认四类
-    const t = raw.feedTags === null ? null : parseFeedTags(raw.feedTags);
-    if (typeof t === "string") return t;
-    (out as Record<string, unknown>).feedTags = t;
-  }
-  if ("digest" in raw) {
-    if (raw.digest !== null && !(DIGEST_KINDS as readonly unknown[]).includes(raw.digest)) return "digest 只能是 daily 或 weekly";
-    // null 表示取消, 由 patchChat 删除该字段
-    (out as Record<string, unknown>).digest = raw.digest;
-  }
-  return out;
-}
-
-async function patchChat(c: ReqCtx): Promise<Response> {
-  const channel = param(c, 0);
-  if (!channel || channel.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
-  const p = parsePatch(await readJson(c.req));
-  if (typeof p === "string") return fail(400, p);
-  const role = roleIn(c.core, c.who, channel);
-  if (!role) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
-  // 子号: 置顶, 免打扰, 已读是自己的; 管理员还能改标题, 头像和监听/输入提示开关
-  if (role !== "owner") {
-    const uid = c.who.owner ? "" : (c.who.member?.user.id ?? "");
-    const { pinned, muted, read, title, avatar, hideListening, hideTyping } = p;
-    c.core.rooms.patchPrefs(channel, uid, { ...(pinned !== undefined ? { pinned } : {}), ...(muted !== undefined ? { muted } : {}), ...(read !== undefined ? { read } : {}) });
-    const shared = { title, avatar, hideListening, hideTyping };
-    const picked = Object.fromEntries(Object.entries(shared).filter(([, v]) => v !== undefined));
-    if (role === "admin" && Object.keys(picked).length) {
-      c.core.chats.patchChat(channel, picked);
-      sync(c.core, "chats", channel);
-    }
-    return json({ chat: memberView(c.core, channel, uid) });
-  }
-  if (p.view && c.core.chats.chat(channel)?.view === "mail") return fail(400, "邮件群不能切换展示方式");
-  // 改标签表时 rev 加一, Agent 的专属指令跟着变, 会收到更新通知
-  const rev = "feedTags" in p ? { feedRev: (c.core.chats.chat(channel)?.feedRev ?? 0) + 1 } : {};
-  const meta = c.core.chats.patchChat(channel, { ...p, ...rev } as ChatPatch);
-  sync(c.core, "chats", channel);
-  return json({ chat: meta });
 }
 
 // 去掉 HTML 卡片, 只留长度, 其余原样
@@ -197,7 +104,7 @@ async function clearChat(c: ReqCtx): Promise<Response> {
   const meta = c.core.chats.patchChat(channel, {});
   const cleared = Math.max(meta.cleared ?? 0, before - 1);
   c.core.chats.replaceChat({ ...meta, cleared });
-  sync(c.core, "chats", channel);
+  syncChat(c.core, channel);
   return json({ deleted, cleared } satisfies ChatCleared);
 }
 
@@ -232,7 +139,8 @@ export function saveAgents(core: Core, channel: string, agents: ChatAgent[]): Ch
   const meta = core.chats.patchChat(channel, {});
   const next = { ...meta, agents };
   core.chats.replaceChat(next);
-  sync(core, "chats", channel);
+  // Agent 只在主人视图里, 子号不必知道
+  syncChat(core, channel, { ownerOnly: true });
   return next;
 }
 
@@ -269,6 +177,7 @@ export function dropAgent(core: Core, channel: string, keyId: string): void {
 
 async function addAgent(c: ReqCtx): Promise<Response> {
   const channel = param(c, 0);
+  if (dmPeers(channel)) return fail(400, `${ERR_DM}接入 Agent`);
   const p = parseAgent(await readJson(c.req), false);
   if (typeof p === "string") return fail(400, p);
   if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
@@ -344,11 +253,8 @@ function agentPromptOf(c: ReqCtx): Response {
 
 // 按 key 找到它所在的群和 Agent 资料
 export function agentByKey(c: ReqCtx): { channel: string; meta: ChatMeta; agent: ChatAgent } {
-  const keyId = c.who.owner ? null : c.who.key.id;
-  for (const meta of keyId ? c.core.chats.chats() : []) {
-    const agent = meta.agents?.find((a) => a.keyId === keyId);
-    if (agent) return { channel: meta.channel, meta, agent };
-  }
+  const hit = c.who.owner ? null : c.core.chats.byKey(c.who.key.id);
+  if (hit) return { channel: hit.meta.channel, meta: hit.meta, agent: hit.agent };
   throw new ApiFail(403, CODE_FORBIDDEN, "这把密钥不是群里接入的 Agent");
 }
 
@@ -380,17 +286,19 @@ function putFavorite(c: ReqCtx): Response {
   const ev = c.core.store.bySeq(seqParam(c));
   if (!ev) return notFound();
   const fav = c.core.chats.addFavorite(ev);
-  sync(c.core, "favorites");
+  syncFavorites(c.core);
   return json({ favorite: fav });
 }
 
 function deleteFavorite(c: ReqCtx): Response {
   const ok = c.core.chats.removeFavorite(seqParam(c));
-  if (ok) sync(c.core, "favorites");
+  if (ok) syncFavorites(c.core);
   return json({ ok });
 }
 
+// 主人与子号都能传 (子号设自己的头像); 按内容哈希存, 重复上传不多写
 async function putAvatar(c: ReqCtx): Promise<Response> {
+  if (!c.who.owner && !c.who.member) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
   const mime = (c.req.headers.get("Content-Type") ?? "").split(";")[0]?.trim() ?? "";
   if (!mime.startsWith(IMAGE_PREFIX)) return fail(400, "头像必须是图片");
   const data = await c.req.arrayBuffer();
@@ -408,8 +316,6 @@ function getAvatar(c: ReqCtx): Response {
 }
 
 export const CHAT_ROUTES: Route[] = [
-  route(GET, PATH_CHATS, ROOM, listChats),
-  route(PATCH, PATH_CHAT, ROOM, patchChat),
   route(GET, PATH_CHAT_MESSAGES, ROOM, chatMessages),
   route(DELETE, PATH_CHAT_MESSAGES, OWNER, clearChat),
   route(POST, PATH_CHAT_AGENTS, OWNER, addAgent),
@@ -420,11 +326,11 @@ export const CHAT_ROUTES: Route[] = [
   route(GET, PATH_AGENT_GUIDE, SEND_SCOPE, agentGuideOf),
   route(POST, PATH_AGENT_GUIDE_ACK, SEND_SCOPE, agentAck),
   route(GET, PATH_FAVORITES, OWNER, (c) =>
-    cached(c.req, c.core.chats.favoritesTag(c.core.store.head()), { favorites: c.core.chats.favorites((id, seq) => c.core.store.get(id) ?? c.core.store.bySeq(seq)) }),
+    etagged(c.req, c.core.chats.favoritesTag(c.core.store.head()), () => ({ favorites: c.core.chats.favorites((id, seq) => c.core.store.get(id) ?? c.core.store.bySeq(seq)) })),
   ),
   route(PUT, PATH_FAVORITE, OWNER, putFavorite),
   route(DELETE, PATH_FAVORITE, OWNER, deleteFavorite),
-  route(PUT, PATH_AVATARS, OWNER, putAvatar),
+  route(PUT, PATH_AVATARS, ROOM, putAvatar),
   route(GET, PATH_AVATAR, ROOM, getAvatar),
   route(GET, PATH_EVENT_BY_SEQ, OWNER, (c) => {
     const ev = c.core.store.bySeq(seqParam(c));

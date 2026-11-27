@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -27,13 +26,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.net.ApiCache
+import com.hengxin.aioa.kit.HomeSection
+import com.hengxin.aioa.ui.OneRow
+import com.hengxin.aioa.ui.RowAction
 import com.hengxin.aioa.ui.SubPage
 import com.hengxin.aioa.ui.ago
 import kotlinx.coroutines.Dispatchers
@@ -59,15 +60,13 @@ private const val PATH = "api/v1/integrations"
 private const val CACHE = "integrations"
 private const val KIND_PUSH = "push"
 private const val KIND_INTERACTIVE = "interactive"
+private const val REVOKE = "作废"
 private const val SOURCE_AGENT = "agent"
 private const val DELETE = "DELETE"
-private val CARD = RoundedCornerShape(14.dp)
-private val DOT = 8.dp
-private val ONLINE = Color(0xFF34C759)
 
 private val SECTIONS = listOf(
-    KIND_PUSH to ("消息源" to "单向推送: 定时任务, 群里接入的 Agent, webhook。它们只往群里发消息。"),
-    KIND_INTERACTIVE to ("交互 Agent" to "Codex 这类: 干完活推给你, 你还能在任务卡上回复, 批准或叫停。"),
+    KIND_PUSH to ("消息源" to "单向推送: 定时任务, 群 Agent, webhook。它们只往群里发消息。"),
+    KIND_INTERACTIVE to (Constants.HARNESS to "电脑上的交互式 CLI (Codex, Claude Code): 干完活推给你, 你还能在任务卡上回复, 批准或叫停。"),
 )
 
 private fun strings(a: JSONArray?) = (0 until (a?.length() ?: 0)).mapNotNull { a?.optString(it)?.ifEmpty { null } }
@@ -142,7 +141,7 @@ fun IntegrationsPage(onBack: () -> Unit) {
                         error = withContext(Dispatchers.IO) { revoke(context, item) }
                         refresh()
                     }
-                }) { Text("作废", color = MaterialTheme.colorScheme.error) }
+                }) { Text(REVOKE, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton({ confirm = null }) { Text("取消") } },
         )
@@ -151,31 +150,24 @@ fun IntegrationsPage(onBack: () -> Unit) {
 
 @Composable
 private fun Section(title: String, hint: String, items: List<Integration>, onRevoke: (Integration) -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.6f), CARD).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("$title · ${items.size}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(hint, fontSize = 12.sp, color = c.outline)
-        if (items.isEmpty()) Text("还没有", fontSize = 13.sp, color = c.outline)
-        items.forEach { IntegrationRow(it, onRevoke) }
+    val k = Aioa.colors
+    HomeSection(title, items.size) {
+        com.hengxin.aioa.kit.Text(hint, k.textSecondary, 12, Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp), maxLines = 3)
+        if (items.isEmpty()) com.hengxin.aioa.kit.Text("还没有", k.textSecondary, 13, Modifier.padding(14.dp))
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) { items.forEach { IntegrationRow(it, onRevoke) } }
     }
 }
 
+/** 一行一条 (#138): 状态点 / 图标, 名字, 所在群与活跃时间压到右边, 最右作废。 */
 @Composable
 private fun IntegrationRow(it: Integration, onRevoke: (Integration) -> Unit) {
-    val c = MaterialTheme.colorScheme
+    val k = Aioa.colors
     val online = it.agents.any { a -> a.second }
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (it.kind == KIND_INTERACTIVE) Box(Modifier.size(DOT).background(if (online) ONLINE else c.outline, CircleShape))
-                Text(it.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(it.prefix, fontSize = 11.sp, color = c.outline)
-            }
-            val where = listOfNotNull(it.group?.let { g -> "群 $g" }, it.reads.takeIf { r -> r.isNotEmpty() }?.let { r -> "可读 ${r.joinToString(", ")}" })
-            if (where.isNotEmpty()) Text(where.joinToString(" · "), fontSize = 12.sp, color = c.outline)
-            if (it.agents.isNotEmpty()) Text("注册: " + it.agents.joinToString(", ") { a -> a.first + if (a.second) " (在线)" else "" }, fontSize = 12.sp, color = c.outline)
-            Text(if (it.lastActive > 0) "最近活跃 ${ago(it.lastActive)}" else "还没动静", fontSize = 12.sp, color = c.outline)
-        }
-        TextButton({ onRevoke(it) }) { Text("作废", color = c.error) }
-    }
+    val meta = listOfNotNull(
+        it.group?.let { g -> "群 $g" },
+        it.reads.takeIf { r -> r.isNotEmpty() }?.let { r -> "可读 ${r.size}" },
+        if (it.lastActive > 0) ago(it.lastActive) else "还没动静",
+    ).joinToString(" · ")
+    val icon = if (it.kind == KIND_INTERACTIVE) "bot" else "plug"
+    OneRow(icon, it.name, meta, if (it.kind == KIND_INTERACTIVE && online) k.success else k.textSecondary) { RowAction(REVOKE, danger = true) { onRevoke(it) } }
 }

@@ -1,4 +1,5 @@
-import type { AgentMemory, ChatMeta, ChatPatch, Envelope, Favorite, SenderMeta } from "@hx-aioa/protocol";
+import type { AgentMemory, ChatAgent, ChatMeta, ChatPatch, Envelope, Favorite } from "@hx-aioa/protocol";
+import { ChatReads } from "./chat-read";
 
 type MetaRow = { channel: string; body: string };
 type FavRow = { seq: number; saved: number; body: string };
@@ -19,28 +20,25 @@ function stubEnvelope(s: FavStub, seq: number): Envelope {
   return (s.channel ? { ...ev, channel: s.channel } : ev) as Envelope;
 }
 
+type KeyHit = { meta: ChatMeta; agent: ChatAgent };
+
 // 群资料, 收藏 (存引用 + 一句摘要), 头像 (按内容哈希存, 永不变)
 export class ChatStore {
+  readonly reads: ChatReads;
+  // Agent 最近活跃 (#129): 只在内存, 合进主人视图, 最多每 30 分钟落库一次
+  readonly active = new Map<string, number>();
+  // keyId -> 群, 第一次按 key 找 Agent 时建, 之后随写入增量更新
+  private keys: Map<string, string> | null = null;
+  // 群资料版本 (每行写入时取最大 rev + 1), GET /chats 的 ETag 用它; 不建索引 (索引会让每次写入多算一行), 每次唤醒扫一次
+  private revCache: number | null = null;
+
   constructor(private readonly sql: SqlStorage) {
     sql.exec("CREATE TABLE IF NOT EXISTS chat_meta (channel TEXT PRIMARY KEY, body TEXT NOT NULL)");
+    if (!sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('chat_meta')").toArray().some((c) => c.name === "rev")) sql.exec("ALTER TABLE chat_meta ADD COLUMN rev INTEGER NOT NULL DEFAULT 0");
+    this.reads = new ChatReads(sql);
     sql.exec("CREATE TABLE IF NOT EXISTS fav (seq INTEGER PRIMARY KEY, saved INTEGER NOT NULL, body TEXT NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS avatar (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created INTEGER NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS agent_memory (who TEXT PRIMARY KEY, text TEXT NOT NULL, updated INTEGER NOT NULL)");
-    sql.exec("CREATE TABLE IF NOT EXISTS sender_meta (sid TEXT PRIMARY KEY, avatar TEXT NOT NULL, updated INTEGER NOT NULL)");
-  }
-
-  /** 设过头像的发送者 (#123)。 */
-  senders(): SenderMeta[] {
-    return this.sql.exec<SenderMeta>("SELECT sid, avatar, updated FROM sender_meta ORDER BY sid").toArray().map((r) => ({ ...r }));
-  }
-
-  /** 设或清 (null) 某个发送者的头像; 返回是否有变化。 */
-  setSender(sid: string, avatar: string | null, now = Date.now()): boolean {
-    const cur = this.sql.exec<{ avatar: string }>("SELECT avatar FROM sender_meta WHERE sid = ?", sid).toArray()[0];
-    if ((cur?.avatar ?? null) === avatar) return false;
-    if (avatar === null) this.sql.exec("DELETE FROM sender_meta WHERE sid = ?", sid);
-    else this.sql.exec("INSERT OR REPLACE INTO sender_meta (sid, avatar, updated) VALUES (?, ?, ?)", sid, avatar, now);
-    return true;
   }
 
   /** Agent 的长期记忆, who 为来源 id (换 key 不丢)。 */
@@ -64,6 +62,38 @@ export class ChatStore {
     return r ? (JSON.parse(r.body) as ChatMeta) : null;
   }
 
+  /** 群资料版本: 任何一行写入都 +1, 存在行里, 休眠唤醒后照样对。 */
+  rev(): number {
+    this.revCache ??= this.sql.exec<{ r: number | null }>("SELECT MAX(rev) AS r FROM chat_meta").one().r ?? 0;
+    return this.revCache;
+  }
+
+  /** 单个群的资料版本 (成员列表的 ETag 用), 没有资料行为 0。 */
+  revOf(channel: string): number {
+    return this.sql.exec<{ rev: number }>("SELECT rev FROM chat_meta WHERE channel = ?", channel).toArray()[0]?.rev ?? 0;
+  }
+
+  /** 按 key 找它所在的群与 Agent 资料, 不再每次扫全表。 */
+  byKey(keyId: string): KeyHit | null {
+    if (!this.keys) {
+      this.keys = new Map();
+      for (const m of this.chats()) for (const a of m.agents ?? []) this.keys.set(a.keyId, m.channel);
+    }
+    const ch = this.keys.get(keyId);
+    const meta = ch ? this.chat(ch) : null;
+    const agent = meta?.agents?.find((a) => a.keyId === keyId);
+    return meta && agent ? { meta, agent } : null;
+  }
+
+  private write(meta: ChatMeta): void {
+    const rev = this.rev() + 1;
+    this.sql.exec("INSERT OR REPLACE INTO chat_meta (channel, body, rev) VALUES (?, ?, ?)", meta.channel, JSON.stringify(meta), rev);
+    this.revCache = rev;
+    if (!this.keys) return;
+    for (const [k, ch] of this.keys) if (ch === meta.channel) this.keys.delete(k);
+    for (const a of meta.agents ?? []) this.keys.set(a.keyId, meta.channel);
+  }
+
   // 已读位置只前进, 多端同时上报时不会倒退
   patchChat(channel: string, patch: ChatPatch, now = Date.now()): ChatMeta {
     const cur = this.chat(channel) ?? { channel, updated: now };
@@ -75,12 +105,12 @@ export class ChatStore {
       if (v === null || v === "" || v === false) delete (next as Record<string, unknown>)[k];
       else (next as Record<string, unknown>)[k] = v;
     }
-    this.sql.exec("INSERT OR REPLACE INTO chat_meta (channel, body) VALUES (?, ?)", channel, JSON.stringify(next));
+    this.write(next);
     return next;
   }
 
   replaceChat(meta: ChatMeta): void {
-    this.sql.exec("INSERT OR REPLACE INTO chat_meta (channel, body) VALUES (?, ?)", meta.channel, JSON.stringify(meta));
+    this.write(meta);
   }
 
   /**

@@ -39,6 +39,24 @@ export function me(a: Accounts, w: AcctWho): Response {
   return json({ user, groups, devices: a.dir.sessions(user.id, w.session) } satisfies Me);
 }
 
+const AVATAR_ID = /^[0-9a-f]{8,64}$/;
+
+/** PATCH /me: 改自己的昵称与头像 (头像先 PUT /avatars 拿 id); 没变就不写。 */
+export function patchMe(a: Accounts, w: AcctWho, b: Body): Response {
+  const user = needUser(w);
+  const next: UserPublic = { ...user };
+  if (typeof b.display === "string" && b.display.trim()) next.display = b.display.trim().slice(0, DISPLAY_MAX);
+  if ("avatar" in b) {
+    if (b.avatar === null || b.avatar === "") delete next.avatar;
+    else if (typeof b.avatar === "string" && AVATAR_ID.test(b.avatar)) next.avatar = b.avatar;
+    else throw new ApiFail(400, "bad_request", "avatar 必须是头像 id");
+  }
+  if (next.display === user.display && next.avatar === user.avatar) return json({ user });
+  a.dir.saveUser(next);
+  a.onProfile?.(user.id);
+  return json({ user: next });
+}
+
 export async function logout(a: Accounts, w: AcctWho): Promise<Response> {
   const user = needUser(w);
   if (w.session && a.dir.deleteSession(w.session)) await a.kick(user, [w.session]);

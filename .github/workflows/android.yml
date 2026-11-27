@@ -50,6 +50,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      # 组件库令牌来自锁定版本的 HX-UI (design/hx-ui.lock.json), 生成物必须是最新的
+      - name: 核对 HX-UI 令牌
+        run: node tools/hx-ui-gen.mjs --check
+
       - name: 下载代理内核
         run: |
           dir=client/android/app/src/main/jniLibs/arm64-v8a

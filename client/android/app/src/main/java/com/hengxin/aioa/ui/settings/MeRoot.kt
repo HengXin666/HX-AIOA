@@ -76,7 +76,7 @@ fun batteryWhitelisted(context: Context) =
 
 /** "我的" 根页: 顶部账号卡 + 分组列表; selected 用于平板两栏时高亮右侧正在看的项。 */
 @Composable
-fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> Unit, openWorkspace: () -> Unit) {
+fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> Unit, openWorkspace: () -> Unit, onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     val tick = rememberResumeTick()
     val config = remember(tick, summary.online) { ConfigStore.load(context) }
@@ -85,7 +85,8 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
     val battery = remember(tick) { batteryWhitelisted(context) }
     val version = remember { appVersion(context) }
     val host = serverHost(config?.server.orEmpty())
-    SettingsPageFrame(SettingsPage.ROOT.title, null) {
+    // 新外壳里 "我的" 没有顶栏与标签, 根页自己带返回钮 (#139)
+    SettingsPageFrame(SettingsPage.ROOT.title, onBack) {
         val who = account?.let { it.display.ifEmpty { it.name } }
         AccountCard(who, host, summary.online, selected == SettingsPage.ACCOUNT) { open(SettingsPage.ACCOUNT) }
         // 分组按 "多常用" 排: 常用 → 数据 → 存储 → 连接 → 管理 (只有主人 / 管理员) → 系统; 账号由顶部卡片进入
@@ -117,6 +118,10 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
                 PageRow(SettingsPage.MEMBERS, "", selected, open)
                 RowDivider()
                 PageRow(SettingsPage.CF_USAGE, "", selected, open)
+                if (account.role == ROLE_OWNER) {
+                    RowDivider()
+                    PageRow(SettingsPage.SENDERS, "", selected, open)
+                }
             }
         }
         SettingsGroup("系统") {

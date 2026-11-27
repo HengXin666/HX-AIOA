@@ -1,5 +1,6 @@
 import type { GithubSyncResult } from "@hx-aioa/protocol";
 import { cfUsage } from "./api-cf";
+import { flushActive } from "./api-presence";
 import { messageInput } from "./api-events";
 import type { Core } from "./core";
 import { ghOn } from "./gh/gate";
@@ -26,6 +27,11 @@ async function cfCheck(core: Core, storage: DurableObjectStorage): Promise<void>
   if (typeof input !== "string") await systemNotice(core, input, { id: "system:cf", name: CF_SOURCE, icon: "cloud" });
 }
 
+/** 每天的 cron: 启用了 GitHub 插件时把动态累计进提交热力图 (#134), 一行一次写。 */
+export async function heatmapDaily(core: Core): Promise<void> {
+  if (githubOn(core)) await core.github.refreshHeatmap(await core.config.tz());
+}
+
 const KEY_GH_NOTICE = "gh_expiry_notice";
 
 /** GitHub 授权到了本地记的到期时间又不能自动续时, 实际探一次; GitHub 真拒绝了才提醒主人 (每个到期时间一条)。 */
@@ -47,11 +53,12 @@ async function ghExpiryCheck(core: Core, storage: DurableObjectStorage): Promise
 }
 
 /**
- * cron 每 30 分钟一次 RPC 做完三件事: CF 额度检查, 待办关联 issue 同步, GitHub 回填。
+ * cron 每 30 分钟一次 RPC 做完: Agent 活跃落库, CF 额度检查, 待办关联 issue 同步, GitHub 回填。
  * 各项按配置与插件启用状态 (内核内存) 跳过, 不多一次 DO 请求。
  */
 export async function halfHourly(core: Core, storage: DurableObjectStorage): Promise<GithubSyncResult | null> {
   const env = core.env;
+  flushActive(core);
   const cf = env.CF_API_TOKEN && env.CF_ACCOUNT_ID ? cfCheck(core, storage).catch((e) => console.error("CF 额度检查失败:", e)) : null;
   const todos = ghOn(core) ? syncTodoIssues(core).catch((e) => console.error(SYNC_FAIL, e)) : null;
   const github = githubOn(core) && env.GITHUB_TOKEN ? core.github.sync().catch((e) => (console.error("GitHub 回填失败:", e), null)) : null;

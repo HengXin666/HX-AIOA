@@ -32,7 +32,7 @@ function setup(agent: Partial<ChatAgent> = {}) {
     plugins,
     kernel: { get: () => undefined },
     market: { sources: () => [] },
-    sockets: { toAllClients() {}, toV1Clients() {}, chatSockets: () => [] },
+    sockets: { toAllClients() {}, toV1Clients() {}, toEach() {}, chatSockets: () => [] },
     presence: { polled() {}, sent() {} },
     registry: { key: () => null, source: () => null },
     pipeline: { fromInput: async (input: { data: { title?: string; summary?: string; text?: string } }) => void notices.push(JSON.stringify(input.data)) },
@@ -202,4 +202,17 @@ test("插件更新: skill 大号变了才让它的 Agent setup + 1", () => {
   assert.equal(a.me().setup, 2);
   bumpSetup(a.core, "other.plugin", "1.0", "2.0");
   assert.equal(a.me().setup, 2);
+});
+
+test("next: @ 了本 Agent 或全体的条目带 mentioned (#131)", async () => {
+  const a = setup({ handled: 0 });
+  const put = (id: string, mentions?: string[]) =>
+    a.core.store.put({ id, seq: 0, ts: 2000, kind: "event", source: HUMAN, channel: CH, priority: "happening", data: { title: id }, ...(mentions ? { mentions } : {}) } as unknown as Envelope).seq;
+  put("plain");
+  put("me", [`agent:${KEY}`]);
+  put("all", ["all"]);
+  put("other", ["agent:k9", "u_x"]);
+  const r = await call(a.core, a.who, "GET", "/api/v1/chat-agent/next");
+  const flags = (r.body.pending as (Envelope & { mentioned?: boolean })[]).map((e) => [e.id, e.mentioned ?? false]);
+  assert.deepEqual(flags, [["plain", false], ["me", true], ["all", true], ["other", false]]);
 });

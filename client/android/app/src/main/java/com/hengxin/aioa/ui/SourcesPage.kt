@@ -97,18 +97,9 @@ private fun SourceList(state: SourcesState, onBack: () -> Unit) {
 
 @Composable
 private fun SourceRow(s: SourceItem, kind: SourceType?, open: () -> Unit) {
-    val c = Aioa.colors
-    Row(
-        Modifier.fillMaxWidth().combinedClickable(onLongClick = open, onClick = open).padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(s.icon ?: kind?.icon ?: s.type, c.textSecondary)
-        Column(Modifier.weight(1f)) {
-            Text(s.name, c.text, 15)
-            s.subject?.let { Text(it, c.textSecondary, HINT_SP) }
-        }
-        Text(kind?.name ?: s.type, c.textSecondary, HINT_SP)
+    // 一行一条 (#138): 图标, 名字, subject 压到右边, 最右类型
+    OneRow(s.icon ?: kind?.icon ?: s.type, s.name, s.subject.orEmpty(), onLongClick = open, onClick = open) {
+        Text(kind?.name ?: s.type, Aioa.colors.textSecondary, HINT_SP)
     }
 }
 

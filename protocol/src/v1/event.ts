@@ -1,4 +1,5 @@
 import { feedText, parseFeed, type FeedData } from "./feed";
+import type { BundleInfo } from "./chat-ext";
 import type { FileRef } from "./files";
 import type { MailInfo } from "./mail";
 import {
@@ -43,6 +44,8 @@ export type EventData = {
   feed?: FeedData;
   // 邮件群里的信: 发件人, 收件账号, 厂商, 验证码; 只由服务端填写
   mail?: MailInfo;
+  // 合并转发卡片 (#132): 只由服务端填写
+  bundle?: BundleInfo;
 };
 export type ReportData = {
   title: string;
@@ -96,6 +99,8 @@ type Common = {
   deleted?: DeletedInfo;
   // 发送者的账号 id (人发的聊天消息); 客户端据此判断是不是自己发的
   by?: string;
+  // 被 @ 的: 账号 id, "agent:<keyId>", "all" (#131)
+  mentions?: string[];
 };
 export type MetricEnvelope = Common & { kind: "metric"; data: MetricData };
 export type EventEnvelope = Common & { kind: "event"; data: EventData };
@@ -119,6 +124,7 @@ export type EventInput = {
   // 只由服务端内部填写 (聊天发送), 外部写入不解析
   reply?: MsgRef;
   fwd?: FwdInfo;
+  mentions?: string[];
   data: MetricData | EventData | ReportData;
 };
 

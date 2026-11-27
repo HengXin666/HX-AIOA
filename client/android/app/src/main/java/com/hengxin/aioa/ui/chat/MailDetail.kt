@@ -186,7 +186,7 @@ private fun ActionBar(m: MailItem, s: MailState, forward: (Boolean) -> Unit, del
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Action(if (unread) "mail-open" else "mail", if (unread) "标为已读" else "标为未读") { s.seen.set(listOf(m), unread) }
             Action("send", "转进群") { forward(false) }
-            Action("bot", "交给 Agent") { forward(true) }
+            Action("bot", "交给群 Agent") { forward(true) }
             Action("trash-2", "删除", delete)
         }
     }

@@ -29,11 +29,7 @@ export function guideFor(core: Core, base: string, channel: string, agent: ChatA
 
 /** 这把 key 对应的群 Agent。 */
 export function agentOfKey(core: Core, keyId: string): { meta: ChatMeta; agent: ChatAgent } | null {
-  for (const meta of core.chats.chats()) {
-    const agent = meta.agents?.find((a) => a.keyId === keyId);
-    if (agent) return { meta, agent };
-  }
-  return null;
+  return core.chats.byKey(keyId);
 }
 
 /** UA 里认出 hxaioa 命令行及版本, 否则算直接调接口。 */

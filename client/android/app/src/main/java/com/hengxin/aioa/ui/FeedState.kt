@@ -70,7 +70,7 @@ class FeedState(private val send: (String) -> Boolean, private val save: (String
                 touch()
             }
             is ServerFrame.Agents -> agents = frame.agents
-            is ServerFrame.ActOk -> settle(frame.aid, if (frame.state == STATE_QUEUED) "Agent 离线, 已排队, 上线后送达" else null)
+            is ServerFrame.ActOk -> settle(frame.aid, if (frame.state == STATE_QUEUED) "${Constants.HARNESS} 离线, 已排队, 上线后送达" else null)
             is ServerFrame.Err -> {
                 val aid = frame.aid ?: return false
                 settle(aid, "操作失败: ${frame.text}")

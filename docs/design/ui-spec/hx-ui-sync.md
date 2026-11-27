@@ -1,6 +1,14 @@
 # 安卓端如何跟随 HX-UI (#121)
 
-## 现状 (2026-11-27 查)
+## 已落地 (2026-11-27)
+
+- HX-UI 2.3.0 (HengXin666/HX-UI#51): 构建时导出 `dist/tokens.json` 与 `dist/components.json`, 新增 `ink` 皮肤 (ChatGPT 式深色)。
+- 本仓库: `design/hx-ui.lock.json` 锁版本, 皮肤与两个文件的 sha256; `design/hx-ui/` 放该版本的两个文件; `tools/hx-ui-gen.mjs` 生成 `kit/HxUiTokens.kt` (HxPalette + 圆角 / 动效) 与 `kit/HxVariants.kt` (每个组件的变体枚举)。
+- `kit/Tokens.kt` 的默认主题由 `HxUi.light / dark` 映射, 不再手写色值; `kit/HxButton.kt` 与 HX-UI Button 同名同变体, `when` 穷尽, HX-UI 加变体会编译失败。
+- 安卓 CI 跑 `node tools/hx-ui-gen.mjs --check`: 文件哈希与锁不符或生成物过期即失败。
+- 升级: `node tools/hx-ui-gen.mjs --sync <版本>` (从 Release 取文件, 更新锁并生成) → 编译 → `./gradlew :gallery:homeShots -PdesktopOnly=true` 看截图 → 提交。
+
+## 调研时的现状 (2026-11-27)
 
 - 安卓 (Compose) 没有用到 HX-UI 的任何东西。令牌来自本仓库 `design/tokens.json`, 由 `tools/gen-tokens.mjs` 生成 `GeneratedTokens.kt` 和 `client/web/src/tokens.css`; 组件是 `client/android/ui` 里自己写的。
 - 网页端 `client/web` 也没装 `@hx/ui`, 只用了 `lucide-static`。

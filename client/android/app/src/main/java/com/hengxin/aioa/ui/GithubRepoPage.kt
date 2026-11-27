@@ -26,7 +26,7 @@ import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.StateBody
 import com.hengxin.aioa.kit.Text
 
-private enum class RepoTab(val label: String) { TIMELINE("动态"), BRANCHES("未合入"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
+private enum class RepoTab(val label: String) { TIMELINE("动态"), HISTORY("历史"), BRANCHES("未合入"), PRS(LABEL_PR), ISSUES(LABEL_ISSUE), CI(LABEL_CI) }
 
 /** 仓库详情: 分段看动态, PR, Issue, CI; 每条点开浏览器, 返回键回列表。 */
 @Composable
@@ -51,7 +51,8 @@ fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
                 RepoTab.entries.forEach { t -> Chip(t.label + count(detail, t, open), tab == t) { tab = t } }
             }
             val error = state.detailErrors[repo]
-            Card {
+            if (tab == RepoTab.HISTORY) Card { HistoryTab(state.history, repo) { openUrl(context, it) } }
+            else Card {
                 val shown = when {
                     detail != null -> if (rows(detail, tab, open) == 0) CardState.Empty else CardState.Ready
                     error != null -> CardState.Error(error)
@@ -96,6 +97,7 @@ private fun TabBody(d: GhDetail, tab: RepoTab, unmerged: List<GhOpenBranch>?, op
             GhRow(ICON_ISSUE, i.title, meta) { open(i.url) }
         }
         RepoTab.CI -> AnimatedItems(d.runs, { it.url }) { r -> RunRow(r) { open(r.url) } }
+        RepoTab.HISTORY -> Unit
         // 有 GITHUB_TOKEN 时列未合入分支, 否则退回 webhook 收到过推送的分支
         RepoTab.BRANCHES -> if (unmerged != null) AnimatedItems(unmerged, { it.name }) { b -> OpenBranchRow(b) }
         else AnimatedItems(d.branches, { it.name }) { b -> BranchRow(b) { open("${d.repo.url}/tree/${b.name}") } }
@@ -109,7 +111,7 @@ private fun BranchRow(b: GhBranch, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Dot(ciColor(b.ci))
         val meta = metaOf(b.by, "${b.commits} 个提交", b.sha.orEmpty(), b.ci?.let(::ciLabel).orEmpty(), ago(b.at))
-        GhRow(ICON_GITHUB, b.name, meta, c.textSecondary, onClick)
+        GhRow("git-branch", b.name, meta, c.textSecondary, onClick)
     }
 }
 
@@ -125,16 +127,18 @@ private fun RunRow(r: GhRun, onClick: () -> Unit) {
 
 private fun rows(d: GhDetail, tab: RepoTab, unmerged: List<GhOpenBranch>?): Int = when (tab) {
     RepoTab.TIMELINE -> d.timeline.size
+    RepoTab.HISTORY -> 0
     RepoTab.PRS -> d.prs.size
     RepoTab.ISSUES -> d.issues.size
     RepoTab.CI -> d.runs.size
     RepoTab.BRANCHES -> unmerged?.size ?: d.branches.size
 }
 
-private fun count(d: GhDetail?, tab: RepoTab, unmerged: List<GhOpenBranch>?): String = if (d == null || tab == RepoTab.TIMELINE) "" else " ${rows(d, tab, unmerged)}"
+private fun count(d: GhDetail?, tab: RepoTab, unmerged: List<GhOpenBranch>?): String = if (d == null || tab == RepoTab.TIMELINE || tab == RepoTab.HISTORY) "" else " ${rows(d, tab, unmerged)}"
 
 private fun emptyText(tab: RepoTab, live: Boolean): String = when (tab) {
-    RepoTab.TIMELINE -> "还没有动态, 配好 Webhook 后这里会实时出现"
+    RepoTab.TIMELINE -> "还没有动态, 配好 Webhook 后这里会实时出现; 更早的在历史里"
+    RepoTab.HISTORY -> ""
     RepoTab.PRS -> "没有开放的 PR"
     RepoTab.ISSUES -> "没有开放的 Issue"
     RepoTab.CI -> "还没有 CI 记录"

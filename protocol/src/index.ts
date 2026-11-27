@@ -15,6 +15,7 @@ export * from "./v1/source";
 export * from "./v1/paths";
 export * from "./v1/github";
 export * from "./v1/chat";
+export * from "./v1/chat-ext";
 export * from "./v1/room";
 export * from "./v1/files";
 export * from "./v1/plugin";
@@ -37,6 +38,7 @@ export * from "./v1/trigger";
 export * from "./v1/compat";
 import { parseTermFrame, type TermFrame } from "./v1/term";
 import { parseTyping, type TypingFrame } from "./v1/presence";
+import { parseBundle, parseMentions, type BundleRequest } from "./v1/chat-ext";
 
 export const PING_TEXT = "ping";
 export const PONG_TEXT = "pong";
@@ -68,8 +70,8 @@ export type TextBody = { kind: "text"; text: string };
 export type Body = TextBody;
 
 // reply / fwd 为被引用 / 被转发消息的 seq, channel 为目标群 (不写为备忘)
-// file: 已上传文件的 id, 作为这条消息的附件
-export type SendFrame = { t: "send"; cid: string; body: Body; reply?: number; fwd?: number; channel?: string; file?: string };
+// file: 已上传文件的 id, 作为这条消息的附件; mentions: @ 的人 (#131); bundle: 合并转发 (#132)
+export type SendFrame = { t: "send"; cid: string; body: Body; reply?: number; fwd?: number; channel?: string; file?: string; mentions?: string[]; bundle?: BundleRequest };
 export type AckFrame = { t: "ack"; seq: number };
 export type RegFrame = { t: "reg"; pushToken: string };
 // 懒更新指标: 客户端声明在看哪些主体, 探针声明能提供哪些主体, 服务端只在有人看时向探针要数据
@@ -122,8 +124,10 @@ export function parseClientFrame(raw: string): ClientFrame | null {
   if (typeof data !== "object" || data === null) return null;
   const f = data as Record<string, unknown>;
   switch (f.t) {
-    case "send":
+    case "send": {
       if (typeof f.cid !== "string" || !isBody(f.body)) return null;
+      const mentions = parseMentions(f.mentions);
+      const bundle = parseBundle(f.bundle);
       return {
         t: "send",
         cid: f.cid,
@@ -131,7 +135,11 @@ export function parseClientFrame(raw: string): ClientFrame | null {
         ...(typeof f.reply === "number" ? { reply: f.reply } : {}),
         ...(typeof f.fwd === "number" ? { fwd: f.fwd } : {}),
         ...(typeof f.channel === "string" && f.channel ? { channel: f.channel } : {}),
+        ...(typeof f.file === "string" && f.file ? { file: f.file } : {}),
+        ...(mentions ? { mentions } : {}),
+        ...(bundle ? { bundle } : {}),
       };
+    }
     case "ack":
       return typeof f.seq === "number" ? { t: "ack", seq: f.seq } : null;
     case "reg":
