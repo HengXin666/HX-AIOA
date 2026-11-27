@@ -22,6 +22,7 @@ import { dailyOf, dayStart, streakOf } from "./daily";
 import { type HeatState, HeatYears, KV_HEAT_STATE, backfillOf, backfillStep, emptyState, noteDate, yearKey, yearOf } from "./backfill";
 import { type LegacyHeat, commitsByDate, dateIn, heatDates } from "./heatmap";
 import { HistoryFail, fetchHistory, historyTtl } from "./history";
+import { calendarStep } from "./calendar";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -165,7 +166,10 @@ export class GithubService {
 
   private async backfill(state: HeatState, years: HeatYears, budget: number, now: number): Promise<void> {
     const token = this.env.GITHUB_TOKEN;
-    if (!token || budget <= 0 || !state.tz) return;
+    if (!token) return;
+    // 先用贡献日历一次铺满全部历史 (#140), 再按仓库慢慢补提交
+    await calendarStep(token, state, years, now).catch((e) => console.error("贡献日历回填失败:", e));
+    if (budget <= 0 || !state.tz) return;
     try {
       const login = await this.login(token);
       await backfillStep({ token, login, repos: await this.tracked(), state, years, tz: state.tz, budget, now });
@@ -177,8 +181,8 @@ export class GithubService {
   /** 同步时顺带回填几页; 还没算过热力图 (不知道时区) 时跳过, 没拉到东西不写。 */
   private heatSync(budget: number, now = Date.now()): Promise<void> {
     return this.serial(async () => {
-      const state = await this.storage.get<HeatState>(KV_HEAT_STATE);
-      if (!state?.tz || budget <= 0) return;
+      // 还没算过热力图也照样回填: 点同步就该看到全部历史 (#140)
+      const state = (await this.storage.get<HeatState>(KV_HEAT_STATE)) ?? emptyState(now);
       const before = JSON.stringify(state.repos);
       const years = new HeatYears(this.storage);
       await this.backfill(state, years, budget, now);
@@ -267,7 +271,7 @@ export class GithubService {
     const [r, actErr] = await Promise.all([syncGithub(this.store, this.registry, token, await this.choice()), this.syncActivity(token)]);
     if (r.repos > 0) await this.storage.put(KV_GITHUB_SYNCED, Date.now());
     const room = SUBREQUESTS - SYNC_CALLS_PER_REPO * Math.min((await this.tracked()).length, GITHUB_SYNC_MAX_REPOS) - SUBREQ_RESERVED;
-    await this.heatSync(Math.min(HEAT_SYNC_PAGES, room)).catch((e) => console.error("热力图回填失败:", e));
+    await this.heatSync(Math.max(0, Math.min(HEAT_SYNC_PAGES, room))).catch((e) => console.error("热力图回填失败:", e));
     if (actErr) {
       r.ok = false;
       r.error = r.error ? `${r.error}; ${actErr}` : actErr;
