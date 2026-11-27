@@ -110,7 +110,8 @@ internal fun MemberStrip(group: String, meta: ChatMeta?, canInvite: Boolean, onA
     LaunchedEffect(group, meta?.updated, meta?.shared) {
         if (meta?.shared != true) return@LaunchedEffect
         withContext(Dispatchers.IO) { api.cached(group) }?.let { list = it.members }
-        api.page(group, limit = STRIP).onSuccess { list = it.members }
+        // 和成员页同一份第一页缓存 (同样的 limit, ETag 才对得上)
+        api.page(group).onSuccess { list = it.members }
     }
     val shown = if (meta?.shared == true) list.take(STRIP) else listOfNotNull(Me.uid?.let { RoomMember(it, it, "我", com.hengxin.aioa.ui.chat.ROLE_OWNER) })
     Column(modifier) {

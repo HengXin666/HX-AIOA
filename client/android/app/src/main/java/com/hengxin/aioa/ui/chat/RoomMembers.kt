@@ -46,8 +46,10 @@ import com.hengxin.aioa.ui.groupinfo.AgentGlyph
 import com.hengxin.aioa.ui.groupinfo.GiBar
 import com.hengxin.aioa.ui.groupinfo.GiNote
 import com.hengxin.aioa.ui.groupinfo.SearchBox
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -100,7 +102,7 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     }
     LaunchedEffect(group, meta?.updated, q) {
         if (meta?.shared != true) return@LaunchedEffect
-        if (q.isBlank()) api.cached(group)?.let { if (members.isEmpty()) apply(it, false) } else delay(SEARCH_DEBOUNCE_MS)
+        if (q.isBlank()) withContext(Dispatchers.IO) { api.cached(group) }?.let { if (members.isEmpty()) apply(it, false) } else delay(SEARCH_DEBOUNCE_MS)
         reload()
     }
     val act: (suspend () -> Result<Unit>) -> Unit = { call -> scope.launch { call().onSuccess { reload(); dir.refreshChats() }.onFailure { error = it.message } } }
