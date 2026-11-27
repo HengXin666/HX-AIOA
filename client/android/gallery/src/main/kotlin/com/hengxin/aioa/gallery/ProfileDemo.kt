@@ -111,13 +111,13 @@ fun AgentSheetDemo() {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("oa_1", c.text, 20, weight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { SoftTag("Agent", pal.chart2); SoftTag("运行中", c.success) }
-                Text("hxaioa 0.2.0 · 指令 v7 已报到", c.textSecondary, 13)
+                Text("hx-aioa 1.1 · hxaioa 0.4.0", c.textSecondary, 13)
             }
         }
         Spacer(Modifier.height(14.dp))
         Fact("所在群", "HX-AIOA 开发")
         Fact("还能读", "GitHub 动态, 点子待办")
-        Fact("最近活跃", "2 分钟前 · 今天处理 14 条")
+        Fact("触发", "每 30 分钟 · 下次约 12 分钟后")
         Fact("接入者", "Heng_Xin · 11-20")
         Row(Modifier.padding(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             HxButton("@它", {}, Modifier.weight(1f), icon = "at-sign")
@@ -126,7 +126,10 @@ fun AgentSheetDemo() {
     }
 }
 
-/** Agent 设置: 名字, 可读的群, 定时 (trigger), 指令版本, 大版本自动更新, skill, 记忆, 重新接入都是现有字段; 头像, "只在被 @ 时回复", 任务说明要新存。 */
+/**
+ * Agent 设置 (按 #117 的定论): 云 Agent 靠 skill 干活, 记忆在它自己那边, 触发方式由它上报。
+ * 主人能改的只有名字, 可读的群, 大更新自动执行; 其余是只读的运行状态与版本, 加重新接入和移出。
+ */
 @Composable
 fun AgentSettingsDemo() {
     val c = Aioa.colors
@@ -136,29 +139,22 @@ fun AgentSettingsDemo() {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
             HomeSection("基本") {
                 V("名字", "oa_1", false)
-                V("头像", "默认", true)
+                V("可读的群", "本群 + 2 个", true)
             }
-            HomeSection("权限") {
-                V("可读的群", "本群 + 2 个", false)
-                HomeRow("只在被 @ 时回复", "关掉后它会读所有新消息自己判断", divider = true, end = { FlatSwitch(false) })
+            HomeSection("运行 (Agent 上报)") {
+                HomeRow("触发方式", "每 30 分钟 · Asia/Shanghai", end = { SoftTag("正常", c.success) })
+                HomeRow("下次触发", "约 12 分钟后 · 今天还有 6 次", divider = true)
+                HomeRow("上次运行", "20:12 · 处理 4 条, 待处理 0", divider = true)
             }
-            HomeSection("任务") {
-                V("触发方式", "被 @ 或新消息", false)
-                V("定时", "每 30 分钟", true)
-                V("任务说明", "跟进 #121 安卓 UI", true)
-            }
-            HomeSection("指令与版本") {
-                HomeRow("当前指令", "v7 · 11-27 20:12 已报到", end = { SoftTag("最新", c.success) })
-                V("查看下发的指令", "", true)
-                HomeRow("大版本自动更新", "插件 skill 出大版本时自动重新接入", divider = true, end = { FlatSwitch(true) })
-                V("已装 skill", "hengxin666.todo@2.1", true)
-            }
-            HomeSection("记忆") {
-                HomeRow("长期记忆", "1,260 / 4,000 字 · 昨天更新", end = { Icon("chevron-right", c.textSecondary, 14.dp) })
+            HomeSection("版本") {
+                HomeRow("hx-aioa", "1.1 · 已是最新", end = { SoftTag("最新", c.success) })
+                HomeRow("hengxin666.todo", "2.1 · 应有 2.2 (小更新, 下一轮自动装)", divider = true, end = { SoftTag("小更新", pal.chart2) })
+                HomeRow("命令行", "hxaioa 0.4.0", divider = true)
+                HomeRow("大更新自动执行", "开启后要重发一次接入语才生效", divider = true, end = { FlatSwitch(false) })
             }
             HomeSection("接入") {
-                HomeRow("重新接入", "作废旧密钥, 生成新的接入语", lead = null, end = { Icon("refresh-cw", pal.chart3, 16.dp) })
-                HomeRow("最近报到", "hxaioa 0.2.0 · 20:12", divider = true)
+                HomeRow("复制接入语", "装命令行, 登录, 装 skill, 建定时任务", end = { Icon("copy", c.textSecondary, 16.dp) })
+                HomeRow("重新接入", "作废旧密钥, 换一份新的接入语", divider = true, end = { Icon("refresh-cw", pal.chart3, 16.dp) })
             }
             HomeSection("") {
                 Text("移出本群", c.danger, 15, Modifier.padding(14.dp), weight = FontWeight.Medium)
