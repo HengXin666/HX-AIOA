@@ -58,11 +58,12 @@ private const val TAB_MEMBERS = "m"
 private const val TAB_AGENTS = "a"
 private const val SEARCH_DEBOUNCE_MS = 300L
 private const val FACE = 36
+private const val MEMBERS = "成员"
 
 fun roleLabel(role: String): String = when (role) {
     ROLE_OWNER -> "群主"
     ROLE_ADMIN -> "管理员"
-    else -> "成员"
+    else -> MEMBERS
 }
 
 /** 成员与 Agent (#137 #130): 两个标签, 搜索走服务端 q, 滚到底加载下一页, 群主 · 管理员与成员分组, 邀请链接。 */
@@ -110,7 +111,7 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     Column(Modifier.fillMaxSize().background(Aioa.colors.background)) {
         GiBar("成员与 Agent", meta?.title ?: group, onBack, if (manage && !dm) "user-plus" else "", doInvite)
         if (showAgents) {
-            SpaceTabs(listOf(HomeSpace(TAB_MEMBERS, "成员", "", badge = meta?.members ?: 0), HomeSpace(TAB_AGENTS, "Agent", "", badge = meta?.agents?.size ?: 0)), tab, { tab = it })
+            SpaceTabs(listOf(HomeSpace(TAB_MEMBERS, MEMBERS, "", badge = meta?.members ?: 0), HomeSpace(TAB_AGENTS, "Agent", "", badge = meta?.agents?.size ?: 0)), tab, { tab = it })
         }
         val list = rememberLazyListState()
         val atEnd by remember { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == list.layoutInfo.totalItemsCount - 1 } }
@@ -123,11 +124,11 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
             item { SearchBox(q, "搜索成员") { q = it } }
             error?.let { e -> item { GiNote(e, Aioa.colors.danger) } }
             if (meta?.shared != true) {
-                item { HomeSection("成员", 1) { GiNote("现在只有你自己。生成邀请链接发给别人, 对方注册或登录后就进群; 消息只存一份, 所有人实时收到。") } }
+                item { HomeSection(MEMBERS, 1) { GiNote("现在只有你自己。生成邀请链接发给别人, 对方注册或登录后就进群; 消息只存一份, 所有人实时收到。") } }
             } else {
                 val (heads, rest) = members.partition { it.role == ROLE_OWNER || it.role == ROLE_ADMIN }
                 if (heads.isNotEmpty()) item { MemberGroup("群主 · 管理员", heads, myRole, act, group, api) }
-                if (rest.isNotEmpty()) item { MemberGroup("成员", rest, myRole, act, group, api) }
+                if (rest.isNotEmpty()) item { MemberGroup(MEMBERS, rest, myRole, act, group, api) }
                 if (members.isEmpty() && !loading) item { GiNote(if (q.isBlank()) "还没有成员" else "没找到 \"$q\"") }
                 if (next != null || loading) item { GiNote("正在加载...") }
             }

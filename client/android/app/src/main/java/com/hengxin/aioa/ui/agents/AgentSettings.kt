@@ -37,6 +37,8 @@ import com.hengxin.aioa.ui.groupinfo.GiPage
 import com.hengxin.aioa.ui.groupinfo.GiValue
 import kotlinx.coroutines.launch
 
+private const val CANCEL = "取消"
+
 // 当前打开的弹层
 private sealed interface Layer {
     data class Guide(val text: String) : Layer
@@ -125,7 +127,7 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
             title = { androidx.compose.material3.Text("移出 ${a.name}?") },
             text = { androidx.compose.material3.Text("它的密钥会立即作废, 已发的消息保留。") },
             confirmButton = { TextButton({ scope.launch { dir.removeAgent(group, a.keyId)?.let { dir.error = it } }; close() }) { androidx.compose.material3.Text("移出", color = danger) } },
-            dismissButton = { TextButton(close) { androidx.compose.material3.Text("取消") } },
+            dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
         )
         is Layer.Auto -> AlertDialog(
             onDismissRequest = close,
@@ -136,7 +138,7 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
                     androidx.compose.material3.Text(if (layer.on) "开启" else "关闭")
                 }
             },
-            dismissButton = { TextButton(close) { androidx.compose.material3.Text("取消") } },
+            dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
         )
         null -> Unit
     }
@@ -151,6 +153,6 @@ private fun EditDialog(model: ChatModel, group: String, agent: ChatAgent, save: 
         title = { androidx.compose.material3.Text("编辑 ${agent.name}") },
         text = { AgentForm(model, group, name, { name = it }, reads, { reads = it }) },
         confirmButton = { TextButton({ save(name.trim(), reads.toList()); close() }, enabled = name.isNotBlank()) { androidx.compose.material3.Text("保存") } },
-        dismissButton = { TextButton(close) { androidx.compose.material3.Text("取消") } },
+        dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
     )
 }

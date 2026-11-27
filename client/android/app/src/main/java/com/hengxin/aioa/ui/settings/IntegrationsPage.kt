@@ -60,6 +60,7 @@ private const val PATH = "api/v1/integrations"
 private const val CACHE = "integrations"
 private const val KIND_PUSH = "push"
 private const val KIND_INTERACTIVE = "interactive"
+private const val REVOKE = "作废"
 private const val SOURCE_AGENT = "agent"
 private const val DELETE = "DELETE"
 
@@ -140,7 +141,7 @@ fun IntegrationsPage(onBack: () -> Unit) {
                         error = withContext(Dispatchers.IO) { revoke(context, item) }
                         refresh()
                     }
-                }) { Text("作废", color = MaterialTheme.colorScheme.error) }
+                }) { Text(REVOKE, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton({ confirm = null }) { Text("取消") } },
         )
@@ -157,7 +158,7 @@ private fun Section(title: String, hint: String, items: List<Integration>, onRev
     }
 }
 
-/** 一行一条 (#138): 状态点 / 图标, 名字, 所在群与活跃时间压到右边, 最右 "作废"。 */
+/** 一行一条 (#138): 状态点 / 图标, 名字, 所在群与活跃时间压到右边, 最右作废。 */
 @Composable
 private fun IntegrationRow(it: Integration, onRevoke: (Integration) -> Unit) {
     val k = Aioa.colors
@@ -168,5 +169,5 @@ private fun IntegrationRow(it: Integration, onRevoke: (Integration) -> Unit) {
         if (it.lastActive > 0) ago(it.lastActive) else "还没动静",
     ).joinToString(" · ")
     val icon = if (it.kind == KIND_INTERACTIVE) "bot" else "plug"
-    OneRow(icon, it.name, meta, if (it.kind == KIND_INTERACTIVE && online) k.success else k.textSecondary) { RowAction("作废", danger = true) { onRevoke(it) } }
+    OneRow(icon, it.name, meta, if (it.kind == KIND_INTERACTIVE && online) k.success else k.textSecondary) { RowAction(REVOKE, danger = true) { onRevoke(it) } }
 }
