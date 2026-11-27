@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -51,7 +52,7 @@ import kotlin.math.roundToInt
 
 private val DRAWER_MAX = 320.dp
 private const val DRAWER_RATIO = 0.84f
-private const val SCRIM_ALPHA = 0.45f
+private const val SCRIM_ALPHA = 0.32f
 // 松手时速度超过这个值 (px/s) 就按方向开合, 否则看过没过一半
 private const val FLING_VELOCITY = 800f
 private const val HALF = 0.5f
@@ -118,13 +119,15 @@ fun HomeShell(
                         Modifier.fillMaxSize().background(c.scrim.copy(alpha = SCRIM_ALPHA * p))
                             .pointerTap { scope.launch { state.close() } },
                     )
+                    // 推开后内容左缘一道细线, 深色下侧栏与内容才分得开
+                    Box(Modifier.fillMaxHeight().width(1.dp).background(c.border.copy(alpha = p)))
                 }
             }
         }
     }
 }
 
-/** 顶栏: 左边两道杠开侧栏, 中间是当前空间 (点开切换), 右边圆圈打开菜单。 */
+/** 顶栏: 左边开侧栏 (dot 为有未读), 当前空间名 (点开切换), 右边圆圈打开菜单。只有右上这颗是圆的。 */
 @Composable
 fun HomeTopBar(
     title: String,
@@ -134,44 +137,36 @@ fun HomeTopBar(
     menuOpen: Boolean,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
+    dot: Boolean = false,
 ) {
     val c = Aioa.colors
     val turn by animateFloatAsState(if (titleOpen) 180f else 0f, tween(MENU_ENTER_MS, easing = FastOutSlowInEasing))
-    Row(modifier.fillMaxWidth().height(BAR_HEIGHT).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        BarIcon("menu", onMenu)
-        Spacer(Modifier.weight(1f))
+    Row(modifier.fillMaxWidth().height(BAR_HEIGHT).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).pointerTap(onMenu), contentAlignment = Alignment.Center) {
+            Icon("menu", c.text, 22.dp)
+            if (dot) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 8.dp).size(9.dp).clip(CircleShape)
+                        .background(c.background).padding(1.5.dp).clip(CircleShape).background(c.danger),
+                )
+            }
+        }
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(c.surface).border(1.dp, c.border, RoundedCornerShape(50))
-                .pointerTap(onTitle).padding(horizontal = 14.dp, vertical = 8.dp),
+            Modifier.clip(RoundedCornerShape(10.dp)).pointerTap(onTitle).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(title, c.text, 16, weight = FontWeight.SemiBold)
-            Icon("chevron-down", c.textSecondary, 16.dp, Modifier.graphicsLayer { rotationZ = turn })
+            Text(title, c.text, 18, weight = FontWeight.SemiBold)
+            Icon("chevron-down", c.textSecondary, 18.dp, Modifier.graphicsLayer { rotationZ = turn })
         }
         Spacer(Modifier.weight(1f))
         val ring = if (menuOpen) c.text else c.border
-        Box(
-            Modifier.size(44.dp).pointerTap(onMore),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.size(44.dp).pointerTap(onMore), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.size(38.dp).clip(CircleShape).border(1.dp, ring, CircleShape).background(c.surface),
+                Modifier.size(36.dp).clip(CircleShape).border(1.dp, ring, CircleShape).background(c.surface),
                 contentAlignment = Alignment.Center,
             ) { Icon("ellipsis", c.text, 18.dp) }
         }
-    }
-}
-
-/** 顶栏上浮着的圆形按钮: 实底 + 细描边, 没有整条栏背景 (ChatGPT 做法)。 */
-@Composable
-private fun BarIcon(name: String, onClick: () -> Unit) {
-    val c = Aioa.colors
-    Box(Modifier.size(44.dp).pointerTap(onClick), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier.size(38.dp).clip(CircleShape).background(c.surface).border(1.dp, c.border, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Icon(name, c.text, 19.dp) }
     }
 }
 
@@ -183,6 +178,8 @@ data class MenuEntry(
     val hint: String = "",
     val danger: Boolean = false,
     val divider: Boolean = false,
+    // 非空时在这一项上面先写一行小标题 (如 "插件")
+    val label: String = "",
 )
 
 /** 右上角菜单: 从圆圈按钮处缩放展开, 深色下是 ChatGPT 那种浮起的灰卡片。 */
@@ -218,6 +215,7 @@ fun DropMenu(
             header?.invoke()
             entries.forEach { e ->
                 if (e.divider) Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.6f)))
+                if (e.label.isNotEmpty()) Text(e.label, c.textSecondary, 12, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
                 MenuRow(e) { onPick(e) }
             }
         }
@@ -240,26 +238,47 @@ private fun MenuRow(e: MenuEntry, onClick: () -> Unit) {
     }
 }
 
-/** 置顶空间的横排切换条 (Telegram 文件夹式): 选中项是实底小圆角块, 不用胶囊。 */
+/** 置顶空间的横排切换条 (Telegram 文件夹式): 文字 + 数字, 选中项下面一道短线, 整条下面一道分隔线。 */
 @Composable
 fun SpaceTabs(spaces: List<HomeSpace>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     val c = Aioa.colors
-    Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        spaces.forEach { s ->
-            val on = s.id == selected
-            val bg by animateFloatAsState(if (on) 1f else 0f, tween(MENU_ENTER_MS))
-            Row(
-                Modifier.clip(RoundedCornerShape(10.dp)).background(c.surface.copy(alpha = bg))
-                    .pointerTap { onSelect(s.id) }.padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(s.title, if (on) c.text else c.textSecondary, 14, weight = if (on) FontWeight.Medium else FontWeight.Normal)
-                if (s.badge > 0) Text(s.badge.toString(), c.textSecondary, 12)
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            spaces.forEach { s ->
+                val on = s.id == selected
+                val k by animateFloatAsState(if (on) 1f else 0f, tween(MENU_ENTER_MS))
+                Column(
+                    Modifier.width(IntrinsicSize.Max).clip(RoundedCornerShape(8.dp)).pointerTap { onSelect(s.id) }
+                        .padding(horizontal = 8.dp),
+                ) {
+                    Row(
+                        Modifier.padding(top = 8.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(s.title, if (on) c.text else c.textSecondary, 15, weight = if (on) FontWeight.SemiBold else FontWeight.Normal)
+                        if (s.badge > 0) CountChip(s.badge)
+                    }
+                    Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(c.text.copy(alpha = k)))
+                }
             }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.6f)))
+    }
+}
+
+/** 数字角标: 小圆角块; strong 为需要处理 (红底)。 */
+@Composable
+fun CountChip(n: Int, strong: Boolean = false) {
+    val c = Aioa.colors
+    Box(
+        Modifier.height(18.dp).clip(RoundedCornerShape(6.dp)).background(if (strong) c.danger else c.surfaceAlt)
+            .padding(horizontal = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(if (n > 99) "99+" else n.toString(), if (strong) androidx.compose.ui.graphics.Color.White else c.textSecondary, 11, weight = FontWeight.SemiBold)
     }
 }

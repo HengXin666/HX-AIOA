@@ -74,7 +74,8 @@ val DEFAULT_RADIUS = 16.dp
 /** 默认主题: 取锁定版本 HX-UI 的皮肤 (HxUi.SKIN, 现为 ink, ChatGPT 式), 由 HxPalette 映射到 App 的令牌名。 */
 object Minimal {
     val light = HxUi.light.toAioa()
-    val dark = HxUi.dark.toAioa()
+    // 深色内容是纯黑, 黑遮罩压不出层次, 取 ChatGPT 的灰 (#616161)
+    val dark = HxUi.dark.toAioa().copy(scrim = Color(0xFF616161))
 }
 
 fun HxPalette.toAioa() = AioaColors(
