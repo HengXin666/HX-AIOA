@@ -79,6 +79,7 @@
 | [ui-spec/message-pages.md](design/ui-spec/message-pages.md) | 消息页: 人 / 群 / 域 / Agent 概念, 群会话与群资料页, 每个元素的请求数, 省 CF 额度的改法, 兼容性 (#121) |
 | [ui-spec/android-rebuild.md](design/ui-spec/android-rebuild.md) | 安卓前端全量重构: 分期, 接口对账 (够不够用), 对接是否合理与要改的地方 (#121) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
+| [weekly-report/prototype.html](design/weekly-report/prototype.html) | 周报原型: 单文件无外链, 平台使用 (前台时长, 打开次数, 活跃时段), 消息, 人际, 配置计数, 本机记录 (传输, 终端, 请求, 电量, 通知), GitHub 一角; 模拟数据 (#140) |
 
 ## 过程记录 `aegis/`
 
