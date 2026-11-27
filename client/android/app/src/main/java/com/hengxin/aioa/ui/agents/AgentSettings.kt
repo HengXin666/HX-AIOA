@@ -61,6 +61,12 @@ fun readsText(group: String, reads: List<String>): String = when {
     else -> "${reads.size} 个群"
 }
 
+/** 可读的群列出群名 (#139, 旧版就是这样): 本群在前, 其余按群名。 */
+fun readsNames(group: String, reads: List<String>, title: (String) -> String): String = when {
+    reads.isEmpty() -> "只能发, 不能读"
+    else -> (listOfNotNull("本群".takeIf { group in reads }) + reads.filter { it != group }.map(title).sorted()).joinToString(", ")
+}
+
 /**
  * Agent 设置 (#137, 按 #117 定论): 云 Agent 靠 skill 干活, 记忆在它自己那边, 触发方式由它上报。
  * 能改的只有名字, 可读的群, 大更新自动执行; 其余只读; 操作是复制接入语, 重新接入, 移出本群。
@@ -99,13 +105,14 @@ fun AgentSettingsPage(model: ChatModel, group: String, keyId: String, onBack: ()
         }
         dir.error?.let { e -> com.hengxin.aioa.ui.ErrorNote(e, Modifier.padding(top = 8.dp), onDismiss = { dir.error = null }) }
         HomeSection("基本") {
-            GiValue("名字", a.name, false) { layer = Layer.Edit }
-            a.sourceId?.let { sid -> GiValue("显示名与头像", Senders.aliasOf(sid) ?: "跟随名字", true) { layer = Layer.Sender(sid) } }
-            GiValue("可读的群", readsText(group, a.reads) + (a.plugin?.let { " · 插件 $it" } ?: ""), true) { layer = Layer.Edit }
+            // 名字只有一处 (#139): 这里改的就是发言时的名字, 头像单独一行
+            GiValue("名字", shown, false) { layer = Layer.Edit }
+            a.sourceId?.let { sid -> GiValue("头像", if (Senders.avatarOf(sid) != null) "已设置" else "默认", true) { layer = Layer.Sender(sid) } }
+            GiValue("可读的群", readsNames(group, a.reads, dir::title) + (a.plugin?.let { " · 插件 $it" } ?: ""), true) { layer = Layer.Edit }
         }
         AgentRunSection(group, a, now)
         AgentVersionSection(group, a, now) { layer = Layer.Auto(it) }
-        AgentRecordSection(model, group, a)
+        AgentRecordSection(model, group, a, now)
         HomeSection("接入") {
             HomeRow(if (copied) "已复制接入语" else "复制接入语", "装命令行, 登录, 装 skill, 建定时任务", end = { Icon("copy", c.textSecondary, 16.dp) }, onClick = {
                 scope.launch { dir.savedPrompt(group, a.keyId).onSuccess { clipboard.setText(AnnotatedString(it)); copied = true }.onFailure(fail) }
@@ -156,14 +163,14 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
             },
             dismissButton = { TextButton(close) { androidx.compose.material3.Text(CANCEL) } },
         )
-        is Layer.Sender -> SenderEditSheet(layer.sid, a.name, dir, close)
+        is Layer.Sender -> SenderEditSheet(layer.sid, MentionOps.agentName(a), dir, close)
         null -> Unit
     }
 }
 
 @Composable
 private fun EditDialog(model: ChatModel, group: String, agent: ChatAgent, save: (String, List<String>) -> Unit, close: () -> Unit) {
-    var name by remember { mutableStateOf(agent.name) }
+    var name by remember { mutableStateOf(MentionOps.agentName(agent)) }
     var reads by remember { mutableStateOf(agent.reads.toSet()) }
     AlertDialog(
         onDismissRequest = close,

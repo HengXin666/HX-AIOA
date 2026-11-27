@@ -40,8 +40,11 @@ import org.json.JSONObject
  * 发送者头像 (#123): 主人给来源 (sid) 设的图片头像, 服务端存, chat_sync senders 时重拉;
  * 没设的系统来源 (system:*) 画内置图标, 其余字母头像。
  */
-/** 一个登记过的系统发送者 (#128)。 */
-data class SenderInfo(val sid: String, val name: String, val alias: String?, val avatar: String?, val icon: String?, val last: Long) {
+/** 一个登记过的系统发送者 (#128); agent 为现有群 Agent, gone 为已移出的 Agent (只为旧消息留头像, 设置页不列) (#139)。 */
+data class SenderInfo(
+    val sid: String, val name: String, val alias: String?, val avatar: String?, val icon: String?, val last: Long,
+    val agent: Boolean = false, val gone: Boolean = false,
+) {
     val display: String get() = alias ?: name
 }
 
@@ -86,6 +89,7 @@ object Senders {
                 o.optString("sid"), o.optString("name").ifEmpty { o.optString("sid") },
                 o.optString("alias").ifEmpty { null }, o.optString("avatar").ifEmpty { null },
                 o.optString("icon").ifEmpty { null }, o.optLong("last"),
+                o.optBoolean("agent"), o.optBoolean("gone"),
             )
         }.filter { it.sid.isNotEmpty() }.associateBy { it.sid }
         metas.keys.filter { it !in next }.forEach { metas.remove(it) }
@@ -139,7 +143,8 @@ fun SenderEditSheet(sid: String, fallbackName: String, dir: ChatDirectory, close
     androidx.compose.runtime.LaunchedEffect(sid) { if (info == null) dir.refreshSenders() }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf(info?.alias ?: "") }
+    // 群 Agent 只有一个名字 (#139): 直接改名字; 系统发送者改的是别名, 留空用默认名
+    var name by remember { mutableStateOf(if (info?.agent == true) info.name else info?.alias ?: "") }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pick = rememberAvatarPicker({ error = it }) { bytes ->
         busy = true
@@ -158,9 +163,10 @@ fun SenderEditSheet(sid: String, fallbackName: String, dir: ChatDirectory, close
             if (info == null) {
                 Text("这个发送者还没登记 (不是系统发送者或 Agent), 只能看。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             } else {
-                OutlinedTextField(name, { name = it.take(NAME_MAX) }, Modifier.fillMaxWidth(), label = { Text("名字 (留空用默认名 ${info.name})") }, singleLine = true)
+                val label = if (info.agent) "名字 (和 Agent 设置里的名字是同一个)" else "名字 (留空用默认名 ${info.name})"
+                OutlinedTextField(name, { name = it.take(NAME_MAX) }, Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true)
                 SheetRow("保存名字") {
-                    scope.launch { error = dir.renameSender(sid, name.trim().ifEmpty { null }); if (error == null) close() }
+                    scope.launch { error = dir.renameSender(sid, name.trim().ifEmpty { null }, info.agent); if (error == null) close() }
                 }
                 SheetRow(if (busy) "正在上传..." else "换头像") { if (!busy) pick() }
                 if (info.avatar != null) SheetRow("头像恢复默认") { dir.clearSenderAvatar(sid) }

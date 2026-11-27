@@ -21,6 +21,13 @@ import org.json.JSONObject
 data class Onboard(val agent: ChatAgent, val prompt: String, val key: String)
 
 // 群资料与收藏: 先读本地缓存秒出, 再带 ETag 增量刷新; 服务端广播 chat_sync 时再刷一次
+/** 当前的群目录 (#139): 邮件转发选群等拿不到 ChatModel 的地方直接用它的 metas, 不再重拉 /chats。 */
+object ChatDirectories {
+    @Volatile
+    var current: ChatDirectory? = null
+        internal set
+}
+
 class ChatDirectory(private val context: Context, private val scope: CoroutineScope) {
     var metas by mutableStateOf<Map<String, ChatMeta>>(emptyMap())
         private set
@@ -29,6 +36,10 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     var error by mutableStateOf<String?>(null)
     var onMetas: (() -> Unit)? = null
     private var loaded = false
+
+    init {
+        ChatDirectories.current = this
+    }
 
     fun load() {
         scope.launch {
@@ -85,11 +96,15 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         return null
     }
 
-    /** 改系统发送者的名字; null 恢复默认名。返回错误文字, 成功为 null。 */
-    suspend fun renameSender(sid: String, alias: String?): String? {
+    /**
+     * 改系统发送者的名字; null 恢复默认名。群 Agent (agent) 改的是 Agent 本身的名字 (#139),
+     * 服务端同时清掉别名, 本机也照这样改, 群资料随后由 chat_sync 带来。返回错误文字, 成功为 null。
+     */
+    suspend fun renameSender(sid: String, alias: String?, agent: Boolean = false): String? {
         val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("alias", alias ?: JSONObject.NULL)) }
         if (r.error != null) return "没保存: ${r.error}"
-        Senders.setLocal(sid) { it.copy(alias = alias) }
+        Senders.setLocal(sid) { if (agent && alias != null) it.copy(name = alias, alias = null) else it.copy(alias = alias) }
+        if (agent) refreshChats()
         return null
     }
 
@@ -222,9 +237,13 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         r.body?.optString("prompt")?.let { Result.success(it) } ?: Result.failure(Exception(r.error))
     }
 
+    /** 改名后服务端清掉发送者别名 (#139), 本机同步清掉, 页面上马上看到新名字。 */
     suspend fun editAgent(channel: String, keyId: String, name: String, reads: List<String>): String? = withContext(Dispatchers.IO) {
         Api.call(context, PATCH, listOf(CHATS, channel, AGENTS, keyId), agentBody(name, reads)).error
-    }.also { refreshChats() }
+    }.also { err ->
+        if (err == null) metas[channel]?.agents?.firstOrNull { it.keyId == keyId }?.sourceId?.let { sid -> Senders.setLocal(sid) { it.copy(name = name.trim(), alias = null) } }
+        refreshChats()
+    }
 
     /** 大更新自动执行开关; 服务端会把接入版本加 1, 之后要把新接入语发给 Agent 一次。 */
     suspend fun setAutoMajor(channel: String, keyId: String, on: Boolean): String? = withContext(Dispatchers.IO) {

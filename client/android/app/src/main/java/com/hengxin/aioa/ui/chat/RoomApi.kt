@@ -8,8 +8,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** 多人群成员; avatar 是头像 id (#130), online 为服务端给了在线状态时的值, joined 为入群时间 (群主为 0)。 */
-data class RoomMember(val id: String, val name: String, val display: String, val role: String, val avatar: String? = null, val online: Boolean = false, val joined: Long = 0)
+/**
+ * 多人群成员; avatar 是头像 id (#130), joined 为入群时间 (群主为 0)。
+ * 在线不在这里: 服务端成员列表不带, 一律看长连接 online 帧 (PeopleOnline) (#139)。
+ */
+data class RoomMember(val id: String, val name: String, val display: String, val role: String, val avatar: String? = null, val joined: Long = 0)
 
 /** 成员一页 (#130): next 为下一页游标, 旧服务端不分页时为空。 */
 data class MemberPage(val members: List<RoomMember>, val next: String?)
@@ -20,7 +23,6 @@ fun parseMember(o: JSONObject): RoomMember = RoomMember(
     o.optString("display").ifEmpty { o.optString("name") },
     o.optString("role"),
     o.optString("avatar").takeIf { !o.isNull("avatar") && it.isNotEmpty() },
-    o.optBoolean("online"),
     o.optLong("joined"),
 )
 
@@ -75,6 +77,13 @@ class RoomApi(private val context: Context) {
         if (r.body == null) error(r.error ?: FAILED)
     }
 
+    /** 和 uid 的共同群 (#139, 资料卡): channel 列表, 不含单聊。 */
+    suspend fun commonRooms(uid: String): Result<List<String>> = io {
+        val r = Api.call(context, GET, listOf(USERS, uid, ROOMS))
+        val arr = (r.body ?: error(r.error ?: FAILED)).optJSONArray(ROOMS_KEY)
+        (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optString(it)?.ifEmpty { null } }
+    }
+
     /** 用邀请码或整条链接进群, 返回群的 channel。 */
     suspend fun join(input: String): Result<String> = io {
         val code = codeOf(input) ?: error("没找到邀请码")
@@ -92,6 +101,9 @@ class RoomApi(private val context: Context) {
         private const val MEMBERS = "members"
         private const val INVITES = "invites"
         private const val JOIN = "api/v1/rooms/join"
+        private const val USERS = "api/v1/users"
+        private const val ROOMS = "rooms"
+        private const val ROOMS_KEY = "channels"
         private const val FAILED = "操作失败"
         const val PAGE_SIZE = 50
         private val UNSAFE = Regex("[^A-Za-z0-9_-]")

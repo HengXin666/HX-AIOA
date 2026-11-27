@@ -127,6 +127,8 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
         LaunchedEffect(atEnd, next, tab) { if (atEnd && tab == TAB_MEMBERS) more() }
         LazyColumn(Modifier.weight(1f).padding(horizontal = 14.dp), state = list) {
             if (tab == TAB_AGENTS) {
+                // Agent 操作的错误记在群目录上 (#139: 之前这个标签下出错看不到)
+                dir.error?.let { e -> item { GiNote(e, Aioa.colors.danger) } }
                 item { AgentsSection(model, group, meta?.agents.orEmpty(), openAgent) }
                 return@LazyColumn
             }
@@ -152,6 +154,18 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     invite?.let { InviteDialog(it, meta?.title ?: group) { invite = null } }
 }
 
+/** 移出群确认 (#139): 说清楚移出后的后果。 */
+@Composable
+fun KickDialog(name: String, close: () -> Unit, run: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("把 $name 移出群?") },
+        text = { Text("对方收不到这个群的消息, 要重新邀请才能回来; 已发的消息保留。") },
+        confirmButton = { TextButton({ close(); run() }) { Text("移出", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(close) { Text("取消") } },
+    )
+}
+
 @Composable
 private fun MemberGroup(title: String, list: List<RoomMember>, myRole: String, act: (suspend () -> Result<Unit>) -> Unit, group: String, api: RoomApi, presence: MemberPresence, now: Long) {
     HomeSection(title, list.size) {
@@ -166,12 +180,13 @@ private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, live: Boo
     val c = Aioa.colors
     val pal = hxPalette()
     var menu by remember { mutableStateOf(false) }
+    var kick by remember { mutableStateOf(false) }
     val isMe = m.id == Me.uid
     // 群主能改身份和踢任何人; 管理员只能踢普通成员
     val canRole = myRole == ROLE_OWNER && m.role != ROLE_OWNER
     val canKick = !isMe && (canRole || (myRole == ROLE_ADMIN && m.role == ROLE_MEMBER))
-    // 在线的头像带绿点, 不在线的行尾写最近在线 (#130)
-    val online = m.online || isMe || live
+    // 在线的头像带绿点, 不在线的行尾写最近在线 (#130); 在线只看 online 帧 (#139)
+    val online = isMe || live
     Box {
         HomeRow(
             // 副标题带入群日期 (#130), 群主没有
@@ -191,9 +206,10 @@ private fun MemberRow(m: RoomMember, myRole: String, divider: Boolean, live: Boo
                 val next = if (m.role == ROLE_ADMIN) ROLE_MEMBER else ROLE_ADMIN
                 DropdownMenuItem({ Text(if (next == ROLE_ADMIN) "设为管理员" else "取消管理员") }, { menu = false; onRole(next) })
             }
-            if (canKick) DropdownMenuItem({ Text("移出群", color = MaterialTheme.colorScheme.error) }, { menu = false; onKick() })
+            if (canKick) DropdownMenuItem({ Text("移出群", color = MaterialTheme.colorScheme.error) }, { menu = false; kick = true })
         }
     }
+    if (kick) KickDialog(m.display, { kick = false }, onKick)
 }
 
 /** 邀请链接行的图标: 和 Agent 一样的圆角方块, 画 user-plus (之前误用了机器人)。 */

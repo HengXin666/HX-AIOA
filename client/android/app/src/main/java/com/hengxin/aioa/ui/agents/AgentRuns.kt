@@ -69,6 +69,10 @@ fun AgentRunSection(group: String, a: ChatAgent, now: Long) {
             else -> run.next?.let { "${CLOCK.format(Date(it))} (${until(it, now)}) · 今天还有 ${leftToday(run.upcoming, now)} 次" } ?: "无法推算"
         }
         HomeRow("下次触发", next, divider = true)
+        // 接下来的触发 (#139, 旧版有): 今明两天推算出的全部时刻
+        run?.upcoming?.drop(1)?.takeIf { run.parsed && it.isNotEmpty() }?.let { rest ->
+            HomeRow("接下来", rest.joinToString(" · ") { upcomingText(it, now) }, divider = true)
+        }
         if (run?.late == true) run.expected?.let { HomeRow("应在", "${CLOCK.format(Date(it))} 触发, 还没运行", divider = true) }
         val pending = rememberPending(group, a, now)
         HomeRow("上次运行", clock(a.lastRun, now) + (pending?.let { " · 待处理 $it" } ?: ""), divider = true)
@@ -118,13 +122,26 @@ fun AgentVersionSection(group: String, a: ChatAgent, now: Long, setAuto: (Boolea
     }
 }
 
-/** 时间线与最近发的几条 (本地库按来源查), 点一条回群里定位。 */
+/** 今天的只写时刻, 明天的带 "明天"。 */
+private fun upcomingText(ts: Long, now: Long): String {
+    val zone = ZoneId.systemDefault()
+    val day = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
+    val hm = HM.format(Date(ts))
+    return if (day == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()) hm else "明天 $hm"
+}
+
+private val HM = SimpleDateFormat("HH:mm", Locale.CHINA)
+
+/**
+ * 时间线与最近发言 (本地库按来源查), 点一条回群里定位。
+ * now 由页面的 rememberNow 传进来, 相对时间 ("x 分钟前") 定时刷新 (#139)。
+ */
 @Composable
-fun AgentRecordSection(model: ChatModel, group: String, a: ChatAgent) {
+fun AgentRecordSection(model: ChatModel, group: String, a: ChatAgent, now: Long) {
     val context = LocalContext.current
-    val now = System.currentTimeMillis()
     var recent by remember { mutableStateOf<List<ServerFrame.Msg>>(emptyList()) }
-    LaunchedEffect(a.sourceId) {
+    // 有新消息 (active 变了) 时重查
+    LaunchedEffect(a.sourceId, a.active) {
         val sid = a.sourceId ?: return@LaunchedEffect
         recent = withContext(Dispatchers.IO) { MessageDb.get(context).bySource(sid, RECENT) }
     }
@@ -133,8 +150,11 @@ fun AgentRecordSection(model: ChatModel, group: String, a: ChatAgent) {
         a.rotated?.let { HomeRow("重新接入", trail = clock(it, now), divider = true) }
         HomeRow("报到", trail = clock(a.joined, now), divider = true)
         HomeRow("最近活跃", trail = clock(a.active, now), divider = true)
-        recent.forEach { m ->
-            HomeRow(plainPreview(m.text), trail = CLOCK.format(Date(m.ts)), divider = true, onClick = {
+    }
+    HomeSection("最近发言", recent.size) {
+        if (recent.isEmpty()) GiNote("本机还没有它的发言")
+        recent.forEachIndexed { i, m ->
+            HomeRow(plainPreview(m.text), trail = ago(m.ts, now), divider = i > 0, onClick = {
                 model.groups.page = ChatPage.CHAT
                 model.groups.openAt(group, m.seq)
             })

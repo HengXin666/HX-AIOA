@@ -70,7 +70,9 @@ internal fun GsDialogs(g: ChatGroups, group: String, meta: ChatMeta?, dialog: Gs
         GsDialog.Tags -> com.hengxin.aioa.ui.feed.FeedTagsDialog(meta?.tags.orEmpty(), close) { dir.setFeedTags(group, it) }
         GsDialog.Delete -> DeleteDialog(g, group, close)
         GsDialog.Clear -> Confirm("清空聊天记录?", "服务端和所有设备上这个群的消息都会删掉, 收藏不受影响, 群资料与 Agent 保留。", "清空", close, onClear)
-        GsDialog.Leave -> Confirm("退出这个群?", "退出后收不到这个群的消息, 需要重新被邀请才能回来。", "退出", close, onLeave)
+        // 单聊是 "删除单聊" (#139), 不是退群
+        GsDialog.Leave -> if (meta?.isDm == true) Confirm("删除这个单聊?", "单聊从列表消失, 收不到这里的新消息; 你或对方在资料卡上点 \"发消息\" 会重新打开。", "删除", close, onLeave)
+        else Confirm("退出这个群?", "退出后收不到这个群的消息, 需要重新被邀请才能回来。", "退出", close, onLeave)
         null -> Unit
     }
 }

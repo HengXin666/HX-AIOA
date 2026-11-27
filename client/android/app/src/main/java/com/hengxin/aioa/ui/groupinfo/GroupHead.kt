@@ -60,9 +60,15 @@ fun viewLabel(meta: ChatMeta?): String = when {
     else -> "聊天"
 }
 
-/** 头部: 头像 (可换), 名字, channel, 域 / 群类型标签; 下面三个计数 (都来自缓存与本地库, 打开不请求)。 */
+/**
+ * 头部: 头像 (可换), 名字, channel, 域 / 群类型标签; 下面三个计数 (都来自缓存与本地库, 打开不请求)。
+ * 点 "成员" / "Agent" 计数进成员页的对应标签 (#139); onAgents 为空时 Agent 计数不可点 (不是群主)。
+ */
 @Composable
-internal fun GroupHead(model: ChatModel, group: String, meta: ChatMeta?, job: AvatarJob?, canAvatar: Boolean, pickAvatar: () -> Unit, modifier: Modifier) {
+internal fun GroupHead(
+    model: ChatModel, group: String, meta: ChatMeta?, job: AvatarJob?, canAvatar: Boolean, pickAvatar: () -> Unit, modifier: Modifier,
+    onMembers: () -> Unit = {}, onAgents: (() -> Unit)? = null,
+) {
     val c = Aioa.colors
     val pal = hxPalette()
     val g = model.groups
@@ -84,8 +90,8 @@ internal fun GroupHead(model: ChatModel, group: String, meta: ChatMeta?, job: Av
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = LINE_ALPHA)))
         Row(Modifier.padding(vertical = 12.dp)) {
-            GiStat(if (meta?.shared == true) meta.members else 1, "成员", Modifier.weight(1f))
-            if (!dm) GiStat(meta?.agents?.size ?: 0, Constants.CLOUD_AGENT, Modifier.weight(1f))
+            GiStat(if (meta?.shared == true) meta.members else 1, "成员", Modifier.weight(1f).pointerTap(onMembers))
+            if (!dm) GiStat(meta?.agents?.size ?: 0, Constants.CLOUD_AGENT, Modifier.weight(1f).pointerTap { onAgents?.invoke() })
             GiStat(today, "今日消息", Modifier.weight(1f))
         }
     }
@@ -119,7 +125,8 @@ internal fun MemberStrip(group: String, meta: ChatMeta?, canInvite: Boolean, onA
     val presence = PeopleOnline.snapshot()
     val shown = if (meta?.shared == true) list.take(STRIP) else listOfNotNull(Me.uid?.let { RoomMember(it, it, "我", com.hengxin.aioa.ui.chat.ROLE_OWNER) })
     Column(modifier) {
-        SectionTitle("群成员", if (meta?.shared == true) meta.members else shown.size, action = "全部", onAction = onAll)
+        // 单聊里不叫 "群成员" (#139)
+        SectionTitle(if (meta?.isDm == true) "成员" else "群成员", if (meta?.shared == true) meta.members else shown.size, action = "全部", onAction = onAll)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             shown.forEach { m ->
                 Column(Modifier.width(60.dp).pointerTap(onAll), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {

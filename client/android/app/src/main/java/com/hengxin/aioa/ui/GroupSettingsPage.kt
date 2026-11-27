@@ -99,7 +99,11 @@ private fun GroupInfoRoot(model: ChatModel, group: String, onBack: () -> Unit, p
     LaunchedEffect(job?.done, meta?.avatar) { if (job?.done != null && job.done == meta?.avatar) AvatarUploads.clear(avatarKey) }
     val doInvite = { scope.launch { api.invite(group).onSuccess { invite = it }.onFailure { dir.error = it.message } }; Unit }
     GiPage(if (dm) "聊天设置" else "群聊设置", busy.orEmpty(), onBack) {
-        GroupHead(model, group, meta, job, manage && job?.running != true, pickAvatar, Modifier.padding(top = 14.dp).enter(0))
+        // 头部计数可点 (#139): 成员 -> 成员页, Agent -> 成员页的 Agent 标签 (只有群主看得到 Agent 标签)
+        GroupHead(
+            model, group, meta, job, manage && job?.running != true, pickAvatar, Modifier.padding(top = 14.dp).enter(0),
+            onMembers = { if (!memo) push(GsPage.Members()) }, onAgents = if (owner && !memo && !dm) ({ push(GsPage.Members(agents = true)) }) else null,
+        )
         job?.error?.let { e ->
             ErrorNote("$AVATAR_FAIL$e", Modifier.padding(top = 8.dp), kind = job.kind ?: ErrKind.guess(e), onRetry = { upload(job.bytes) }, onDismiss = { AvatarUploads.clear(avatarKey) })
         }
