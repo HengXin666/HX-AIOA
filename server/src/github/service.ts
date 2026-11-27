@@ -3,11 +3,12 @@ import type {
   GithubBranchesResult,
   GithubAvailableResult,
   GithubDailyResult,
+  GithubHeatmap,
   GithubRepoDetail,
   GithubReposResult,
   GithubSyncResult,
 } from "@hx-aioa/protocol";
-import { KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_LOGIN, KV_GITHUB_PICKS, KV_GITHUB_SYNCED } from "../constants";
+import { KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_GITHUB_LOGIN, KV_GITHUB_PICKS, KV_GITHUB_SYNCED } from "../constants";
 import type { Env } from "../env";
 import type { Registry } from "../registry";
 import { fetchActivity, fetchAvailable, fetchLogin } from "./account";
@@ -16,6 +17,7 @@ import { applyGithubEvent } from "./apply";
 import { fetchBranches } from "./branches";
 import { cfCached } from "../cf-cache";
 import { dailyOf, dayStart, streakOf } from "./daily";
+import { type HeatStore, commitsByDate, dateIn, heatmapOf, mergeHeat } from "./heatmap";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -23,6 +25,8 @@ const NO_PICKS: Picks = { picks: [], hidden: [] };
 // 分支状况 10 分钟缓存 (内存 + 边缘), 下拉刷新可跳过
 const BRANCH_CACHE_MS = 10 * 60_000;
 const GUESS_BASE = "main";
+const HEAT_SCAN_MS = 31 * 24 * 3600_000;
+const HEAT_LIVE_MS = 2 * 24 * 3600_000;
 
 // GitHub 页面状态: webhook 增量更新, 有 GITHUB_TOKEN 时可回填, 并拉取本人的动态
 export class GithubService {
@@ -119,6 +123,23 @@ export class GithubService {
     };
   }
 
+  /** 每天 cron (#134): 把留存的 30 天动态按天累计进热力图那一行。 */
+  async refreshHeatmap(tz: string, now = Date.now()): Promise<HeatStore> {
+    const fresh = commitsByDate(this.activityStore.pushes(now - HEAT_SCAN_MS), tz);
+    const next = mergeHeat(await this.storage.get<HeatStore>(KV_GITHUB_HEATMAP), fresh, dateIn(now, tz), now);
+    await this.storage.put(KV_GITHUB_HEATMAP, next);
+    return next;
+  }
+
+  /** 热力图与 ETag: 存的那一行 + 最近两天的实时提交; 还没算过时当场算一次。 */
+  async heatmap(tz: string, now = Date.now()): Promise<{ map: GithubHeatmap; tag: string }> {
+    const saved = (await this.storage.get<HeatStore>(KV_GITHUB_HEATMAP)) ?? (await this.refreshHeatmap(tz, now));
+    const live = commitsByDate(this.activityStore.pushes(now - HEAT_LIVE_MS), tz);
+    const today = dateIn(now, tz);
+    const sum = [...live.values()].reduce((a, b) => a + b, 0);
+    return { map: heatmapOf(saved, live, today), tag: `${today}-${saved.updated}-${sum}` };
+  }
+
   /** 关注仓库里最近 days 天活跃, 还没合入默认分支的分支。fresh 跳过缓存。 */
   async branches(days: number, fresh: boolean, now = Date.now()): Promise<GithubBranchesResult | null> {
     const token = this.env.GITHUB_TOKEN;
@@ -159,7 +180,7 @@ export class GithubService {
   /** 停用插件并清除数据: 表与关注列表, 登录名, 同步时间一起清掉; 返回删掉的行数。 */
   async purge(): Promise<number> {
     const n = this.store.clear() + this.activityStore.clear();
-    await this.storage.delete([KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED]);
+    await this.storage.delete([KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP]);
     return n;
   }
 

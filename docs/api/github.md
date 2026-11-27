@@ -35,6 +35,14 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
 - `push` 更新 `lastPush` 和活跃分支列表 (只认分支, 忽略 tag 与空推送; `deleted: true` 的推送把该分支从列表拿掉), 详情带 `branches: [{ branch, at, by, commits, sha?, ci? }]`, 最近的在前, 最多 8 个, `ci` 从已存的 runs 现算; `pull_request` opened / reopened / ready_for_review / converted_to_draft / edited 写入, closed (含合并) 删除; `issues` opened / reopened / edited 写入, closed 删除, 带 `pull_request` 的忽略; `workflow_run` 按 run id 覆盖; `release` published, `star` created, `issue_comment` created 进 timeline。
 - 有 `GITHUB_TOKEN` 且主人启用了插件时, Worker 的 cron 每 30 分钟自动回填一次。回填和 CF 额度检查合成同一次 RPC (`Hub.halfHourly`), 停用插件不再多花 DO 请求。
 
+## 提交热力图 (#134)
+
+`GET /api/v1/github/heatmap` (owner 或 `events:read`) → `{ days: [{ date: "YYYY-MM-DD", commits }], updated }`, 最近 140 天, 从早到晚, 日期按主人设置的时区 (设置 `tz`, 默认 Asia/Shanghai)。
+
+- 数据来自已同步的个人动态 (推送的提交数, 没带提交数的推送算 1), 不额外调 GitHub API。动态只留 30 天, 所以每天的 cron (`0 19 * * *`, 与邮件索引清理同一次 RPC) 把最近 30 天按天累计进一行 (`githubHeatmap`, 同一天取较大值, 超过 140 天的丢掉), `updated` 为这次累计的时间。第一次请求时还没累计过就当场算一次。
+- 最近两天用实时动态覆盖, cron 之后的新提交也能看到。
+- 带 `ETag` (日期 + 累计时间 + 最近两天提交数), 没变时 304。停用插件带 `purge=1` 时一并清掉。
+
 ## 未合入分支
 
 `GET /api/v1/github/branches?days=30&fresh=1` (events:read): 关注仓库里最近 `days` 天 (默认 30, 最多 90) 有提交, 还没合入默认分支的分支。

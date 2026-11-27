@@ -1,8 +1,8 @@
-import { GITHUB_BRANCH_DEFAULT_DAYS, GITHUB_BRANCH_MAX_DAYS, PATH_GITHUB_BRANCHES, GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
+import { GITHUB_BRANCH_DEFAULT_DAYS, GITHUB_BRANCH_MAX_DAYS, PATH_GITHUB_BRANCHES, GITHUB_DAILY_DEFAULT_DAYS, GITHUB_DAILY_MAX_DAYS, PATH_GITHUB_ACTIVITY, PATH_GITHUB_AVAILABLE, PATH_GITHUB_DAILY, PATH_GITHUB_HEATMAP, PATH_GITHUB_REPO, PATH_GITHUB_REPOS, PATH_GITHUB_SYNC, PATH_GITHUB_TRACKED } from "@hx-aioa/protocol";
 import { CODE_NOT_CONFIGURED, CODE_NOT_FOUND, ERR_NO_GITHUB_TOKEN, ERR_NO_RESOURCE, GET, POST, PUT } from "./constants";
 import { type Handler, type Need, OWNER, type Route, route } from "./core";
 import { gated } from "./github/gate";
-import { fail, json, readJson } from "./http";
+import { etagged, fail, json, readJson } from "./http";
 
 const READ = "events:read";
 const DAY_MS = 24 * 3600_000;
@@ -48,6 +48,11 @@ export const GITHUB_ROUTES: Route[] = [
     const days = Math.min(GITHUB_DAILY_MAX_DAYS, Math.max(1, Number(c.url.searchParams.get("days")) || GITHUB_DAILY_DEFAULT_DAYS));
     const tz = Math.max(-TZ_MAX_MIN, Math.min(TZ_MAX_MIN, Number(c.url.searchParams.get("tz")) || 0));
     return json(await c.core.github.daily(days, tz));
+  }),
+  // 提交热力图 (#134): 最近 140 天, 按主人设置的时区分天; 每天 cron 累计, 没变时 304
+  gh(GET, PATH_GITHUB_HEATMAP, READ, async (c) => {
+    const h = await c.core.github.heatmap(await c.core.config.tz());
+    return etagged(c.req, h.tag, () => h.map);
   }),
   // 未合入分支: days 天内有提交 (默认 30, 最多 90); fresh=1 跳过 10 分钟缓存
   gh(GET, PATH_GITHUB_BRANCHES, READ, async (c) => {

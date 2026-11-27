@@ -108,6 +108,11 @@ export class ActivityStore {
     return this.sql.exec("DELETE FROM gh_activity").rowsWritten;
   }
 
+  /** since 之后的推送 (热力图用), 不截条数。 */
+  pushes(since: number): GithubActivityItem[] {
+    return this.sql.exec<Row>("SELECT body FROM gh_activity WHERE ts >= ? AND json_extract(body, '$.kind') = 'push'", since).toArray().map((r) => JSON.parse(r.body) as GithubActivityItem);
+  }
+
   range(since: number, until: number): GithubActivityItem[] {
     return this.sql
       .exec<Row>("SELECT body FROM gh_activity WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 500", since, until)
