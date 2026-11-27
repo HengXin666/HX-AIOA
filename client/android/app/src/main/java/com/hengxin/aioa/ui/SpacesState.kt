@@ -109,6 +109,8 @@ class SpacesState(
     private val metrics: MetricsState,
 ) {
     val spaces = mutableStateListOf<Space>()
+    /** 总览当前看板 (#138): 新外壳顶栏的空间切换与旧外壳的 Chip 共用。 */
+    var board by mutableStateOf(BOARD_DAILY)
     var currentId by mutableStateOf<String?>(null)
     var editing by mutableStateOf(false)
     val logs = mutableStateMapOf<String, List<ChatLine>>()

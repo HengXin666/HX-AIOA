@@ -107,7 +107,8 @@ fun HomeFrame(
     }) {
         Column(Modifier.fillMaxSize()) {
             if (bars) {
-                HomeTopBar(tab.label, switcher, { scope.launch { shell.open() } }, { switcher = !switcher }, menu, { menu = !menu }, dot = unread > 0)
+                val title = if (tab == Tab.OVERVIEW) boardTitle(chat.spaces.board, chat.spaces.spaces) else tab.label
+                HomeTopBar(title, switcher, { scope.launch { shell.open() } }, { switcher = !switcher }, menu, { menu = !menu }, dot = unread > 0)
                 SpaceTabs(spaces, tab.name, { onTab(Tab.valueOf(it)) })
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -126,6 +127,13 @@ fun HomeFrame(
             { menu = false },
             offset = IntOffset(0, barPx),
         )
-        SpaceSwitcher(switcher, spaces, tab.name, { switcher = false; pick(it) }, { switcher = false }, { switcher = false }, IntOffset(0, barPx))
+        // 标题下的空间切换 (#138): 总览 (日常), 开发, 服务器, 插件空间; 选中就切到总览并显示那个看板
+        val boards = boardSpaces(chat.spaces.spaces)
+        val board = if (tab == Tab.OVERVIEW) chat.spaces.board else ""
+        SpaceSwitcher(switcher, boards, board, { key ->
+            switcher = false
+            chat.spaces.board = key
+            if (tab != Tab.OVERVIEW) onTab(Tab.OVERVIEW)
+        }, { switcher = false }, { switcher = false }, IntOffset(0, barPx))
     }
 }

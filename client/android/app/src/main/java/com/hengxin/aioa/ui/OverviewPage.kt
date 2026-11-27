@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +52,7 @@ private const val LAYER_SHOWN = 3
 fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
     val spaces = chat.spaces.spaces
-    var board by rememberSaveable { mutableStateOf(BOARD_DAILY) }
+    val board = chat.spaces.board
     val picked = spaces.firstOrNull { it.id == board }
     WatchProbes(chat.metrics, picked?.metricSubjects().orEmpty())
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
@@ -67,24 +66,21 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     }
     PageColumn("总览") {
         if (!feed.v1) Status(chat.online, chat.metrics.probes.size, feed.v1)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            BOARDS.forEach { (id, label) -> Chip(label, board == id) { board = id } }
-            spaces.forEach { s -> Chip(s.title, board == s.id) { board = s.id } }
+        // 新外壳里看板在顶栏标题的空间切换里选 (#138), 这排 Chip 只留给旧外壳与平板
+        if (!LocalShellBar.current) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BOARDS.forEach { (id, label) -> Chip(label, board == id) { chat.spaces.board = id } }
+            spaces.forEach { s -> Chip(s.title, board == s.id) { chat.spaces.board = s.id } }
         }
         when {
             picked != null -> SpacesSection(chat, picked.id)
             board == BOARD_DEV -> DevBoard(chat, openGithub, open)
             board == BOARD_SERVERS -> ServerBoard(chat, open)
-            feed.v1 -> OverviewV2(chat, state, open) { id -> detail = findEvent(feed, id) }
+            feed.v1 -> OverviewV2(chat, state, open, openGithub) { id -> detail = findEvent(feed, id) }
             else -> LegacyLayers(chat, state, open)
         }
     }
 }
 
-private const val BOARD_DAILY = "#daily"
-private const val BOARD_DEV = "#dev"
-private const val BOARD_SERVERS = "#servers"
-private val BOARDS = listOf(BOARD_DAILY to "日常", BOARD_DEV to "开发", BOARD_SERVERS to "服务器")
 
 private fun findEvent(feed: FeedState, id: String): Envelope? = feed.layers.values.flatten().firstOrNull { it.ev.id == id }?.ev
 
