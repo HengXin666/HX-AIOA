@@ -71,6 +71,8 @@ internal object V1Decode {
             deletedSeq = o.optJSONObject(KEY_DELETED)?.optLong("seq") ?: 0L,
             by = opt(o, "by"),
             file = FileRef.parse(data.optJSONObject("file")),
+            mentions = strings(o.optJSONArray("mentions")),
+            bundle = Bundle.parse(data.optJSONObject("bundle")),
         )
     }
 
@@ -144,7 +146,7 @@ fun Envelope.toMsg(): ServerFrame.Msg {
     val human = source.type == Constants.SOURCE_TYPE_USER || source.id.startsWith(Constants.DEVICE_PREFIX)
     val mine = if (by != null && me != null) by == me else human
     val src = if (mine && source.id.startsWith(Constants.DEVICE_PREFIX)) Me.label else source.name.ifEmpty { source.id }
-    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq, file, mine, source.id, feed)
+    return ServerFrame.Msg(seq, ts, src, chatText(), cid, channel?.ifEmpty { null }, reply, fwd, html, id, deleted, deletedSeq, file, mine, source.id, feed, mentions, bundle)
 }
 
 /** 聊天里显示的正文 (Markdown): 报告带标题与全文, 有标题的消息标题加粗; 纯文本消息 summary 就是原文。 */

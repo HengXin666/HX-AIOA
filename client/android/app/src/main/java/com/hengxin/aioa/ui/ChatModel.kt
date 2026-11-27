@@ -148,7 +148,9 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
 
     override fun onFrame(frame: ServerFrame) {
         if (metrics.onFrame(frame) || spaces.onFrame(frame) || terms.onFrame(frame)) return
-        if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic)
+        if (frame is ServerFrame.ChatSync) return groups.directory.onSync(frame.topic, frame.chat)
+        if (frame is ServerFrame.ChatRead) return groups.directory.applyRead(frame.channel, frame.read)
+        if (frame is ServerFrame.AgentActive) return groups.directory.setAgentActive(frame.channel, frame.keyId, frame.active)
         if (frame is ServerFrame.Presence) return groups.presence.apply(frame)
         if (frame is ServerFrame.PluginUpdate) {
             PluginEvents.bump()
@@ -176,7 +178,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     private fun maybeBanner(frame: ServerFrame.Msg) {
         val key = frame.groupKey()
         if (isMine(frame) || groups.open == key || System.currentTimeMillis() - frame.ts > BANNER_FRESH_MS) return
-        if (MutedGroups.contains(getApplication(), key)) return
+        if (MutedGroups.contains(getApplication(), key) && !com.hengxin.aioa.proto.Mentions.hits(frame.mentions, Me.uid)) return
         banner = frame
         bannerJob?.cancel()
         bannerJob = viewModelScope.launch {

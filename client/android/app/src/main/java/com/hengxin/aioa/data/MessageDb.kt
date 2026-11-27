@@ -130,6 +130,15 @@ class MessageDb private constructor(context: Context) :
         return all to agent
     }
 
+    /** 按 seq 批量取 (合并转发详情先用本地有的)。 */
+    fun bySeqs(seqs: Collection<Long>): List<ServerFrame.Msg> =
+        if (seqs.isEmpty()) emptyList() else query("SELECT * FROM $T_MSG WHERE $C_SEQ IN (${seqs.joinToString(",")}) ORDER BY $C_SEQ", emptyArray())
+
+    /** 某个来源在群里的最近发言时间与条数 (资料卡用, 只算本地)。 */
+    fun spoke(key: String, sid: String): Pair<Long, Int> =
+        readableDatabase.rawQuery("SELECT IFNULL(MAX($C_TS), 0), COUNT(*) FROM $T_MSG WHERE $C_GRP = ? AND $C_SID = ? AND $LIVE", arrayOf(key, sid))
+            .use { if (it.moveToFirst()) it.getLong(0) to it.getInt(1) else 0L to 0 }
+
     fun find(seq: Long): ServerFrame.Msg? = query("SELECT * FROM $T_MSG WHERE $C_SEQ = ?", arrayOf(seq.toString())).firstOrNull()
 
     /** 每个群最后一条消息, 按时间倒序; 未读按该群自己的已读位置算, 不含本机发出的。 */
@@ -231,7 +240,9 @@ class MessageDb private constructor(context: Context) :
                     val del = x?.optString(X_DELETED)?.ifEmpty { null }
                     val file = com.hengxin.aioa.proto.FileRef.parse(x?.optJSONObject(X_FILE))
                     val feed = x?.optJSONObject(X_FEED)?.toString()
-                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid), feed = feed))
+                    val mentions = x?.optJSONArray(X_MENTIONS)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty()
+                    val bundle = com.hengxin.aioa.proto.Bundle.parse(x?.optJSONObject(X_BUNDLE))
+                    add(ServerFrame.Msg(c.getLong(seq), c.getLong(ts), srcV, c.getString(text), c.getString(cid), g, reply, fwd, html, c.getString(id), del, file = file, mine = isMine, sid = c.getString(sid), feed = feed, mentions = mentions, bundle = bundle))
                 }
             }
         }
@@ -254,10 +265,12 @@ class MessageDb private constructor(context: Context) :
         private const val X_HTML = "html"
         private const val X_FILE = "file"
         private const val X_FEED = "feed"
+        private const val X_MENTIONS = "mentions"
+        private const val X_BUNDLE = "bundle"
 
         // 引用与转发的快照存成一列 JSON, 没有就是 null
         private fun extraOf(m: ServerFrame.Msg): String? {
-            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null && m.feed == null) return null
+            if (m.reply == null && m.fwd == null && m.html == null && m.deleted == null && m.file == null && m.feed == null && m.mentions.isEmpty() && m.bundle == null) return null
             val o = JSONObject()
             m.reply?.let { o.put(X_REPLY, JSONObject().put(C_SEQ, it.seq).put(C_SRC, it.src).put(C_TEXT, it.text)) }
             m.fwd?.let { o.put(X_FWD, JSONObject().put(C_SRC, it.src).put(C_TS, it.ts)) }
@@ -265,6 +278,8 @@ class MessageDb private constructor(context: Context) :
             m.file?.let { o.put(X_FILE, it.toJson()) }
             m.feed?.let { runCatching { o.put(X_FEED, JSONObject(it)) } }
             m.deleted?.let { o.put(X_DELETED, it) }
+            if (m.mentions.isNotEmpty()) o.put(X_MENTIONS, org.json.JSONArray(m.mentions))
+            m.bundle?.let { o.put(X_BUNDLE, it.toJson()) }
             return o.toString()
         }
         private const val T_MSG = "msg"

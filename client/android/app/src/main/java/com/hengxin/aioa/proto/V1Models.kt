@@ -71,6 +71,9 @@ data class Envelope(
     // 发送者账号 id (人发的聊天消息)
     val by: String? = null,
     val file: FileRef? = null,
+    // @ 提醒 (#131): uid, agent:<keyId>, all
+    val mentions: List<String> = emptyList(),
+    val bundle: Bundle? = null,
 )
 
 /** 消息附件: 字节在服务端 R2, 消息里只有引用。 */
@@ -86,6 +89,28 @@ data class FileRef(val id: String, val name: String, val size: Long, val mime: S
         }
     }
 }
+
+/** 合并转发 (#132): 只存引用与前几条摘要, 详情按 refs 批量取。 */
+data class Bundle(val from: String, val count: Int, val refs: List<Long>, val head: List<BundleLine>) {
+    fun toJson(): org.json.JSONObject = org.json.JSONObject().put("from", from).put("count", count)
+        .put("refs", org.json.JSONArray(refs))
+        .put("head", org.json.JSONArray(head.map { org.json.JSONObject().put("src", it.src).put("text", it.text) }))
+
+    companion object {
+        fun parse(o: org.json.JSONObject?): Bundle? {
+            val arr = o?.optJSONArray("refs") ?: return null
+            val refs = (0 until arr.length()).map { arr.optLong(it) }.filter { it > 0 }
+            val h = o.optJSONArray("head")
+            val head = (0 until (h?.length() ?: 0)).mapNotNull { h?.optJSONObject(it) }.map { BundleLine(it.optString("src"), it.optString("text")) }
+            return Bundle(o.optString("from"), o.optInt("count", refs.size), refs, head)
+        }
+    }
+}
+
+data class BundleLine(val src: String, val text: String)
+
+/** 发合并转发时帧里带的: 来源群名与被转发消息的 seq。 */
+data class BundleSend(val from: String, val seqs: List<Long>)
 
 /** 引用的快照: 原消息的序号, 来源与摘要。 */
 data class MsgRef(val seq: Long, val src: String, val text: String)

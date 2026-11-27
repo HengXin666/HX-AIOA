@@ -44,12 +44,26 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    fun onSync(topic: String) {
+    /** chat 为帧里带的那一行 (#129): 直接合并, 不带时照旧整表重拉。 */
+    fun onSync(topic: String, chat: JSONObject? = null) {
         when (topic) {
             TOPIC_FAVORITES -> refreshFavorites()
             Senders.TOPIC -> refreshSenders()
-            else -> refreshChats()
+            else -> chat?.let(::parseChat)?.let { applyMetas(metas + (it.channel to it)) } ?: refreshChats()
         }
+    }
+
+    /** 本人其它设备的已读位置 (#129 chat_read 帧): 只前进, 不重拉。 */
+    fun applyRead(channel: String, read: Long) {
+        val cur = metas[channel] ?: return
+        if (read > cur.read) applyMetas(metas + (channel to cur.copy(read = read)))
+    }
+
+    /** Agent 活跃时间 (#129 agent_active 帧): 只改内存。 */
+    fun setAgentActive(channel: String, keyId: String, active: Long) {
+        val cur = metas[channel] ?: return
+        if (cur.agents.none { it.keyId == keyId }) return
+        metas = metas + (channel to cur.copy(agents = cur.agents.map { if (it.keyId == keyId) it.copy(active = active) else it }))
     }
 
     /** 发送者头像 (#123): 先用缓存, 再问服务端。 */

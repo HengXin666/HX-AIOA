@@ -19,6 +19,7 @@ private const val T_TASK = "task"
 private const val KEY_SID = "sid"
 private const val KEY_COLS = "cols"
 private const val KEY_ROWS = "rows"
+private const val KEY_CHANNEL = "channel"
 
 sealed interface ServerFrame {
     /** v 为 0 表示旧 /ws 端点; v1 流还带服务端时间与会话。 */
@@ -47,6 +48,8 @@ sealed interface ServerFrame {
         val sid: String? = null,
         // 统一推送卡片 (data.feed 原始 JSON)
         val feed: String? = null,
+        val mentions: List<String> = emptyList(),
+        val bundle: Bundle? = null,
     ) : ServerFrame
     data class Sent(val cid: String, val seq: Long, val ts: Long) : ServerFrame
     data class Err(val code: String, val text: String, val aid: String? = null) : ServerFrame
@@ -61,7 +64,11 @@ sealed interface ServerFrame {
     data class SpaceUpdate(val id: String, val deleted: Boolean, val raw: String) : ServerFrame
     data class Settings(val raw: String) : ServerFrame
     data class Agents(val agents: List<AgentStatus>) : ServerFrame
-    data class ChatSync(val topic: String, val channel: String?) : ServerFrame
+    /** chat 为变化的那一行群资料 (#129), 旧服务端不带, 收到后照旧重拉。 */
+    data class ChatSync(val topic: String, val channel: String?, val chat: JSONObject? = null) : ServerFrame
+    /** 本人其它设备的已读位置 (#129)。 */
+    data class ChatRead(val channel: String, val read: Long) : ServerFrame
+    data class AgentActive(val channel: String, val keyId: String, val active: Long) : ServerFrame
     /** 插件数据有变: 按 rev 增量拉。 */
     data class PDataSync(val plugin: String, val coll: String, val rev: Long) : ServerFrame
     /** 群里谁在监听 / 输入; until 为 0 表示长连在线, 否则到点自动消失。 */
@@ -133,9 +140,11 @@ object Frames {
             T_OVERVIEW -> o.getJSONObject(T_OVERVIEW).let { ServerFrame.OverviewFrame(V1Decode.overview(it), it.toString()) }
             "space_update" -> ServerFrame.SpaceUpdate(o.optString("id"), o.optBoolean("deleted"), o.toString())
             "settings" -> ServerFrame.Settings(o.optJSONObject("settings")?.toString() ?: "{}")
-            "chat_sync" -> ServerFrame.ChatSync(o.optString("topic"), o.optString("channel").ifEmpty { null })
+            "chat_sync" -> ServerFrame.ChatSync(o.optString("topic"), o.optString(KEY_CHANNEL).ifEmpty { null }, o.optJSONObject("chat"))
+            "chat_read" -> ServerFrame.ChatRead(o.optString(KEY_CHANNEL), o.optLong("read"))
+            "agent_active" -> ServerFrame.AgentActive(o.optString(KEY_CHANNEL), o.optString("keyId"), o.optLong("active"))
             "pdata_sync" -> ServerFrame.PDataSync(o.optString("plugin"), o.optString("coll"), o.optLong("rev"))
-            "presence" -> ServerFrame.Presence(o.optString("channel"), presence(o.optJSONArray("listening")), presence(o.optJSONArray("typing")))
+            "presence" -> ServerFrame.Presence(o.optString(KEY_CHANNEL), presence(o.optJSONArray("listening")), presence(o.optJSONArray("typing")))
             "agents" -> ServerFrame.Agents(V1Decode.agents(o.optJSONArray("agents")))
             "task_log" -> o.getJSONObject("entry").let { e ->
                 ServerFrame.TaskLog(o.getString("taskId"), e.optString("role"), e.optString("kind"), e.optString(KEY_TEXT).ifEmpty { null }, e.optLong(KEY_TS))
@@ -191,16 +200,18 @@ object Frames {
     /** 声明当前在看的主体, 空列表表示不看了; 页面离开或进入后台时必须发空列表。 */
     fun watch(subjects: List<String>): String = JSONObject().put(KEY_T, "watch").put("subjects", JSONArray(subjects)).toString()
 
-    /** 发消息: channel 为目标群 (备忘不写), reply / fwd 为被引用 / 被转发消息的 seq。 */
-    fun send(cid: String, text: String, channel: String? = null, reply: Long? = null, fwd: Long? = null, file: String? = null): String {
+    /** 发消息: channel 为目标群 (备忘不写), reply / fwd 为被引用 / 被转发消息的 seq; mentions 为 @ 记号, bundle 为合并转发。 */
+    fun send(cid: String, text: String, channel: String? = null, reply: Long? = null, fwd: Long? = null, file: String? = null, mentions: List<String> = emptyList(), bundle: BundleSend? = null): String {
         val o = JSONObject()
             .put(KEY_T, "send")
             .put(KEY_CID, cid)
             .put(KEY_BODY, JSONObject().put(KEY_KIND, KIND_TEXT).put(KEY_TEXT, text))
-        channel?.let { o.put("channel", it) }
+        channel?.let { o.put(KEY_CHANNEL, it) }
         reply?.let { o.put("reply", it) }
         fwd?.let { o.put("fwd", it) }
         file?.let { o.put("file", it) }
+        if (mentions.isNotEmpty()) o.put("mentions", JSONArray(mentions))
+        bundle?.let { o.put("bundle", JSONObject().put("from", it.from).put("seqs", JSONArray(it.seqs))) }
         return o.toString()
     }
 
@@ -215,7 +226,7 @@ object Frames {
 
     fun termClose(sid: String): String = JSONObject().put(KEY_T, "term_close").put(KEY_SID, sid).toString()
 
-    fun typing(channel: String): String = JSONObject().put(KEY_T, "typing").put("channel", channel).toString()
+    fun typing(channel: String): String = JSONObject().put(KEY_T, "typing").put(KEY_CHANNEL, channel).toString()
 
     fun ack(seq: Long): String = JSONObject().put(KEY_T, "ack").put(KEY_SEQ, seq).toString()
 

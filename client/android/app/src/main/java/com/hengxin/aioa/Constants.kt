@@ -156,6 +156,14 @@ object Constants {
     const val SETTINGS_PATH = "api/v1/settings"
     // 消息分组 (群放进组) 存在账号设置里, 多端同步
     const val SETTING_CHAT_FOLDERS = "chatFolders"
+    // 标签 (#135): { 标签: [channel] }, 同样存账号设置
+    const val SETTING_CHAT_TAGS = "chatTags"
+    // 单聊 (#133) 与合并转发详情批量取 (#132)
+    const val DMS_PATH = "api/v1/dms"
+    const val EVENTS_SEQ_PATH = "api/v1/events/seq"
+    const val BUNDLE_MAX = 100
+    // 自己的消息 2 分钟内可撤回, 管理员随时 (对齐 QQ)
+    const val RECALL_WINDOW_MS = 2 * 60_000L
     // 工作台按钮动作的 taskId 前缀, 与 protocol 的 BUTTON_TASK_PREFIX 一致
     const val BUTTON_TASK_PREFIX = "button:"
     const val STYLE_DANGER = "danger"
