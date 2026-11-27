@@ -15,6 +15,7 @@ private const val W = 390
 private const val H = 844
 private const val FULL_H = 1880
 private const val GROUP_H = 1420
+private const val AGENT_H = 1500
 private const val SETTLE_MS = 1800L
 private const val FRAME_MS = 50L
 
@@ -34,6 +35,16 @@ fun main(args: Array<String>) {
         "10-direct" to { DirectDemo() },
         "11-group" to { GroupInfoDemo() },
         "12-members" to { MembersDemo() },
+        "20-list" to { ChatListV2() },
+        "21-domain" to { DomainDemo() },
+        "22-mention" to { MentionDemo() },
+        "23-voice" to { VoiceDemo() },
+        "24-longpress" to { LongPressDemo() },
+        "25-multi" to { MultiSelectDemo() },
+        "26-forward" to { ForwardDemo() },
+        "27-person" to { PersonSheetDemo() },
+        "28-agent" to { AgentSheetDemo() },
+        "29-agent-set" to { AgentSettingsDemo() },
     )
     for (dark in listOf(true, false)) {
         val mode = if (dark) "dark" else "light"
@@ -41,6 +52,7 @@ fun main(args: Array<String>) {
         // 总览整页 (不滚动, 一次看全)
         shot(File(out, "0-overview-full-$mode.png"), dark, FULL_H) { HomeDemo() }
         shot(File(out, "11-group-full-$mode.png"), dark, GROUP_H) { GroupInfoDemo() }
+        shot(File(out, "29-agent-set-full-$mode.png"), dark, AGENT_H) { AgentSettingsDemo() }
         listOf(0f, 0.2f, 0.4f, 0.6f, 0.8f, 1f).forEachIndexed { i, f ->
             shot(File(out, "drawer-$mode-$i.png"), dark) { HomeDemo(drawer = f) }
         }

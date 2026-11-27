@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -108,7 +109,7 @@ fun ChatRoomDemo() {
             }
             Spacer(Modifier.height(12.dp))
         }
-        Composer(listOf("mic", "image", "camera", "at-sign", "bot", "smile", "plus"), "发消息, @ 交给 Agent")
+        Composer("发消息, 输入 @ 叫人或 Agent")
     }
 }
 
@@ -128,12 +129,12 @@ fun DirectDemo() {
             SysNote("单聊只有你们两个人; 想让 Agent 帮忙, 在群里 @ 它", Modifier.enter(5))
             Spacer(Modifier.height(12.dp))
         }
-        Composer(listOf("mic", "image", "camera", "folder", "smile", "plus"), "发消息")
+        Composer("发消息")
     }
 }
 
 @Composable
-private fun TimeChip(t: String, modifier: Modifier) {
+internal fun TimeChip(t: String, modifier: Modifier) {
     val c = Aioa.colors
     Box(modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         Text(t, c.textSecondary, 12, Modifier.clip(RoundedCornerShape(8.dp)).background(c.surface).padding(horizontal = 10.dp, vertical = 3.dp))
@@ -141,7 +142,7 @@ private fun TimeChip(t: String, modifier: Modifier) {
 }
 
 @Composable
-private fun SysNote(t: String, modifier: Modifier) {
+internal fun SysNote(t: String, modifier: Modifier) {
     val c = Aioa.colors
     Box(modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
         Text(t, c.textSecondary, 12, Modifier.clip(RoundedCornerShape(8.dp)).background(c.surface).padding(horizontal = 10.dp, vertical = 4.dp))
@@ -162,7 +163,7 @@ private fun bubbleShape(mine: Boolean) =
     if (mine) RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp) else RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)
 
 @Composable
-private fun Msg(name: String, role: String, tone: Color, text: String, modifier: Modifier) {
+internal fun Msg(name: String, role: String, tone: Color, text: String, modifier: Modifier) {
     val c = Aioa.colors
     Row(modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Initial(name.take(1), 40, tone)
@@ -174,7 +175,7 @@ private fun Msg(name: String, role: String, tone: Color, text: String, modifier:
 }
 
 @Composable
-private fun AgentMsg(name: String, tone: Color, modifier: Modifier, body: @Composable () -> Unit) {
+internal fun AgentMsg(name: String, tone: Color, modifier: Modifier, body: @Composable () -> Unit) {
     val c = Aioa.colors
     Row(modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
@@ -191,7 +192,7 @@ private fun AgentMsg(name: String, tone: Color, modifier: Modifier, body: @Compo
 }
 
 @Composable
-private fun Mine(text: String, quote: String, modifier: Modifier) {
+internal fun Mine(text: String, quote: String, modifier: Modifier) {
     val c = Aioa.colors
     Row(modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
         Column(Modifier.widthIn(max = BUBBLE_MAX).clip(bubbleShape(true)).background(c.accent).padding(horizontal = 12.dp, vertical = 9.dp)) {
@@ -206,17 +207,27 @@ private fun Mine(text: String, quote: String, modifier: Modifier) {
     }
 }
 
+/** 输入栏 (对齐微信 / QQ): 左边切语音, 中间输入, 右边发送; 下面一排 表情, 图片, 拍照, 文件, 更多。@ 靠输入 "@" 或长按头像, 不占按钮。 */
 @Composable
-private fun Composer(icons: List<String>, hint: String) {
+internal fun Composer(hint: String, text: String = "", voice: Boolean = false) {
     val c = Aioa.colors
     Column(Modifier.fillMaxWidth().background(c.sidebar)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.6f)))
-        Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(hint, c.textSecondary, 15, Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.surface).padding(horizontal = 14.dp, vertical = 11.dp))
-            Text("发送", c.onAccent, 14, Modifier.clip(RoundedCornerShape(12.dp)).background(c.accent).padding(horizontal = 14.dp, vertical = 10.dp), weight = FontWeight.SemiBold)
+        Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).pointerTap {}, contentAlignment = Alignment.Center) {
+                Icon(if (voice) "keyboard" else "mic", c.text, 22.dp)
+            }
+            if (voice) {
+                Text("按住 说话", c.text, 15, Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.surfaceAlt).padding(vertical = 11.dp).wrapContentWidth(Alignment.CenterHorizontally), weight = FontWeight.SemiBold)
+            } else {
+                Text(text.ifEmpty { hint }, if (text.isEmpty()) c.textSecondary else c.text, 15, Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.surface).padding(horizontal = 14.dp, vertical = 11.dp))
+                Text("发送", if (text.isEmpty()) c.textSecondary else c.onAccent, 14, Modifier.clip(RoundedCornerShape(12.dp)).background(if (text.isEmpty()) c.surface else c.accent).padding(horizontal = 14.dp, vertical = 10.dp), weight = FontWeight.SemiBold)
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            icons.forEach { Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).pointerTap {}, contentAlignment = Alignment.Center) { Icon(it, c.textSecondary, 22.dp) } }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            listOf("smile", "image", "camera", "folder", "plus").forEach {
+                Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).pointerTap {}, contentAlignment = Alignment.Center) { Icon(it, c.textSecondary, 22.dp) }
+            }
         }
     }
 }
