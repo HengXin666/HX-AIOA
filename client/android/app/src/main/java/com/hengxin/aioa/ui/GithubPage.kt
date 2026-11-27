@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.Dot
 import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.CardState
 import com.hengxin.aioa.kit.Chip
@@ -56,7 +57,7 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
                 state.repos.isNotEmpty() -> {
                     Summary(state)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Chip("选择仓库", false, onPick) }
-                    AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r, state.branches.of(r.repo)?.branches?.size ?: 0) { openRepo(r.repo) } }
+                    Card { AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r, state.branches.of(r.repo)?.branches?.size ?: 0) { openRepo(r.repo) } } }
                 }
             }
         }
@@ -93,28 +94,14 @@ private fun EmptyRepos(synced: Boolean, onPick: () -> Unit, onAddSource: () -> U
     }
 }
 
+/** 一行一个仓库 (#138): GitHub 图标, 仓库名, PR / Issue / 未合入 / 最近推送压到右边, 最右 CI 状态点。 */
 @Composable
 private fun RepoCard(repo: GhRepo, unmerged: Int, open: () -> Unit) {
-    val c = Aioa.colors
-    Card(onClick = open) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(ICON_GITHUB, c.textSecondary, 16.dp)
-            Box(Modifier.weight(1f)) { Text(repo.repo, c.text, GH_ROW_SP, weight = FontWeight.Medium) }
-            Icon(ICON_STAR, c.textSecondary, 14.dp)
-            Text("${repo.stars}", c.textSecondary, 13)
-        }
-        repo.description?.let { Paragraph(it, c.textSecondary, 13, maxLines = 2) }
-        CiLine(repo.ci)
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            IconCount(ICON_PR, repo.openPrs, LABEL_PR)
-            IconCount(ICON_ISSUE, repo.openIssues, LABEL_ISSUE)
-            if (unmerged > 0) IconCount(ICON_GITHUB, unmerged, "未合入")
-        }
-        pushLine(repo.lastPush)?.let {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon("git-commit-horizontal", c.textSecondary, 14.dp)
-                Text(it, c.textSecondary, GH_META_SP)
-            }
-        }
-    }
+    val meta = metaOf(
+        if (repo.openPrs > 0) "${repo.openPrs} $LABEL_PR" else "",
+        if (repo.openIssues > 0) "${repo.openIssues} $LABEL_ISSUE" else "",
+        if (unmerged > 0) "$unmerged 未合入" else "",
+        repo.lastPush?.let { ago(it.at) }.orEmpty(),
+    )
+    OneRow(ICON_GITHUB, repo.repo, meta, onClick = open) { Dot(ciColor(repo.ci?.status)) }
 }
