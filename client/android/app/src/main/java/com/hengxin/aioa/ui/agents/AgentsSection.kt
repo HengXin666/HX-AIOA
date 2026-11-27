@@ -75,16 +75,19 @@ fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>) {
             val state = stateOf(a, a.keyId in listening)
             var menu by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().clickable { layer = Layer.Detail(a.keyId) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // 一行一条 (#121): 状态点, 名字, 状态说明 (省略), 右边小标注: 可读几个群, 插件, skill
                 StatusDot(state)
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(a.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text(stateLine(a, state, now), fontSize = 12.sp, color = c.outline)
-                    FlowRow(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        AgentTag(if (a.reads.isEmpty()) "只发不读" else "可读 ${a.reads.size} 个群")
-                        a.plugin?.let { AgentTag("插件") }
-                        SkillTags(group, a, now)
+                Text(a.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                Spacer(Modifier.width(8.dp))
+                Text(stateLine(a, state, now), Modifier.weight(1f), fontSize = 12.sp, color = c.outline, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (a.reads.isNotEmpty()) {
+                        com.hengxin.aioa.kit.Icon("eye", c.outline, 12.dp)
+                        Text("${a.reads.size}", fontSize = 11.sp, color = c.outline)
                     }
+                    a.plugin?.let { com.hengxin.aioa.kit.Icon("puzzle", c.outline, 12.dp) }
+                    SkillMarks(group, a, now)
                 }
                 Box {
                     Box(Modifier.size(36.dp).clickable { menu = true }, contentAlignment = Alignment.Center) { Text("⋯", fontSize = 20.sp, color = c.outline) }

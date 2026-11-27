@@ -92,6 +92,25 @@ fun SkillTags(group: String, a: ChatAgent, now: Long) {
     if (run.late) AgentTag("定时未运行", true)
 }
 
+/** 列表行右边的图标式标注 (一行一条用): 小更新, 要重新接入, 待处理条数, 定时未运行; 文字版留给详情页。 */
+@Composable
+fun SkillMarks(group: String, a: ChatAgent, now: Long) {
+    if (!isSkillAgent(a)) return
+    val c = com.hengxin.aioa.kit.Aioa.colors
+    val s = rememberSkill(a, now)
+    val pending = rememberPending(group, a, now)
+    when (s.gap) {
+        SkillGap.SAME -> Unit
+        SkillGap.MINOR -> com.hengxin.aioa.kit.Icon("download", c.accent, 12.dp)
+        SkillGap.MAJOR -> com.hengxin.aioa.kit.Icon("alert-triangle", c.danger, 12.dp)
+    }
+    pending?.takeIf { it > 0 }?.let {
+        com.hengxin.aioa.kit.Icon("inbox", c.textSecondary, 12.dp)
+        Text("$it", fontSize = 11.sp, color = c.textSecondary)
+    }
+    if (runInfo(a, now)?.late == true) com.hengxin.aioa.kit.Icon("clock", c.danger, 12.dp)
+}
+
 // 时间点按本机日界标 "今天 / 明天", 更远的写日期
 private fun dayLabel(ts: Long, now: Long): String {
     val zone = java.time.ZoneId.systemDefault()

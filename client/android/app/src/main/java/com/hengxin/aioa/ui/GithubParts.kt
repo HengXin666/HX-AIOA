@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -21,7 +22,7 @@ import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.pressable
 
-const val ICON_GITHUB = "git-branch"
+const val ICON_GITHUB = "github"
 const val ICON_PR = "git-pull-request"
 const val ICON_ISSUE = "circle-dot"
 const val ICON_STAR = "star"
@@ -35,6 +36,7 @@ const val GH_WEB_ROOT = "https://github.com/"
 const val GH_META_SP = 12
 const val GH_ROW_SP = 15
 private const val META_ALPHA = 0.8f
+private val META_MAX = 150.dp
 
 /** CI 状态点颜色: 绿成功, 红失败, 黄运行中, 灰其他。 */
 @Composable
@@ -102,20 +104,18 @@ fun IconCount(icon: String, count: Int, label: String) {
     }
 }
 
-/** 列表里的一行: 左图标, 标题与说明, 可点开浏览器。 */
+/** 列表里的一行 (#121 一行一条): 左图标, 标题单行省略, 说明压到右边; 可点开浏览器。 */
 @Composable
 fun GhRow(icon: String, title: String, meta: String, tint: Color = Aioa.colors.textSecondary, onClick: (() -> Unit)?) {
     val c = Aioa.colors
     Row(
-        Modifier.fillMaxWidth().pressable(onClick).padding(vertical = 6.dp),
-        verticalAlignment = Alignment.Top,
+        Modifier.fillMaxWidth().pressable(onClick).padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(icon, tint, 16.dp, Modifier.padding(top = 2.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Paragraph(title, c.text, 14, maxLines = 2)
-            if (meta.isNotEmpty()) Text(meta, c.textSecondary.copy(alpha = META_ALPHA), 11)
-        }
+        Icon(icon, tint, 15.dp)
+        Text(title, c.text, 14, Modifier.weight(1f))
+        if (meta.isNotEmpty()) Text(meta, c.textSecondary.copy(alpha = META_ALPHA), 11, Modifier.widthIn(max = META_MAX))
     }
 }
 
