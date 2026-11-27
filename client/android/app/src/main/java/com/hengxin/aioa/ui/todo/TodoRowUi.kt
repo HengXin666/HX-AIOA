@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.TodoRow
+import com.hengxin.aioa.kit.TreePath
+import com.hengxin.aioa.kit.treeGuides
 import com.hengxin.aioa.kit.pressable
 import kotlinx.coroutines.delay
 
@@ -56,14 +58,17 @@ private val PILL = RoundedCornerShape(50)
 // 选中态与标签的底色透明度, 待办各页共用
 internal const val CHIP_ALPHA = 0.12f
 private const val PRIO_URGENT = 1
+private const val GUIDE_ALPHA = 0.45f
 
 @Composable
-internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (String) -> Unit, open: (TodoRow) -> Unit, showRepo: Boolean = false, showArea: Boolean = false, tick: (TodoRow) -> Unit) {
+internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (String) -> Unit, open: (TodoRow) -> Unit, showRepo: Boolean = false, showArea: Boolean = false, lasts: TreePath = emptyList(), tick: (TodoRow) -> Unit) {
     val c = Aioa.colors
     val r = n.row
     val key = "n:${r.channel}:${r.id}"
     val parent = n.kids.isNotEmpty()
     val shut = key in closed
+    // 树形列表: 左边画层级连线 (#121), 位置参数与下面的缩进, 勾选框一致
+    Column(Modifier.fillMaxWidth().treeGuides(lasts, parent && !shut, c.textSecondary.copy(alpha = GUIDE_ALPHA), indent = INDENT.dp, top = 9.5.dp)) {
     Box(Modifier.fillMaxWidth().padding(start = (12 + depth * INDENT).dp).height(0.5.dp).background(c.border))
     Row(Modifier.fillMaxWidth().pressable { open(r) }.padding(start = (12 + depth * INDENT).dp, end = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
         if (parent) {
@@ -86,7 +91,8 @@ internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (Str
         }
         if (parent) Text("${n.done}/${n.total}", Modifier.padding(start = 6.dp).clip(PILL).background(c.surfaceAlt).padding(horizontal = 6.dp, vertical = 1.dp), color = c.textSecondary, fontSize = 11.sp)
     }
-    if (parent && !shut) n.kids.forEach { NodeRows(it, depth + 1, closed, toggle, open, showRepo, showArea, tick) }
+    }
+    if (parent && !shut) n.kids.forEachIndexed { i, k -> NodeRows(k, depth + 1, closed, toggle, open, showRepo, showArea, lasts + (i == n.kids.lastIndex), tick) }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

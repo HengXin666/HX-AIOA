@@ -46,7 +46,6 @@ fun main(args: Array<String>) {
         "28-agent" to { AgentSheetDemo() },
         "29-agent-set" to { AgentSettingsDemo() },
         "30-tree" to { TodoTreeDemo() },
-        "31-tree-pick" to { TodoTreeDemo(selected = "a", scale = 1f, panX = -640f, panY = 0f) },
     )
     for (dark in listOf(true, false)) {
         val mode = if (dark) "dark" else "light"
@@ -61,7 +60,6 @@ fun main(args: Array<String>) {
     }
     // 入场动效逐帧 (错开淡入, 数字滚动, 曲线描出), 拼 GIF 用
     frames(File(out, "enter"), true) { HomeDemo() }
-    frames(File(out, "tree-enter"), true) { TodoTreeDemo() }
     println("截图输出到 ${out.path}")
 }
 
