@@ -87,7 +87,7 @@ data class SpacePanel(
     val items: List<SpaceItem> = emptyList(),
 )
 
-/** 用户自己的显示状态, 与布局分开存; pinned 为 null 表示没设过 (插件空间默认不置顶)。 */
+/** 用户自己的显示状态, 与布局分开存; pinned 为 null 表示没设过 (按 [Space.tab] 自动补空位)。 */
 data class SpaceLayout(
     val hidden: Boolean = false,
     val pinned: Boolean? = null,
@@ -103,6 +103,8 @@ data class Space(
     val origin: String? = null,
     val panels: List<SpacePanel> = emptyList(),
     val layout: SpaceLayout = SpaceLayout(),
+    /** 插件对顶部标签的提示 (#139): primary / auto (缺省) / none, 服务端已按来源把不可信的 primary 降为 auto。 */
+    val tab: String? = null,
 ) {
     fun sizeOf(panel: SpacePanel): PanelSize = layout.sizes[panel.id] ?: panel.size ?: PanelSize.M
 

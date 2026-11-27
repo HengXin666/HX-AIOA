@@ -109,8 +109,8 @@ class ChatGroups(
     private var loadingOlder = false
     private var cloudEnd = false
     private val history = ChatHistory(context)
-    /** 某个群被清空到 seq 时通知外层 (总览的今日消息等内存列表一起删)。 */
-    var onCleared: ((String, Long) -> Unit)? = null
+    var onCleared: ((String, Long) -> Unit)? = null // 某个群被清空到 seq 时通知外层 (总览的今日消息等内存列表一起删)
+    var onSettings: (JSONObject) -> Unit = {} // 账号设置下发时交给外层 (首页标签, #139)
 
     /** 下拉同步: 群资料, 收藏, 分组都重新拉一次。 */
     fun syncNow() {
@@ -129,8 +129,7 @@ class ChatGroups(
         val metas = directory.metas
         val fromDb = summaries.map { GroupRowData(it.key, metas[it.key], it.last, it.unread, it.atMe) }
         val known = fromDb.map { it.key }.toSet()
-        // 没消息的群在建过资料或清空过时显示
-        // 清空过的群也留着: 清空只删消息, 不删群
+        // 没消息的群在建过资料或清空过时显示 (清空只删消息, 不删群)
         val empty = metas.values.filter { it.channel !in known && it.deleted == 0L && (it.configured || it.cleared > 0) }.map { GroupRowData(it.channel, it, null, 0) }
         return (fromDb + empty).sortedWith(compareByDescending<GroupRowData> { it.pinned }.thenByDescending { it.order })
     }
@@ -151,7 +150,7 @@ class ChatGroups(
             val g = o.optJSONArray("groups")
             ChatFolder(o.optString("name"), (0 until (g?.length() ?: 0)).map { g!!.optString(it) })
         }.filter { it.name.isNotEmpty() }
-        tags.apply(settings)
+        tags.apply(settings).also { onSettings(settings) }
     }
 
     /** 群资料变了: 其它设备读过的群本机也算已读, 被清空的群删掉本地记录。 */

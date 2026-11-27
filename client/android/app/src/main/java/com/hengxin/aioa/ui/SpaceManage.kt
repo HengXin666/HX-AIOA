@@ -26,20 +26,26 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.pointerTap
 
 /**
- * 管理空间与排序 (#139): 顶部标签与侧栏 "空间" 的顺序 (上移 / 下移, 存本机), 置顶开关 (最多 [MAX_PINNED] 个),
+ * 管理空间与排序 (#139): 顶部标签与侧栏 "空间" 的顺序 (上移 / 下移), 置顶开关 (最多 [MAX_PINNED] 个, 跟账号走),
  * 插件空间可以隐藏 (PUT state.hidden)。总览固定在第一个, 不能挪, 藏, 取消置顶; 内置页面不能藏。
+ * 没设过的页面按优先级自动补空位, 每行标出 置顶 / 自动 / 更多; 手动置顶会挤掉自动补位的, 五个都是自己置顶的才要先取消一个。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SpaceManageSheet(s: SpacesState, unread: Int, close: () -> Unit) {
     val c = Aioa.colors
-    val all = homeTabs(s.spaces, unread, s.tabOrder, withHidden = true, pins = s.pins())
+    val pins = s.pins()
+    val all = homeTabs(s.spaces, unread, s.tabOrder, withHidden = true, pins = pins)
     val context = androidx.compose.ui.platform.LocalContext.current
     val pinnedCount = all.count { it.pinned }
-    val pin = { t: HomeSpace ->
-        if (!t.pinned && pinnedCount >= MAX_PINNED) {
-            android.widget.Toast.makeText(context, "顶部标签最多置顶 $MAX_PINNED 个, 先取消一个", android.widget.Toast.LENGTH_SHORT).show()
-        } else s.setPinned(t.id, !t.pinned)
+    val firm = all.withIndex().count { (i, t) -> pinState(t, i == 0, pins) == PinState.PINNED }
+    val pin = { t: HomeSpace, i: Int ->
+        when {
+            // 取消自动补位的也记成用户明确不要它置顶, 不然空位马上又被它补上
+            t.pinned -> s.setPinned(t.id, false)
+            firm >= MAX_PINNED -> android.widget.Toast.makeText(context, "顶部标签最多置顶 $MAX_PINNED 个, 先取消一个", android.widget.Toast.LENGTH_SHORT).show()
+            else -> s.setPinned(t.id, true)
+        }
     }
     val move = { i: Int, d: Int ->
         val ids = all.map { it.id }.toMutableList()
@@ -52,11 +58,14 @@ fun SpaceManageSheet(s: SpacesState, unread: Int, close: () -> Unit) {
     ModalBottomSheet(close, containerColor = c.popover) {
         Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp).padding(bottom = 18.dp)) {
             Text("管理空间与排序", c.text, 16, Modifier.padding(start = 4.dp, bottom = 2.dp), weight = FontWeight.SemiBold)
-            Text("顶部标签只放置顶的 (已置顶 $pinnedCount/$MAX_PINNED), 其余在侧栏 \"更多空间\"; 插件空间可以先藏起来", c.textSecondary, 12, Modifier.padding(start = 4.dp, bottom = 10.dp), maxLines = 2)
-            all.forEachIndexed { i, t -> ManageRow(t, i, all.size, s, move, pin) }
-            if (s.tabOrder.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).pointerTap { s.saveTabOrder(emptyList()) }.padding(horizontal = 4.dp, vertical = 12.dp)) {
-                    Text("恢复默认顺序", c.textSecondary, 14)
+            Text(
+                "顶部标签放 $pinnedCount/$MAX_PINNED 个, 你置顶的优先, 空位自动补; 其余在侧栏 \"更多空间\", 插件空间可以先藏起来",
+                c.textSecondary, 12, Modifier.padding(start = 4.dp, bottom = 10.dp), maxLines = 2,
+            )
+            all.forEachIndexed { i, t -> ManageRow(t, i, all.size, pinState(t, i == 0, pins), s, move) { pin(t, i) } }
+            if (s.tabOrder.isNotEmpty() || pins.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).pointerTap { s.resetTabs() }.padding(horizontal = 4.dp, vertical = 12.dp)) {
+                    Text("恢复默认 (顺序与置顶)", c.textSecondary, 14)
                 }
             }
         }
@@ -64,7 +73,7 @@ fun SpaceManageSheet(s: SpacesState, unread: Int, close: () -> Unit) {
 }
 
 @Composable
-private fun ManageRow(t: HomeSpace, i: Int, n: Int, s: SpacesState, move: (Int, Int) -> Unit, pin: (HomeSpace) -> Unit) {
+private fun ManageRow(t: HomeSpace, i: Int, n: Int, state: PinState, s: SpacesState, move: (Int, Int) -> Unit, pin: () -> Unit) {
     val c = Aioa.colors
     val space = s.spaces.firstOrNull { it.id == t.id }
     val hidden = space?.layout?.hidden == true
@@ -77,17 +86,19 @@ private fun ManageRow(t: HomeSpace, i: Int, n: Int, s: SpacesState, move: (Int, 
         Glyph(t.icon, tone)
         Column(Modifier.weight(1f)) {
             Text(t.title, tone, 15, weight = FontWeight.Medium)
+            val kind = if (space == null) "内置" else "插件"
             Text(
                 when {
                     i == 0 -> "固定在第一个, 总是置顶"
-                    space == null -> if (t.pinned) "内置 · 置顶" else "内置"
-                    hidden -> "插件 · 已隐藏"
-                    else -> if (t.pinned) "插件 · 置顶" else "插件"
+                    hidden -> "$kind · 已隐藏"
+                    state == PinState.PINNED -> "$kind · 置顶"
+                    state == PinState.AUTO -> "$kind · 自动 (空位补上的)"
+                    else -> "$kind · 更多空间"
                 },
-                c.textSecondary, 12,
+                if (state == PinState.AUTO && !hidden) c.accent else c.textSecondary, 12,
             )
         }
-        if (i > 0 && !hidden) Tap("pin", tint = if (t.pinned) c.accent else c.textSecondary) { pin(t) }
+        if (i > 0 && !hidden) Tap("pin", tint = if (t.pinned) c.accent else c.textSecondary, onClick = pin)
         if (space != null) Tap(if (hidden) "eye-off" else "eye") { s.setHidden(space, !hidden) }
         if (i > 0) {
             Tap("chevron-up", enabled = i > 1) { move(i, -1) }

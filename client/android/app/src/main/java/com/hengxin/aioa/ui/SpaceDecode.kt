@@ -28,6 +28,7 @@ object SpaceDecode {
         origin = opt(o, "origin"),
         panels = list(o.optJSONArray("panels"), ::panel),
         layout = o.optJSONObject("state")?.let(::layout) ?: SpaceLayout(),
+        tab = opt(o, "tab"),
     )
 
     fun layout(o: JSONObject): SpaceLayout {

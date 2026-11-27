@@ -12,8 +12,9 @@ private const val OVERVIEW_TITLE = "总览"
 private const val SPACE_ICON = "layout-dashboard"
 
 /** 插件 / Agent 下发的空间 (点子待办, HX OA...), 用户藏起来的不列。 */
-fun pluginSpaces(spaces: List<Space>): List<HomeSpace> =
-    spaces.filter { !it.layout.hidden }.map { HomeSpace(it.id, it.title, it.icon ?: SPACE_ICON, plugin = it.origin ?: it.id) }
+fun pluginSpaces(spaces: List<Space>): List<HomeSpace> = spaces.filter { !it.layout.hidden }.map(::pluginTab)
+
+private fun pluginTab(s: Space) = HomeSpace(s.id, s.title, s.icon ?: SPACE_ICON, plugin = s.origin ?: s.id, tab = s.tab)
 
 /** 标题下的空间切换: 总览 (日常), 开发, 服务器, 再接插件空间。 */
 fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
@@ -35,28 +36,64 @@ fun homeTabs(
 ): List<HomeSpace> {
     val boards = boardSpaces(spaces)
     val tab = { t: Tab -> HomeSpace(t.name, t.label, t.icon) }
-    val plugins = if (withHidden) spaces.map { HomeSpace(it.id, it.title, it.icon ?: SPACE_ICON, plugin = it.origin ?: it.id) } else pluginSpaces(spaces)
+    val plugins = if (withHidden) spaces.map(::pluginTab) else pluginSpaces(spaces)
     val all = listOf(boards[0], HomeSpace(Tab.CHAT.name, Tab.CHAT.label, Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
         boards.filter { it.id == BOARD_DEV } + tab(Tab.RESOURCES) + plugins
     val hidden = spaces.filter { it.layout.hidden }.map { it.id }.toSet()
-    return pinTabs(ordered(all, order), pins, hidden)
+    return pinTabs(ordered(all, order), pins, hidden, base = all)
 }
 
 /** 顶部标签最多置顶这么多个 (#139, home-spaces §2), 其余在侧栏 "更多空间" 与标题下的切换里。 */
 const val MAX_PINNED = 5
 
+/** 插件空间对顶部标签的提示 (#139, 与 protocol SPACE_TABS 一致)。 */
+const val TAB_PRIMARY = "primary"
+const val TAB_NONE = "none"
+
 /**
- * 按顺序标出哪些置顶 (#139): 总览永远置顶; 设过的按设的, 没设过的内置页面置顶, 插件空间不置顶 (home-spaces §3 规则 1);
- * 隐藏的不置顶; 置顶的数到 [MAX_PINNED] 为止, 再往后的就算设过也先不进标签。
+ * 没设过置顶的页面自动补空位的优先级 (#139, home-spaces §3 规则 1), 小的先补; null 表示从不自动置顶:
+ * 消息 > 插件 tab = primary > 其它内置页 (按默认顺序) > 插件 auto (缺省, 按列表顺序); tab = none 不自动。
  */
-fun pinTabs(tabs: List<HomeSpace>, pins: Map<String, Boolean>, hidden: Set<String> = emptySet()): List<HomeSpace> {
-    var n = 0
-    return tabs.mapIndexed { i, s ->
-        val want = i == 0 || (s.id !in hidden && (pins[s.id] ?: (s.plugin == null)))
-        val on = want && n < MAX_PINNED
-        if (on) n++
-        s.copy(pinned = on)
+internal fun autoRank(s: HomeSpace): Int? = when {
+    s.plugin != null -> when (s.tab) {
+        TAB_PRIMARY -> 1
+        TAB_NONE -> null
+        else -> 3
     }
+    s.id == Tab.CHAT.name -> 0
+    else -> 2
+}
+
+/**
+ * 标出哪些置顶 (#139), 显示顺序不变 ([tabs] 已按用户排序): 总览永远置顶占第 1 位;
+ * 用户设过的永远按用户的, 设 true 的按显示顺序先占名额, 超过 [MAX_PINNED] 的进 "更多空间";
+ * 剩下的名额给没设过的, 按 [autoRank] 与默认顺序 ([base]) 分配; 隐藏的不置顶。
+ */
+fun pinTabs(
+    tabs: List<HomeSpace>,
+    pins: Map<String, Boolean>,
+    hidden: Set<String> = emptySet(),
+    base: List<HomeSpace> = tabs,
+): List<HomeSpace> {
+    val on = LinkedHashSet<String>()
+    tabs.firstOrNull()?.let { on += it.id }
+    val rest = tabs.drop(1).filter { it.id !in hidden }
+    for (s in rest) if (pins[s.id] == true && on.size < MAX_PINNED) on += s.id
+    val pos = base.withIndex().associate { (i, s) -> s.id to i }
+    rest.filter { pins[it.id] == null }
+        .mapNotNull { s -> autoRank(s)?.let { r -> Triple(r, pos[s.id] ?: Int.MAX_VALUE, s.id) } }
+        .sortedWith(compareBy({ it.first }, { it.second }))
+        .forEach { if (on.size < MAX_PINNED) on += it.third }
+    return tabs.map { it.copy(pinned = it.id in on) }
+}
+
+/** 管理抽屉里每行的状态 (#139): 用户置顶的, 自动补位的, 在 "更多空间" 的。 */
+enum class PinState { PINNED, AUTO, MORE }
+
+fun pinState(t: HomeSpace, first: Boolean, pins: Map<String, Boolean>): PinState = when {
+    !t.pinned -> PinState.MORE
+    first || pins[t.id] == true -> PinState.PINNED
+    else -> PinState.AUTO
 }
 
 /** 按用户排过的顺序 (#139): 总览永远第一, 排过的按那个顺序, 新出现的接在后面保持默认顺序。 */

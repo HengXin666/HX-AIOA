@@ -38,6 +38,8 @@ data class HomeSpace(
     val badge: Int = 0,
     val plugin: String? = null,
     val pinned: Boolean = true,
+    /** 插件空间对顶部标签的提示 (primary / auto / none), 内置页面为空。 */
+    val tab: String? = null,
 )
 
 /** 侧栏里的固定入口 (消息, Agent, 资源...) 或底部工具钮。 */

@@ -162,6 +162,8 @@ object Constants {
     const val SETTING_CHAT_FOLDERS = "chatFolders"
     // 标签 (#135): { 标签: [channel] }, 同样存账号设置
     const val SETTING_CHAT_TAGS = "chatTags"
+    // 首页一级页面的顺序与内置页面置顶 (#139): { order: [id], pins: { id: bool } }, 同样存账号设置
+    const val SETTING_HOME_TABS = "homeTabs"
     // 单聊 (#133) 与合并转发详情批量取 (#132)
     const val DMS_PATH = "api/v1/dms"
     const val EVENTS_SEQ_PATH = "api/v1/events/seq"

@@ -73,6 +73,7 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
     val github = GithubState(app, viewModelScope)
     val groups = ChatGroups(app, viewModelScope, db, socket::send).also { g ->
         g.directory.onMetas = { g.applyReads() }
+        g.onSettings = spaces.tabs::apply
         g.onCleared = { key, upTo -> messages.removeAll { it.seq <= upTo && it.groupKey() == key } }
     }
 
