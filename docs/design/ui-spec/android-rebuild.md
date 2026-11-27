@@ -60,3 +60,16 @@
 - `:app:compileDebugKotlin`, `:app:testDebugUnitTest`, `:ui:desktopTest` 通过 (贴退出码)。
 - 改页面或跳转: `pages.json` → `gen.py` → 入口清单 → `TabNavTest`。
 - 服务端改动单独提交, 带测试与 CF 请求数说明。
+
+## 接口契约 (实现用, 2026-11-27 定)
+
+服务端先改 `protocol/src/v1`, 安卓按下面的形状对接; 全部可选字段, 旧端忽略。
+
+| issue | 形状 |
+| --- | --- |
+| #129 | `ChatMeta` 不再因已读改 `updated`; 已读存 `chat_read`, 推 `{ t: "chat_read", channel, read }` 给本人其它设备。`chat_sync` 帧可带 `chat: ChatMeta` (按收帧人的视图), 只发给该群成员 (主人总收)。`GET /chats` 的 ETag 用版本号。Agent 活跃: 推 `{ t: "agent_active", channel, keyId, active }`, 内存记录, 最多每 30 分钟落库一次 |
+| #130 | `GET /chats/{c}/members?cursor=&limit=&q=` → `{ members, next? }`, 带 ETag; `RoomMember.avatar?`; `room_member` 加 `member` 索引 |
+| #131 | WS `send` 帧可带 `mentions: string[]` (uid, `agent:<keyId>`, `all`); 消息 (Envelope) 带 `mentions`; 被 @ 的人即使免打扰也提醒; Agent `next` 的条目带 `mentioned: true` |
+| #132 | WS `send` 帧可带 `bundle: { from: string, seqs: number[] }` (最多 100 条) → 新消息 `data.bundle = { from, count, refs: number[], head: [{ src, text }] }` (head 最多 4 条, text 截 60 字), 正文 `[聊天记录] <from>`; `GET /api/v1/events/seq?seqs=1,2,3` 批量取 (最多 100) → `{ events: [Envelope] }` |
+| #133 | `ChatMeta.notice` (≤500 字), `PATCH /chats/{c}` 群主 / 管理员可改; 单聊 `POST /api/v1/dms { peer }` → `{ chat }`, channel `dm:<小 uid>:<大 uid>`, `kind: "dm"`, `peer` 为对方; dm 群不能接 Agent, 不能邀请, 不能加人 (400) |
+| #134 | `GET /api/v1/github/heatmap` → `{ days: [{ date: "YYYY-MM-DD", commits }], updated }` 最近 140 天, 每日 cron 里算好存一行, 带 ETag |
