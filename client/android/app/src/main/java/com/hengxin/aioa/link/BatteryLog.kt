@@ -69,6 +69,15 @@ object BatteryLog {
         return listOf(line("亮屏", on), line("熄屏", off), "样本 ${rows.size} 个, 充电时段与超过 1 小时的空档不计")
     }
 
+    /** 调试页的电量曲线 (#139): 近 24 小时的样本 (时间, 电量, 充电, 亮屏), 从早到晚。 */
+    data class Point(val at: Long, val pct: Int, val plugged: Boolean, val screen: Boolean)
+
+    fun points(context: Context): List<Point> {
+        val since = System.currentTimeMillis() - WINDOW_MS
+        return runCatching { file(context).readLines() }.getOrDefault(emptyList()).mapNotNull(::parse).filter { it.at >= since }
+            .map { Point(it.at, it.pct, it.plugged, it.screen) }
+    }
+
     private class Span(var ms: Long = 0, var drop: Int = 0)
 
     private data class Row(val at: Long, val pct: Int, val plugged: Boolean, val screen: Boolean)

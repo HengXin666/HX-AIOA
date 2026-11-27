@@ -20,10 +20,11 @@ const FORBIDDEN = 403;
 const GONE = new Set([FORBIDDEN, 404, 409, 451]);
 const TOO_MANY = 429;
 
-export type HeatYear = { c?: Record<string, number>; e?: Record<string, number> };
+// g 为 GitHub 贡献日历 (#140, 全部仓库含 PR / Issue, 同一天取较大值)
+export type HeatYear = { c?: Record<string, number>; e?: Record<string, number>; g?: Record<string, number> };
 // page 为下一页页码, 0 表示当前窗口 [since, until] 已拉完; at 为窗口开始或拉完的时间
 export type RepoCursor = { since?: string; until: string; page: number; at: number; error?: string };
-export type HeatState = { repos: Record<string, RepoCursor>; years: number[]; oldest?: string; updated: number; tz?: string };
+export type HeatState = { repos: Record<string, RepoCursor>; years: number[]; oldest?: string; updated: number; tz?: string; cal?: { created?: string; done: number[]; at?: number } };
 
 export const yearKey = (y: number) => YEAR_PREFIX + y;
 export const yearOf = (date: string) => Number(date.slice(0, 4));
@@ -45,11 +46,11 @@ export class HeatYears {
 
   count(date: string): number {
     const r = this.rows.get(yearOf(date));
-    return Math.max(r?.c?.[date] ?? 0, r?.e?.[date] ?? 0);
+    return Math.max(r?.c?.[date] ?? 0, r?.e?.[date] ?? 0, r?.g?.[date] ?? 0);
   }
 
   /** 回填的提交求和; 动态取较大值。调用前要先 load 该年。 */
-  add(field: "c" | "e", date: string, n: number): void {
+  add(field: "c" | "e" | "g", date: string, n: number): void {
     const y = yearOf(date);
     const row = this.rows.get(y);
     if (!row || n <= 0) return;

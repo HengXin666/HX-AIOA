@@ -302,6 +302,8 @@ fun SpaceTabs(spaces: List<HomeSpace>, selected: String, onSelect: (String) -> U
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        // 每个标签带图标 (#139), 一眼分得清
+                        Icon(s.icon, if (on) c.text else c.textSecondary, 16.dp)
                         Text(s.title, if (on) c.text else c.textSecondary, 15, weight = if (on) FontWeight.SemiBold else FontWeight.Normal)
                         if (s.badge > 0) CountChip(s.badge)
                     }

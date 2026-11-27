@@ -52,7 +52,7 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
         }
     }
     session?.let { (s, ticket) -> TerminalDialog(chat.terms, s, ticket) { session = null } }
-    PageColumn("资源") {
+    PageColumn(Tab.RESOURCES.label) {
         if (chat.github.enabled) Card { SettingRow(ICON_GITHUB, GITHUB_TITLE, chat.github.repos.size.takeIf { it > 0 }?.let { "$it 个仓库" }.orEmpty(), openGithub) }
         CfUsageCard()
         val carded = state.hosts.map { it.subject }.toSet()

@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     private val chat: ChatModel by viewModels()
     private val settings: SettingsModel by viewModels()
+    private val usage by lazy { com.hengxin.aioa.data.UsageLog(applicationContext) }
 
     // 非空时显示更新公告抽屉
     private var notes by mutableStateOf<List<ReleaseNote>?>(null)
@@ -118,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        usage.begin()
         chat.resume()
         resumePendingUpdate()
     }
@@ -151,6 +153,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         chat.pause()
+        usage.end()
         super.onStop()
     }
 

@@ -92,6 +92,7 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     LaunchedEffect(job?.done) {
         val id = job?.done ?: return@LaunchedEffect
         avatar = id
+        com.hengxin.aioa.data.Me.setAvatar(app, id)
         message = "头像已更新"
         AvatarUploads.clear(AvatarUploads.ME)
     }
@@ -112,7 +113,10 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
             }
         }
         val r = withContext(Dispatchers.IO) { Api.call(context, GET, listOf(Constants.ME_PATH)) }
-        r.body?.optJSONObject("user")?.optString(SETTING_AVATAR)?.ifEmpty { null }?.let { avatar = it }
+        r.body?.optJSONObject("user")?.optString(SETTING_AVATAR)?.ifEmpty { null }?.let {
+            avatar = it
+            com.hengxin.aioa.data.Me.setAvatar(app, it)
+        }
         val arr = r.body?.optJSONArray("devices")
         devices = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it) }.map {
             Device(it.optString("id"), it.optString("name"), it.optString("platform"), it.optBoolean("current"))

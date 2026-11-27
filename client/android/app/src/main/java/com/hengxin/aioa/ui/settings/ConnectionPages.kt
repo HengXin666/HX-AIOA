@@ -177,6 +177,10 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
         }
         if (model.httpOn) SettingsGroup("最近的请求 (最新在前)", "长连接建连也是一次请求 (101)。经常 4xx / 5xx 或耗时很长的路径就是要查的。") {
             if (model.httpLog.isEmpty()) NoteRow("暂无记录", c.textSecondary)
+            else {
+                HttpVisual(model.httpLog)
+                RowDivider(false)
+            }
             model.httpLog.forEachIndexed { i, line ->
                 if (i > 0) RowDivider(false)
                 NoteRow(line, mono = true)
@@ -189,8 +193,9 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
             }
         }
         SettingsGroup("近 24 小时耗电 (整机)", "电量是整台手机的, 用来对照: 熄屏每小时掉电明显变多, 再看下面的唤醒与收帧计数。精确到本 App 请用系统电池页。") {
+            BatteryVisual(model.httpLog.size + view.battery.hashCode())
             view.battery.forEachIndexed { i, line ->
-                if (i > 0) RowDivider(false)
+                RowDivider(false)
                 NoteRow(line)
             }
         }

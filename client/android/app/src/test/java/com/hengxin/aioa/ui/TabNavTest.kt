@@ -107,7 +107,7 @@ class TabNavTest {
     fun 顶部标签列出插件空间_顺序固定() {
         val spaces = listOf(com.hengxin.aioa.kit.Space("hengxin666.todo", "点子待办", origin = "hengxin666.todo"), com.hengxin.aioa.kit.Space("hxoa", "HX OA"))
         val ids = homeTabs(spaces, 0).map { it.id }
-        assertEquals(listOf(BOARD_DAILY, Tab.CHAT.name, BOARD_DEV, BOARD_SERVERS, "hengxin666.todo", "hxoa", Tab.AGENT.name, Tab.RESOURCES.name), ids)
+        assertEquals(listOf(BOARD_DAILY, Tab.CHAT.name, Tab.AGENT.name, BOARD_DEV, Tab.RESOURCES.name, "hengxin666.todo", "hxoa"), ids)
         assertTrue(homeTabs(spaces, 0).filter { it.id in setOf("hengxin666.todo", "hxoa") }.all { it.plugin != null })
     }
 

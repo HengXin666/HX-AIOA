@@ -23,13 +23,24 @@ fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
 ) + pluginSpaces(spaces)
 
 /**
- * 新外壳的一级页面 (顶部标签与侧栏 "空间" 同一份): 总览, 消息, 开发, 服务器, 各插件空间, agent harness, 资源。
- * 看板类的 id 是看板 key, 其余是 [Tab] 名。
+ * 新外壳的一级页面 (顶部标签与侧栏 "空间" 同一份, #139): 总览, 消息, 工作区, 开发, 服务器, 各插件空间。
+ * "服务器" 直接是完整的资源页 (原来的服务器看板与资源页重叠); 看板类的 id 是看板 key, 其余是 [Tab] 名。
  */
-fun homeTabs(spaces: List<Space>, unread: Int): List<HomeSpace> {
+fun homeTabs(spaces: List<Space>, unread: Int, order: List<String> = emptyList(), withHidden: Boolean = false): List<HomeSpace> {
     val boards = boardSpaces(spaces)
-    return listOf(boards[0], HomeSpace(Tab.CHAT.name, Tab.CHAT.label, Tab.CHAT.icon, badge = unread)) + boards.drop(1) +
-        listOf(Tab.AGENT, Tab.RESOURCES).map { HomeSpace(it.name, it.label, it.icon) }
+    val tab = { t: Tab -> HomeSpace(t.name, t.label, t.icon) }
+    val plugins = if (withHidden) spaces.map { HomeSpace(it.id, it.title, it.icon ?: SPACE_ICON, plugin = it.origin ?: it.id) } else pluginSpaces(spaces)
+    val all = listOf(boards[0], HomeSpace(Tab.CHAT.name, Tab.CHAT.label, Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
+        boards.filter { it.id == BOARD_DEV } + tab(Tab.RESOURCES) + plugins
+    return ordered(all, order)
+}
+
+/** 按用户排过的顺序 (#139): 总览永远第一, 排过的按那个顺序, 新出现的接在后面保持默认顺序。 */
+fun ordered(all: List<HomeSpace>, order: List<String>): List<HomeSpace> {
+    if (order.isEmpty()) return all
+    val rank = order.withIndex().associate { (i, id) -> id to i }
+    val head = all.take(1)
+    return head + all.drop(1).withIndex().sortedWith(compareBy({ rank[it.value.id] ?: Int.MAX_VALUE }, { it.index })).map { it.value }
 }
 
 /** 当前选中的一级页面 id: 总览下是看板 (看板没了回日常), 其余是栏名。 */

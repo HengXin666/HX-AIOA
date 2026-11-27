@@ -175,6 +175,28 @@ class MessageDb private constructor(context: Context) :
         return Lifetime(head[0].toInt(), head[1].toInt(), head[2].toInt(), head[3], perDay)
     }
 
+    /** 周报 (#140): [from, to) 之间没撤回的消息, 只取统计要用的字段, 交给 MessageWeekMath 汇总。 */
+    fun weekRows(from: Long, to: Long): List<WeekRow> {
+        val out = ArrayList<WeekRow>()
+        readableDatabase.rawQuery(
+            "SELECT $C_TS, $C_MINE, $C_SID, $C_SRC, $C_GRP, $C_SEQ, $C_SEEN FROM $T_MSG WHERE $C_TS >= ? AND $C_TS < ? AND $LIVE",
+            arrayOf(from.toString(), to.toString()),
+        ).use { c ->
+            while (c.moveToNext()) {
+                out += WeekRow(
+                    ts = c.getLong(0),
+                    mine = c.getInt(1) != 0,
+                    sid = if (c.isNull(2)) null else c.getString(2),
+                    src = c.getString(3),
+                    grp = if (c.isNull(4)) "" else c.getString(4),
+                    seq = c.getLong(5),
+                    seen = c.getInt(6) != 0,
+                )
+            }
+        }
+        return out
+    }
+
     /** 按 seq 批量取 (合并转发详情先用本地有的)。 */
     fun bySeqs(seqs: Collection<Long>): List<ServerFrame.Msg> =
         if (seqs.isEmpty()) emptyList() else query("SELECT * FROM $T_MSG WHERE $C_SEQ IN (${seqs.joinToString(",")}) ORDER BY $C_SEQ", emptyArray())

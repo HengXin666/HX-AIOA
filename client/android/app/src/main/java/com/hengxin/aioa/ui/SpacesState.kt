@@ -47,6 +47,8 @@ private const val KEY_TODOS_SYNC = "todos-sync"
 private const val HTTP_CONFLICT = 409
 private const val CHANGE_DISABLED = "disabled"
 private const val CHANGE_REVOKED = "revoked"
+private const val PREFS_TABS = "home-tabs"
+private const val KEY_TAB_ORDER = "order"
 // todos 里这个键放本账号全部群的待办
 const val ALL_TODOS = "*"
 
@@ -113,6 +115,25 @@ class SpacesState(
     var board by mutableStateOf(BOARD_DAILY)
     var currentId by mutableStateOf<String?>(null)
     var editing by mutableStateOf(false)
+    /** 顶部标签与侧栏 "空间" 的顺序 (#139): 一级页面 id 列表, 存本机; 空表示默认顺序。 */
+    var tabOrder by mutableStateOf(loadTabOrder())
+        private set
+
+    fun saveTabOrder(ids: List<String>) {
+        tabOrder = ids
+        context.getSharedPreferences(PREFS_TABS, Context.MODE_PRIVATE).edit().putString(KEY_TAB_ORDER, ids.joinToString("\n")).apply()
+    }
+
+    private fun loadTabOrder(): List<String> =
+        context.getSharedPreferences(PREFS_TABS, Context.MODE_PRIVATE).getString(KEY_TAB_ORDER, null)?.split("\n")?.filter { it.isNotEmpty() }.orEmpty()
+
+    /** 插件空间显示 / 隐藏 (#139): 本地立即生效, 再 PUT spaces/{id}/state。 */
+    fun setHidden(space: Space, hidden: Boolean) {
+        val i = spaces.indexOfFirst { it.id == space.id }
+        if (i >= 0) spaces[i] = space.copy(layout = space.layout.copy(hidden = hidden))
+        if (hidden && board == space.id) board = BOARD_DAILY
+        io { call(url(Constants.SPACES_PATH, space.id, "state"), "PUT", JSONObject().put("hidden", hidden)) }
+    }
     val logs = mutableStateMapOf<String, List<ChatLine>>()
     /** /data 接口带回的最近事件, 补充流里还没有的部分。 */
     val events = mutableStateMapOf<String, Envelope>()

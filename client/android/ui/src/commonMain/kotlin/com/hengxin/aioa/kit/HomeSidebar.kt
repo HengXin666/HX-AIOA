@@ -47,7 +47,8 @@ data class SideLink(val key: String, val title: String, val icon: String, val ba
 data class SideRecent(val key: String, val title: String, val sub: String, val initial: String, val unread: Int = 0)
 
 /** 侧栏头部的账号: 名字, 连的服务端, 是否在线。 */
-data class SideAccount(val name: String, val server: String, val online: Boolean)
+/** 侧栏账号头 (#139): 我的头像与昵称, 下面一行连接状态与服务器; avatar 为空时用昵称首字。 */
+data class SideAccount(val name: String, val server: String, val online: Boolean, val avatar: (@Composable () -> Unit)? = null)
 
 /** 点按, 不带缩放动效 (列表行用; 卡片才用 pressable)。 */
 fun Modifier.pointerTap(onTap: () -> Unit): Modifier = this.then(
@@ -125,12 +126,12 @@ private fun AccountHead(a: SideAccount, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Initial(a.name.take(1), 40)
+        a.avatar?.invoke() ?: Initial(a.name.take(1), 40)
         Column(Modifier.weight(1f)) {
             Text(a.name, c.text, 16, weight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(if (a.online) c.success else c.textSecondary))
-                Text(a.server, c.textSecondary, 12)
+                Text(listOf(if (a.online) "已连接" else "未连接", a.server).filter { it.isNotEmpty() }.joinToString(" · "), c.textSecondary, 12, maxLines = 1)
             }
         }
         Icon("chevrons-up-down", c.textSecondary, 16.dp)
