@@ -201,8 +201,11 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
         }
         SettingsGroup(
             "记录 (最新在前)",
-            "第一行是连接与唤醒计数 (对照耗电测量用), 下面是后台长连接的连接, 断开, 重连记录。排查断线不重连时看这里。",
+            "上面是近 24 小时的事件分道与计数时间线; 文字记录第一行是连接与唤醒计数 (对照耗电测量用), 下面是后台长连接的连接, 断开, 重连记录。排查断线不重连时看这里。",
         ) {
+            // 连接与唤醒计数的时间线 (#141), 文字记录仍在下面
+            LinkTimelineVisual(log.size + log.firstOrNull().hashCode())
+            RowDivider(false)
             if (log.isEmpty()) NoteRow("暂无记录", c.textSecondary)
             log.forEachIndexed { i, line ->
                 if (i > 0) RowDivider(false)
