@@ -71,18 +71,20 @@ fun HomeSidebar(
     onEditSpaces: () -> Unit,
     onAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    // 点搜索框 (#139): 打开搜索页; 为 null 时搜索框只是摆设 (画廊)
+    onSearch: (() -> Unit)? = null,
 ) {
     val c = Aioa.colors
     Column(modifier.fillMaxSize().background(c.sidebar)) {
         AccountHead(account, onAccount)
         Row(
             Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(c.surface).padding(horizontal = 12.dp),
+                .background(c.surface).then(if (onSearch != null) Modifier.pointerTap(onSearch) else Modifier).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon("search", c.textSecondary, 17.dp)
-            Text("搜索消息, 待办, 设置", c.textSecondary, 14)
+            Text("搜索群, 会话与消息", c.textSecondary, 14)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp)) {
             links.forEach { SideRow(it.icon, it.title, it.badge, it.key == selected) { onSelect(it.key) } }

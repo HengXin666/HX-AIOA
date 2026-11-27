@@ -22,6 +22,7 @@ import com.hengxin.aioa.kit.NavItem
 import com.hengxin.aioa.ui.settings.MeDeps
 import com.hengxin.aioa.ui.settings.MeHost
 import com.hengxin.aioa.ui.settings.SettingsPage
+import kotlinx.coroutines.flow.first
 
 enum class Tab(val label: String, val icon: String) {
     OVERVIEW("总览", "gauge"),
@@ -60,12 +61,29 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     // 工作台里点待办: 跳到消息栏的原消息
     androidx.compose.runtime.LaunchedEffect(chat.groups.focusTick) { if (chat.groups.focusTick > 0) { github = null; nav = nav.go(Tab.CHAT) } }
     BackHandler(enabled = nav.canBack) { nav = nav.back() }
+    // 当前看板进程重建后还在 (#139): 看板状态在 ViewModel 里, 进程被回收会丢, 这里存一份
+    var savedBoard by rememberSaveable { mutableStateOf(chat.spaces.board) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (chat.spaces.board != savedBoard) chat.spaces.board = savedBoard
+        androidx.compose.runtime.snapshotFlow { chat.spaces.board }.collect { savedBoard = it }
+    }
+    // 从侧栏进 "收藏" 或 "最近会话" (#139, android-navigation.md): 退出那一页就直接回来源栏, 不用再按一次
+    var sideReturn by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(sideReturn, tab) {
+        if (!sideReturn) return@LaunchedEffect
+        if (tab != Tab.CHAT) { sideReturn = false; return@LaunchedEffect }
+        androidx.compose.runtime.snapshotFlow { chat.groups.open == null && !chat.groups.favoritesOpen }.first { it }
+        sideReturn = false
+        nav = nav.back()
+    }
+    // 从别的栏经侧栏跳进消息栏的子页才记; 本来就在消息栏时, 退出回群列表就是来源
+    val fromSide: (() -> Unit) -> Unit = { open -> sideReturn = tab != Tab.CHAT; open(); nav = nav.go(Tab.CHAT) }
     // 平板才用侧边导航; 按最短边判断, 手机横屏仍是新外壳, 转屏不换整套导航 (#139)
     val phoneShell = prefs.newShell && androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp < COMPACT_MAX.value
     val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
-        val select: (Tab) -> Unit = { t -> github = null; meStart = SettingsPage.ROOT; meFromGithub = false; nav = nav.select(t) }
+        val select: (Tab) -> Unit = { t -> github = null; meStart = SettingsPage.ROOT; meFromGithub = false; sideReturn = false; nav = nav.select(t) }
         val page: @Composable () -> Unit = {
             val gh = github
             if (gh != null) KeepState("gh:$gh") {
@@ -106,10 +124,13 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
         BoxWithConstraints(Modifier.safeDrawingPadding()) {
             if (phoneShell) {
                 HomeFrame(
-                    tab, atRoot, chat, select, { nav = nav.go(it) }, { chat.groups.favoritesOpen = true; nav = nav.go(Tab.CHAT) },
-                    openGithub, { key -> chat.groups.openGroup(key); nav = nav.go(Tab.CHAT) }, { setPrefs(prefs.copy(mode = it)) }, page,
+                    tab, atRoot, chat, select, { nav = nav.go(it) }, { fromSide { chat.groups.favoritesOpen = true } },
+                    openGithub, { key -> fromSide { chat.groups.openGroup(key) } }, { key, seq -> fromSide { chat.groups.openAt(key, seq) } },
+                    prefs.mode, { setPrefs(prefs.copy(mode = it)) }, page,
                 )
             } else {
+                // 宽屏没有新外壳的看板返回: 在开发 / 服务器 / 插件看板按返回先回日常, 不直接退出 App (#139)
+                BackHandler(enabled = tab == Tab.OVERVIEW && github == null && chat.spaces.board != BOARD_DAILY) { chat.spaces.board = BOARD_DAILY }
                 AppScaffold(NAV, tab.name, { key -> select(Tab.valueOf(key)) }) { page() }
             }
         }

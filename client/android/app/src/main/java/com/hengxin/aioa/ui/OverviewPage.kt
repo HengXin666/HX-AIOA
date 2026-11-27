@@ -51,7 +51,8 @@ private const val LAYER_SHOWN = 3
 @Composable
 fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     val feed = chat.feed
-    val spaces = chat.spaces.spaces
+    // 只取没隐藏的空间, 和顶部标签一致 (#139): 藏起来的空间不再当看板显示
+    val spaces = chat.spaces.spaces.filter { !it.layout.hidden }
     val board = chat.spaces.board
     val picked = spaces.firstOrNull { it.id == board }
     WatchProbes(chat.metrics, picked?.metricSubjects().orEmpty())
