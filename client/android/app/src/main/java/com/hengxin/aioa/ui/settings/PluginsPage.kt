@@ -2,7 +2,6 @@ package com.hengxin.aioa.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +22,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Paragraph
+import com.hengxin.aioa.kit.SoftTag
 import com.hengxin.aioa.kit.Text
+import com.hengxin.aioa.ui.OneRow
 import kotlinx.coroutines.launch
 
-private const val NAME_SP = 16
-private const val SMALL_SP = 12
 private const val BODY_SP = 13
 private val ICON_BOX = 44.dp
 private val TILE = RoundedCornerShape(12.dp)
@@ -121,26 +120,16 @@ fun PluginIcon(name: String) {
 @Composable
 private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
     val c = Aioa.colors
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PluginIcon(p.icon)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(p.name, c.text, NAME_SP, weight = FontWeight.SemiBold)
-                Text("v${p.installed?.version ?: p.version}", c.textSecondary, SMALL_SP)
-                if (p.foreign) Text("别人开发中", c.textSecondary, SMALL_SP)
-                else if (p.dev) Text("开发中", c.accent, SMALL_SP)
-                else if (p.outdated) Text("可更新到 v${p.allowed?.version}", c.accent, SMALL_SP)
-                else if (p.installed != null) Text("已安装", c.success, SMALL_SP)
-                else if (p.enabled) Text("已启用", c.success, SMALL_SP)
-                else if (p.allowed == null) Text("待放行", c.textSecondary, SMALL_SP)
-            }
-            if (p.summary.isNotEmpty()) Paragraph(p.summary, c.textSecondary, BODY_SP, maxLines = 2)
-            if (p.tags.isNotEmpty()) Text(p.tags.joinToString("  ") { "#$it" }, c.accent, SMALL_SP)
-            p.sourceName?.let { Text("来自 $it", c.textSecondary, SMALL_SP) }
-        }
+    // 一行一条 (#138): 图标, 名字, 版本与来源压到右边, 最右状态标签; 简介与标签在详情页
+    val state: Pair<String, Color>? = when {
+        p.foreign -> "别人开发中" to c.textSecondary
+        p.dev -> "开发中" to c.accent
+        p.outdated -> "可更新" to c.accent
+        p.installed != null -> "已安装" to c.success
+        p.enabled -> "已启用" to c.success
+        p.allowed == null -> "待放行" to c.textSecondary
+        else -> null
     }
+    val meta = listOfNotNull("v${p.installed?.version ?: p.version}", p.sourceName).joinToString(" · ")
+    OneRow(p.icon, p.name, meta, c.accent, pad = 16, onClick = onClick) { state?.let { (t, tone) -> SoftTag(t, tone) } }
 }

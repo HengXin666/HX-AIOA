@@ -109,7 +109,7 @@ private fun BranchRow(b: GhBranch, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Dot(ciColor(b.ci))
         val meta = metaOf(b.by, "${b.commits} 个提交", b.sha.orEmpty(), b.ci?.let(::ciLabel).orEmpty(), ago(b.at))
-        GhRow(ICON_GITHUB, b.name, meta, c.textSecondary, onClick)
+        GhRow("git-branch", b.name, meta, c.textSecondary, onClick)
     }
 }
 
