@@ -6,7 +6,6 @@ import {
   categoryOf,
   extractCode,
   vendorOf,
-  type ChatSyncFrame,
   type EventData,
   type FileRef,
   type EventInput,
@@ -23,6 +22,7 @@ import type { Core, Principal } from "../core";
 import { storageOf } from "../files/storage";
 import { EventStore } from "../store";
 import { applyRules } from "./rules";
+import { syncChat } from "../chat-sync";
 
 // 列表摘要与 HTML 卡片的上限, 与普通消息一致
 const MAX_SUMMARY = 500;
@@ -99,5 +99,5 @@ function ensureMailChat(core: Core): void {
   if (cur?.view === "mail") return;
   const now = Date.now();
   core.chats.replaceChat({ ...(cur ?? { channel: MAIL_CHANNEL }), title: cur?.title ?? MAIL_TITLE, view: "mail", updated: now });
-  core.sockets.toAllClients({ t: "chat_sync", topic: "chats", channel: MAIL_CHANNEL } satisfies ChatSyncFrame);
+  syncChat(core, MAIL_CHANNEL);
 }

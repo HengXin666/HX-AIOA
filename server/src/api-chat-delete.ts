@@ -1,4 +1,5 @@
-import { MAX_ID_LENGTH, PATH_CHAT, type ChatCleared, type ChatSyncFrame } from "@hx-aioa/protocol";
+import { MAX_ID_LENGTH, PATH_CHAT, type ChatCleared } from "@hx-aioa/protocol";
+import { syncChat } from "./chat-sync";
 import { dropAgent } from "./api-chats";
 import { DELETE } from "./constants";
 import { OWNER, type Core, type ReqCtx, type Route, route } from "./core";
@@ -16,13 +17,15 @@ export async function deleteGroup(core: Core, channel: string, now = Date.now())
     core.plugins.remove(p.id);
   }
   for (const t of core.todos.list(channel)) core.todos.remove(channel, t.id);
+  const members = core.rooms.members(channel).map((m) => m.member);
   core.rooms.dropRoom(channel);
+  core.chats.reads.dropChannel(channel);
   const head = core.store.head();
   const deleted = core.store.clearGroup(channel, head + 1);
   await core.files.dropGroup(channel);
   const cleared = Math.max(meta?.cleared ?? 0, head);
   core.chats.replaceChat({ channel, cleared, deleted: now, updated: now });
-  core.sockets.toAllClients({ t: "chat_sync", topic: "chats", channel } satisfies ChatSyncFrame);
+  syncChat(core, channel, { also: members });
   return { deleted, cleared };
 }
 

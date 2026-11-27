@@ -1,5 +1,6 @@
-import { AGENT_ACTIVE_STEP_MS, PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type ChatSyncFrame, type KeyInfo } from "@hx-aioa/protocol";
+import { AGENT_ACTIVE_FLUSH_MS, AGENT_ACTIVE_STEP_MS, PATH_AGENT_ME, PATH_CHAT_TYPING, USER_SOURCE_PREFIX, globMatch, type ChatAgentMe, type KeyInfo } from "@hx-aioa/protocol";
 import { canRead } from "./api-chats";
+import { pushActive } from "./chat-sync";
 import { CODE_FORBIDDEN, ERR_FORBIDDEN, GET, HISTORY_MAX_LIMIT, OWNER_NAME, POST } from "./constants";
 import { type Core, type Principal, ROOM, type ReqCtx, type Route, route } from "./core";
 import { fail, json } from "./http";
@@ -9,26 +10,40 @@ const READ_SCOPE = "events:read";
 
 /** key 对应的群 Agent: 名字以群资料里的为准 (改名即时生效), 找不到就用 key 名。 */
 export function agentMe(core: Core, key: KeyInfo): ChatAgentMe {
-  for (const meta of core.chats.chats()) {
-    const a = meta.agents?.find((x) => x.keyId === key.id);
-    if (a) return { keyId: key.id, name: a.name, channel: meta.channel, sourceId: a.sourceId, reads: key.channels };
-  }
+  const hit = core.chats.byKey(key.id);
+  if (hit) return { keyId: key.id, name: hit.agent.name, channel: hit.meta.channel, sourceId: hit.agent.sourceId, reads: key.channels };
   return { keyId: key.id, name: key.name, reads: key.channels, ...(key.sourceId ? { sourceId: key.sourceId } : {}) };
 }
 
+function saveActive(core: Core, keyId: string, at: number): void {
+  const hit = core.chats.byKey(keyId);
+  if (!hit || (hit.agent.active ?? 0) >= at) return;
+  core.chats.replaceChat({ ...hit.meta, agents: (hit.meta.agents ?? []).map((x) => (x.keyId === keyId ? { ...x, active: at } : x)) });
+}
+
 /**
- * Agent 有动作 (拉消息, 发消息, 拉指令, 长连): 记最近活跃, 同一个 Agent 最多每 2 分钟写一次库,
- * 写了就通知各端重拉群资料 (以前不广播, App 一直显示旧时间, 发言 5 分钟前却显示 40 分钟前活跃)。
+ * Agent 有动作 (拉消息, 发消息, 拉指令, 长连): 活跃时间记在内存, 每 2 分钟最多推一帧 agent_active 给主人;
+ * 库里的值比现在早 30 分钟以上才落一次库 (#129), 不再整份重写群资料也不让各端重拉。
  */
 export function touchAgent(core: Core, keyId: string, now = Date.now()): void {
-  for (const meta of core.chats.chats()) {
-    const a = meta.agents?.find((x) => x.keyId === keyId);
-    if (!a) continue;
-    if (now - (a.active ?? 0) < AGENT_ACTIVE_STEP_MS) return;
-    core.chats.replaceChat({ ...meta, agents: (meta.agents ?? []).map((x) => (x.keyId === keyId ? { ...x, active: now } : x)) });
-    core.sockets.toAllClients({ t: "chat_sync", topic: "chats", channel: meta.channel } satisfies ChatSyncFrame);
-    return;
+  const hit = core.chats.byKey(keyId);
+  if (!hit) return;
+  const saved = hit.agent.active ?? 0;
+  if (now - Math.max(saved, core.chats.active.get(keyId) ?? 0) < AGENT_ACTIVE_STEP_MS) return;
+  core.chats.active.set(keyId, now);
+  pushActive(core, hit.meta.channel, keyId, now);
+  if (now - saved >= AGENT_ACTIVE_FLUSH_MS) saveActive(core, keyId, now);
+}
+
+/** 每 30 分钟的 cron: 把内存里较新的活跃时间落库, 返回写了几个。 */
+export function flushActive(core: Core): number {
+  let n = 0;
+  for (const [keyId, at] of core.chats.active) {
+    if (at <= (core.chats.byKey(keyId)?.agent.active ?? at)) continue;
+    saveActive(core, keyId, at);
+    n += 1;
   }
+  return n;
 }
 
 /** HTTP 拉群消息的是 Agent 时记一次 "在监听"。 */

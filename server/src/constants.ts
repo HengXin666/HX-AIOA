@@ -64,6 +64,9 @@ export const ERR_UNAUTHORIZED = "未授权";
 export const ERR_FORBIDDEN = "没有权限";
 export const ERR_NOT_FOUND = "路径不存在";
 export const ERR_NO_RESOURCE = "资源不存在";
+export const ERR_BAD_CHANNEL = "群名不合法";
+// 单聊 (#133) 的限制: 后面接 "接入 Agent" / "邀请" / "加人" 等
+export const ERR_DM = "单聊不能";
 export const ERR_BAD_FRAME = "无法解析的帧";
 export const ERR_BAD_BODY = "消息体格式错误";
 export const ERR_BAD_JSON = "请求体必须是 JSON";
@@ -101,6 +104,8 @@ export const KV_GITHUB_LOGIN = "githubLogin";
 // 解析规则变化时换键名, 让下一次同步重新拉全量并改写旧行
 export const KV_GITHUB_ACTIVITY_ETAG = "githubActivityEtag:2";
 export const KV_GITHUB_ACTIVITY_SYNCED = "githubActivitySyncedAt";
+// 提交热力图 (#134): 每天 cron 累计的 { days: 日期 -> 提交数, updated }, 一行
+export const KV_GITHUB_HEATMAP = "githubHeatmap";
 export const ERR_NO_GITHUB_TOKEN = "服务端没有配置 GITHUB_TOKEN";
 export const GITHUB_ADAPTER = "github";
 
