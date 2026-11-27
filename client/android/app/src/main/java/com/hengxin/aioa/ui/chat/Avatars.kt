@@ -56,6 +56,11 @@ object Avatars {
         bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()?.also { mem.put(id, it) }
     }
 
+    /** 自己刚传上去的图 (#142 自选图标): 直接存进本地, 显示时不用再下载一次。 */
+    fun put(context: Context, id: String, bytes: ByteArray) {
+        File(File(context.filesDir, DIR).apply { mkdirs() }, id).writeBytes(bytes)
+    }
+
     /** 读入选中的图片: 按 EXIF 摆正, 长边先降到 2048px 以内, 免得大图撑爆内存。 */
     suspend fun decode(context: Context, uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
         runCatching {

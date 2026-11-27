@@ -88,7 +88,7 @@ fun HomeFrame(
     val unread by remember { derivedStateOf { rows.sumOf { if (it.muted) 0 else it.unread } } }
     // 一级页面: 总览, 消息, 开发, 服务器, 插件空间, agent harness, 资源; 顶部标签与侧栏 "空间" 列同一份 (#121)
     // 置顶最多 5 个 (#139): 标签只放置顶的, 其余在侧栏 "更多空间" 与标题下的切换里
-    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins())
+    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons)
     val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces)
     val board: (String) -> Unit = { key ->
         chat.spaces.board = key
@@ -161,6 +161,8 @@ fun HomeFrame(
     // 侧栏只在一级页面能划出 (#121); 进群, 群设置, GitHub, 我的等子页里划不动
     // 拖开侧栏的手势在左缘和系统返回手势抢 (#139): 一级页面把左缘一段排除掉, 左缘右划是拉侧栏而不是退出 App
     val edge = if (bars) Modifier.systemGestureExclusion { r -> edgeBand(r.size.width.toFloat(), r.size.height.toFloat(), density) } else Modifier
+    // 自选的上传图标 (#142, img: / svg:) 按头像那套取: 内存 → 磁盘 → 下载一次
+    androidx.compose.runtime.CompositionLocalProvider(com.hengxin.aioa.kit.LocalIconImage provides { ref -> rememberIconImage(ref) }) {
     HomeShell(shell, modifier = edge, gestures = bars, sidebar = {
         val recents = rows.sortedByDescending { it.order }.take(RECENTS).map { r ->
             val title = r.meta?.title?.takeIf { it.isNotBlank() } ?: r.key
@@ -215,4 +217,14 @@ fun HomeFrame(
         if (managing) SpaceManageSheet(chat.spaces, unread) { managing = false }
         if (searching) HomeSearchPage(chat, { searching = false; onOpenGroup(it) }, { k, seq -> searching = false; onOpenAt(k, seq) }) { searching = false }
     }
+    }
+}
+
+/** 上传图标的图片; 不是上传的或还没加载好返回 null。 */
+@Composable
+private fun rememberIconImage(ref: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val id = com.hengxin.aioa.kit.IconRef.imageId(ref) ?: return null
+    val context = LocalContext.current
+    val img by androidx.compose.runtime.produceState(com.hengxin.aioa.ui.chat.Avatars.cached(id), id) { value = com.hengxin.aioa.ui.chat.Avatars.load(context, id) }
+    return img
 }

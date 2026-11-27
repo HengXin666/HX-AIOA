@@ -87,10 +87,11 @@ data class SpacePanel(
     val items: List<SpaceItem> = emptyList(),
 )
 
-/** 用户自己的显示状态, 与布局分开存; pinned 为 null 表示没设过 (按 [Space.tab] 自动补空位)。 */
+/** 用户自己的显示状态, 与布局分开存; pinned 为 null 表示没设过 (按 [Space.tab] 自动补空位); icon 是用户自选的图标 (#142), null 用插件声明的。 */
 data class SpaceLayout(
     val hidden: Boolean = false,
     val pinned: Boolean? = null,
+    val icon: String? = null,
     val hiddenPanels: List<String> = emptyList(),
     val order: List<String> = emptyList(),
     val sizes: Map<String, PanelSize> = emptyMap(),

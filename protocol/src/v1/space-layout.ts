@@ -1,4 +1,5 @@
 import type { Envelope } from "./event";
+import { isIconRef } from "./home-tabs";
 import { BIND_REQUIRED, PANEL_SIZES, isPanelSize, type Bind, type Panel, type PanelSize, type Space, type SpaceState } from "./space";
 
 // 面板宽度按 4 列网格计算; 窄屏时客户端把超出的列数收拢为整行
@@ -43,6 +44,12 @@ export function parseSpaceState(raw: unknown, space: Space, cur: SpaceState = {}
     if (v === null) delete next[key];
     else if (typeof v !== "boolean") errs.push(`${key} 必须是布尔值或 null`);
     else next[key] = v;
+  }
+  // 自选图标 (#142): null 清掉, 回到插件声明的图标
+  if (raw.icon === null) delete next.icon;
+  else if (raw.icon !== undefined) {
+    if (isIconRef(raw.icon)) next.icon = raw.icon;
+    else errs.push("icon 必须是图标名, 或 img: / svg: 加上传得到的 id");
   }
   for (const key of ["hiddenPanels", "order"] as const) {
     const v = raw[key];

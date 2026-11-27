@@ -68,7 +68,7 @@
 
 ## 头像
 
-- `PUT /api/v1/avatars` (主人或子号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。
+- `PUT /api/v1/avatars` (主人或子号, body 为图片, ≤64KB) → `{ id }` (内容哈希)。不收 `image/svg+xml` (能带脚本, #142), SVG 由客户端光栅化成 PNG 再传; 旧数据里的 SVG 读取时按下载给 (`application/octet-stream`, `nosniff`)。空间自选图标也用它存 (`img:` / `svg:` 加 id, 见 spaces.md)。
 - 本人头像 (#130): `PATCH /api/v1/me` `{ display?, avatar?: "<头像 id>" | null }` → `{ user }`, 存在账号资料 `UserPublic.avatar`, 只在改的时候写一次; 改了昵称或头像, 他所在群的资料版本 +1, 成员列表与群列表的 ETag 随之失效。
 - `GET /api/v1/avatars/{id}` → 图片, `Cache-Control: immutable`, 客户端按 id 永久缓存。
 - 系统发送者 (#123 #128): 服务端自己发言用的来源 (`system`, `system:*`, `终端`) 第一次发言时自动登记。`GET /api/v1/senders` → `{ senders: [{ sid, name, icon, alias, avatar, first, last, updated }] }` (第一次请求时补登历史消息里的); `PATCH` (或 `PUT`) `/api/v1/senders/{sid}` (母号) `{ "alias": "名字" | null, "avatar": "<头像 id>" | null }`, 没登记的 404, 改了推 `chat_sync` topic `senders`。改了名的新消息 `source.name` 直接是别名; 客户端旧消息也按别名显示, 没设头像的用内置图标。安卓入口: 我的 → 管理 → 系统发送者。

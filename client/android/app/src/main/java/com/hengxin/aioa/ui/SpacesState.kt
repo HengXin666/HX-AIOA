@@ -140,6 +140,14 @@ class SpacesState(
         }
     }
 
+    /** 换图标 (#142): 插件空间 PUT spaces/{id}/state 的 icon, 内置页面存账号设置 homeTabs.icons; null 回到默认。 */
+    fun setIcon(id: String, icon: String?) {
+        val i = spaces.indexOfFirst { it.id == id }
+        if (i < 0) return tabs.setIcon(id, icon)
+        spaces[i] = spaces[i].let { it.copy(layout = it.layout.copy(icon = icon)) }
+        io { call(url(Constants.SPACES_PATH, id, "state"), "PUT", JSONObject().put("icon", icon ?: JSONObject.NULL)) }
+    }
+
     /** 插件空间显示 / 隐藏 (#139): 本地立即生效, 再 PUT spaces/{id}/state。 */
     fun setHidden(space: Space, hidden: Boolean) {
         val i = spaces.indexOfFirst { it.id == space.id }

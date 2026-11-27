@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memSql } from "./sql";
 
-const { demoteTab, parseHomeTabs, parseManifest, parseSpaceState, validateSpace, pluginSpaceId } = await import("@hx-aioa/protocol");
+const { demoteTab, isIconRef, parseHomeTabs, parseManifest, parseSpaceState, validateSpace, pluginSpaceId } = await import("@hx-aioa/protocol");
 const { AllowStore } = await import("../src/plugins/allow-store");
 const { PluginKernel } = await import("../src/plugins/kernel");
 const { Market } = await import("../src/plugins/market");
@@ -86,6 +86,19 @@ test("homeTabs: 只认 order 与 pins, 长度与类型都校验", () => {
   assert.match(String(parseHomeTabs({ order: Array.from({ length: 65 }, (_, i) => `t${i}`) })), /最多 64/);
   assert.match(String(parseHomeTabs({ pins: { CHAT: 1 } })), /pins/);
   assert.match(String(parseHomeTabs({ pins: { ["x".repeat(129)]: true } })), /pins/);
+});
+
+test("自选图标 (#142): 图标名或 img: / svg: 加上传 id; homeTabs.icons 与 state.icon 都校验, null 清掉", () => {
+  for (const ok of ["server", "code-xml", "img:0123456789abcdef01234567", "svg:abcdef01"]) assert.equal(isIconRef(ok), true, ok);
+  for (const bad of ["", "Server", "img:", "img:xyz", "png:abcdef01", "javascript:alert(1)", "a".repeat(49), 3]) assert.equal(isIconRef(bad), false, String(bad));
+  assert.deepEqual(parseHomeTabs({ order: [], pins: {}, icons: { CHAT: "mail", "#daily": "svg:abcdef01" } }), { order: [], pins: {}, icons: { CHAT: "mail", "#daily": "svg:abcdef01" } });
+  assert.deepEqual(parseHomeTabs({ icons: {} }), { order: [], pins: {} });
+  assert.match(String(parseHomeTabs({ icons: { CHAT: "<svg>" } })), /icons/);
+  assert.match(String(parseHomeTabs({ icons: [] })), /icons/);
+  const s = { ...space(), panels: [] };
+  assert.deepEqual(parseSpaceState({ icon: "img:0123456789abcdef01234567" }, s, { hidden: true }), { hidden: true, icon: "img:0123456789abcdef01234567" });
+  assert.deepEqual(parseSpaceState({ icon: null }, s, { icon: "server" }), {});
+  assert.match(String(parseSpaceState({ icon: "https://x/y.svg" }, s)), /icon/);
 });
 
 test("PATCH settings 的 homeTabs: 校验后存, null 删掉", async () => {

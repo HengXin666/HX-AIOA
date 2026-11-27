@@ -14,7 +14,8 @@ private const val SPACE_ICON = "layout-dashboard"
 /** 插件 / Agent 下发的空间 (点子待办, HX OA...), 用户藏起来的不列。 */
 fun pluginSpaces(spaces: List<Space>): List<HomeSpace> = spaces.filter { !it.layout.hidden }.map(::pluginTab)
 
-private fun pluginTab(s: Space) = HomeSpace(s.id, s.title, s.icon ?: SPACE_ICON, plugin = s.origin ?: s.id, tab = s.tab)
+// 用户自选的图标 (#142, state.icon) 优先, 其次插件声明的
+private fun pluginTab(s: Space) = HomeSpace(s.id, s.title, s.layout.icon ?: s.icon ?: SPACE_ICON, plugin = s.origin ?: s.id, tab = s.tab)
 
 /** 标题下的空间切换: 总览 (日常), 开发, 服务器, 再接插件空间。 */
 fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
@@ -33,12 +34,15 @@ fun homeTabs(
     order: List<String> = emptyList(),
     withHidden: Boolean = false,
     pins: Map<String, Boolean> = emptyMap(),
+    // 内置页面的自选图标 (#142, 账号设置 homeTabs.icons); 插件空间的在各自 state.icon
+    icons: Map<String, String> = emptyMap(),
 ): List<HomeSpace> {
     val boards = boardSpaces(spaces)
-    val tab = { t: Tab -> HomeSpace(t.name, t.label, t.icon) }
+    val tab = { t: Tab -> HomeSpace(t.name, t.label, icons[t.name] ?: t.icon) }
     val plugins = if (withHidden) spaces.map(::pluginTab) else pluginSpaces(spaces)
-    val all = listOf(boards[0], HomeSpace(Tab.CHAT.name, Tab.CHAT.label, Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
-        boards.filter { it.id == BOARD_DEV } + tab(Tab.RESOURCES) + plugins
+    val board = { b: HomeSpace -> icons[b.id]?.let { b.copy(icon = it) } ?: b }
+    val all = listOf(board(boards[0]), HomeSpace(Tab.CHAT.name, Tab.CHAT.label, icons[Tab.CHAT.name] ?: Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
+        boards.filter { it.id == BOARD_DEV }.map(board) + tab(Tab.RESOURCES) + plugins
     val hidden = spaces.filter { it.layout.hidden }.map { it.id }.toSet()
     return pinTabs(ordered(all, order), pins, hidden, base = all)
 }

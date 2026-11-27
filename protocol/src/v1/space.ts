@@ -67,8 +67,8 @@ export type Space = {
   panels: Panel[];
   state?: SpaceState;
 };
-// 用户自己的显示状态: 隐藏, 置顶到顶部标签 (客户端限 5 个, 没设过按 tab 提示补空位; PUT 时 null 表示清掉), 排序, 尺寸; 与布局分开存, Agent 重新下发不覆盖
-export type SpaceState = { hidden?: boolean; pinned?: boolean; hiddenPanels?: string[]; order?: string[]; sizes?: Record<string, PanelSize> };
+// 用户自己的显示状态: 隐藏, 置顶到顶部标签 (客户端限 5 个, 没设过按 tab 提示补空位; PUT 时 null 表示清掉), 自选图标 (#142, 见 isIconRef), 排序, 尺寸; 与布局分开存, Agent 重新下发不覆盖
+export type SpaceState = { hidden?: boolean; pinned?: boolean; icon?: string; hiddenPanels?: string[]; order?: string[]; sizes?: Record<string, PanelSize> };
 export type SpaceWithState = Space & { state: SpaceState };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);

@@ -49,6 +49,7 @@ const READ_SCOPE: Scope = "events:read";
 const AVATAR_ID_HEX = 24;
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const IMAGE_PREFIX = "image/";
+const SVG_MIME = "image/svg+xml";
 
 const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
 // 线上一律给 https 地址, 本地调试保持原样
@@ -303,6 +304,8 @@ async function putAvatar(c: ReqCtx): Promise<Response> {
   if (!c.who.owner && !c.who.member) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
   const mime = (c.req.headers.get("Content-Type") ?? "").split(";")[0]?.trim() ?? "";
   if (!mime.startsWith(IMAGE_PREFIX)) return fail(400, "头像必须是图片");
+  // SVG 能带脚本, 直接打开链接就是同源 XSS (#142): 一律不收, 客户端先光栅化成 PNG
+  if (mime === SVG_MIME) return fail(400, "不收 SVG, 请先转成 PNG");
   const data = await c.req.arrayBuffer();
   if (!data.byteLength || data.byteLength > MAX_AVATAR_BYTES) return fail(400, `头像不能超过 ${MAX_AVATAR_BYTES / 1024}KB`);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -314,7 +317,11 @@ async function putAvatar(c: ReqCtx): Promise<Response> {
 function getAvatar(c: ReqCtx): Response {
   const a = c.core.chats.avatar(param(c, 0));
   if (!a) return notFound();
-  return new Response(a.data, { headers: { "Content-Type": a.mime, "Cache-Control": IMMUTABLE } });
+  // 旧数据里可能有 SVG: 按下载给, 不让浏览器当页面渲染
+  const svg = a.mime === SVG_MIME;
+  return new Response(a.data, {
+    headers: { "Content-Type": svg ? "application/octet-stream" : a.mime, "Cache-Control": IMMUTABLE, "X-Content-Type-Options": "nosniff", ...(svg ? { "Content-Disposition": "attachment" } : {}) },
+  });
 }
 
 export const CHAT_ROUTES: Route[] = [

@@ -36,6 +36,7 @@ object SpaceDecode {
         return SpaceLayout(
             hidden = o.optBoolean("hidden"),
             pinned = if (o.has(KEY_PINNED) && !o.isNull(KEY_PINNED)) o.optBoolean(KEY_PINNED) else null,
+            icon = opt(o, KEY_ICON),
             hiddenPanels = strings(o.optJSONArray(KEY_HIDDEN_PANELS)),
             order = strings(o.optJSONArray(KEY_ORDER)),
             sizes = sizes?.keys()?.asSequence()?.mapNotNull { k -> PanelSize.of(sizes.optString(k))?.let { k to it } }?.toMap().orEmpty(),
