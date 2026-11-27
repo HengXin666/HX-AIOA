@@ -55,6 +55,32 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
 - 安卓: 热力格在 GitHub 页顶部 (总览不再显示), 默认最近 140 天, 下面的年份可切到任一年, 横向滚动看全年, 底部一行显示回填进度。
 - 局限: 回填只数关注仓库默认分支上 author 能对上本人账号的提交; 别的仓库与分支靠动态 (保留 30 天, 期间每天累计进 `e`)。增量窗口按提交时间过滤, 合入时保留原提交时间的旧提交会落在窗口外, 由动态补上。
 
+## 走势与足迹 (#142)
+
+`GET /api/v1/github/trend?tz=Asia/Shanghai` (owner 或 `events:read`) → `GithubTrendResult`, GitHub 页的全部折线 / 混合图与足迹一次给全, 带 `ETag` (时区 + 今天 + 同步时间), 没变时 304。只读库, 不调 GitHub。
+
+```
+{ login, syncedAt?, backfill: { done },
+  days:  { points: GithubTrendPoint[14], received },   // 按天, 最近 14 天, 从早到晚
+  weeks: { points: GithubTrendPoint[12], received },   // 按周 (周一起), 最近 12 周, 本周只算到今天
+  created: [{ repo, url, at, description?, private? }], // 我新建的仓库 (近一年), 新的在前, 最多 20
+  starred: [{ repo, url, at, description?, stars }] }   // 我 star 的仓库, 按 star 时间, 最多 20
+GithubTrendPoint = { label: "YYYY-MM-DD" (那一格第一天), commits, prOpened, prMerged, prClosed, issueOpened, issueClosed, prComments, issueComments, reviews }
+```
+
+- `tz`: IANA 时区名, 按它分天; 不传或不认识时用主人设置的时区。提交数例外: 用 GitHub 贡献日历的日期 (提交者本地日期), 与热力格一致。
+- `prOpened` / `issueOpened`: 我开的; `prMerged`: 我开的 PR 被合入 (按合入时间); `prClosed`: 没合入就关了; `issueClosed`: 我开的 Issue 被关 (按关闭时间, 很早开的 Issue 最近才关也算在关的那天)。
+- `prComments` / `issueComments`: 我在 PR / Issue 下发的评论; `received`: 范围内我新开的 Issue / PR 当前收到的评论总数; `reviews`: 我提交的 PR 评审。
+- `backfill.done`: Issue / PR 与评论都已补到 12 周前; 为 false 时较早的格子可能偏少。
+
+同步 (每 30 分钟 cron 与 `POST /sync` 顺带, 需要 `GITHUB_TOKEN`):
+
+- 一次 GraphQL 拿全: `viewer.contributionsCollection` (近一年, `commitContributionsByRepository` 每仓库最近 100 个有提交的日子, `pullRequestReviewContributions`, `repositoryContributions`), `starredRepositories` (按 star 时间最近 50), `issueComments` (最近 100), 加一次搜索 `author:<login> updated:>=<游标> sort:updated-asc` (Issue 与 PR 一起, 每页 100)。GraphQL 计费约 1 点。
+- 补历史: 首次游标为 98 天前; 搜索满页就从最后一条的更新时间接着翻, 评论用 `issueComments(last: 100, before: …)` 往前翻到 98 天前为止。每次同步除第一页外用剩余子请求额度最多再翻 3 页 (只带搜索与更早的评论), 一般几轮 cron 补完。追上后游标停在最后一条更新时间前 1 分钟。
+- 存储: 表 `gh_trend (k 主键, kind, ts, body)`, 一件事一行 (Issue / PR / 评论按节点 id, 提交按 仓库 + 日期, 评审按 URL, 新建仓库与 star 按仓库名), 内容没变不写。`ts` 为最后一次动静 (Issue / PR 取 开 / 关 / 合入 的最晚者); 超过 105 天的行删掉, 新建仓库与 star 每次整份替换 (取消 star 即消失)。游标存 `githubTrend` (KV)。停用插件带 `purge=1` 时一并清掉。
+- 为什么不用事件 API: `/users/{login}/events` 只给最近 300 条 / 90 天, 原实现只拉第 1 页 (100 条), 一天就有上百条 (评论, 加标签) 时只能盖住一两天, 更早的永远拉不到; 推送事件也不再带提交数。`GET /github/daily` (总览, 周报用) 在走势同步过一次后, 提交 / PR / Issue / 评审 / 评论也改从 `gh_trend` 算, 只有推送次数仍来自事件。
+- 安卓: GitHub 页 "走势" 卡 (热力格下面), 14 天 / 12 周切换只换本地数据; 提交 = 面积折线, PR 新开 = 实线, Issue 新开 = 虚线, PR 合入 = 柱, Issue 关闭 = 点, 评论 = 细线; 下面是 "足迹" (新建仓库 / star 列表, 带时间)。
+
 ## 仓库历史 (#134)
 
 `GET /api/v1/github/repos/{owner}/{name}/history?kind=commit&before=…` (owner 或 `events:read`) → `{ repo, kind, items: [{ id, ts, kind, title, url, by?, number?, state? }], next? }`, 新的在前, 每页 30 条。
