@@ -101,7 +101,6 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     Column(Modifier.enter(4)) { com.hengxin.aioa.ui.todo.TodoFocus(chat.spaces) { ch, seq -> chat.groups.openAt(ch, seq) } }
     Column(Modifier.enter(5)) { Layer(chat, "正在发生", "不必立即处理", Constants.PRIORITY_HAPPENING, state, "暂时风平浪静", LAYER_SHOWN, show) }
     Hosts(chat, open, Modifier.enter(6))
-    GithubHeatBlock(chat, openGithub, Modifier.enter(6))
     Column(Modifier.enter(7)) { Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show) }
 }
 

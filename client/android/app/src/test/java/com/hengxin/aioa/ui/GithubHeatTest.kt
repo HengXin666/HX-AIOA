@@ -5,14 +5,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** 总览热力格 (#134): 按周对齐, 级别 0..4, 本周从周一算。 */
+/** GitHub 页热力格 (#134): 按周对齐, 级别 0..4, 本周从周一算, 按年切换的年份与回填进度。 */
 class GithubHeatTest {
     private val today = LocalDate.parse("2026-11-27")
 
+    private fun recent(vararg counts: Pair<LocalDate, Int>): GhHeatmap {
+        val start = today.minusDays((HEAT_DAYS - 1).toLong())
+        val m = (0 until HEAT_DAYS).associate { start.plusDays(it.toLong()) to 0 } + counts
+        return GhHeatmap(m, 0)
+    }
+
     @Test
     fun 格子按周一对齐_最多一档最亮() {
-        val h = GhHeatmap(mapOf(today to 8, today.minusDays(1) to 2), 0)
-        val levels = heatLevels(h, today)
+        val levels = heatLevels(recent(today to 8, today.minusDays(1) to 2))
         val start = today.minusDays((HEAT_DAYS - 1).toLong())
         assertEquals(HEAT_DAYS + start.dayOfWeek.value - 1, levels.size)
         assertEquals(4, levels.last())
@@ -25,5 +30,15 @@ class GithubHeatTest {
         // 2026-11-27 是周五, 周一是 11-23
         val h = GhHeatmap(mapOf(LocalDate.parse("2026-11-23") to 3, LocalDate.parse("2026-11-22") to 5, today to 1), 0)
         assertEquals(4, weekCommits(h, today))
+    }
+
+    @Test
+    fun 按年_回填进度与周对齐() {
+        val h = GhHeatmap(linkedMapOf(LocalDate.parse("2019-01-01") to 1, LocalDate.parse("2019-01-02") to 3), 5, listOf(2026, 2019), 2, "2018-05-01")
+        assertEquals("正在回填历史提交, 还有 2 个仓库", backfillLine(h))
+        assertEquals("历史提交已覆盖到 2018-05-01", backfillLine(h.copy(pending = 0)))
+        assertEquals(null, backfillLine(h.copy(pending = 0, oldest = null)))
+        // 2019-01-01 是周二, 前面补一格
+        assertEquals(listOf(0, 2, 4), heatLevels(h))
     }
 }

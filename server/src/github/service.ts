@@ -4,11 +4,13 @@ import type {
   GithubAvailableResult,
   GithubDailyResult,
   GithubHeatmap,
+  GithubHistoryKind,
+  GithubHistoryResult,
   GithubRepoDetail,
   GithubReposResult,
   GithubSyncResult,
 } from "@hx-aioa/protocol";
-import { KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_GITHUB_LOGIN, KV_GITHUB_PICKS, KV_GITHUB_SYNCED } from "../constants";
+import { GITHUB_SYNC_MAX_REPOS, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_GITHUB_LOGIN, KV_GITHUB_PICKS, KV_GITHUB_SYNCED } from "../constants";
 import type { Env } from "../env";
 import type { Registry } from "../registry";
 import { fetchActivity, fetchAvailable, fetchLogin } from "./account";
@@ -17,7 +19,9 @@ import { applyGithubEvent } from "./apply";
 import { fetchBranches } from "./branches";
 import { cfCached } from "../cf-cache";
 import { dailyOf, dayStart, streakOf } from "./daily";
-import { type HeatStore, commitsByDate, dateIn, heatmapOf, mergeHeat } from "./heatmap";
+import { type HeatState, HeatYears, KV_HEAT_STATE, backfillOf, backfillStep, emptyState, noteDate, yearKey, yearOf } from "./backfill";
+import { type LegacyHeat, commitsByDate, dateIn, heatDates } from "./heatmap";
+import { HistoryFail, fetchHistory, historyTtl } from "./history";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -27,11 +31,19 @@ const BRANCH_CACHE_MS = 10 * 60_000;
 const GUESS_BASE = "main";
 const HEAT_SCAN_MS = 31 * 24 * 3600_000;
 const HEAT_LIVE_MS = 2 * 24 * 3600_000;
+// 每次回填最多拉几页 (一页一次 GitHub 调用): 每天 cron 一次; 同步每 30 分钟一次, 只用同步剩下的子请求额度
+const HEAT_CRON_PAGES = 30;
+const HEAT_SYNC_PAGES = 5;
+// 免费计划每次调用 50 个子请求: 同步每个仓库 4 个, 再给动态, 待办同步, CF 额度检查留一些
+const SUBREQUESTS = 50;
+const SYNC_CALLS_PER_REPO = 4;
+const SUBREQ_RESERVED = 12;
 
 // GitHub 页面状态: webhook 增量更新, 有 GITHUB_TOKEN 时可回填, 并拉取本人的动态
 export class GithubService {
   readonly store: GithubStore;
   private readonly activityStore: ActivityStore;
+  private heatLock: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly env: Env,
@@ -123,21 +135,84 @@ export class GithubService {
     };
   }
 
-  /** 每天 cron (#134): 把留存的 30 天动态按天累计进热力图那一行。 */
-  async refreshHeatmap(tz: string, now = Date.now()): Promise<HeatStore> {
-    const fresh = commitsByDate(this.activityStore.pushes(now - HEAT_SCAN_MS), tz);
-    const next = mergeHeat(await this.storage.get<HeatStore>(KV_GITHUB_HEATMAP), fresh, dateIn(now, tz), now);
-    await this.storage.put(KV_GITHUB_HEATMAP, next);
-    return next;
+  /** 热力图状态与年份行的读改写串行执行, cron 与同步同时跑时不会重复累计。 */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.heatLock.then(fn, fn);
+    this.heatLock = run.catch(() => undefined);
+    return run;
   }
 
-  /** 热力图与 ETag: 存的那一行 + 最近两天的实时提交; 还没算过时当场算一次。 */
-  async heatmap(tz: string, now = Date.now()): Promise<{ map: GithubHeatmap; tag: string }> {
-    const saved = (await this.storage.get<HeatStore>(KV_GITHUB_HEATMAP)) ?? (await this.refreshHeatmap(tz, now));
-    const live = commitsByDate(this.activityStore.pushes(now - HEAT_LIVE_MS), tz);
+  /** 每天 cron (#134): 最近 31 天动态按天并进年份行, 有 token 时再回填 budget 页历史提交。 */
+  refreshHeatmap(tz: string, now = Date.now(), budget = HEAT_CRON_PAGES): Promise<HeatState> {
+    return this.serial(async () => {
+      const state = (await this.storage.get<HeatState>(KV_HEAT_STATE)) ?? emptyState(now);
+      state.tz = tz;
+      const years = new HeatYears(this.storage);
+      const legacy = await this.storage.get<LegacyHeat>(KV_GITHUB_HEATMAP);
+      const events = [...commitsByDate(this.activityStore.pushes(now - HEAT_SCAN_MS), tz), ...Object.entries(legacy?.days ?? {})];
+      await years.load(events.map(([d]) => yearOf(d)));
+      for (const [d, n] of events) {
+        years.add("e", d, n);
+        noteDate(state, d);
+      }
+      await this.backfill(state, years, budget, now);
+      state.updated = now;
+      await this.storage.put({ ...years.changes(), [KV_HEAT_STATE]: state });
+      if (legacy) await this.storage.delete(KV_GITHUB_HEATMAP);
+      return state;
+    });
+  }
+
+  private async backfill(state: HeatState, years: HeatYears, budget: number, now: number): Promise<void> {
+    const token = this.env.GITHUB_TOKEN;
+    if (!token || budget <= 0 || !state.tz) return;
+    try {
+      const login = await this.login(token);
+      await backfillStep({ token, login, repos: await this.tracked(), state, years, tz: state.tz, budget, now });
+    } catch (e) {
+      console.error("热力图历史回填失败:", e);
+    }
+  }
+
+  /** 同步时顺带回填几页; 还没算过热力图 (不知道时区) 时跳过, 没拉到东西不写。 */
+  private heatSync(budget: number, now = Date.now()): Promise<void> {
+    return this.serial(async () => {
+      const state = await this.storage.get<HeatState>(KV_HEAT_STATE);
+      if (!state?.tz || budget <= 0) return;
+      const before = JSON.stringify(state.repos);
+      const years = new HeatYears(this.storage);
+      await this.backfill(state, years, budget, now);
+      const changes = years.changes();
+      if (!Object.keys(changes).length && JSON.stringify(state.repos) === before) return;
+      state.updated = now;
+      await this.storage.put({ ...changes, [KV_HEAT_STATE]: state });
+    });
+  }
+
+  /** 热力图与 ETag: 年份行 + 最近两天的实时提交; 还没算过时当场算一次 (不调 GitHub)。year 为空时是最近 140 天。 */
+  async heatmap(tz: string, now = Date.now(), year?: number): Promise<{ map: GithubHeatmap; tag: string }> {
+    const state = (await this.storage.get<HeatState>(KV_HEAT_STATE)) ?? (await this.refreshHeatmap(tz, now, 0));
     const today = dateIn(now, tz);
+    const dates = heatDates(today, year);
+    const years = new HeatYears(this.storage);
+    await years.load(dates.map(yearOf));
+    const live = commitsByDate(this.activityStore.pushes(now - HEAT_LIVE_MS), tz);
+    const days = dates.map((date) => ({ date, commits: Math.max(years.count(date), live.get(date) ?? 0) }));
+    const thisYear = yearOf(today);
+    const list = [...new Set([thisYear, ...state.years])].filter((y) => y <= thisYear).sort((a, b) => b - a);
+    const map: GithubHeatmap = { days, updated: state.updated, years: list, backfill: backfillOf(state, await this.tracked()) };
+    if (year) map.year = year;
     const sum = [...live.values()].reduce((a, b) => a + b, 0);
-    return { map: heatmapOf(saved, live, today), tag: `${today}-${saved.updated}-${sum}` };
+    return { map, tag: `${year ?? 0}-${today}-${state.updated}-${sum}` };
+  }
+
+  /** 仓库全部历史的一页 (#134): 只给关注的仓库, 按 (仓库, 类别, 游标) 放 Cache API, 不落库。 */
+  async history(repo: string, kind: GithubHistoryKind, before: string, now = Date.now()): Promise<GithubHistoryResult | null> {
+    const token = this.env.GITHUB_TOKEN;
+    if (!token) return null;
+    const known = (await this.tracked()).find((r) => repoKey(r) === repoKey(repo));
+    if (!known) throw new HistoryFail(404, "没有关注这个仓库");
+    return cfCached(`gh-hist:${repoKey(known)}:${kind}:${before}`, historyTtl(kind, before, now), now, () => fetchHistory(token, known, kind, before));
   }
 
   /** 关注仓库里最近 days 天活跃, 还没合入默认分支的分支。fresh 跳过缓存。 */
@@ -180,7 +255,9 @@ export class GithubService {
   /** 停用插件并清除数据: 表与关注列表, 登录名, 同步时间一起清掉; 返回删掉的行数。 */
   async purge(): Promise<number> {
     const n = this.store.clear() + this.activityStore.clear();
-    await this.storage.delete([KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP]);
+    const heat = (await this.storage.get<HeatState>(KV_HEAT_STATE))?.years ?? [];
+    const keys = [KV_GITHUB_PICKS, KV_GITHUB_LOGIN, KV_GITHUB_SYNCED, KV_GITHUB_ACTIVITY_ETAG, KV_GITHUB_ACTIVITY_SYNCED, KV_GITHUB_HEATMAP, KV_HEAT_STATE];
+    await this.storage.delete([...keys, ...heat.map(yearKey)]);
     return n;
   }
 
@@ -189,6 +266,8 @@ export class GithubService {
     if (!token) return null;
     const [r, actErr] = await Promise.all([syncGithub(this.store, this.registry, token, await this.choice()), this.syncActivity(token)]);
     if (r.repos > 0) await this.storage.put(KV_GITHUB_SYNCED, Date.now());
+    const room = SUBREQUESTS - SYNC_CALLS_PER_REPO * Math.min((await this.tracked()).length, GITHUB_SYNC_MAX_REPOS) - SUBREQ_RESERVED;
+    await this.heatSync(Math.min(HEAT_SYNC_PAGES, room)).catch((e) => console.error("热力图回填失败:", e));
     if (actErr) {
       r.ok = false;
       r.error = r.error ? `${r.error}; ${actErr}` : actErr;

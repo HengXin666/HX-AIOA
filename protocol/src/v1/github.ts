@@ -94,7 +94,18 @@ export type GithubBranchesResult = { at: number; days: number; repos: GithubRepo
 export const GITHUB_BRANCH_DEFAULT_DAYS = 30;
 export const GITHUB_BRANCH_MAX_DAYS = 90;
 
-// 提交热力图 (#134): 最近 GITHUB_HEATMAP_DAYS 天每天的提交数, 按主人时区的日期; 每天 cron 累计存一行
+// 提交热力图 (#134): 不带 year 时为最近 GITHUB_HEATMAP_DAYS 天, 带 year 时为该年 1 月 1 日到年底 (今年到今天); 按主人时区的日期
 export type GithubHeatDay = { date: string; commits: number };
-export type GithubHeatmap = { days: GithubHeatDay[]; updated: number };
+// 历史回填进度: repos 为关注的仓库数, pending 为全部历史还没拉完的; oldest 为有提交数据的最早一天
+export type GithubHeatBackfill = { done: boolean; repos: number; pending: number; oldest?: string };
+// years: 有数据的年份 (含今年), 新的在前
+export type GithubHeatmap = { days: GithubHeatDay[]; updated: number; year?: number; years?: number[]; backfill?: GithubHeatBackfill };
 export const GITHUB_HEATMAP_DAYS = 140;
+
+// 仓库历史 (#134): 服务端代理 GitHub 分页, 按页缓存, 不落库; next 原样作为下一次的 before, 没有表示到头了
+export const GITHUB_HISTORY_KINDS = ["commit", "pr", "issue", "release"] as const;
+export type GithubHistoryKind = (typeof GITHUB_HISTORY_KINDS)[number];
+// state: PR 为 open / closed / merged, Issue 为 open / closed
+export type GithubHistoryItem = { id: string; ts: number; kind: GithubHistoryKind; title: string; url: string; by?: string; number?: number; state?: string };
+export type GithubHistoryResult = { repo: string; kind: GithubHistoryKind; items: GithubHistoryItem[]; next?: string };
+export const GITHUB_HISTORY_PAGE = 30;

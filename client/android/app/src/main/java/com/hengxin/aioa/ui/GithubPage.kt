@@ -48,6 +48,7 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
     GhRefreshBox(state.refreshing && state.loaded, { state.refresh(withRecent = true); state.mine.loadToday(); state.mine.loadDaily(); state.branches.load(true) }) {
         SubPage(GITHUB_TITLE, onBack, (if (state.syncing) "同步中..." else "同步") to sync) {
             state.error?.let { ErrorCard(it) }
+            GithubHeatCard(state)
             DailyCard(state.mine)
             BranchBoard(state.branches) { state.openBranchesTab = true; openRepo(it) }
             TodayCard(state.mine)
