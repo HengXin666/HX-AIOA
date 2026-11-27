@@ -94,4 +94,11 @@ class TabNavTest {
         val s = GsStack().push(GsPage.Search).push(GsPage.Search)
         assertEquals(1, s.pages.size)
     }
+
+    // 会话页 v2 (#136): 资料卡 "发消息" 打开单聊仍在消息栏, 不多记一层, 返回还是回原来的栏
+    @Test
+    fun 资料卡开单聊_返回原栏() {
+        val n = path({ it.select(Tab.AGENT) }, { it.go(Tab.CHAT) }, { it.go(Tab.CHAT) })
+        assertEquals(TabNav(Tab.AGENT), n.back())
+    }
 }

@@ -35,9 +35,10 @@
       ]}
     ]},
     {"id": "chat", "label": "消息", "icon": "message-circle", "rt": "live", "kids": [
-      {"id": "ch-list", "t": "block", "label": "群列表", "sub": "分组 · 折叠 · 未读", "rt": "live", "kids": [
-        {"id": "ch-new", "t": "dialog", "label": "新建群 / 组 · 加入群", "rt": "static"},
-        {"id": "ch-long", "t": "sheet", "label": "长按操作", "sub": "置顶 · 移动 · 改名 · 删除", "rt": "static", "warn": "现为 DropdownMenu + 多个 AlertDialog, 统一成操作抽屉"}
+      {"id": "ch-list", "t": "block", "label": "消息列表", "sub": "一列 · 置顶折叠 · 域一行 · 标签筛选 (#135)", "rt": "live", "kids": [
+        {"id": "ch-new", "t": "dialog", "label": "+ 菜单: 新建群 / 域 · 加入群 · 收藏 · 管理标签", "rt": "static"},
+        {"id": "ch-long", "t": "sheet", "label": "长按操作", "sub": "置顶 · 免打扰 · 标签 · 移到域 · 改名 · 删除", "rt": "static"},
+        {"id": "ch-domain", "t": "page", "label": "域", "sub": "一组群 · 未读合计; 进群再返回回到域", "rt": "live"}
       ]},
       {"id": "ch-room", "t": "page", "label": "群聊", "sub": "输入中 · Agent 监听 · 引用回复", "rt": "live", "kids": [
         {"id": "ch-settings", "t": "page", "label": "群聊设置", "sub": "计数 · 成员横排 · Agent · 资料 · 提醒 (#137)", "rt": "near", "kids": [
@@ -54,7 +55,14 @@
           {"id": "ch-clear", "t": "dialog", "label": "清空 / 删除 / 退出群", "sub": "危险操作确认", "rt": "static"}
         ]},
         {"id": "ch-fav", "t": "page", "label": "收藏", "sub": "定位回原消息", "rt": "near"},
-        {"id": "ch-forward", "t": "dialog", "label": "转发到", "rt": "static", "warn": "选群是列表, 应为抽屉"},
+        {"id": "ch-forward", "t": "sheet", "label": "转发到", "sub": "逐条 / 合并转发选会话", "rt": "static"},
+        {"id": "ch-mention", "t": "sheet", "label": "@ 选择", "sub": "输入 @ 弹出: 全体 · Agent · 真人 (#131)", "rt": "near"},
+        {"id": "ch-msgmenu", "t": "sheet", "label": "长按消息", "sub": "两排: 复制 转发 收藏 回复 / 多选 精选 撤回 删除", "rt": "static"},
+        {"id": "ch-select", "t": "block", "label": "多选", "sub": "勾选 · 逐条转发 · 合并转发 · 收藏 · 删除", "rt": "static"},
+        {"id": "ch-bundle", "t": "page", "label": "聊天记录 (合并转发)", "sub": "只读 · 按引用批量取 (#132)", "rt": "near"},
+        {"id": "ch-profile", "t": "sheet", "label": "资料卡", "sub": "点头像; 发消息进单聊 · @TA · Agent 设置", "rt": "near", "kids": [
+          {"id": "ch-dm", "t": "page", "label": "单聊", "sub": "同会话页; 顶栏 真人, 没有 Agent (#133)", "rt": "live"}
+        ]},
         {"id": "ch-todo", "t": "sheet", "label": "群待办看板", "rt": "live"},
         {"id": "ch-file", "t": "sheet", "label": "文件 · 传输进度", "rt": "live"}
       ]},
