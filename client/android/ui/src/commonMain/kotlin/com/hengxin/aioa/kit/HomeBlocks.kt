@@ -103,8 +103,9 @@ fun HomeRow(
     divider: Boolean = false,
     lead: (@Composable () -> Unit)? = null,
     end: (@Composable () -> Unit)? = null,
-    extra: (@Composable ColumnScope.() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    // 放最后, 尾随 lambda 落在这里 (文字下面的按钮, 进度等)
+    extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val c = Aioa.colors
     Column(Modifier.fillMaxWidth().pointerTap { onClick?.invoke() }) {
