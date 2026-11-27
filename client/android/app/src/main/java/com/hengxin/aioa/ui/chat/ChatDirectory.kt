@@ -49,9 +49,12 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         when (topic) {
             TOPIC_FAVORITES -> refreshFavorites()
             Senders.TOPIC -> refreshSenders()
-            else -> chat?.let(::parseChat)?.let { applyMetas(metas + (it.channel to it)) } ?: refreshChats()
+            else -> chat?.let(::parseChat)?.let(::applyChat) ?: refreshChats()
         }
     }
+
+    /** 合并一行群资料 (chat_sync 带的, 或新开的单聊)。 */
+    fun applyChat(meta: ChatMeta) = applyMetas(metas + (meta.channel to meta))
 
     /** 本人其它设备的已读位置 (#129 chat_read 帧): 只前进, 不重拉。 */
     fun applyRead(channel: String, read: Long) {

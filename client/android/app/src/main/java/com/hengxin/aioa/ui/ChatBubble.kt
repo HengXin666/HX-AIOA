@@ -21,12 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,8 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hengxin.aioa.Constants
-import com.hengxin.aioa.data.MessageDb
 import com.hengxin.aioa.ui.chat.Names
 import com.hengxin.aioa.proto.MsgRef
 import com.hengxin.aioa.proto.ServerFrame
@@ -52,10 +46,20 @@ import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
 import com.hengxin.aioa.ui.chat.colorOf
 import com.hengxin.aioa.ui.chat.plainPreview
+import com.hengxin.aioa.ui.chat.AgentFace
+import com.hengxin.aioa.ui.chat.tapHold
+import com.hengxin.aioa.kit.Aioa
+import com.hengxin.aioa.kit.CheckBox
+import com.hengxin.aioa.kit.SoftTag
+import com.hengxin.aioa.kit.hxPalette
+import androidx.compose.foundation.border
 
 private val BUBBLE_R = 16.dp
 private val BUBBLE_TAIL = 4.dp
-private val SENDER_AVATAR = 34.dp
+private val SENDER_AVATAR = 40.dp
+private val PICK_W = 36.dp
+private const val AGENT_BORDER = 0.35f
+const val ROLE_MEMBER_LABEL = "成员"
 private val QUOTE_SHAPE = RoundedCornerShape(6.dp)
 private const val HIGHLIGHT_ALPHA = 0.18f
 
@@ -70,12 +74,22 @@ class BubbleActions(
     val onJump: (Long) -> Unit,
     // mode: recall / delete
     val onRemove: (ServerFrame.Msg, String) -> Unit = { _, _ -> },
-    // 点发送者头像 (主人可换头像, #123); null 表示不可点
-    val onSender: ((ServerFrame.Msg) -> Unit)? = null,
+    // 点 / 长按发送者头像: 资料卡 / 插入 @名字 (#136)
+    val onAvatar: ((ServerFrame.Msg) -> Unit)? = null,
+    val onAvatarLong: ((ServerFrame.Msg) -> Unit)? = null,
+    // 多选: 进入多选并勾上这条; 多选中点一条是勾选 / 取消
+    val onSelect: ((ServerFrame.Msg) -> Unit)? = null,
+    val onBundle: ((ServerFrame.Msg) -> Unit)? = null,
+    val admin: Boolean = false,
+    val look: (ServerFrame.Msg) -> SenderLook = { SenderLook() },
+    val atNames: List<String> = emptyList(),
 )
 
-/** 一条气泡在列表里的位置: 是否一串的第一条 (显示名字与头像)。 */
-data class BubbleSpot(val head: Boolean, val showSender: Boolean, val highlight: Boolean)
+/** 名字上面的身份: 群主 / 管理员 / 成员, 以及是不是 Agent。 */
+data class SenderLook(val role: String? = null, val agent: Boolean = false)
+
+/** 一条气泡在列表里的位置: 是否一串的第一条 (显示名字与头像); picking 为多选中。 */
+data class BubbleSpot(val head: Boolean, val showSender: Boolean, val highlight: Boolean, val picking: Boolean = false, val picked: Boolean = false)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -84,55 +98,83 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
     if (msg.deleted != null) return RecalledLine(if (mine) "你" else Names.of(msg), modifier)
     var menu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
+    val look = actions?.look?.invoke(msg) ?: SenderLook()
+    val tone = colorOf(msg.sid ?: msg.src)
     val shape = when {
         mine -> RoundedCornerShape(BUBBLE_R, if (spot.head) BUBBLE_TAIL else BUBBLE_R, BUBBLE_R, BUBBLE_R)
         else -> RoundedCornerShape(if (spot.head) BUBBLE_TAIL else BUBBLE_R, BUBBLE_R, BUBBLE_R, BUBBLE_R)
     }
-    val bg = if (mine) c.primary else c.surfaceVariant
-    val fg = if (mine) c.onPrimary else c.onSurface
+    val card = msg.bundle != null
+    val bg = if (mine && !card) c.primary else c.surfaceVariant
+    val fg = if (mine && !card) c.onPrimary else c.onSurface
     val muted = fg.copy(alpha = 0.65f)
-    val md = MdColors(fg, muted, if (mine) fg else c.primary, fg.copy(alpha = 0.1f))
-    val rowBg by animateColorAsState(if (spot.highlight) c.primary.copy(alpha = HIGHLIGHT_ALPHA) else Color.Transparent, label = "hl")
+    val md = MdColors(fg, muted, if (mine) fg else c.primary, fg.copy(alpha = 0.1f), actions?.atNames.orEmpty())
+    val rowBg by animateColorAsState(if (spot.highlight || spot.picked) c.primary.copy(alpha = HIGHLIGHT_ALPHA) else Color.Transparent, label = "hl")
+    val pick = actions?.onSelect.takeIf { spot.picking }
     Row(
-        modifier.fillMaxWidth().background(rowBg).padding(top = if (spot.head) 6.dp else 2.dp),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Top,
+        modifier.fillMaxWidth().background(rowBg).then(if (pick != null) Modifier.clickable { pick(msg) } else Modifier).padding(top = if (spot.head) 6.dp else 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (!mine && spot.showSender) {
-            val tap = actions?.onSender
-            if (spot.head) com.hengxin.aioa.ui.chat.SenderAvatar(msg, SENDER_AVATAR, if (tap != null) Modifier.clickable { tap(msg) } else Modifier) else Spacer(Modifier.width(SENDER_AVATAR))
-            Spacer(Modifier.width(6.dp))
-        }
-        Box {
-            Column(
-                Modifier.widthIn(max = if (msg.feed != null) 340.dp else 290.dp)
-                    .background(bg, shape)
-                    .combinedClickable(onClick = { onStatus?.invoke() }, onLongClick = { if (actions != null) menu = true })
-                    .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = 5.dp),
-            ) {
-                if (!mine && spot.showSender && spot.head) {
-                    Text(Names.of(msg), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colorOf(msg.sid ?: msg.src), maxLines = 1)
-                }
-                msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
-                msg.reply?.let { QuoteBlock(it, fg, if (mine) fg else c.primary) { actions?.onJump?.invoke(it.seq) } }
-                val time: @Composable () -> Unit = {
-                    Text(status ?: timeOf(msg.ts), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
-                }
-                val html = msg.html
-                if (msg.feed != null) {
-                    FeedBubble(msg, time)
-                } else if (html != null) {
-                    // HTML 卡片的 "全屏" 和时间同一行
-                    HtmlCard(html, Modifier.padding(top = 2.dp), footer = time)
-                } else {
-                    msg.file?.let { FileCard(it, fg, Modifier.padding(top = 2.dp, bottom = 2.dp)) }
-                    // 只发文件时正文就是 "[文件] 名字", 有文件卡就不重复
-                    if (msg.file == null || !msg.text.startsWith(FILE_TEXT_PREFIX)) MarkdownText(msg.text, md)
-                    Box(Modifier.align(Alignment.End)) { time() }
+        if (spot.picking) Box(Modifier.width(PICK_W)) { CheckBox(spot.picked) }
+        Row(Modifier.weight(1f), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
+            if (!mine && spot.showSender) {
+                if (spot.head) {
+                    val face = Modifier.tapHold({ actions?.onAvatar?.invoke(msg) }, actions?.onAvatarLong?.let { l -> { l(msg) } })
+                    if (look.agent) AgentFace(tone, SENDER_AVATAR, face) else com.hengxin.aioa.ui.chat.SenderAvatar(msg, SENDER_AVATAR, face)
+                } else Spacer(Modifier.width(SENDER_AVATAR))
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                if (!mine && spot.showSender && spot.head) Who(Names.of(msg), look, tone)
+                Box {
+                    val border = if (look.agent && !mine) Modifier.border(1.dp, tone.copy(alpha = AGENT_BORDER), shape) else if (card) Modifier.border(1.dp, c.outlineVariant, shape) else Modifier
+                    Column(
+                        Modifier.widthIn(max = if (msg.feed != null) 340.dp else 290.dp)
+                            .background(bg, shape)
+                            .then(border)
+                            .combinedClickable(
+                                onClick = { if (pick != null) pick(msg) else if (card) actions?.onBundle?.invoke(msg) else onStatus?.invoke() },
+                                onLongClick = { if (actions != null && pick == null) menu = true },
+                            )
+                            .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = 5.dp),
+                    ) {
+                        msg.fwd?.let { Text("转发自 ${it.src}", fontSize = 12.sp, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
+                        msg.reply?.let { QuoteBlock(it, fg, if (mine) fg else c.primary) { actions?.onJump?.invoke(it.seq) } }
+                        val time: @Composable () -> Unit = {
+                            Text(status ?: timeOf(msg.ts), fontSize = 10.sp, color = if (status != null && onStatus != null) c.error else muted)
+                        }
+                        val html = msg.html
+                        val bundle = msg.bundle
+                        if (bundle != null) {
+                            com.hengxin.aioa.ui.chat.BundleCard(bundle)
+                            Box(Modifier.align(Alignment.End)) { time() }
+                        } else if (msg.feed != null) {
+                            FeedBubble(msg, time)
+                        } else if (html != null) {
+                            // HTML 卡片的 "全屏" 和时间同一行
+                            HtmlCard(html, Modifier.padding(top = 2.dp), footer = time)
+                        } else {
+                            msg.file?.let { FileCard(it, fg, Modifier.padding(top = 2.dp, bottom = 2.dp)) }
+                            // 只发文件时正文就是 "[文件] 名字", 有文件卡就不重复
+                            if (msg.file == null || !msg.text.startsWith(FILE_TEXT_PREFIX)) MarkdownText(msg.text, md)
+                            Box(Modifier.align(Alignment.End)) { time() }
+                        }
+                    }
+                    if (actions != null && menu) MessageMenu(msg, actions, onCopy = { clipboard.setText(AnnotatedString(msg.text)) }) { menu = false }
                 }
             }
-            if (actions != null) BubbleMenu(menu, { menu = false }, msg, actions, onCopy = { clipboard.setText(AnnotatedString(msg.text)) })
         }
+    }
+}
+
+/** 气泡上面一行: 身份标签, Agent 标签, 名字。 */
+@Composable
+private fun Who(name: String, look: SenderLook, tone: Color) {
+    val k = Aioa.colors
+    Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        look.role?.let { SoftTag(it, if (it == ROLE_MEMBER_LABEL) k.textSecondary else hxPalette().chart3) }
+        if (look.agent) SoftTag("Agent", tone)
+        com.hengxin.aioa.kit.Text(name, k.textSecondary, 12)
     }
 }
 
@@ -154,30 +196,6 @@ private fun QuoteBlock(ref: MsgRef, fg: Color, bar: Color, onClick: () -> Unit) 
 private fun RecalledLine(who: String, modifier: Modifier) {
     Box(modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
         Text("$who 撤回了一条消息", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-    }
-}
-
-@Composable
-private fun BubbleMenu(open: Boolean, close: () -> Unit, msg: ServerFrame.Msg, a: BubbleActions, onCopy: () -> Unit) {
-    var confirm by remember { mutableStateOf(false) }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("删除这条消息?") },
-            text = { Text("所有设备上都会删除, 不能恢复。") },
-            confirmButton = { TextButton({ confirm = false; a.onRemove(msg, MessageDb.DELETE_MODE) }) { Text("删除", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton({ confirm = false }) { Text("取消") } },
-        )
-    }
-    val recallable = msg.cid != null && msg.mine
-    DropdownMenu(open, close) {
-        DropdownMenuItem({ Text("复制") }, { onCopy(); close() })
-        DropdownMenuItem({ Text("引用") }, { a.onReply(msg); close() })
-        DropdownMenuItem({ Text("转发") }, { a.onForward(msg); close() })
-        DropdownMenuItem({ Text(if (a.isFavorite(msg.seq)) "取消收藏" else "收藏") }, { a.onFavorite(msg); close() })
-        a.digests.forEach { (key, label) -> DropdownMenuItem({ Text("收录到 $label") }, { a.onDigest(msg, key); close() }) }
-        if (recallable) DropdownMenuItem({ Text("撤回") }, { a.onRemove(msg, MessageDb.RECALL_MODE); close() })
-        DropdownMenuItem({ Text("删除", color = MaterialTheme.colorScheme.error) }, { confirm = true; close() })
     }
 }
 

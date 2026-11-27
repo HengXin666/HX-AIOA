@@ -44,7 +44,8 @@ sealed interface MdBlock {
 }
 
 /** 渲染用到的颜色, 由气泡决定。 */
-data class MdColors(val text: Color, val muted: Color, val link: Color, val codeBg: Color)
+/** at: 要高亮的 @名字 (#131), 长的在前。 */
+data class MdColors(val text: Color, val muted: Color, val link: Color, val codeBg: Color, val at: List<String> = emptyList())
 
 private const val FENCE = "```"
 private const val MAX_HEADING = 6
@@ -149,6 +150,13 @@ fun inlineMarkdown(src: String, c: MdColors): AnnotatedString = buildAnnotatedSt
                 if (m != null) {
                     withLink(LinkAnnotation.Url(m.value, links)) { append(m.value) }
                     i += m.value.length
+                } else { append(ch); i++ }
+            }
+            ch == '@' && c.at.isNotEmpty() -> {
+                val n = c.at.firstOrNull { src.startsWith("@$it", i) }
+                if (n != null) {
+                    withStyle(SpanStyle(color = c.link, fontWeight = FontWeight.SemiBold)) { append("@$n") }
+                    i += n.length + 1
                 } else { append(ch); i++ }
             }
             else -> { append(ch); i++ }
