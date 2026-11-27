@@ -47,6 +47,7 @@ data class Pending(
     val upload: android.net.Uri? = null,
     val progress: Float? = null,
     val error: String? = null,
+    val mentions: List<String> = emptyList(),
 )
 
 private const val PROGRESS_STEP = 0.02f
@@ -65,6 +66,7 @@ class ChatGroups(
 ) {
     val directory = ChatDirectory(context, scope)
     val presence = com.hengxin.aioa.ui.chat.ChatPresence()
+    val tags = com.hengxin.aioa.ui.chat.ChatTags(context, scope)
     private var typedAt = 0L
     var summaries by mutableStateOf<List<GroupSummary>>(emptyList())
         private set
@@ -73,6 +75,8 @@ class ChatGroups(
     var open by mutableStateOf<String?>(null)
         private set
     var page by mutableStateOf(ChatPage.CHAT)
+    /** 资料卡点 "Agent 设置" 时要定位的 Agent keyId, 群设置页用完置空。 */
+    var settingsAgent by mutableStateOf<String?>(null)
     var favoritesOpen by mutableStateOf(false)
     // 从邀请链接拉起 App 时带来的邀请码, 群列表看到后弹出加入框
     var pendingInvite by mutableStateOf<String?>(null)
@@ -137,6 +141,7 @@ class ChatGroups(
             val g = o.optJSONArray("groups")
             ChatFolder(o.optString("name"), (0 until (g?.length() ?: 0)).map { g!!.optString(it) })
         }.filter { it.name.isNotEmpty() }
+        tags.apply(settings)
     }
 
     /** 群资料变了: 其它设备读过的群本机也算已读, 被清空的群删掉本地记录。 */
@@ -183,6 +188,7 @@ class ChatGroups(
                 onCleared?.invoke(key, upTo)
                 if (open == key) close()
                 if (folders.any { key in it.groups }) save(folders.map { it.copy(groups = it.groups - key) })
+                tags.forget(key)
                 directory.refreshChats()
                 reload()
             }
@@ -341,16 +347,16 @@ class ChatGroups(
     }
 
     /** 发到当前群: 本地先显示, 服务端回来同 cid 的消息后替换。 */
-    fun send(text: String): Boolean {
+    fun send(text: String, mentions: List<String> = emptyList()): Boolean {
         val key = open ?: return false
         val body = text.trim()
         if (body.isEmpty()) return false
         val cid = UUID.randomUUID().toString()
         val reply = replyTo
         val ref = reply?.let { MsgRef(it.seq, it.src, plainPreview(it.text).take(REPLY_EXCERPT)) }
-        val ok = socketSend(Frames.send(cid, body, channelOf(key), reply?.seq))
+        val ok = socketSend(Frames.send(cid, body, channelOf(key), reply?.seq, mentions = mentions))
         typedAt = 0L
-        pending.add(Pending(cid, body, System.currentTimeMillis(), ref, failed = !ok))
+        pending.add(Pending(cid, body, System.currentTimeMillis(), ref, failed = !ok, mentions = mentions))
         sendTick += 1
         if (ok) replyTo = null
         return ok
@@ -388,12 +394,24 @@ class ChatGroups(
         val key = open ?: return
         if (p.upload != null) return sendFile(p.upload, if (p.text.startsWith(FILE_TEXT_PREFIX)) "" else p.text, p)
         pending.remove(p)
-        val ok = socketSend(Frames.send(p.cid, p.text, channelOf(key), p.reply?.seq))
+        val ok = socketSend(Frames.send(p.cid, p.text, channelOf(key), p.reply?.seq, mentions = p.mentions))
         pending.add(p.copy(failed = !ok, ts = System.currentTimeMillis()))
     }
 
     fun forward(msg: ServerFrame.Msg, target: String): Boolean =
         socketSend(Frames.send(UUID.randomUUID().toString(), msg.text, channelOf(target), fwd = msg.seq))
+
+    /** 合并转发 (#132): 一条消息只带引用, 卡片由服务端生成。 */
+    fun sendBundle(target: String, from: String, seqs: List<Long>): Boolean {
+        val cid = UUID.randomUUID().toString()
+        val text = BUNDLE_TEXT + from
+        val ok = socketSend(Frames.send(cid, text, channelOf(target), bundle = com.hengxin.aioa.proto.BundleSend(from, seqs.sorted().take(Constants.BUNDLE_MAX))))
+        if (ok && target == open) {
+            pending.add(Pending(cid, text, System.currentTimeMillis(), null))
+            sendTick += 1
+        }
+        return ok
+    }
 
     private fun channelOf(key: String): String? = if (key == MessageDb.MEMO_GROUP) null else key
 
@@ -440,19 +458,21 @@ class ChatGroups(
         val arr = JSONArray(next.map { JSONObject().put("name", it.name).put("groups", JSONArray(it.groups)) })
         scope.launch(Dispatchers.IO) {
             val r = Api.call(context, PATCH, listOf(Constants.SETTINGS_PATH), JSONObject().put(Constants.SETTING_CHAT_FOLDERS, arr))
-            withContext(Dispatchers.Main) { error = r.error?.let { "分组没有保存到服务端: $it" } }
+            withContext(Dispatchers.Main) { error = r.error?.let { "域没有保存到服务端: $it" } }
         }
     }
 
     fun clearError() {
         error = null
         directory.error = null
+        tags.error = null
     }
 
     private companion object {
         const val GET = "GET"
         const val PATCH = "PATCH"
         const val REPLY_EXCERPT = 200
+        const val BUNDLE_TEXT = "[聊天记录] "
         const val MAX_JUMP_PAGES = 5
         const val JUMP_POLL_MS = 30L
         const val OPEN_WAIT_TRIES = 40
