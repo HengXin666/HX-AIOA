@@ -95,14 +95,21 @@ private fun EmptyRepos(synced: Boolean, onPick: () -> Unit, onAddSource: () -> U
     }
 }
 
-/** 一行一个仓库 (#138): GitHub 图标, 仓库名, PR / Issue / 未合入 / 最近推送压到右边, 最右 CI 状态点。 */
+/**
+ * 一个仓库 (#138 #139): 标题行是仓库名, 星数 / PR / Issue / 未合入压到右边, 最右 CI 状态点;
+ * 次行补回 "一行化" 丢的信息: CI 失败详情 (标红), 最近推送, 描述。
+ */
 @Composable
 private fun RepoCard(repo: GhRepo, unmerged: Int, open: () -> Unit) {
     val meta = metaOf(
+        if (repo.stars > 0) "★ ${repo.stars}" else "",
         if (repo.openPrs > 0) "${repo.openPrs} $LABEL_PR" else "",
         if (repo.openIssues > 0) "${repo.openIssues} $LABEL_ISSUE" else "",
         if (unmerged > 0) "$unmerged 未合入" else "",
-        repo.lastPush?.let { ago(it.at) }.orEmpty(),
     )
-    OneRow(ICON_GITHUB, repo.repo, meta, onClick = open) { Dot(ciColor(repo.ci?.status)) }
+    val ci = repo.ci
+    val alert = if (ci?.status == CiStatus.FAILURE) "CI 失败 · ${metaOf(ci.workflow, ci.branch, ago(ci.at))}" else ""
+    val push = repo.lastPush?.let { p -> metaOf("${p.by.ifEmpty { "有人" }} 推送 ${p.commits} 个提交到 ${p.branch}", ago(p.at)) }.orEmpty()
+    val sub = listOf(push, repo.description.orEmpty()).filter { it.isNotBlank() }.joinToString("\n")
+    OneRow(ICON_GITHUB, repo.repo, meta, onClick = open, sub = sub, alert = alert) { Dot(ciColor(ci?.status)) }
 }

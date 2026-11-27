@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -45,6 +47,10 @@ private const val MINUTE_MS = 60_000L
 private const val HOUR_MS = 60 * MINUTE_MS
 private const val DAY_MS = 24 * HOUR_MS
 private const val WEEK_DAYS = 7
+private const val TITLE_LINES = 2
+private const val MARKS_MAX = 168
+private const val UNIT_MONTH = "month"
+private val EVERY_UNITS = mapOf("day" to "天", "week" to "周", UNIT_MONTH to "月", "year" to "年")
 
 /** 仓库的固定颜色: 名字哈希到一组好分辨的色; null 为没关联仓库。 */
 fun repoTint(repo: String?): Color = if (repo == null) NO_REPO_TINT else Color(REPO_TINTS[repo.hashCode().mod(REPO_TINTS.size)])
@@ -114,19 +120,30 @@ fun TodoLine(
                     textDecoration = if (row.finished) TextDecoration.LineThrough else null,
                 ),
                 overflow = TextOverflow.Ellipsis,
-                maxLines = 1,
+                // 标题至少两行 (#139), 一行化后长标题只剩半句
+                maxLines = TITLE_LINES,
             )
             TodoMarks(row, now, fold, showRepo, showArea)
         }
     }
 }
 
-/** 一行右边的小标注: 按要紧程度排, 放不下的往后省略 (标题先让位)。 */
+/** 每 n 天 / 周 / 月 / 年; 不认识的单位不写。 */
+private fun everyShort(unit: String?, n: Int): String? {
+    val u = EVERY_UNITS[unit] ?: return null
+    return if (n <= 1) "每$u" else "每 $n ${if (unit == UNIT_MONTH) "个月" else u}"
+}
+
+/**
+ * 一行右边的小标注: 按要紧程度排, 放不下的往后截掉。
+ * 整块最宽 [MARKS_MAX] (#139): 标注再多, 标题也留得出位置, 不会被挤到 0 宽。
+ */
 @Composable
 private fun TodoMarks(r: TodoRow, now: Long, fold: TodoFold?, showRepo: Boolean, showArea: Boolean) {
     val c = Aioa.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.widthIn(max = MARKS_MAX.dp).clipToBounds(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!r.finished && r.prio == PRIO_URGENT) Icon("flame", c.danger, 12.dp)
+        // P2 / P3 也标出来 (旧版就有), P1 用火苗
         if (r.star && !r.finished) Icon("star", c.warning, 12.dp)
         val state = when (r.state) {
             TodoRow.STATE_DOING -> c.accent
@@ -138,7 +155,15 @@ private fun TodoMarks(r: TodoRow, now: Long, fold: TodoFold?, showRepo: Boolean,
             val (text, hot) = todoCountdown(due, now)
             TodoPill(text.removePrefix("还剩 "), if (hot) c.danger else c.accent, if (r.alarm) "alarm-clock" else "clock")
         }
-        if (r.everyUnit != null) Icon("repeat", c.textSecondary, 12.dp)
+        if (!r.finished && r.prio > PRIO_URGENT) Text("P${r.prio}", c.textSecondary, MARK_SP)
+        everyShort(r.everyUnit, r.everyN)?.let {
+            Icon("repeat", c.textSecondary, 12.dp)
+            Text(it, c.textSecondary, MARK_SP)
+        }
+        if (r.ghComments > 0 && r.ghOpen != false) {
+            Icon("message-square", c.textSecondary, 12.dp)
+            Text(r.ghComments.toString(), c.textSecondary, MARK_SP)
+        }
         if (showArea) Text(r.areaKey, c.textSecondary, MARK_SP)
         if (showRepo) r.repo?.let { repo ->
             Icon("github", repoTint(repo), 12.dp)

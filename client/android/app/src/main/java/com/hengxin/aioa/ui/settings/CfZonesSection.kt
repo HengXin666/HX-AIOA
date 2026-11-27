@@ -300,9 +300,10 @@ private fun WorkerGroup(workers: List<Worker>) {
                 val sub = buildString {
                     append(String.format(Locale.US, "CPU %.1f / %.1f ms", w.cpuP50 / US_PER_MS, w.cpuP99 / US_PER_MS))
                     if (w.err > 0) append(" · 错误 ${pct(w.err, w.req)}")
-                    if (w.hosts.isNotEmpty()) append(" · ${w.hosts.size} 个域名")
                 }
                 BarRow(w.name, w.req.toFloat() / top, count(w.req), if (w.err > 0) c.danger else c.accent, sub, if (w.err > 0) c.danger else null)
+                // 挂的域名列出来 (#139), 一行化后只剩个数看不出是哪几个
+                if (w.hosts.isNotEmpty()) Text(w.hosts.joinToString(", "), c.textSecondary, 11, Modifier.padding(top = 2.dp), maxLines = 3)
             }
         }
     }

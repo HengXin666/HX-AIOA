@@ -120,16 +120,17 @@ fun PluginIcon(name: String) {
 @Composable
 private fun PluginTile(p: PluginEntry, onClick: () -> Unit) {
     val c = Aioa.colors
-    // 一行一条 (#138): 图标, 名字, 版本与来源压到右边, 最右状态标签; 简介与标签在详情页
+    // 一行一条 (#138): 图标, 名字, 版本与来源压到右边, 最右状态标签; 次行补回简介与标签 (#139)
     val state: Pair<String, Color>? = when {
         p.foreign -> "别人开发中" to c.textSecondary
         p.dev -> "开发中" to c.accent
-        p.outdated -> "可更新" to c.accent
+        p.outdated -> "可更新到 v${p.allowed?.version}" to c.accent
         p.installed != null -> "已安装" to c.success
         p.enabled -> "已启用" to c.success
         p.allowed == null -> "待放行" to c.textSecondary
         else -> null
     }
     val meta = listOfNotNull("v${p.installed?.version ?: p.version}", p.sourceName).joinToString(" · ")
-    OneRow(p.icon, p.name, meta, c.accent, pad = 16, onClick = onClick) { state?.let { (t, tone) -> SoftTag(t, tone) } }
+    val sub = listOf(p.summary, p.tags.joinToString(" ") { "#$it" }).filter { it.isNotBlank() }.joinToString("\n")
+    OneRow(p.icon, p.name, meta, c.accent, pad = 16, onClick = onClick, sub = sub) { state?.let { (t, tone) -> SoftTag(t, tone) } }
 }

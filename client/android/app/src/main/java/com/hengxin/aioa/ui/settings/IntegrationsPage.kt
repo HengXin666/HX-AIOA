@@ -169,5 +169,11 @@ private fun IntegrationRow(it: Integration, onRevoke: (Integration) -> Unit) {
         if (it.lastActive > 0) ago(it.lastActive) else "还没动静",
     ).joinToString(" · ")
     val icon = if (it.kind == KIND_INTERACTIVE) "bot" else "plug"
-    OneRow(icon, it.name, meta, if (it.kind == KIND_INTERACTIVE && online) k.success else k.textSecondary) { RowAction(REVOKE, danger = true) { onRevoke(it) } }
+    // 次行补回 key 前缀与注册的 Agent (#139): 认得出是哪把 key, 谁在用
+    val agents = it.agents.joinToString(", ") { (name, on) -> if (on) "$name (在线)" else name }
+    val sub = listOfNotNull(
+        it.prefix.takeIf { p -> p.isNotEmpty() }?.let { p -> "key $p..." },
+        agents.takeIf { a -> a.isNotEmpty() }?.let { a -> "Agent: $a" },
+    ).joinToString(" · ")
+    OneRow(icon, it.name, meta, if (it.kind == KIND_INTERACTIVE && online) k.success else k.textSecondary, sub = sub) { RowAction(REVOKE, danger = true) { onRevoke(it) } }
 }
