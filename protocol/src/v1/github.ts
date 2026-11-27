@@ -93,3 +93,8 @@ export type GithubRepoBranches = { repo: string; url: string; defaultBranch: str
 export type GithubBranchesResult = { at: number; days: number; repos: GithubRepoBranches[] };
 export const GITHUB_BRANCH_DEFAULT_DAYS = 30;
 export const GITHUB_BRANCH_MAX_DAYS = 90;
+
+// 提交热力图 (#134): 最近 GITHUB_HEATMAP_DAYS 天每天的提交数, 按主人时区的日期; 每天 cron 累计存一行
+export type GithubHeatDay = { date: string; commits: number };
+export type GithubHeatmap = { days: GithubHeatDay[]; updated: number };
+export const GITHUB_HEATMAP_DAYS = 140;

@@ -50,7 +50,9 @@ export type AgentBrief = {
   trigger?: AgentTrigger;
 };
 // GET next?brief=<本地简报版本>&start=1&memory=1: 游标之后没处理的人发消息, 简报只在版本不同时带全文
-export type AgentNext = { pending: Envelope[]; head: number; cursor: number; briefVersion: string; brief?: AgentBrief; memory?: string };
+// mentioned: 这条消息 @ 了本 Agent 或全体 (#131)
+export type AgentPending = Envelope & { mentioned?: true };
+export type AgentNext = { pending: AgentPending[]; head: number; cursor: number; briefVersion: string; brief?: AgentBrief; memory?: string };
 // POST done 与 POST /messages 的 covers: 把这些 seq 记为已处理
 export type AgentDoneInput = { seqs: number[] };
 export type AgentDoneResult = { cursor: number; left: number };

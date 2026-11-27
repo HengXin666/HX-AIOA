@@ -4,8 +4,14 @@ import type { ChatMeta } from "./chat";
 // 多人群: 消息只存一份 (主库按 grp 分), 成员表决定谁能看, 推送只发给在线成员
 export const ROOM_ROLES = ["owner", "admin", "member"] as const;
 export type RoomRole = (typeof ROOM_ROLES)[number];
-export type RoomMember = { id: string; name: string; display: string; role: RoomRole; joined: number };
-export type RoomMembers = { members: RoomMember[] };
+// avatar: 账号头像 id (GET /avatars/{id}), 本人用 PATCH /me 设置
+export type RoomMember = { id: string; name: string; display: string; role: RoomRole; joined: number; avatar?: string };
+// 分页 (#130): next 为下一页的 cursor, 没有下一页时不给; 主人 (群主) 只在第一页
+export type RoomMembers = { members: RoomMember[]; next?: string };
+export const MEMBERS_DEFAULT_LIMIT = 50;
+export const MEMBERS_MAX_LIMIT = 200;
+export const QUERY_CURSOR = "cursor";
+export const QUERY_Q = "q";
 export type RoomInviteRequest = { ttlHours?: number; maxUses?: number };
 // link 给浏览器打开 (说明页), appLink 由 App 直接接住
 export type RoomInviteCreated = { code: string; link: string; appLink: string; expires: number; maxUses: number };
