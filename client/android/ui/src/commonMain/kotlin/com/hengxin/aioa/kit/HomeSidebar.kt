@@ -204,10 +204,11 @@ private fun RecentRow(r: SideRecent, on: Boolean, onClick: () -> Unit) {
 
 /** 头像占位: 首字, 圆形 (头像是唯一用正圆的地方)。 */
 @Composable
-fun Initial(text: String, sizeDp: Int) {
+fun Initial(text: String, sizeDp: Int, tint: androidx.compose.ui.graphics.Color? = null) {
     val c = Aioa.colors
-    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(c.surfaceAlt), contentAlignment = Alignment.Center) {
-        Text(text, c.text, (sizeDp * 0.45f).toInt(), weight = FontWeight.Medium)
+    val bg = tint?.copy(alpha = 0.18f) ?: c.surfaceAlt
+    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+        Text(text, tint ?: c.text, (sizeDp * 0.45f).toInt(), weight = FontWeight.Medium)
     }
 }
 

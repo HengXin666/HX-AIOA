@@ -54,19 +54,12 @@ fun StatTile(icon: String, value: String, label: String, modifier: Modifier = Mo
 @Composable
 private fun groupBg(): Color = if (Aioa.tokens.dark) Aioa.colors.surface else Aioa.colors.background
 
-/** 总览里的一组: 小标题在外, 行在一张描边圆角卡里, 行间细线 (分组列表)。 */
+/** 分组小标题: 标题, 数字, 右边 "全部 >" 这类动作。 */
 @Composable
-fun HomeSection(
-    title: String,
-    count: Int = 0,
-    strong: Boolean = false,
-    action: String = "",
-    onAction: () -> Unit = {},
-    content: @Composable ColumnScope.() -> Unit,
-) {
+fun SectionTitle(title: String, count: Int = 0, strong: Boolean = false, action: String = "", onAction: () -> Unit = {}) {
     val c = Aioa.colors
     Row(
-        Modifier.fillMaxWidth().padding(start = 4.dp, end = 2.dp, top = 22.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 2.dp, top = 24.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -80,6 +73,20 @@ fun HomeSection(
             }
         }
     }
+}
+
+/** 总览里的一组: 小标题在外, 行在一张描边圆角卡里, 行间细线 (分组列表)。 */
+@Composable
+fun HomeSection(
+    title: String,
+    count: Int = 0,
+    strong: Boolean = false,
+    action: String = "",
+    onAction: () -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = Aioa.colors
+    SectionTitle(title, count, strong, action, onAction)
     Column(
         Modifier.fillMaxWidth().clip(GROUP_SHAPE).background(groupBg()).border(1.dp, c.border.copy(alpha = 0.6f), GROUP_SHAPE),
         content = content,

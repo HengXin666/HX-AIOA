@@ -34,8 +34,7 @@ import kotlinx.coroutines.launch
 // 画廊用的假数据, 结构与真实总览一致
 internal val DEMO_ACCOUNT = SideAccount("Heng_Xin", "aioa.lolioa.com · 已连接", online = true)
 internal val DEMO_LINKS = listOf(
-    SideLink("chat", "消息", "message-circle", 3),
-    SideLink("agent", "Agent", "bot", 2),
+    SideLink("agent", "Agent", "bot", 3),
     SideLink("res", "资源", "server"),
     SideLink("fav", "收藏", "star"),
 )
@@ -45,12 +44,12 @@ internal val DEMO_TOOLS = listOf(
     SideLink("settings", "设置", "settings"),
 )
 internal val DEMO_SPACES = listOf(
-    HomeSpace("daily", "日常", "sun", "需要我 · 今日消息", 2),
-    HomeSpace("dev", "开发", "code-xml", "Agent 任务 · GitHub", 3),
+    HomeSpace("overview", "总览", "gauge", "需要我 · 脉搏 · 资源", 2),
+    HomeSpace("chat", "消息", "message-circle", "3 条未读", 3),
+    HomeSpace("dev", "开发", "code-xml", "Agent 任务 · GitHub"),
     HomeSpace("server", "服务器", "server", "2 台在线"),
-    HomeSpace("todo", "点子待办", "lightbulb", "5 条未完成", 5),
+    HomeSpace("todo", "点子待办", "lightbulb", "5 条未完成", plugin = "hengxin666.idea", pinned = false),
     HomeSpace("mail", "邮件", "mail", "收件箱摘要", plugin = "hengxin666.mail", pinned = false),
-    HomeSpace("feed", "信息流", "flame", "今日精选", plugin = "hengxin666.feed", pinned = false),
     HomeSpace("hxoa", "hxoa 工作区", "terminal", "3 个工作区", plugin = "hengxin666.hxoa", pinned = false),
 )
 internal val DEMO_RECENTS = listOf(
@@ -60,18 +59,18 @@ internal val DEMO_RECENTS = listOf(
     SideRecent("g4", "福利", "Steam 冬促清单", "福"),
 )
 internal val DEMO_MENU = listOf(
-    MenuEntry("new-todo", "记个点子", "lightbulb"),
     MenuEntry("new-group", "新建群聊", "message-square-plus"),
     MenuEntry("join", "扫码 / 加入", "scan-line"),
     MenuEntry("agent", "接入 Agent", "bot"),
     MenuEntry("edit", "编辑这个空间", "sliders-horizontal", divider = true),
-    MenuEntry("hxoa", "新建工作区", "terminal", hint = "hxoa", divider = true, label = "插件快捷动作"),
+    MenuEntry("idea", "记个点子", "lightbulb", hint = "点子待办", divider = true, label = "插件快捷动作"),
+    MenuEntry("hxoa", "新建工作区", "terminal", hint = "hxoa"),
     MenuEntry("mail", "邮件全部已读", "mail-open", hint = "邮件"),
 )
 
 /** 新总览: 侧栏 (推开) + 顶栏空间切换 + 置顶空间横排 + 右上菜单。参数用于截图时固定状态。 */
 @Composable
-fun HomeDemo(start: String = "daily", drawer: Float = 0f, menu: Boolean = false, switcher: Boolean = false) {
+fun HomeDemo(start: String = "overview", drawer: Float = 0f, menu: Boolean = false, switcher: Boolean = false) {
     val shell = rememberHomeShellState(drawer)
     val scope = rememberCoroutineScope()
     var space by remember { mutableStateOf(start) }
@@ -94,10 +93,11 @@ fun HomeDemo(start: String = "daily", drawer: Float = 0f, menu: Boolean = false,
             SpaceTabs(DEMO_SPACES.filter { it.pinned }, space, { space = it })
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
                 when (space) {
+                    "chat" -> ChatSpace()
                     "dev" -> DevSpace()
                     "server" -> ServerSpace()
                     "todo" -> TodoSpace()
-                    else -> DailySpace()
+                    else -> OverviewSpace()
                 }
                 Spacer(Modifier.height(24.dp))
             }
