@@ -93,7 +93,8 @@ export type ChatSyncFrame = { t: "chat_sync"; topic: "chats" | "favorites" | "to
  * 系统发送者登记 (#123 #128): 服务端自己发消息用的来源 (system, system:*, 终端) 第一次发言时自动登记。
  * name 是发送时的默认名, alias 是主人改的名 (新消息按它发, 客户端旧消息也按它显示), avatar 是主人设的头像 id。
  */
-export type SenderMeta = { sid: string; name: string; icon?: string; alias?: string; avatar?: string; first: number; last: number; updated: number };
+// agent: 现有群 Agent 的来源; gone: 已移出的 Agent (行留着保住头像, 旧消息照样显示, 设置页不再列出) (#139)
+export type SenderMeta = { sid: string; name: string; icon?: string; alias?: string; avatar?: string; first: number; last: number; updated: number; agent?: boolean; gone?: boolean };
 export type SenderPatch = { alias?: string | null; avatar?: string | null };
 export const PATH_SENDERS = `${API_V1}/senders`;
 export const PATH_SENDER = `${API_V1}/senders/{sid}`;

@@ -31,6 +31,9 @@ export const PATH_CHAT_MEMBER = `${API_V1}/chats/{channel}/members/{id}`;
 // 成员在线状态 (#130): online 为有前台连接的账号 id, seen 为最近在线时间 (ms), 读不到的不给; 只在内存, 不落库
 export const PATH_CHAT_PRESENCE = `${API_V1}/chats/{channel}/presence`;
 export type ChatPresence = { online: string[]; seen: Record<string, number> };
+// 和某个账号的共同群 (#139, 资料卡): 调用者与 {id} 都在的群, 不含单聊; 主人算在所有群里
+export const PATH_USER_ROOMS = `${API_V1}/users/{id}/rooms`;
+export type UserRooms = { channels: string[] };
 export const PATH_CHAT_INVITES = `${API_V1}/chats/{channel}/invites`;
 export const PATH_ROOM_JOIN = `${API_V1}/rooms/join`;
 // 邀请链接在浏览器里打开的说明页, 不需要登录

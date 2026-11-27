@@ -1,6 +1,7 @@
-import { MEMBERS_DEFAULT_LIMIT, MEMBERS_MAX_LIMIT, QUERY_CURSOR, QUERY_LIMIT, QUERY_Q, dmPeers, type ChatPresence, type RoomMember, type RoomMembers, type RoomRole, type UserPublic } from "@hx-aioa/protocol";
+import { MEMBERS_DEFAULT_LIMIT, MEMBERS_MAX_LIMIT, QUERY_CURSOR, QUERY_LIMIT, QUERY_Q, dmPeers, type ChatPresence, type RoomMember, type RoomMembers, type RoomRole, type UserPublic, type UserRooms } from "@hx-aioa/protocol";
+import { CODE_FORBIDDEN, ERR_FORBIDDEN } from "./constants";
 import type { Core, ReqCtx } from "./core";
-import { clampInt, etagged, json } from "./http";
+import { clampInt, etagged, fail, json } from "./http";
 import { mustRole } from "./room-access";
 import type { Membership } from "./rooms";
 
@@ -84,4 +85,24 @@ export function listMembers(c: ReqCtx): Response {
   const after = parseCursor(sp.get(QUERY_CURSOR) ?? "");
   const tag = `${c.core.rooms.count(grp)}-${c.core.chats.revOf(grp)}`;
   return etagged(c.req, tag, () => membersPage(c.core, grp, q, after, limit));
+}
+
+const multi = (core: Core, uid: string) => core.rooms.roomsOf(uid).map((m) => m.grp).filter((g) => !dmPeers(g));
+
+/** GET /users/{id}/rooms (#139): 调用者和 {id} 的共同群 (不含单聊), 资料卡用; 主人在所有群里。现算不缓存。 */
+export function commonRooms(c: ReqCtx): Response {
+  const owner = c.core.users.ownerId();
+  const me = c.who.owner ? owner : c.who.member?.user.id;
+  if (!me) return fail(403, ERR_FORBIDDEN, CODE_FORBIDDEN);
+  const other = decodeURIComponent(c.params[0] ?? "");
+  let channels: string[] = [];
+  if (other && other !== me) {
+    if (me === owner) channels = multi(c.core, other);
+    else if (other === owner) channels = multi(c.core, me);
+    else {
+      const mine = new Set(multi(c.core, me));
+      channels = multi(c.core, other).filter((g) => mine.has(g));
+    }
+  }
+  return json({ channels: [...new Set(channels)].sort() } satisfies UserRooms);
 }

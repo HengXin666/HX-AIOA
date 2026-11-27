@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Envelope } from "@hx-aioa/protocol";
+import { dropAgentAlias } from "../src/agent-name";
+import { markSenders } from "../src/api-senders";
+import type { Core } from "../src/core";
 import { SenderStore, isSystemSender } from "../src/senders";
 import { EventStore } from "../src/store";
 import { memSql } from "./sql";
@@ -69,4 +72,25 @@ test("Agent 来源 (#121): 补登与改名换头像, 发言按别名, 来源删�
   // 来源删了也不丢主人设过的头像
   s.syncAgents([], 8);
   assert.equal(s.get("src_a")?.avatar, "c".repeat(24));
+});
+
+test("系统发送者页 (#139): 移出的 Agent 标 gone (行留着保头像), 现有的标 agent; 改名清掉别名", () => {
+  const s = new SenderStore(memSql());
+  s.syncAgents([{ id: "src_a", name: "小助手" }, { id: "src_b", name: "旧助手" }], 1);
+  s.see(ev("system:gh", "GitHub 同步"), 2);
+  const frames: unknown[] = [];
+  const core = {
+    registry: { sources: () => [{ id: "src_a", type: "agent" }, { id: "hook", type: "github" }] },
+    pipeline: { senders: s },
+    sockets: { toAllClients: (f: unknown) => frames.push(f) },
+  } as unknown as Core;
+  const marked = new Map(markSenders(core, s.list()).map((m) => [m.sid, m]));
+  assert.equal(marked.get("src_a")?.agent, true);
+  assert.equal(marked.get("src_b")?.gone, true);
+  assert.equal(marked.get("system:gh")?.gone, undefined);
+  s.patch("src_a", { alias: "研发助理" });
+  dropAgentAlias(core, "src_a", "整理员");
+  assert.equal(s.get("src_a")?.alias, undefined);
+  assert.equal(s.get("src_a")?.name, "整理员");
+  assert.equal(frames.length, 1);
 });

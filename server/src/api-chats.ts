@@ -33,6 +33,7 @@ import {
   type OnboardResult,
   type Scope,
 } from "@hx-aioa/protocol";
+import { dropAgentAlias } from "./agent-name";
 import { agentSetup } from "./agent-prompt";
 import { acked, guideFor } from "./agent-sync";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_DM, ERR_FORBIDDEN, ERR_NO_RESOURCE, GET, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT, PATCH, POST, PUT } from "./constants";
@@ -229,6 +230,7 @@ async function patchAgent(c: ReqCtx): Promise<Response> {
   const src = c.core.registry.source(old.sourceId);
   if (src && p.name) c.core.registry.saveSource({ ...src, name: p.name });
   saveAgents(c.core, channel, (meta?.agents ?? []).map((x) => (x.keyId === old.keyId ? agent : x)));
+  if (p.name && old.sourceId) dropAgentAlias(c.core, old.sourceId, p.name);
   return json({ agent });
 }
 

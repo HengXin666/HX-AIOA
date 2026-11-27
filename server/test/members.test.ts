@@ -54,3 +54,19 @@ test("成员 ETag: 没变 304, 有人进群或改头像后失效 (#130)", async 
   const c = await call(t.core, ROOM_ROUTES, ownerWho, "GET", path(), undefined, { "If-None-Match": b.etag! });
   assert.equal(c.status, 200);
 });
+
+test("共同群 (#139): 子号之间取交集, 不含单聊; 主人与子号是子号在的群; 自己和 key 没有", async () => {
+  const t = chatCore(["u_a", "u_b"]);
+  t.rooms.add("甲", "u_a", "member");
+  t.rooms.add("甲", "u_b", "member");
+  t.rooms.add("乙", "u_a", "member");
+  t.rooms.add("dm:u_a:u_b", "u_a", "member");
+  t.rooms.add("dm:u_a:u_b", "u_b", "member");
+  const rooms = (who: Parameters<typeof call>[2], id: string) => call(t.core, ROOM_ROUTES, who, "GET", `/api/v1/users/${id}/rooms`);
+  assert.deepEqual((await rooms(memberWho("u_b"), "u_a")).body.channels, ["甲"]);
+  assert.deepEqual((await rooms(ownerWho, "u_a")).body.channels, ["乙", "甲"].sort());
+  assert.deepEqual((await rooms(memberWho("u_a"), OWNER_UID)).body.channels, ["乙", "甲"].sort());
+  assert.deepEqual((await rooms(memberWho("u_a"), "u_a")).body.channels, []);
+  const key = { owner: false, key: { id: "k", scopes: [], channels: [] } } as never;
+  assert.equal((await rooms(key, "u_a")).status, 403);
+});
