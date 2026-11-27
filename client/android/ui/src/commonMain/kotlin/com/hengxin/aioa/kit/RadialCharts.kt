@@ -15,14 +15,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -30,22 +27,12 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// 成就感图表 (#140): 放射柱 (一圈光线), 里程碑环; 只用 HX-UI 图表色
+// 放射柱 (#140): 一圈光线看一天 24 小时或两周每天; 只用 HX-UI 图表色
 
 private const val INNER = 0.42f
 private const val RAY_STAGGER = 0.5f
 private const val FULL_DEG = 360f
 private const val TOP_DEG = -90f
-
-/** 里程碑台阶: 到了一个就亮下一个。 */
-val MILESTONES = listOf(10, 50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000)
-
-/** n 之上的下一个里程碑, 与已经达成的上一个 (没有时为 0)。 */
-fun milestoneOf(n: Int): Pair<Int, Int> {
-    val next = MILESTONES.firstOrNull { it > n } ?: (n / MILESTONES.last() + 1) * MILESTONES.last()
-    val prev = MILESTONES.lastOrNull { it <= n } ?: 0
-    return prev to next
-}
 
 /**
  * 放射柱: values 一项一根光线, 从 12 点顺时针排开, 长度按平方根 (小数也看得见);
@@ -105,40 +92,6 @@ fun RadialBars(
             }
         }
         center()
-    }
-}
-
-/** 里程碑环: 从上一个里程碑走到下一个的进度, 渐变弧 + 弧头光点, 中间放内容。 */
-@Composable
-fun MilestoneRing(
-    fraction: Float,
-    from: Color,
-    to: Color,
-    modifier: Modifier = Modifier,
-    stroke: Dp = 10.dp,
-    delayMs: Int = 0,
-    content: @Composable BoxScope.() -> Unit = {},
-) {
-    val p = rememberReveal(delayMs, 1400)
-    val glow by rememberInfiniteTransition().animateFloat(0.4f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), androidx.compose.animation.core.RepeatMode.Reverse))
-    val track = Aioa.colors.surfaceAlt
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val s = stroke.toPx()
-            val tl = Offset(s / 2, s / 2)
-            val sz = Size(size.width - s, size.height - s)
-            val sweep = FULL_DEG * fraction.coerceIn(0f, 1f) * p
-            drawArc(track, 0f, FULL_DEG, false, tl, sz, style = Stroke(s))
-            rotate(TOP_DEG) { drawArc(Brush.sweepGradient(listOf(from, to, from)), 0f, sweep, false, tl, sz, style = Stroke(s, cap = StrokeCap.Round)) }
-            if (sweep > 0f) {
-                val a = ((TOP_DEG + sweep) * PI / 180).toFloat()
-                val rr = sz.width / 2
-                val head = Offset(size.width / 2 + cos(a) * rr, size.height / 2 + sin(a) * rr)
-                drawCircle(to.copy(alpha = 0.3f * glow), s * 1.1f, head)
-                drawCircle(Color.White.copy(alpha = 0.9f), s * 0.22f, head)
-            }
-        }
-        content()
     }
 }
 

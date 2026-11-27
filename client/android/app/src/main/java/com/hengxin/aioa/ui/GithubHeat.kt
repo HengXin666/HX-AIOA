@@ -4,8 +4,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,7 +47,6 @@ private const val CACHE_HEATMAP = "gh-heatmap"
 private val HEAT_STEP = 13.dp
 private val HEAT_GAP = 3.dp
 private val RECENT_H = 110.dp
-private val RING = 112.dp
 
 /** days 按日期从早到晚; years 是有数据的年份 (新的在前); pending 是全部历史还没回填完的仓库数。 */
 data class GhHeatmap(
@@ -147,15 +144,13 @@ fun GithubHeatCard(gh: GithubState) {
     val streak = heatStreak(map, today)
     val best = map.days.maxByOrNull { it.value }?.takeIf { it.value > 0 }
     val active = map.days.count { it.value > 0 }
-    val (prev, next) = com.hengxin.aioa.kit.milestoneOf(total)
     Card {
-        // 成就区 (#140): 里程碑环 (中间本周 / 这一年的提交), 右边连续天数, 最高一天, 点亮天数, 离下一个里程碑还差多少
+        // 事实数据 (#140): 本周 / 这一年的提交, 连续天数, 最高一天, 点亮天数; 不做自定的里程碑
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            com.hengxin.aioa.kit.MilestoneRing((total - prev).toFloat() / (next - prev).coerceAtLeast(1), pal.chart2, pal.chart4, Modifier.size(RING), delayMs = 100) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CountUp(if (year == RECENT) weekCommits(map, today) else total, 24, c.text, delayMs = 100)
-                    Text(if (year == RECENT) "本周提交" else "$year 年", c.textSecondary, 11)
-                }
+            Icon(ICON_GITHUB, c.text, 18.dp)
+            Column {
+                CountUp(if (year == RECENT) weekCommits(map, today) else total, 26, c.text, delayMs = 100)
+                Text(if (year == RECENT) "本周提交" else "$year 年提交", c.textSecondary, GH_META_SP)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -164,7 +159,6 @@ fun GithubHeatCard(gh: GithubState) {
                 }
                 best?.let { Text("最高一天 ${it.value} 次 · ${it.key.monthValue}月${it.key.dayOfMonth}日", c.text, GH_META_SP) }
                 Text("${if (year == RECENT) "近 $HEAT_DAYS 天" else "这一年"} 亮了 $active 天, 共 $total 次", c.textSecondary, GH_META_SP)
-                Text("再 ${next - total} 次解锁 $next 次成就", pal.chart2, GH_META_SP, weight = FontWeight.Medium)
             }
         }
         HeatGrid(map, year != RECENT, if (year == RECENT || year == today.year) todayIndex(map, today) else -1)
