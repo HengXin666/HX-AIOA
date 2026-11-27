@@ -2,6 +2,7 @@ package com.hengxin.aioa.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.AppearancePrefs
 import com.hengxin.aioa.kit.AioaColors
@@ -31,6 +33,8 @@ enum class Tab(val label: String, val icon: String) {
 
 // GitHub 叠层里的 "选择仓库" 页, 不会与 owner/repo 冲突
 private const val GH_PICK = "#pick"
+// 手机宽度上限, 与组件库 Adaptive 的 Compact 一致
+private val COMPACT_MAX = 600.dp
 
 private val NAV = Tab.entries.map { NavItem(it.name, it.label, it.icon) }
 
@@ -57,7 +61,8 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
     val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.CompositionLocalProvider(LocalPageStates provides pages) {
     Box {
-        AppScaffold(NAV, tab.name, { key -> github = null; meStart = SettingsPage.ROOT; meFromGithub = false; nav = nav.select(Tab.valueOf(key)) }, Modifier.safeDrawingPadding()) {
+        val select: (Tab) -> Unit = { t -> github = null; meStart = SettingsPage.ROOT; meFromGithub = false; nav = nav.select(t) }
+        val page: @Composable () -> Unit = {
             val gh = github
             if (gh != null) KeepState("gh:$gh") {
                 if (gh == GH_PICK) {
@@ -72,7 +77,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                     }
                 } else GithubRepoPage(chat.github, gh) { github = "" }
             }
-            if (gh != null) return@AppScaffold
+            if (gh == null) {
             KeepState("tab:${tab.name}") {
             when (tab) {
                 Tab.OVERVIEW -> OverviewPage(chat, openGithub) { nav = nav.go(it) }
@@ -89,6 +94,19 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                     }
                 } else null)
             }
+            }
+            }
+        }
+        // 子页 (群里, 收藏, GitHub, 我的) 自带顶栏, 这时不叠外壳的顶栏与标签
+        val atRoot = github == null && tab != Tab.ME && (tab != Tab.CHAT || (chat.groups.open == null && !chat.groups.favoritesOpen))
+        BoxWithConstraints(Modifier.safeDrawingPadding()) {
+            if (prefs.newShell && maxWidth < COMPACT_MAX) {
+                HomeFrame(
+                    tab, atRoot, chat, select, { nav = nav.go(it) }, { chat.groups.favoritesOpen = true; nav = nav.go(Tab.CHAT) },
+                    openGithub, { key -> chat.groups.openGroup(key); nav = nav.go(Tab.CHAT) }, { setPrefs(prefs.copy(mode = it)) }, page,
+                )
+            } else {
+                AppScaffold(NAV, tab.name, { key -> select(Tab.valueOf(key)) }) { page() }
             }
         }
         MessageBanner(chat) {

@@ -52,6 +52,9 @@ fun AppearancePage(prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, 
                 AppearanceEditor(prefs.resolve(Aioa.tokens.dark)) { setPrefs(prefs.with(it)) }
             }
         }
+        SettingsGroup("预览") {
+            SwitchRow("新外壳", prefs.newShell, "侧栏 + 顶部标签, 去掉底栏 (#121); 只在手机宽度生效") { setPrefs(prefs.copy(newShell = it)) }
+        }
     }
 }
 

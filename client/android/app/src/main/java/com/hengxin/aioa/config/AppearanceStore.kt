@@ -17,6 +17,8 @@ data class AppearancePrefs(
     val accent: Int? = null,
     val radius: Int = DEFAULT_RADIUS.value.toInt(),
     val compact: Boolean = false,
+    // 预览新外壳 (侧栏 + 顶部标签, 无底栏, #121); 默认关, 只在手机宽度生效
+    val newShell: Boolean = false,
 ) {
     fun resolve(systemDark: Boolean) = Appearance(
         dark = when (mode) {
@@ -38,6 +40,7 @@ object AppearanceStore {
     private const val KEY_ACCENT = "accent"
     private const val KEY_RADIUS = "radius"
     private const val KEY_COMPACT = "compact"
+    private const val KEY_NEW_SHELL = "newShell"
 
     fun load(context: Context): AppearancePrefs {
         val o = JsonFile.read(file(context)) ?: return AppearancePrefs()
@@ -47,11 +50,12 @@ object AppearanceStore {
             accent = if (o.has(KEY_ACCENT)) o.getInt(KEY_ACCENT) else null,
             radius = o.optInt(KEY_RADIUS, d.radius),
             compact = o.optBoolean(KEY_COMPACT, d.compact),
+            newShell = o.optBoolean(KEY_NEW_SHELL, d.newShell),
         )
     }
 
     fun save(context: Context, p: AppearancePrefs) {
-        val o = JSONObject().put(KEY_MODE, p.mode.name).put(KEY_RADIUS, p.radius).put(KEY_COMPACT, p.compact)
+        val o = JSONObject().put(KEY_MODE, p.mode.name).put(KEY_RADIUS, p.radius).put(KEY_COMPACT, p.compact).put(KEY_NEW_SHELL, p.newShell)
         p.accent?.let { o.put(KEY_ACCENT, it) }
         JsonFile.write(file(context), o)
     }
