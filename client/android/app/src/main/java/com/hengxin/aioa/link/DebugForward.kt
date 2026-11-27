@@ -87,17 +87,20 @@ object DebugForward {
         if (ok) snap.delete()
     }
 
-    /** OkHttp 拦截器: 开关关着时只多读一次文件是否存在。 */
+    /** OkHttp 拦截器: 开关关着时只多读一次文件是否存在, 外加周报的内存计数。 */
     class Http(private val context: Context) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val req = chain.request()
-            val http = httpOn(context)
-            val fwd = forwardOn(context)
-            if ((!http && !fwd) || forwarding.get() == true) return chain.proceed(req)
-            val path = if (own(req.url.host)) req.url.encodedPath else "${req.url.host} (外部, 不记路径)"
             val start = System.currentTimeMillis()
             val res = runCatching { chain.proceed(req) }
             val ms = System.currentTimeMillis() - start
+            // 周报 (#140): 不论开关都只在内存里累加次数, 耗时与已知长度的流量, 不写文件不发请求
+            val code = res.getOrNull()?.code ?: 0
+            com.hengxin.aioa.data.LocalTally.request(ms, res.isFailure || code >= HTTP_FAIL, req.body?.contentLength() ?: 0L, res.getOrNull()?.body?.contentLength() ?: 0L)
+            val http = httpOn(context)
+            val fwd = forwardOn(context)
+            if ((!http && !fwd) || forwarding.get() == true) return res.getOrThrow()
+            val path = if (own(req.url.host)) req.url.encodedPath else "${req.url.host} (外部, 不记路径)"
             val line = "${req.method} $path ${res.getOrNull()?.code ?: res.exceptionOrNull()?.javaClass?.simpleName} ${ms}ms"
             if (http) append(context, HTTP_LOG, line)
             val failed = res.isFailure || (res.getOrNull()?.code ?: 0) >= HTTP_FAIL

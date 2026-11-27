@@ -53,6 +53,9 @@ object LinkStats {
         val json = JSONObject().put(KEY_SINCE, since)
         Key.entries.forEach { json.put(it.name, counts.get(it.ordinal)) }
         runCatching { JsonFile.write(file(context), json) }
+        // 搭同一次唤醒把周报计数 (通知, 后台请求) 落盘, 连接与唤醒计数的快照给调试页时间线 (#141)
+        com.hengxin.aioa.data.LocalTally.flush(context, "link")
+        LinkStatsHistory.snap(context, Key.entries.map { counts.get(it.ordinal) })
     }
 
     fun reset(context: Context) {

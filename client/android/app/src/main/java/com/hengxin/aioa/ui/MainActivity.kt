@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         chat.pause()
         usage.end()
+        com.hengxin.aioa.data.LocalTally.flush(applicationContext, "ui")
         super.onStop()
     }
 

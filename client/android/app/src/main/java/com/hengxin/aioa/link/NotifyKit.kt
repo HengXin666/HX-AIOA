@@ -74,6 +74,8 @@ object NotifyKit {
     fun post(context: Context, tag: String?, id: Int, notification: Notification) {
         if (!granted(context)) return
         runCatching { NotificationManagerCompat.from(context).notify(tag, id, notification) }
+            // 周报 (#140): 数发出的通知; 传输与更新的进度通知会反复刷新, 不算
+            .onSuccess { if (id != Constants.NOTIFY_ID_TRANSFER && id != Constants.NOTIFY_ID_UPDATE) com.hengxin.aioa.data.LocalTally.add(com.hengxin.aioa.data.Tally.NOTIFY) }
     }
 
     fun active(context: Context, tag: String, id: Int): Boolean =

@@ -13,8 +13,9 @@ import java.io.File
 // 一行一个样本: 时间 电量 是否充电 是否亮屏; 用相邻样本算亮屏 / 熄屏各自每小时掉多少电。
 object BatteryLog {
     private const val FILE_NAME = "battery_log.txt"
-    private const val KEEP_LINES = 1500
-    private const val TRIM_AT_BYTES = 64 * 1024L
+    // 周报 (#140) 要看一周: 约 7 天的样本
+    private const val KEEP_LINES = 4000
+    private const val TRIM_AT_BYTES = 160 * 1024L
     // 两个样本间隔超过这个值 (进程被杀, 关机) 就不计入
     private const val MAX_GAP_MS = 60 * 60_000L
     private const val MS_PER_HOUR = 3_600_000.0
@@ -72,8 +73,7 @@ object BatteryLog {
     /** 调试页的电量曲线 (#139): 近 24 小时的样本 (时间, 电量, 充电, 亮屏), 从早到晚。 */
     data class Point(val at: Long, val pct: Int, val plugged: Boolean, val screen: Boolean)
 
-    fun points(context: Context): List<Point> {
-        val since = System.currentTimeMillis() - WINDOW_MS
+    fun points(context: Context, since: Long = System.currentTimeMillis() - WINDOW_MS): List<Point> {
         return runCatching { file(context).readLines() }.getOrDefault(emptyList()).mapNotNull(::parse).filter { it.at >= since }
             .map { Point(it.at, it.pct, it.plugged, it.screen) }
     }

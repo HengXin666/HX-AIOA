@@ -120,7 +120,8 @@ object ApiCache {
             last = runCatching {
                 client.newCall(req).execute().use { res ->
                     val json = runCatching { JSONObject(res.body?.string().orEmpty()) }.getOrNull()
-                    if (res.isSuccessful) ApiReply(json ?: JSONObject(), null)
+                    // 周报 (#140): 传成功的文件数与字节数, 只记在内存里
+                    if (res.isSuccessful) ApiReply(json ?: JSONObject(), null).also { com.hengxin.aioa.data.LocalTally.add(com.hengxin.aioa.data.Tally.FILES); com.hengxin.aioa.data.LocalTally.add(com.hengxin.aioa.data.Tally.FILE_UP, data.size.toLong()) }
                     else ApiReply(null, json?.optString("error")?.ifEmpty { null } ?: "上传失败 (HTTP ${res.code})", res.code)
                 }
             }.getOrElse { ApiReply(null, ErrKind.describe(it)) }
