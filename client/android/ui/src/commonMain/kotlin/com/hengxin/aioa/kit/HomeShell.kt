@@ -31,7 +31,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -48,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val DRAWER_MAX = 320.dp
@@ -62,15 +68,47 @@ private val MENU_WIDTH = 248.dp
 private const val MENU_ENTER_MS = 160
 private const val MENU_FROM_SCALE = 0.92f
 
-/** 首页侧边栏的开合进度 0..1, 拖动与点按都改它。 */
+/** 首页侧边栏的开合进度 0..1: 拖动时同步跟手 (drag), 松手后由动画吸附到开或关。 */
 @Stable
 class HomeShellState(initial: Float = 0f) {
     internal val progress = Animatable(initial)
-    val fraction: Float get() = progress.value
-    val isOpen: Boolean get() = progress.targetValue > HALF
+    private var drag by mutableFloatStateOf(initial)
+    internal var dragging by mutableStateOf(false)
+        private set
+    internal var settling by mutableStateOf(false)
+        private set
+    val fraction: Float get() = if (dragging) drag else progress.value
+    val isOpen: Boolean get() = if (dragging) drag > HALF else progress.targetValue > HALF
     suspend fun open() = progress.animateTo(1f, DRAWER_SPRING)
     suspend fun close() = progress.animateTo(0f, DRAWER_SPRING)
     suspend fun snapTo(value: Float) = progress.snapTo(value.coerceIn(0f, 1f))
+
+    internal fun dragStart() {
+        drag = progress.value
+        dragging = true
+    }
+
+    internal fun dragBy(delta: Float) {
+        if (!dragging) dragStart()
+        drag = (drag + delta).coerceIn(0f, 1f)
+    }
+
+    /** 松手 / 手势被取消: 从当前位置按速度或过没过一半吸附, 任何结束路径都走这里。 */
+    internal suspend fun settle(velocity: Float) {
+        val from = fraction
+        val open = if (abs(velocity) > FLING_VELOCITY) velocity > 0 else from > HALF
+        settling = true
+        try {
+            progress.snapTo(from)
+            dragging = false
+            progress.animateTo(if (open) 1f else 0f, DRAWER_SPRING)
+        } finally {
+            settling = false
+        }
+    }
+
+    /** 不在拖, 不在吸附也不在动画, 却停在半路。 */
+    internal val stuck: Boolean get() = !dragging && !settling && !progress.isRunning && progress.value > 0f && progress.value < 1f
 }
 
 @Composable
@@ -78,28 +116,33 @@ fun rememberHomeShellState(initial: Float = 0f): HomeShellState = remember { Hom
 
 /**
  * ChatGPT 式首页骨架: 左侧栏在内容下方, 打开时把内容整体推向右边并压暗 (不是盖住)。
- * 任意位置横向拖动都能开合, 点被推开的内容收起。
+ * gestures 为 true 时 (只在一级页面) 横向拖动能开合, 子页里划不出; 点被推开的内容收起。
  */
 @Composable
 fun HomeShell(
     state: HomeShellState,
     sidebar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    gestures: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val c = Aioa.colors
     val scope = rememberCoroutineScope()
+    // 兜底: 不在拖也不在动画却停在半路 (手势节点被拆掉等), 吸附到最近的一边
+    LaunchedEffect(state) {
+        snapshotFlow { state.stuck }.collect { if (it) scope.launch { state.settle(0f) } }
+    }
     BoxWithConstraints(modifier.fillMaxSize().background(c.sidebar)) {
         val width: Dp = minOf(maxWidth * DRAWER_RATIO, DRAWER_MAX)
         val widthPx = with(LocalDensity.current) { width.toPx() }
         val p = state.fraction
-        val drag = rememberDraggableState { delta -> scope.launch { state.snapTo(state.fraction + delta / widthPx) } }
+        val drag = rememberDraggableState { delta -> state.dragBy(delta / widthPx) }
         val dragModifier = Modifier.draggable(
             drag, Orientation.Horizontal,
-            onDragStopped = { v ->
-                val open = if (kotlin.math.abs(v) > FLING_VELOCITY) v > 0 else state.fraction > HALF
-                if (open) state.open() else state.close()
-            },
+            enabled = gestures || p > 0f,
+            onDragStarted = { state.dragStart() },
+            // 动画放在外壳自己的作用域: 手势节点被拆掉也不会停在半路
+            onDragStopped = { v -> scope.launch { state.settle(v) } },
         )
         Box(Modifier.fillMaxSize().then(dragModifier)) {
             // 侧栏比内容慢一点出来, 有层次但不晃

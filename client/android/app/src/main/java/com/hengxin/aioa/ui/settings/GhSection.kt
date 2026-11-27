@@ -68,7 +68,7 @@ fun GhSection() {
     }
     RepoRules(s.rules) { r -> st = s.copy(rules = r); scope.launch { api.setRules(r).onSuccess { reload(false) }.onFailure { error = it.message } } }
     RepoList(repos, s.rules, { reload(true) }) { r -> scope.launch { api.setRules(r).onSuccess { reload(false) }.onFailure { error = it.message } } }
-    if (s.agents.isNotEmpty()) SettingsGroup("能用它的 Agent", "声明了依赖的插件 Agent 默认打开, 其他默认关。") {
+    if (s.agents.isNotEmpty()) SettingsGroup("能用它的群 Agent", "声明了依赖的插件 Agent 默认打开, 其他默认关。") {
         s.agents.forEachIndexed { i, a ->
             if (i > 0) RowDivider()
             SwitchRow(a.name, a.allowed, a.channel + if (a.dep) " · 插件声明了依赖" else "") { on -> scope.launch { api.setAgent(a.keyId, on).onSuccess { reload(false) }.onFailure { error = it.message } } }

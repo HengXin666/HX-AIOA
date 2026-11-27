@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.agents
 
+import com.hengxin.aioa.Constants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -78,7 +79,7 @@ fun AgentSettingsPage(model: ChatModel, group: String, keyId: String, onBack: ()
     var layer by remember { mutableStateOf<Layer?>(null) }
     var copied by remember { mutableStateOf(false) }
     val fail = { e: Throwable -> dir.error = e.message }
-    GiPage("Agent 设置", "${a.name} · ${meta.title ?: group}", onBack) {
+    GiPage("${Constants.CLOUD_AGENT}设置", "${a.name} · ${meta.title ?: group}", onBack) {
         Panel(Modifier.padding(top = 14.dp).fillMaxWidth()) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 AgentGlyph(agentTone(index), 56)

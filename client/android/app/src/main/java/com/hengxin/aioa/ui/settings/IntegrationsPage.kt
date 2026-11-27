@@ -65,8 +65,8 @@ private const val SOURCE_AGENT = "agent"
 private const val DELETE = "DELETE"
 
 private val SECTIONS = listOf(
-    KIND_PUSH to ("消息源" to "单向推送: 定时任务, 群里接入的 Agent, webhook。它们只往群里发消息。"),
-    KIND_INTERACTIVE to ("交互 Agent" to "Codex 这类: 干完活推给你, 你还能在任务卡上回复, 批准或叫停。"),
+    KIND_PUSH to ("消息源" to "单向推送: 定时任务, 群 Agent, webhook。它们只往群里发消息。"),
+    KIND_INTERACTIVE to (Constants.HARNESS to "电脑上的交互式 CLI (Codex, Claude Code): 干完活推给你, 你还能在任务卡上回复, 批准或叫停。"),
 )
 
 private fun strings(a: JSONArray?) = (0 until (a?.length() ?: 0)).mapNotNull { a?.optString(it)?.ifEmpty { null } }

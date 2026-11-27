@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -95,21 +97,34 @@ object Senders {
     }
 }
 
-/** 消息里的发送者头像: 主人设的图片 > 系统来源图标 > 字母头像。 */
+/** 消息里的发送者头像: 主人设的图片 > 系统来源图标 > 群 Agent 的圆角方块 > 字母头像。 */
 @Composable
-fun SenderAvatar(msg: ServerFrame.Msg, size: Dp, modifier: Modifier = Modifier) = SenderFace(msg.sid, Names.of(msg), size, modifier)
+fun SenderAvatar(msg: ServerFrame.Msg, size: Dp, modifier: Modifier = Modifier, avatar: String? = null) =
+    SenderFace(msg.sid, Names.of(msg), size, modifier, avatar)
 
+/**
+ * 发送者头像。avatar 为成员资料里的头像 id (真人), 主人给发送者设的图片优先;
+ * agent 为群 Agent: 有图片也用圆角方块, 没设头像时画机器人图标 (只有真人头像是圆的)。
+ */
 @Composable
-fun SenderFace(sid: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
-    val avatar = Senders.avatarOf(sid)
+fun SenderFace(sid: String?, name: String, size: Dp, modifier: Modifier = Modifier, avatar: String? = null, agent: Boolean = Names.isAgent(sid)) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val id = Senders.avatarOf(sid) ?: avatar
+    val img by androidx.compose.runtime.produceState(id?.let { Avatars.cached(it) }, id) { value = id?.let { Avatars.load(context, it) } }
     val icon = Senders.iconOf(sid)
+    val bmp = img
     when {
-        avatar != null -> ChatAvatar(name, avatar, size, modifier)
+        bmp != null -> androidx.compose.foundation.Image(
+            bmp, name, modifier.size(size).clip(if (agent) RoundedCornerShape(size * AGENT_RATIO) else CircleShape),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        )
         icon != null -> Box(modifier.size(size).background(colorOf(sid ?: name), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, Color.White, size * ICON_RATIO) }
+        agent -> AgentFace(colorOf(sid ?: name), size, modifier)
         else -> LetterAvatar(name, size, modifier)
     }
 }
 
+private const val AGENT_RATIO = 0.3f
 private const val ICON_RATIO = 0.55f
 
 /** 改系统发送者的名字和头像 (消息里点头像, 或系统发送者页点一行)。 */

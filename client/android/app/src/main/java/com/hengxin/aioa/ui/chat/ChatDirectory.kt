@@ -125,6 +125,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
     private fun applyMetas(next: Map<String, ChatMeta>) {
         metas = next
         onMetas?.invoke()
+        Names.agents(next.values.filter { it.deleted == 0L }.flatMap { it.agents }.mapNotNull { a -> a.sourceId?.let { it to a.name } }.toMap())
         val muted = next.values.filter { it.muted }.map { it.channel }.toSet()
         val titles = next.values.mapNotNull { m -> m.title?.let { m.channel to it } }.toMap()
         scope.launch(Dispatchers.IO) {

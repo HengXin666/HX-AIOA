@@ -19,7 +19,6 @@ private const val DAY_FMT = "yyyy-MM-dd"
 private const val SHORT_FMT = "MM-dd"
 private const val TIME_FMT = "HH:mm"
 internal const val DAY_MS = 86_400_000L
-private const val HOUR_MS = 3_600_000L
 private const val WEEK_DAYS = 7
 /** 新建时可选的分区; 用过的自定义分区也会出现在选项里。 */
 val PRESET_AREAS = listOf("生活", "开发", "工作", "学习")
@@ -105,9 +104,8 @@ fun dayTitle(day: String, now: Long = System.currentTimeMillis()): Pair<String, 
 
 fun repoName(repo: String) = repo.substringAfter('/')
 
-/** 仓库的固定颜色: 名字哈希到一组好分辨的色。 */
-private val REPO_COLORS = listOf(0xFF2F6BFF, 0xFF12A150, 0xFFD97706, 0xFF8250DF, 0xFFDB2777, 0xFF0891B2, 0xFF65A30D)
-fun repoColor(repo: String): Color = if (repo == NO_REPO) Color(0xFF9CA3AF) else Color(REPO_COLORS[Math.floorMod(repo.hashCode(), REPO_COLORS.size)])
+/** 仓库的固定颜色, 与组件库待办行一致。 */
+fun repoColor(repo: String): Color = com.hengxin.aioa.kit.repoTint(repo.takeIf { it != NO_REPO })
 
 // 未完成在前, 星标在前, 截止近的在前, 再按优先级和新旧
 private val ORDER = compareBy<TodoRow> { it.finished }.thenBy { !it.star }.thenBy { it.due ?: Long.MAX_VALUE }.thenBy { it.prio }.thenByDescending { it.created }
@@ -189,20 +187,8 @@ fun sections(rows: List<TodoRow>, axis: TodoAxis): List<TodoSection> {
     }
 }
 
-/** 倒计时: "还剩 2 天 3 小时" / "还剩 40 分钟" / "逾期 1 天"; 第二项为 true 表示逾期或 24 小时内 (标红)。 */
-fun countdown(due: Long, now: Long = System.currentTimeMillis()): Pair<String, Boolean> {
-    val left = due - now
-    val abs = kotlin.math.abs(left)
-    val d = abs / DAY_MS
-    val h = (abs % DAY_MS) / HOUR_MS
-    val m = (abs % HOUR_MS) / MINUTE_MS
-    val span = when {
-        d > 0 -> if (h > 0 && d < WEEK_DAYS) "$d 天 $h 小时" else "$d 天"
-        h > 0 -> if (m > 0) "$h 小时 $m 分" else "$h 小时"
-        else -> "${maxOf(m, 1)} 分钟"
-    }
-    return (if (left >= 0) "还剩 $span" else "逾期 $span") to (left < DAY_MS)
-}
+/** 倒计时, 见组件库 todoCountdown; 第二项为 true 表示逾期或 24 小时内 (标红)。 */
+fun countdown(due: Long, now: Long = System.currentTimeMillis()): Pair<String, Boolean> = com.hengxin.aioa.kit.todoCountdown(due, now)
 
 /** 截止时间: 今年的省略年份。 */
 fun dueText(due: Long): String {

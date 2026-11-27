@@ -101,4 +101,21 @@ class TabNavTest {
         val n = path({ it.select(Tab.AGENT) }, { it.go(Tab.CHAT) }, { it.go(Tab.CHAT) })
         assertEquals(TabNav(Tab.AGENT), n.back())
     }
+
+    // 新外壳 (#121): 插件空间直接在顶部标签与侧栏里, 选中后是总览栏的看板, 返回先回日常
+    @Test
+    fun 顶部标签列出插件空间_顺序固定() {
+        val spaces = listOf(com.hengxin.aioa.kit.Space("hengxin666.todo", "点子待办", origin = "hengxin666.todo"), com.hengxin.aioa.kit.Space("hxoa", "HX OA"))
+        val ids = homeTabs(spaces, 0).map { it.id }
+        assertEquals(listOf(BOARD_DAILY, Tab.CHAT.name, BOARD_DEV, BOARD_SERVERS, "hengxin666.todo", "hxoa", Tab.AGENT.name, Tab.RESOURCES.name), ids)
+        assertTrue(homeTabs(spaces, 0).filter { it.id in setOf("hengxin666.todo", "hxoa") }.all { it.plugin != null })
+    }
+
+    @Test
+    fun 选中的标签_看板没了回日常() {
+        val spaces = listOf(com.hengxin.aioa.kit.Space("hxoa", "HX OA"))
+        assertEquals("hxoa", homeSelected(Tab.OVERVIEW, "hxoa", spaces))
+        assertEquals(BOARD_DAILY, homeSelected(Tab.OVERVIEW, "gone", spaces))
+        assertEquals(Tab.CHAT.name, homeSelected(Tab.CHAT, "hxoa", spaces))
+    }
 }

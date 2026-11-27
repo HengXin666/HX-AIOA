@@ -69,7 +69,7 @@ fun PluginsPage(onBack: (() -> Unit)?, openGroup: (String) -> Unit) {
     }
     val c = Aioa.colors
     SettingsPageFrame(SettingsPage.PLUGINS.title, onBack) {
-        Paragraph("插件把一种玩法打包分发: 一个群 + 一个接入的 Agent (提示词) + 一个工作台面板, 数据归启用它的账号。不在手机上运行代码, Agent 跑在你自己的机器上。", c.textSecondary, BODY_SP)
+        Paragraph("插件把一种玩法打包分发: 一个群 + 一个群 Agent (提示词) + 一个工作台面板, 数据归启用它的账号。不在手机上运行代码, 群 Agent 由你自己机器上的 agent harness 或云端来跑。", c.textSecondary, BODY_SP)
         compat?.takeIf { it.level != COMPAT_OK }?.let { SettingsGroup { NoteRow(it.msg ?: "建议更新 App", if (it.limited) c.danger else c.textSecondary) } }
         error?.let { SettingsGroup { NoteRow(it, c.danger) } }
         val items = market?.items

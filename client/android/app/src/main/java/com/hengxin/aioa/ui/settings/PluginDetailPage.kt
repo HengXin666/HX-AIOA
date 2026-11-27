@@ -231,7 +231,7 @@ private fun TaskPrompt(task: String, installed: Boolean) {
 /** 刚装完: 一段接入语整段复制给任何 Agent, 里面的间隔和任务可以直接改。只显示这一次。 */
 @Composable
 private fun Handoff(p: PluginInstalled) {
-    SettingsGroup("接入 Agent", "整段发给 Claude Code, Codex 或云端 Agent 都行, 间隔和任务可以先改再发。里面有密钥, 只显示这一次。") {
+    SettingsGroup("接入群 Agent", "整段发给 Claude Code, Codex 等 agent harness 或云 Agent 都行, 间隔和任务可以先改再发。里面有密钥, 只显示这一次。") {
         NoteRow(p.prompt, mono = true)
         RowDivider(indent = false)
         CopyRow("复制接入语", p.prompt)

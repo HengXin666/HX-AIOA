@@ -24,14 +24,14 @@ import com.hengxin.aioa.kit.Text as KitText
 
 private val ACTIVE = setOf(Constants.TASK_WAITING, Constants.TASK_RUNNING)
 
-/** Agent 页: 等待确认在最上, 然后是运行中, 最后是已结束的任务; 卡片上直接批准 / 拒绝。 */
+/** agent harness 页 (电脑上 Codex, Claude Code 这类交互式 CLI 的任务): 等待确认在最上, 然后是运行中, 最后是已结束的任务; 卡片上直接批准 / 拒绝。 */
 @Composable
 fun AgentPage(chat: ChatModel) {
     val feed = chat.feed
     val answer = rememberAnswer(chat)
     val state = layerState(chat.online, feed.loaded, feed.updatedAt)
     val all = feed.tasks.values.sortedWith(compareBy<TaskSnapshot>({ rank(it.state) }, { -it.updated }))
-    PageColumn("Agent") {
+    PageColumn(Constants.HARNESS) {
         feed.notice?.let { text ->
             Card {
                 Paragraph(text, Aioa.colors.warning, 14)
@@ -39,7 +39,7 @@ fun AgentPage(chat: ChatModel) {
             }
         }
         if (!feed.v1 && feed.loaded) {
-            Card { KitText("服务端还没有升级到 v1 协议, 暂时看不到 Agent 任务", Aioa.colors.textSecondary, 14) }
+            Card { KitText("服务端还没有升级到 v1 协议, 暂时看不到 ${Constants.HARNESS} 任务", Aioa.colors.textSecondary, 14) }
             return@PageColumn
         }
         if (feed.agents.isNotEmpty()) {

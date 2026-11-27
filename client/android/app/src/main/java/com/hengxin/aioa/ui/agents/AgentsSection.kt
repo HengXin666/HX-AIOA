@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.agents
 
+import com.hengxin.aioa.Constants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,7 +60,7 @@ fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>, open
     val now = rememberNow()
     val listening = model.groups.presence.listening(group, now)
     var wizard by remember { mutableStateOf(false) }
-    HomeSection("Agent", agents.size, action = "接入", onAction = { wizard = true }) {
+    HomeSection(Constants.CLOUD_AGENT, agents.size, action = "接入", onAction = { wizard = true }) {
         if (agents.isEmpty()) GiNote("接入后它就能往这个群发消息, 读你允许的群, 三步就好。")
         agents.forEachIndexed { i, a -> AgentLine(group, a, stateOf(a, a.keyId in listening), i, now) { openAgent(a.keyId) } }
     }

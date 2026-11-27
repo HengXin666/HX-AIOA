@@ -3,15 +3,11 @@ package com.hengxin.aioa.gallery
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,13 +21,14 @@ import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Text
+import com.hengxin.aioa.kit.TodoFold
+import com.hengxin.aioa.kit.TodoLine
+import com.hengxin.aioa.kit.TodoRow
 import com.hengxin.aioa.kit.TreePath
 import com.hengxin.aioa.kit.hxPalette
-import com.hengxin.aioa.kit.pointerTap
-import com.hengxin.aioa.kit.treeGuides
 
 // 待办树: 一行一条的缩进列表 + 层级连线; 仓库分组带 GitHub 图标, 关联 issue 的带 issue 图标与编号,
-// 父项带小进度条, 截止 / 星标 / 急 / 进行中压成右边的小标注。与 App 的 NodeRows 同一套布局
+// 父项带小进度条, 截止 / 星标 / 急 / 进行中压成右边的小标注。行用组件库 TodoLine, 与 App 完全一致
 
 private class Item(
     val title: String,
@@ -110,47 +107,26 @@ private fun rows(items: List<Item>, path: TreePath) {
     items.forEachIndexed { i, it -> Line(it, path + (i == items.lastIndex)) }
 }
 
-@Composable
-private fun Line(it: Item, path: TreePath) {
-    val c = Aioa.colors
-    val lasts = path.drop(1)
-    val parent = it.kids.isNotEmpty()
-    val start = (12 + lasts.size * 22).dp
-    Column(Modifier.fillMaxWidth().treeGuides(lasts, parent && !it.shut, c.textSecondary.copy(alpha = 0.5f), marker = 18.dp, top = 8.5.dp)) {
-        Box(Modifier.fillMaxWidth().padding(start = start).height(0.5.dp).background(c.border))
-        Row(Modifier.fillMaxWidth().pointerTap {}.padding(start = start, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
-                if (parent) Icon(if (it.shut) "chevron-right" else "chevron-down", c.textSecondary, 15.dp)
-                else Icon(if (it.done) "square-check" else "square", if (it.done) c.success else c.textSecondary, 17.dp)
-            }
-            if (it.issue > 0) Icon(if (it.closed) "circle-check" else "circle-dot", if (it.closed) Color(0xFF8250DF) else c.success, 14.dp)
-            Text(it.title, if (it.done) c.textSecondary else c.text, 14, Modifier.weight(1f), weight = if (parent) FontWeight.SemiBold else FontWeight.Normal)
-            Marks(it)
-        }
-    }
-    if (parent && !it.shut) rows(it.kids, path)
+// 画廊的固定 "现在", 截止按它倒推, 截图稳定
+private const val NOW = 1_800_000_000_000L
+private const val HOUR_MS = 3_600_000L
+private val DUE = Regex("(逾期 )?(\\d+) (天|小时)")
+
+private fun dueOf(text: String): Long? = DUE.find(text)?.let { m ->
+    val n = m.groupValues[2].toLong() * if (m.groupValues[3] == "天") 24 * HOUR_MS else HOUR_MS
+    if (m.groupValues[1].isEmpty()) NOW + n + 1 else NOW - n
 }
 
+// 与 App 同一个组件库行 TodoLine, 这里只把演示数据换成 TodoRow
 @Composable
-private fun Marks(it: Item) {
-    val c = Aioa.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (it.urgent && !it.done) Icon("flame", c.danger, 12.dp)
-        if (it.star && !it.done) Icon("star", c.warning, 12.dp)
-        if (it.doing && !it.done) Box(Modifier.size(6.dp).clip(RoundedCornerShape(2.dp)).background(c.accent))
-        if (it.due.isNotEmpty() && !it.done) {
-            val tone = if (it.hot) c.danger else c.accent
-            Row(Modifier.clip(RoundedCornerShape(50)).background(tone.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                Icon("clock", tone, 11.dp)
-                Text(it.due, tone, 11, weight = FontWeight.SemiBold)
-            }
-        }
-        if (it.issue > 0) Text("#${it.issue}", c.textSecondary, 11)
-        if (it.kids.isNotEmpty()) {
-            Box(Modifier.width(28.dp).height(4.dp).clip(RoundedCornerShape(50)).background(c.surfaceAlt)) {
-                Box(Modifier.fillMaxWidth(it.doneCount.toFloat() / it.total).height(4.dp).clip(RoundedCornerShape(50)).background(if (it.doneCount == it.total) c.success else c.accent))
-            }
-            Text("${it.doneCount}/${it.total}", c.textSecondary, 11)
-        }
-    }
+private fun Line(it: Item, path: TreePath) {
+    val lasts = path.drop(1)
+    val state = if (it.doing) TodoRow.STATE_DOING else if (it.done) TodoRow.STATE_DONE else TodoRow.STATE_OPEN
+    val row = TodoRow(
+        it.title, it.title, null, state, if (it.urgent) 1 else 2, null, 0,
+        issue = it.issue.takeIf { i -> i > 0 }, ghOpen = if (it.issue > 0) !it.closed else null, due = dueOf(it.due), star = it.star,
+    )
+    val fold = if (it.kids.isNotEmpty()) TodoFold(it.doneCount, it.total, it.shut) {} else null
+    TodoLine(row, NOW, {}, {}, lasts = lasts, fold = fold)
+    if (fold != null && !it.shut) rows(it.kids, path)
 }

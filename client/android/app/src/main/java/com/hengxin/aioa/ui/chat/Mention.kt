@@ -3,7 +3,7 @@ package com.hengxin.aioa.ui.chat
 import com.hengxin.aioa.proto.Mentions
 
 /** @ 选择里的一项: token 是发给服务端的记号 (uid / agent:<keyId> / all), label 是插进输入框的名字。 */
-data class MentionTarget(val token: String, val label: String, val sub: String, val agent: Boolean = false, val sid: String? = null)
+data class MentionTarget(val token: String, val label: String, val sub: String, val agent: Boolean = false, val sid: String? = null, val avatar: String? = null)
 
 /** @ 的纯运算: 候选列表, 输入框里的查询词, 发送时还留着的记号。 */
 object MentionOps {
@@ -15,10 +15,15 @@ object MentionOps {
     fun candidates(meta: ChatMeta?, members: List<RoomMember>, me: String?): List<MentionTarget> {
         val dm = meta?.isDm == true
         val all = if (dm || meta == null || !meta.shared) emptyList() else listOf(MentionTarget(Mentions.ALL, ALL_LABEL, "${meta.members} 人"))
-        val agents = if (dm) emptyList() else meta?.agents.orEmpty().map { MentionTarget(Mentions.agent(it.keyId), it.name.ifEmpty { it.keyId }, "Agent", agent = true, sid = it.sourceId) }
-        val people = members.filter { it.id != me }.map { MentionTarget(it.id, it.display.ifEmpty { it.name }, roleLabel(it.role), sid = USER_PREFIX + it.id) }
+        val agents = if (dm) emptyList() else meta?.agents.orEmpty().map(::agentTarget)
+        val people = members.filter { it.id != me }.map { MentionTarget(it.id, it.display.ifEmpty { it.name }, roleLabel(it.role), sid = USER_PREFIX + it.id, avatar = it.avatar) }
         return all + agents + people
     }
+
+    /** 群 Agent 的显示名: 主人起的别名 > 群资料里的名字 > keyId。 */
+    fun agentName(a: ChatAgent): String = Senders.aliasOf(a.sourceId) ?: a.name.ifEmpty { a.keyId }
+
+    fun agentTarget(a: ChatAgent): MentionTarget = MentionTarget(Mentions.agent(a.keyId), agentName(a), com.hengxin.aioa.Constants.CLOUD_AGENT, agent = true, sid = a.sourceId)
 
     /** 光标前的 "@xx" 里的 xx; 没在输 @ 时为 null。 */
     fun query(beforeCursor: String): String? = QUERY.find(beforeCursor)?.groupValues?.get(1)

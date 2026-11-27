@@ -63,7 +63,7 @@ fun TaskSnapshot.options(): List<TaskOption> {
 
 fun TaskSnapshot.toCard(pending: String?): TaskCardData = TaskCardData(
     id = id,
-    agent = agent.ifEmpty { "Agent" },
+    agent = agent.ifEmpty { Constants.HARNESS },
     title = title,
     phase = phase(),
     updated = ago(updated),

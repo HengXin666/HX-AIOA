@@ -132,6 +132,7 @@ fun ChatScreen(model: ChatModel) {
     val candidates = remember(meta, members) { MentionOps.candidates(meta, members, Me.uid) }
     val atNames = remember(candidates) { MentionOps.names(candidates) }
     val roles = remember(members) { members.associate { MentionOps.USER_PREFIX + it.id to MentionOps.roleLabel(it.role) } }
+    val faces = remember(members) { members.mapNotNull { m -> m.avatar?.let { MentionOps.USER_PREFIX + m.id to it } }.toMap() }
     val agentSids = meta?.agents?.mapNotNull { it.sourceId }?.toSet().orEmpty()
     val actions = BubbleActions(
         onReply = { g.replyTo = it },
@@ -147,7 +148,7 @@ fun ChatScreen(model: ChatModel) {
         onSelect = { m -> if (picking.on) picking.toggle(m.seq) else picking.start(m.seq) },
         onBundle = { m -> if (m.bundle != null) bundle = m },
         admin = meta?.canManage == true,
-        look = { m -> SenderLook(roles[m.sid], m.sid in agentSids) },
+        look = { m -> SenderLook(roles[m.sid], m.sid in agentSids || com.hengxin.aioa.ui.chat.Names.isAgent(m.sid), faces[m.sid]) },
         atNames = atNames,
     )
     CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (meta?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {

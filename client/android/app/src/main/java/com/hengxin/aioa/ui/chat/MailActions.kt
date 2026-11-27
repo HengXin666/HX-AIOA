@@ -89,13 +89,13 @@ fun ForwardSheet(m: MailItem, s: MailState, agent: Boolean, close: () -> Unit) {
     LaunchedEffect(Unit) { s.api.chats().onSuccess { list -> chats = if (agent) list.filter { it.agents.isNotEmpty() } else list } }
     ModalBottomSheet(close, containerColor = c.surface) {
         Column(Modifier.navigationBarsPadding().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
-            Text(if (agent) "交给 Agent" else "转进群", Modifier.padding(horizontal = SHEET_PAD.dp), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text(if (agent) "以你的名义把标题, 发件人, 纯文本正文发到 Agent 所在的群, 原文作附件, Agent 照群里的指令处理。" else "以你的名义转进群, 原文作附件。",
+            Text(if (agent) "交给群 Agent" else "转进群", Modifier.padding(horizontal = SHEET_PAD.dp), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (agent) "以你的名义把标题, 发件人, 纯文本正文发到群 Agent 所在的群, 原文作附件, 群 Agent 照群里的指令处理。" else "以你的名义转进群, 原文作附件。",
                 Modifier.padding(SHEET_PAD.dp, 4.dp), color = c.textSecondary, fontSize = 12.sp, lineHeight = 18.sp)
             val list = chats
             when {
                 list == null -> Text("加载中...", Modifier.padding(SHEET_PAD.dp), color = c.textSecondary, fontSize = 13.sp)
-                list.isEmpty() -> Text(if (agent) "还没有接入 Agent 的群" else "还没有群", Modifier.padding(SHEET_PAD.dp), color = c.textSecondary, fontSize = 13.sp)
+                list.isEmpty() -> Text(if (agent) "还没有接入群 Agent 的群" else "还没有群", Modifier.padding(SHEET_PAD.dp), color = c.textSecondary, fontSize = 13.sp)
                 else -> list.forEach { g ->
                     val hint = g.agents.joinToString(" / ") { it.name }.ifEmpty { null }
                     SheetRow(if (g.agents.isEmpty()) "message-circle" else "bot", g.title ?: g.channel, hint, checked = pick == g.channel) { pick = g.channel }

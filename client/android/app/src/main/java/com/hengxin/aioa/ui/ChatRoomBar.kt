@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui
 
+import com.hengxin.aioa.Constants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,11 +33,11 @@ internal fun roomSub(meta: ChatMeta?, online: Boolean): String {
     val agents = meta?.agents?.size ?: 0
     return when {
         meta?.isDm == true -> "真人"
-        meta?.shared == true -> "${meta.members} 人 · $agents 个 Agent"
+        meta?.shared == true -> "${meta.members} 人 · $agents 个${Constants.CLOUD_AGENT}"
         else -> listOfNotNull(
             digestLabel(meta?.digest),
             if (meta?.muted == true) "免打扰" else null,
-            agents.takeIf { it > 0 }?.let { "$it 个 Agent" },
+            agents.takeIf { it > 0 }?.let { "$it 个${Constants.CLOUD_AGENT}" },
         ).joinToString(" · ")
     }
 }

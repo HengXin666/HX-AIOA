@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.groupinfo
 
+import com.hengxin.aioa.Constants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -84,7 +85,7 @@ internal fun GroupHead(model: ChatModel, group: String, meta: ChatMeta?, job: Av
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border.copy(alpha = LINE_ALPHA)))
         Row(Modifier.padding(vertical = 12.dp)) {
             GiStat(if (meta?.shared == true) meta.members else 1, "成员", Modifier.weight(1f))
-            if (!dm) GiStat(meta?.agents?.size ?: 0, "Agent", Modifier.weight(1f))
+            if (!dm) GiStat(meta?.agents?.size ?: 0, Constants.CLOUD_AGENT, Modifier.weight(1f))
             GiStat(today, "今日消息", Modifier.weight(1f))
         }
     }

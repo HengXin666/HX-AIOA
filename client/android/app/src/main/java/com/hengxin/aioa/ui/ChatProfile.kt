@@ -32,14 +32,13 @@ import com.hengxin.aioa.kit.LiveDot
 import com.hengxin.aioa.kit.SoftTag
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.hxPalette
-import com.hengxin.aioa.proto.Mentions
 import com.hengxin.aioa.proto.ServerFrame
 import com.hengxin.aioa.ui.agents.AgentState
 import com.hengxin.aioa.ui.agents.ago
 import com.hengxin.aioa.ui.agents.runInfo
 import com.hengxin.aioa.ui.agents.stateOf
 import com.hengxin.aioa.ui.agents.until
-import com.hengxin.aioa.ui.chat.AgentFace
+import com.hengxin.aioa.Constants
 import com.hengxin.aioa.ui.chat.ChatAgent
 import com.hengxin.aioa.ui.chat.ChatMeta
 import com.hengxin.aioa.ui.chat.ComposerState
@@ -60,11 +59,11 @@ private val LABEL_W = 84.dp
 /** 消息发送者对应的 @ 目标: Agent 写 agent:<keyId>, 真人写 uid; 系统来源没有。 */
 internal fun targetOf(meta: ChatMeta?, members: List<RoomMember>, msg: ServerFrame.Msg): MentionTarget? {
     val sid = msg.sid ?: return null
-    meta?.agents?.firstOrNull { it.sourceId == sid }?.let { return MentionTarget(Mentions.agent(it.keyId), it.name.ifEmpty { it.keyId }, "Agent", agent = true, sid = sid) }
+    meta?.agents?.firstOrNull { it.sourceId == sid }?.let { return MentionOps.agentTarget(it) }
     if (!sid.startsWith(MentionOps.USER_PREFIX)) return null
     val uid = sid.removePrefix(MentionOps.USER_PREFIX)
     val m = members.firstOrNull { it.id == uid }
-    return MentionTarget(uid, m?.display?.ifEmpty { null } ?: Names.of(msg), MentionOps.roleLabel(m?.role), sid = sid)
+    return MentionTarget(uid, m?.display?.ifEmpty { null } ?: Names.of(msg), MentionOps.roleLabel(m?.role), sid = sid, avatar = m?.avatar)
 }
 
 /** 点头像的资料卡 (#136): 真人 身份, 群昵称, 最近发言, 发消息, @TA; Agent 状态, 版本, 可读的群, 下次触发, @它, Agent 设置。 */
@@ -104,7 +103,7 @@ private fun ColumnScope.PersonCard(model: ChatModel, group: String, msg: ServerF
     val now = com.hengxin.aioa.ui.agents.rememberNow()
     val live = uid != null && (uid == Me.uid || presence.isOnline(uid))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        SenderFace(msg.sid, name, FACE.dp)
+        SenderFace(msg.sid, name, FACE.dp, avatar = member?.avatar)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(name, c.text, 20, weight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -148,10 +147,11 @@ private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent,
         AgentState.WAITING -> "还没报到" to c.textSecondary
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        AgentFace(tone, FACE.dp)
+        val name = MentionOps.agentName(a)
+        SenderFace(a.sourceId, name, FACE.dp, agent = true)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(a.name.ifEmpty { a.keyId }, c.text, 20, weight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { SoftTag("Agent", tone); SoftTag(label, stateTone) }
+            Text(name, c.text, 20, weight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { SoftTag(Constants.CLOUD_AGENT, tone); SoftTag(label, stateTone) }
             Text(a.skills?.skills?.entries?.joinToString(" · ") { "${it.key} ${it.value}" }?.ifEmpty { null } ?: "还没上报版本", c.textSecondary, 13)
         }
     }
@@ -163,7 +163,7 @@ private fun ColumnScope.AgentCard(model: ChatModel, group: String, a: ChatAgent,
     Fact("最近活跃", a.active?.let { ago(it, now) } ?: "还没有动静")
     Row(Modifier.padding(top = 14.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         HxButton("@它", onAt, Modifier.weight(1f), icon = "at-sign")
-        HxButton("Agent 设置", {
+        HxButton("${Constants.CLOUD_AGENT}设置", {
             g.settingsAgent = a.keyId
             close()
             g.page = ChatPage.SETTINGS

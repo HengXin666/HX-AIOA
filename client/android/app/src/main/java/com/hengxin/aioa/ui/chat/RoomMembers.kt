@@ -1,5 +1,6 @@
 package com.hengxin.aioa.ui.chat
 
+import com.hengxin.aioa.Constants
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -111,9 +112,9 @@ fun RoomMembersPage(model: ChatModel, group: String, agentsTab: Boolean, onBack:
     val act: (suspend () -> Result<Unit>) -> Unit = { call -> scope.launch { call().onSuccess { reload(); dir.refreshChats() }.onFailure { error = it.message } } }
     val doInvite = { scope.launch { api.invite(group).onSuccess { invite = it }.onFailure { error = it.message } }; Unit }
     Column(Modifier.fillMaxSize().background(Aioa.colors.background)) {
-        GiBar("成员与 Agent", meta?.title ?: group, onBack, if (manage && !dm) "user-plus" else "", doInvite)
+        GiBar("成员与${Constants.CLOUD_AGENT}", meta?.title ?: group, onBack, if (manage && !dm) "user-plus" else "", doInvite)
         if (showAgents) {
-            SpaceTabs(listOf(HomeSpace(TAB_MEMBERS, MEMBERS, "", badge = meta?.members ?: 0), HomeSpace(TAB_AGENTS, "Agent", "", badge = meta?.agents?.size ?: 0)), tab, { tab = it })
+            SpaceTabs(listOf(HomeSpace(TAB_MEMBERS, MEMBERS, "", badge = meta?.members ?: 0), HomeSpace(TAB_AGENTS, Constants.CLOUD_AGENT, "", badge = meta?.agents?.size ?: 0)), tab, { tab = it })
         }
         val list = rememberLazyListState()
         val atEnd by remember { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == list.layoutInfo.totalItemsCount - 1 } }

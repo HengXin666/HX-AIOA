@@ -26,7 +26,7 @@ import com.hengxin.aioa.ui.settings.SettingsPage
 enum class Tab(val label: String, val icon: String) {
     OVERVIEW("总览", "gauge"),
     CHAT("消息", "message-circle"),
-    AGENT("Agent", Constants.ICON_ACTIVITY),
+    AGENT(Constants.HARNESS, Constants.ICON_ACTIVITY),
     RESOURCES("资源", "server"),
     ME("我的", "user"),
 }

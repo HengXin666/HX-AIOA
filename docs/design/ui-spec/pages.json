@@ -11,7 +11,7 @@
         {"id": "ov-confirm", "t": "sheet", "label": "Agent 确认", "sub": "执行 / 拒绝", "rt": "live"}
       ]},
       {"id": "ov-now", "t": "block", "label": "正在发生", "sub": "Agent 任务卡", "rt": "live", "kids": [
-        {"id": "ov-go-agent", "t": "go", "to": "agent", "label": "Agent 栏", "sub": "回来时回总览"}
+        {"id": "ov-go-agent", "t": "go", "to": "agent", "label": "agent harness 栏", "sub": "回来时回总览"}
       ]},
       {"id": "ov-worth", "t": "block", "label": "值得一看", "sub": "少而重要", "rt": "near", "kids": [
         {"id": "ov-mailpeek", "t": "sheet", "label": "单封邮件", "sub": "只标这一封已读", "rt": "static"},
@@ -19,7 +19,7 @@
           {"id": "ov-go-chat", "t": "go", "to": "chat", "label": "消息 · 定位到条", "sub": "返回: 群列表 → 总览"}
         ]}
       ]},
-      {"id": "ov-board", "t": "block", "label": "看板切换", "sub": "新外壳: 顶栏标题选 总览 / 开发 / 服务器 / 插件空间 (#138); 旧外壳: 小 Chip", "rt": "live"},
+      {"id": "ov-board", "t": "block", "label": "看板切换", "sub": "新外壳: 顶部标签与侧栏 \"空间\" 直接列 开发 / 服务器 / 各插件空间 (点子待办, HX OA), 点标题也能切 (#121 #138); 旧外壳: 小 Chip", "rt": "live"},
       {"id": "ov-todo", "t": "block", "label": "重点待办", "sub": "#120", "rt": "live", "kids": [
         {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "按仓库 / 按日期 · 筛选", "rt": "live"}
       ]},
@@ -42,10 +42,10 @@
       ]},
       {"id": "ch-room", "t": "page", "label": "群聊", "sub": "输入中 · Agent 监听 · 引用回复", "rt": "live", "kids": [
         {"id": "ch-settings", "t": "page", "label": "群聊设置", "sub": "计数 · 成员横排 · Agent · 资料 · 提醒 (#137)", "rt": "near", "kids": [
-          {"id": "ch-members", "t": "page", "label": "成员与 Agent", "sub": "两个标签 · 搜索 · 分页 (#130)", "rt": "near", "kids": [
+          {"id": "ch-members", "t": "page", "label": "成员与群 Agent", "sub": "两个标签 · 搜索 · 分页 (#130)", "rt": "near", "kids": [
             {"id": "ch-invite", "t": "dialog", "label": "邀请链接", "sub": "分享 · 复制", "rt": "static"}
           ]},
-          {"id": "ch-agentset", "t": "page", "label": "Agent 设置", "sub": "名字 · 可读的群 · 大更新自动执行; 其余只读 (#117)", "rt": "near", "kids": [
+          {"id": "ch-agentset", "t": "page", "label": "群 Agent 设置", "sub": "名字 · 可读的群 · 大更新自动执行; 其余只读 (#117)", "rt": "near", "kids": [
             {"id": "ag-guide", "t": "sheet", "label": "查看指令", "sub": "复制提示词", "rt": "static"},
             {"id": "ag-edit", "t": "dialog", "label": "编辑 / 移出", "rt": "static"}
           ]},
@@ -80,11 +80,11 @@
       ]},
       {"id": "ch-banner", "t": "block", "label": "新消息横幅 (全局)", "sub": "任意栏顶部", "rt": "live"}
     ]},
-    {"id": "agent", "label": "Agent", "icon": "activity", "rt": "live", "kids": [
+    {"id": "agent", "label": "agent harness", "icon": "activity", "rt": "live", "kids": [
       {"id": "ag-tasks", "t": "block", "label": "任务", "sub": "进行中 | 已结束", "rt": "live", "kids": [
         {"id": "ag-confirm", "t": "dialog", "label": "确认执行?", "rt": "live"}
       ]},
-      {"id": "ag-list", "t": "block", "label": "Agent 列表", "sub": "在线 · 指令同步状态", "rt": "live", "kids": [
+      {"id": "ag-list", "t": "block", "label": "agent harness 列表", "sub": "电脑上的交互式 CLI (Codex, Claude Code) · 在线", "rt": "live", "kids": [
         {"id": "ag-wizard", "t": "sheet", "label": "接入向导", "sub": "选群 · 权限 · 复制接入语", "rt": "static"}
       ]}
     ]},

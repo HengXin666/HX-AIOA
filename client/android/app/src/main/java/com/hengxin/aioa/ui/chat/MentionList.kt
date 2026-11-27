@@ -41,7 +41,7 @@ fun MentionList(list: List<MentionTarget>, onPick: (MentionTarget) -> Unit) {
         Modifier.padding(horizontal = 10.dp, vertical = 6.dp).fillMaxWidth().shadow(16.dp, shape).clip(shape).background(c.popover)
             .border(1.dp, c.border.copy(alpha = 0.6f), shape).heightIn(max = LIST_MAX).verticalScroll(rememberScrollState()).padding(vertical = 6.dp),
     ) {
-        Text(if (list.isEmpty()) "没有匹配的人或 Agent" else "选择要 @ 的人", c.textSecondary, 12, Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp))
+        Text(if (list.isEmpty()) "没有匹配的人或群 Agent" else "选择要 @ 的人", c.textSecondary, 12, Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp))
         list.forEach { t ->
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 6.dp).clip(RoundedCornerShape(10.dp)).pointerTap { onPick(t) }.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -49,13 +49,13 @@ fun MentionList(list: List<MentionTarget>, onPick: (MentionTarget) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 when {
-                    t.agent -> AgentFace(colorOf(t.sid ?: t.token), FACE)
+                    t.agent -> SenderFace(t.sid, t.label, FACE, agent = true)
                     t.token == com.hengxin.aioa.proto.Mentions.ALL -> Box(Modifier.size(FACE).clip(RoundedCornerShape(9.dp)).background(c.surfaceAlt), contentAlignment = Alignment.Center) { Icon("users", c.text, 16.dp) }
-                    else -> SenderFace(t.sid, t.label, FACE)
+                    else -> SenderFace(t.sid, t.label, FACE, avatar = t.avatar)
                 }
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f, fill = false)) { Text(t.label, c.text, 15, weight = FontWeight.Medium) }
-                    if (t.agent) SoftTag("Agent", colorOf(t.sid ?: t.token))
+                    if (t.agent) SoftTag(com.hengxin.aioa.Constants.CLOUD_AGENT, colorOf(t.sid ?: t.token))
                 }
                 Text(t.sub, c.textSecondary, 12)
             }

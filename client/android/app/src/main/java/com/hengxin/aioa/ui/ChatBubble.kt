@@ -46,7 +46,6 @@ import com.hengxin.aioa.ui.chat.MarkdownText
 import com.hengxin.aioa.ui.chat.MdColors
 import com.hengxin.aioa.ui.chat.colorOf
 import com.hengxin.aioa.ui.chat.plainPreview
-import com.hengxin.aioa.ui.chat.AgentFace
 import com.hengxin.aioa.ui.chat.tapHold
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.CheckBox
@@ -85,8 +84,8 @@ class BubbleActions(
     val atNames: List<String> = emptyList(),
 )
 
-/** 名字上面的身份: 群主 / 管理员 / 成员, 以及是不是 Agent。 */
-data class SenderLook(val role: String? = null, val agent: Boolean = false)
+/** 名字上面的身份: 群主 / 管理员 / 成员, 是不是群 Agent; avatar 为成员资料里的头像 id。 */
+data class SenderLook(val role: String? = null, val agent: Boolean = false, val avatar: String? = null)
 
 /** 一条气泡在列表里的位置: 是否一串的第一条 (显示名字与头像); picking 为多选中。 */
 data class BubbleSpot(val head: Boolean, val showSender: Boolean, val highlight: Boolean, val picking: Boolean = false, val picked: Boolean = false)
@@ -120,7 +119,8 @@ fun MessageBubble(msg: ServerFrame.Msg, mine: Boolean, spot: BubbleSpot, actions
             if (!mine && spot.showSender) {
                 if (spot.head) {
                     val face = Modifier.tapHold({ actions?.onAvatar?.invoke(msg) }, actions?.onAvatarLong?.let { l -> { l(msg) } })
-                    if (look.agent) AgentFace(tone, SENDER_AVATAR, face) else com.hengxin.aioa.ui.chat.SenderAvatar(msg, SENDER_AVATAR, face)
+                    // 名字与头像按主人设的为准, 没设头像时群 Agent 用圆角方块机器人 (#128 #136)
+                    com.hengxin.aioa.ui.chat.SenderFace(msg.sid, Names.of(msg), SENDER_AVATAR, face, look.avatar, look.agent)
                 } else Spacer(Modifier.width(SENDER_AVATAR))
                 Spacer(Modifier.width(8.dp))
             }
@@ -173,7 +173,7 @@ private fun Who(name: String, look: SenderLook, tone: Color) {
     val k = Aioa.colors
     Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         look.role?.let { SoftTag(it, if (it == ROLE_MEMBER_LABEL) k.textSecondary else hxPalette().chart3) }
-        if (look.agent) SoftTag("Agent", tone)
+        if (look.agent) SoftTag(com.hengxin.aioa.Constants.CLOUD_AGENT, tone)
         com.hengxin.aioa.kit.Text(name, k.textSecondary, 12)
     }
 }

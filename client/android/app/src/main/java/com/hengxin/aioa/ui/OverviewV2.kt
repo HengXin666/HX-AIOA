@@ -79,7 +79,7 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
         Text(if (needMe > 0) "$needMe 件事等你决定" else "一切正常", c.text, 26, weight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             LiveDot(if (chat.online) c.success else c.danger, 7.dp)
-            Text(if (chat.online) "已连接 · ${agents.size} 个 Agent · $running 个任务在跑" else "未连接, 正在重连", c.textSecondary, 14)
+            Text(if (chat.online) "已连接 · ${agents.size} 个${Constants.CLOUD_AGENT} · $running 个任务在跑" else "未连接, 正在重连", c.textSecondary, 14)
         }
     }
     Pulse(chat, agents.mapNotNull { it.second.sourceId }.toSet(), needMe, Modifier.enter(1))
@@ -92,7 +92,7 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     }
     if (agents.isNotEmpty()) {
         Column(Modifier.enter(3)) {
-            SectionTitle("Agent", agents.size, action = "全部", onAction = { open(Tab.AGENT) })
+            SectionTitle(Constants.CLOUD_AGENT, agents.size, action = "消息", onAction = { open(Tab.CHAT) })
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 agents.take(AGENTS_SHOWN).forEachIndexed { i, (m, a) -> AgentTile(m, a, i) { chat.groups.openGroup(m.channel); open(Tab.CHAT) } }
             }
@@ -104,7 +104,7 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     Column(Modifier.enter(7)) { Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show) }
 }
 
-/** 近 24 小时的消息与 Agent 发言, 每小时一格; 新消息进来时重算 (本地查询)。 */
+/** 近 24 小时的消息与群 Agent 发言, 每小时一格; 新消息进来时重算 (本地查询)。 */
 @Composable
 private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier: Modifier) {
     val c = Aioa.colors
@@ -124,12 +124,12 @@ private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier
         }
         Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
             Metric(all.sum(), "消息", 0, Modifier.weight(1f))
-            Metric(agent.sum(), "Agent 发言", 120, Modifier.weight(1f))
+            Metric(agent.sum(), "${Constants.CLOUD_AGENT}发言", 120, Modifier.weight(1f))
             Metric(needMe, "等你处理", 240, Modifier.weight(1f))
         }
         Row(Modifier.padding(start = 16.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Legend(pal.chart1, "消息")
-            Legend(pal.chart2, "Agent")
+            Legend(pal.chart2, Constants.CLOUD_AGENT)
         }
         Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp).fillMaxWidth().height(104.dp)) {
             AreaChart(all.map { it.toFloat() }, pal.chart1, Modifier.fillMaxWidth().height(104.dp), delayMs = 150)
