@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -80,6 +82,9 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     val running = feed.tasks.values.count { it.state == Constants.TASK_RUNNING }
     val needMe = items(feed, Constants.PRIORITY_NEED_ME).count { !chat.seen.has(it.id) } + waiting.size
     val agents = chat.groups.directory.metas.values.filter { it.deleted == 0L }.flatMap { m -> m.agents.map { m to it } }
+    // 周报 (#140): 从下面 "你和 Agent 一起" 的右上角进入, 整页叠在上面
+    var report by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (report) com.hengxin.aioa.ui.report.WeeklyReportDialog(chat) { report = false }
     Column(Modifier.padding(start = 4.dp, bottom = 4.dp).enter(0), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(remember { SimpleDateFormat("EEEE · M 月 d 日", Locale.CHINA).format(Date()) }, c.textSecondary, 13)
         Text(if (needMe > 0) "$needMe 件事等你决定" else "一切正常", c.text, 26, weight = FontWeight.SemiBold)
@@ -88,7 +93,7 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
             Text(if (chat.online) "已连接 · ${agents.size} 个${Constants.CLOUD_AGENT} · $running 个任务在跑" else "未连接, 正在重连", c.textSecondary, 14)
         }
     }
-    Pulse(chat, agents.mapNotNull { it.second.sourceId }.toSet(), needMe, Modifier.enter(1))
+    Pulse(chat, agents.mapNotNull { it.second.sourceId }.toSet(), needMe, Modifier.enter(1)) { report = true }
     Column(Modifier.enter(2), verticalArrangement = Arrangement.spacedBy(Aioa.metrics.gap)) {
         val answer = rememberAnswer(chat)
         AnimatedItems(waiting, { it.id }) { task ->
@@ -116,7 +121,7 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
  * 下面连续活跃 / 最忙一天 / Agent 占比 / 等你处理。全部本地算, 新消息进来时重算。
  */
 @Composable
-private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier: Modifier) {
+private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier: Modifier, openReport: () -> Unit) {
     val c = Aioa.colors
     val pal = hxPalette()
     val db = MessageDb.get(LocalContext.current)
@@ -138,6 +143,8 @@ private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier
             Spacer(Modifier.weight(1f))
             LiveDot(pal.chart2, 6.dp)
             Text("实时", c.textSecondary, 12)
+            Spacer(Modifier.width(10.dp))
+            com.hengxin.aioa.kit.Chip("周报", true, openReport)
         }
         Row(Modifier.padding(start = 8.dp, end = 16.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             com.hengxin.aioa.kit.RadialBars(all.map { it.toFloat() }, pal.chart1, pal.chart2, Modifier.size(CLOCK), highlight = HOURS - 1, delayMs = 150) {
