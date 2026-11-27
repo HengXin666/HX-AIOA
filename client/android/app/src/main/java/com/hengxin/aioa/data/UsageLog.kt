@@ -42,6 +42,18 @@ class UsageLog(context: Context) {
         runCatching { file.readLines().mapNotNull(::parse).filter { it.end > since } }.getOrDefault(emptyList())
     }
 
+    /** 还没走到 end 的这一次 (界面正在前台, 比如正看着周报), 结束时间按 now 算。 */
+    fun current(now: Long = System.currentTimeMillis()): Session? {
+        val start = prefs.getLong(K_OPEN, 0L)
+        return if (start > 0L && now - start in MIN_MS..MAX_MS) Session(start, now) else null
+    }
+
+    /** 最早一条记录的开始时间, 用来区分 "这周没用" 与 "还没开始记录"。 */
+    fun firstStart(): Long? = synchronized(LOCK) {
+        if (!file.exists()) return null
+        runCatching { file.bufferedReader().use { r -> r.lineSequence().firstNotNullOfOrNull(::parse)?.start } }.getOrNull()
+    }
+
     private fun prune(now: Long) {
         val keep = sessions(now - KEEP_MS)
         runCatching { file.writeText(keep.joinToString("") { "${it.start},${it.end}\n" }) }
@@ -71,6 +83,18 @@ class UsageLog(context: Context) {
 object UsageMath {
     private const val HOURS = 24
     private const val MIN_MS = 60_000L
+    // 两段间隔不超过这么久算同一次 (转屏, 切到内置浏览器又回来, 系统记录与本机记录的几百毫秒错位)
+    const val JOIN_MS = 5_000L
+
+    /** 多个来源的会话合并: 重叠或间隔 <= JOIN_MS 的并成一次, 按开始时间排序。 */
+    fun merge(sessions: List<Session>): List<Session> {
+        val out = ArrayList<Session>()
+        for (s in sessions.sortedBy { it.start }) {
+            val last = out.lastOrNull()
+            if (last != null && s.start <= last.end + JOIN_MS) out[out.size - 1] = Session(last.start, maxOf(last.end, s.end)) else out.add(s)
+        }
+        return out
+    }
 
     /** 从 first 那天 0 点起 days 天, 会话按小时切开累加分钟; 跨窗口的只算窗口内那段。 */
     fun week(sessions: List<Session>, first: LocalDate, zone: ZoneId, days: Int = 7): UsageWeek {

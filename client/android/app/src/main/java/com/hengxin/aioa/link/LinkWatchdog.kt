@@ -41,6 +41,7 @@ class LinkWatchdog(
     private val alarmReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, data: Intent) {
             LinkStats.hit(LinkStats.Key.ALARM)
+            com.hengxin.aioa.data.AppPower.wake()
             BatteryLog.sample(context)
             val wake = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG)
             wake.acquire(Constants.WATCHDOG_WAKE_MS)

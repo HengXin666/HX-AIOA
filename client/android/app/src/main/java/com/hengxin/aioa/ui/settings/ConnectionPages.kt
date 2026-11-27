@@ -192,7 +192,10 @@ fun LinkLogPage(model: SettingsModel, onBack: (() -> Unit)?) {
                 NoteRow(line)
             }
         }
-        SettingsGroup("近 24 小时耗电 (整机)", "电量是整台手机的, 用来对照: 熄屏每小时掉电明显变多, 再看下面的唤醒与收帧计数。精确到本 App 请用系统电池页。") {
+        SettingsGroup("近 24 小时耗电 · 本 App (估算)", com.hengxin.aioa.ui.report.powerNote()) {
+            AppPowerVisual(model.httpLog.size + view.battery.hashCode())
+        }
+        SettingsGroup("整机电量 (参考)", "整台手机的电量, 含其他 App; 只用来对照熄屏掉电是否异常。") {
             BatteryVisual(model.httpLog.size + view.battery.hashCode())
             view.battery.forEachIndexed { i, line ->
                 RowDivider(false)

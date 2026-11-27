@@ -56,41 +56,82 @@ object BatteryMath {
     }
 }
 
-/** 一份报告用到的全部本机数据; 上一段只取总量做对比。 */
+/** 一份报告用到的全部本机数据; 上一段只取总量做对比。failed 是读失败的块 (其余照常显示)。 */
 class WeekReport(
     val span: ReportSpan,
     val first: LocalDate,
     val days: Int,
     val usage: UsageWeek,
     val prevUsageMs: Long,
+    val usageSince: Long?,
     val msgs: MessageWeek,
     val prevMsgs: Int,
     val tally: Map<Tally, LongArray>,
     val battery: BatteryWeek,
+    val power: List<PowerParts>,
+    val capacityMah: Double?,
+    val failed: List<String>,
 ) {
     fun sum(t: Tally): Long = tally[t]?.sum() ?: 0L
+
+    val powerTotal: PowerParts get() = power.fold(PowerParts.ZERO) { a, b -> a + b }
+
+    /** 同期整机不充电时的掉电 (mAh), 由电量百分比与容量折算; 拿不到容量时为 null。 */
+    val deviceMah: Double? get() = capacityMah?.let { (battery.onDrop + battery.offDrop) * it / PCT }
+
+    /** 这一段里有没有任何前台记录; 没有时区分 "还没开始记录" (首周) 与 "这周没打开"。 */
+    fun usageState(to: Long): UsageState = when {
+        usage.totalMs > 0 -> UsageState.READY
+        usageSince == null || usageSince >= to -> UsageState.NOT_STARTED
+        else -> UsageState.NONE
+    }
 }
 
-/** 全部读本机 (前台会话文件, 消息库, 计数文件, 电量样本), 不发请求; 在后台线程调用。 */
+enum class UsageState { READY, NONE, NOT_STARTED }
+
+private const val PCT = 100.0
+
+/** 全部读本机 (前台会话, 消息库, 计数文件, 电量样本, 耗电采样), 不发请求; 在后台线程调用。每块单独兜底, 一块坏了不拖垮整页。 */
 object WeekReports {
-    fun load(context: Context, span: ReportSpan, first: LocalDate, isAgent: (String) -> Boolean, zone: ZoneId = ZoneId.systemDefault()): WeekReport {
+    fun load(context: Context, span: ReportSpan, first: LocalDate, isAgent: (String) -> Boolean, zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis()): WeekReport {
         val days = span.days(first)
         val from = first.atStartOfDay(zone).toInstant().toEpochMilli()
         val to = first.plusDays(days.toLong()).atStartOfDay(zone).toInstant().toEpochMilli()
         val prevFirst = span.first(first, 1)
         val prevFrom = prevFirst.atStartOfDay(zone).toInstant().toEpochMilli()
+        val failed = ArrayList<String>()
+        fun <T> part(name: String, fallback: T, block: () -> T): T = runCatching(block).getOrElse { e ->
+            failed.add("$name: ${e.javaClass.simpleName}${e.message?.let { " $it" }.orEmpty()}")
+            fallback
+        }
         val log = UsageLog(context)
-        val sessions = log.sessions(prevFrom)
+        val sessions = part("前台时长", emptyList()) { sessionsOf(context, log, prevFrom, minOf(now, to)) }
         val usage = UsageMath.week(sessions, first, zone, days)
         val prevUsage = UsageMath.week(sessions, prevFirst, zone, span.days(prevFirst))
-        val db = MessageDb.get(context)
-        val rows = db.weekRows(from, to)
-        val agents = rows.mapNotNullTo(HashSet()) { r -> r.sid?.takeIf(isAgent) }
-        val reads = HashMap<String, Long>()
-        val msgs = MessageWeekMath.tally(rows, agents, { g -> reads.getOrPut(g) { db.groupRead(g) } }, first, zone, days)
-        val prevMsgs = db.weekRows(prevFrom, from).size
-        val tally = LocalTally.days(context, first, days)
-        val battery = BatteryMath.of(BatteryLog.points(context, from).filter { it.at < to })
-        return WeekReport(span, first, days, usage, prevUsage.totalMs, msgs, prevMsgs, tally, battery)
+        val since = part("前台时长", null) { listOfNotNull(log.firstStart(), sessions.firstOrNull()?.start).minOrNull() }
+        val emptyMsgs = MessageWeekMath.tally(emptyList(), emptySet(), { 0L }, first, zone, days)
+        val msgs = part("消息", emptyMsgs to 0) {
+            val db = MessageDb.get(context)
+            val rows = db.weekRows(from, to)
+            val agents = rows.mapNotNullTo(HashSet()) { r -> r.sid?.takeIf(isAgent) }
+            val reads = HashMap<String, Long>()
+            MessageWeekMath.tally(rows, agents, { g -> reads.getOrPut(g) { db.groupRead(g) } }, first, zone, days) to db.weekRows(prevFrom, from).size
+        }
+        val tally = part("本机计数", LocalTally.window(emptyMap(), first, days)) { LocalTally.days(context, first, days) }
+        val battery = part("电量", BatteryMath.of(emptyList())) { BatteryMath.of(BatteryLog.points(context, from).filter { it.at < to }) }
+        val power = part("耗电估算", List(days) { PowerParts.ZERO }) {
+            if (to > now) AppPower.sample(context, "ui", now)
+            val edges = LongArray(days + 1) { d -> first.plusDays(d.toLong()).atStartOfDay(zone).toInstant().toEpochMilli() }
+            PowerModel.buckets(AppPower.samples(context, from, to), sessions, edges)
+        }
+        val capacity = AppPower.capacityMah(context)
+        return WeekReport(span, first, days, usage, prevUsage.totalMs, since, msgs.first, msgs.second, tally, battery, power, capacity, failed.distinct())
+    }
+
+    /** 本机记录 + 正在进行的这一次 + 系统记下的本 App 界面事件 (能补上装这一版之前的), 合并去重。 */
+    fun sessionsOf(context: Context, log: UsageLog, from: Long, to: Long): List<Session> {
+        val mine = log.sessions(from) + listOfNotNull(log.current(to))
+        val system = UsageEventsSource.sessions(context, from, to)
+        return UsageMath.merge(mine + system).filter { it.end > from }
     }
 }

@@ -55,6 +55,8 @@ object LinkStats {
         runCatching { JsonFile.write(file(context), json) }
         // 搭同一次唤醒把周报计数 (通知, 后台请求) 落盘, 连接与唤醒计数的快照给调试页时间线 (#141)
         com.hengxin.aioa.data.LocalTally.flush(context, "link")
+        // 本 App 耗电估算 (#142): 搭同一次唤醒记 CPU, 流量, 唤醒增量
+        com.hengxin.aioa.data.AppPower.sample(context, "link")
         LinkStatsHistory.snap(context, Key.entries.map { counts.get(it.ordinal) })
     }
 

@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.rememberReveal
-import com.hengxin.aioa.link.BatteryLog
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -89,7 +88,7 @@ fun DayBars(values: List<Long>, top: List<String>, bottom: List<String>, labels:
             val h = (v.toFloat() / mx * room * p).coerceAtLeast(if (v > 0) 4.dp.toPx() else 0f)
             drawRoundRect(Brush.verticalGradient(listOf(from, to.copy(alpha = 0.35f)), base - h, base), Offset(x, base - h), Size(w, h), CornerRadius(8.dp.toPx()))
             label(m, top.getOrElse(i) { "" }, Offset(x + w / 2, base - h - 16.dp.toPx()), c.text, 11)
-            if (h > 18.dp.toPx()) label(m, bottom.getOrElse(i) { "" }, Offset(x + w / 2, base - 16.dp.toPx()), Color.Black.copy(alpha = 0.75f), 10, true)
+            if (h > 18.dp.toPx()) label(m, bottom.getOrElse(i) { "" }, Offset(x + w / 2, base - 16.dp.toPx()), c.onAccent, 10, true)
             label(m, labels.getOrElse(i) { "" }, Offset(x + w / 2, base + 3.dp.toPx()), c.textSecondary, 11)
         }
     }
@@ -179,7 +178,7 @@ fun Orbit(peers: List<OrbitPeer>, me: Color, agent: Color, human: Color, modifie
             }
         }
         drawCircle(Brush.linearGradient(listOf(me, human), o - Offset(24f, 24f), o + Offset(24f, 24f)), 22.dp.toPx(), o)
-        label(m, "我", Offset(o.x, o.y - 9.dp.toPx()), Color.White, 14, true)
+        label(m, "我", Offset(o.x, o.y - 9.dp.toPx()), c.onAccent, 14, true)
     }
 }
 
@@ -200,20 +199,6 @@ fun Histogram(values: LongArray, colors: List<Color>, labels: List<String>, modi
             drawRoundRect(colors.getOrElse(i) { colors.last() }, Offset(i * slot, base - h), Size(w, h), CornerRadius(5.dp.toPx()))
             label(m, labels.getOrElse(i) { "" }, Offset(i * slot + w / 2, base + 2.dp.toPx()), c.textSecondary, 9)
         }
-    }
-}
-
-/** 一段时间的电量曲线: 亮屏段铺浅底, 充电段换色。 */
-@Composable
-fun BatteryRange(points: List<BatteryLog.Point>, from: Long, to: Long, line: Color, charge: Color, screen: Color, modifier: Modifier) {
-    if (points.size < 2 || to <= from) return
-    val c = Aioa.colors
-    Canvas(modifier) {
-        val x = { at: Long -> (at - from).toFloat() / (to - from) * size.width }
-        val y = { pct: Int -> size.height * (1f - pct / 100f) }
-        points.zipWithNext { a, b -> if (a.screen) drawRect(screen, Offset(x(a.at), 0f), Size((x(b.at) - x(a.at)).coerceAtLeast(1f), size.height)) }
-        for (k in 1..3) drawLine(c.border.copy(alpha = 0.5f), Offset(0f, size.height * k / 4), Offset(size.width, size.height * k / 4), 1f)
-        points.zipWithNext { a, b -> if (b.at - a.at < 3_600_000L) drawLine(if (a.plugged) charge else line, Offset(x(a.at), y(a.pct)), Offset(x(b.at), y(b.pct)), 2.dp.toPx(), StrokeCap.Round) }
     }
 }
 

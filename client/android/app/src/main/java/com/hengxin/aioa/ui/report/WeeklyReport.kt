@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.data.LocalTally
 import com.hengxin.aioa.data.ReportSpan
 import com.hengxin.aioa.data.Tally
+import com.hengxin.aioa.data.UsageState
 import com.hengxin.aioa.data.WeekReport
 import com.hengxin.aioa.data.WeekReports
 import com.hengxin.aioa.kit.Aioa
@@ -70,21 +71,26 @@ fun WeeklyReport(chat: ChatModel, onBack: () -> Unit) {
     val first = span.first(LocalDate.now(), back)
     val zone = ZoneId.systemDefault()
     val agentSids = chat.groups.directory.metas.values.flatMap { m -> m.agents.mapNotNull { it.sourceId } }.toSet()
-    val report = produceState<WeekReport?>(null, first) {
-        value = withContext(Dispatchers.IO) { WeekReports.load(context, span, first, { it in agentSids || Names.isAgent(it) }, zone) }
+    val result = produceState<Result<WeekReport>?>(null, first) {
+        value = withContext(Dispatchers.IO) { runCatching { WeekReports.load(context, span, first, { it in agentSids || Names.isAgent(it) }, zone) } }
     }.value
     val counts = rememberConfigCounts(chat, first.atStartOfDay(zone).toInstant().toEpochMilli())
     SubPage("周报", onBack) {
         Header(first, back) { back = it }
-        if (report == null) return@SubPage Card { StateBody(CardState.Loading) {} }
-        Hero(report, Modifier.enter(0))
-        Usage(report, Modifier.enter(1))
+        if (result == null) return@SubPage Card { StateBody(CardState.Loading) {} }
+        val report = result.getOrElse { e -> return@SubPage Card { StateBody(CardState.Error("周报读取失败: ${e.javaClass.simpleName} ${e.message.orEmpty()}")) {} } }
+        val to = first.plusDays(report.days.toLong()).atStartOfDay(zone).toInstant().toEpochMilli()
+        val state = report.usageState(to)
+        Hero(report, state, Modifier.enter(0))
+        Usage(report, state, Modifier.enter(1))
         Messages(report, Modifier.enter(2))
         People(report, Modifier.enter(3))
         Configs(counts, Modifier.enter(4))
         Local(report, Modifier.enter(5))
-        Github(chat, report, Modifier.enter(6))
-        Text("数据口径: 前台时长是 App 回到前台到离开前台的本机记录; 消息来自本机消息库, 撤回的不算, 我看过的 = 已读位置之内或单独看过; 请求, 流量, 终端, 通知, 电量都是本机记录, 不上传, 从这一版起开始累计。", Aioa.colors.textSecondary, 12, maxLines = 6)
+        PowerSection(report, Modifier.enter(6))
+        Github(chat, report, Modifier.enter(7))
+        if (report.failed.isNotEmpty()) Text("这几块读取失败, 其余照常: " + report.failed.joinToString("; "), Aioa.colors.warning, 12, maxLines = 6)
+        Text("数据口径: 前台时长 = 本机记录的 App 回到前台到离开前台, 合并系统记下的本 App 界面事件 (能补上装这一版之前约一周); 消息来自本机消息库, 撤回的不算, 我看过的 = 已读位置之内或单独看过; 请求, 流量, 终端, 通知, 耗电都是本机记录, 不上传, 从这一版起开始累计。", Aioa.colors.textSecondary, 12, maxLines = 8)
     }
 }
 
@@ -103,7 +109,7 @@ private fun Header(first: LocalDate, back: Int, pick: (Int) -> Unit) {
 }
 
 @Composable
-private fun Hero(r: WeekReport, modifier: Modifier) {
+private fun Hero(r: WeekReport, state: UsageState, modifier: Modifier) {
     val c = Aioa.colors
     val pal = hxPalette()
     val mins = (r.usage.totalMs / MIN_MS).toInt()
@@ -124,6 +130,7 @@ private fun Hero(r: WeekReport, modifier: Modifier) {
             Kpi(r.msgs.peers.size, "个交流对象", c.text, Modifier.weight(1f))
             Kpi(r.sum(Tally.REQ).toInt(), "次请求", c.text, Modifier.weight(1f))
         }
+        if (state != UsageState.READY) return@Section Text(emptyUsage(state), c.textSecondary, 13, maxLines = 3)
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             WeekClock(r.usage.minutes, pal.chart2, pal.chart5, pal.chart4, Modifier.size(260.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -137,7 +144,7 @@ private fun Hero(r: WeekReport, modifier: Modifier) {
 }
 
 @Composable
-private fun Usage(r: WeekReport, modifier: Modifier) {
+private fun Usage(r: WeekReport, state: UsageState, modifier: Modifier) {
     val c = Aioa.colors
     val pal = hxPalette()
     val u = r.usage
@@ -145,6 +152,7 @@ private fun Usage(r: WeekReport, modifier: Modifier) {
     val byHour = IntArray(24) { h -> u.minutes.sumOf { it[h] } }
     val peak = byHour.indices.maxByOrNull { byHour[it] }?.takeIf { byHour[it] > 0 }
     Section("01 平台使用", modifier) {
+        if (state != UsageState.READY) return@Section StateBody(CardState.Empty, emptyUsage(state)) {}
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat(if (u.opens > 0) "${u.totalMs / MIN_MS / u.opens} 分" else "-", "平均每次", Modifier.weight(1f))
             Stat(u.longest?.let { "${it.ms / MIN_MS} 分" } ?: "-", "最长一次", Modifier.weight(1f))
@@ -246,7 +254,6 @@ private fun Local(r: WeekReport, modifier: Modifier) {
     val pal = hxPalette()
     val lat = LocalTally.latency(r.tally)
     val req = r.sum(Tally.REQ)
-    val b = r.battery
     Section("05 本机记录 · 不在数据库里的", modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat(bytes(r.sum(Tally.NET_DOWN) + r.sum(Tally.NET_UP)), "流量 (已知长度)", Modifier.weight(1f))
@@ -265,12 +272,13 @@ private fun Local(r: WeekReport, modifier: Modifier) {
             val tones = List(lat.size) { i -> if (i >= 6) c.danger else if (i >= 4) pal.chart3 else pal.chart2 }
             Histogram(lat, tones, LAT_LABELS, Modifier.fillMaxWidth().height(90.dp))
         }
-        val from = r.first.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        BatteryRange(b.points, from, from + r.days * 86_400_000L, pal.chart2, c.success, pal.chart1.copy(alpha = 0.08f), Modifier.fillMaxWidth().height(90.dp))
-        val on = b.perHour(b.onMs, b.onDrop)
-        val off = b.perHour(b.offMs, b.offDrop)
-        Text(if (on == null && off == null) "电量: 采样不足" else "整机电量: 熄屏 ${off?.let { "-%.1f%%/小时".format(it) } ?: "-"}, 亮屏 ${on?.let { "-%.1f%%/小时".format(it) } ?: "-"}", c.textSecondary, 12)
     }
+}
+
+/** 首周还没记录与这周没打开, 分开说。 */
+private fun emptyUsage(state: UsageState): String = when (state) {
+    UsageState.NOT_STARTED -> "这一周还没有前台记录: 记录从这一版起开始, 系统那边也没留下更早的。用一会儿再来看。"
+    else -> "这一周没有打开过 HX-AIOA。"
 }
 
 @Composable
@@ -300,7 +308,7 @@ private fun Github(chat: ChatModel, r: WeekReport, modifier: Modifier) {
 }
 
 @Composable
-private fun Section(title: String, modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun Section(title: String, modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
     Panel(modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, Aioa.colors.textSecondary, 13, weight = FontWeight.Medium)
@@ -318,7 +326,7 @@ private fun Kpi(n: Int, label: String, tone: Color, modifier: Modifier) {
 }
 
 @Composable
-private fun Stat(value: String, label: String, modifier: Modifier) {
+internal fun Stat(value: String, label: String, modifier: Modifier) {
     Column(modifier) {
         Text(value, Aioa.colors.text, 18, weight = FontWeight.SemiBold)
         Text(label, Aioa.colors.textSecondary, 11, maxLines = 2)
@@ -326,7 +334,7 @@ private fun Stat(value: String, label: String, modifier: Modifier) {
 }
 
 @Composable
-private fun Legend(items: List<Pair<String, Color>>) {
+internal fun Legend(items: List<Pair<String, Color>>) {
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items.forEach { (label, color) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
