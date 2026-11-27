@@ -18,7 +18,20 @@ export class RoomStore {
   }
 
   members(grp: string): Membership[] {
-    return this.sql.exec<MemberRow>("SELECT * FROM room_member WHERE grp = ? ORDER BY joined", grp).toArray().map(toMembership);
+    return this.sql.exec<MemberRow>("SELECT * FROM room_member WHERE grp = ? ORDER BY joined, member", grp).toArray().map(toMembership);
+  }
+
+  /** 按 (joined, member) 翻页 (#130): after 为上一页最后一个。 */
+  page(grp: string, after: { joined: number; member: string } | null, limit: number): Membership[] {
+    const rows = after
+      ? this.sql.exec<MemberRow>("SELECT * FROM room_member WHERE grp = ? AND (joined > ? OR (joined = ? AND member > ?)) ORDER BY joined, member LIMIT ?", grp, after.joined, after.joined, after.member, limit)
+      : this.sql.exec<MemberRow>("SELECT * FROM room_member WHERE grp = ? ORDER BY joined, member LIMIT ?", grp, limit);
+    return rows.toArray().map(toMembership);
+  }
+
+  /** 有成员的群 (主人改头像时这些群的成员列表要失效)。 */
+  sharedGroups(): string[] {
+    return this.sql.exec<{ grp: string }>("SELECT DISTINCT grp FROM room_member").toArray().map((r) => r.grp);
   }
 
   member(grp: string, uid: string): Membership | null {

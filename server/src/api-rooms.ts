@@ -11,13 +11,13 @@ import {
   ROOM_INVITE_MAX_TTL_HOURS,
   ROOM_INVITE_MAX_USES,
   ROOM_INVITE_TTL_HOURS,
-  type ChatSyncFrame,
+  dmPeers,
   type RoomInviteCreated,
   type RoomJoined,
-  type RoomMember,
-  type UserPublic,
 } from "@hx-aioa/protocol";
-import { CODE_CONFLICT, CODE_EXPIRED, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_FORBIDDEN, GET, PATCH, POST } from "./constants";
+import { listMembers } from "./api-members";
+import { syncChat } from "./chat-sync";
+import { CODE_CONFLICT, CODE_EXPIRED, CODE_FORBIDDEN, CODE_NOT_FOUND, DELETE, ERR_BAD_CHANNEL, ERR_DM, ERR_FORBIDDEN, GET, PATCH, POST } from "./constants";
 import { type Core, type ReqCtx, ROOM, type Route, route } from "./core";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { memberView, mustRole, ownerView, rank } from "./room-access";
@@ -32,31 +32,25 @@ const param = (c: ReqCtx, i: number) => decodeURIComponent(c.params[i] ?? "");
 const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
 export const baseOf = (u: URL) => (LOCAL_HOSTS.includes(u.hostname) ? u.origin : `https://${u.host}`);
 
-// 成员或群资料变了: 让各端重新拉群列表
+// 成员或群资料变了: 带上资料推给群成员与主人 (#129)
 export function syncChats(core: Core, channel: string): void {
-  core.sockets.toAllClients({ t: "chat_sync", topic: "chats", channel } satisfies ChatSyncFrame);
+  syncChat(core, channel);
 }
 
-function brief(u: UserPublic): Pick<RoomMember, "id" | "name" | "display"> {
-  return { id: u.id, name: u.name, display: u.display || u.name };
+/** 有人改了昵称或头像: 他所在的群 (主人是所有多人群) 资料版本 +1, 成员列表与群列表的 ETag 随之失效。 */
+export function profileChanged(core: Core, uid: string): void {
+  const grps = uid === core.users.ownerId() ? core.rooms.sharedGroups() : core.rooms.roomsOf(uid).map((m) => m.grp);
+  for (const g of grps) core.chats.patchChat(g, {});
 }
 
-function listMembers(c: ReqCtx): Response {
-  const grp = param(c, 0);
-  mustRole(c.core, c.who, grp, "member");
-  const owner = c.core.users.get(c.core.users.ownerId());
-  const out: RoomMember[] = owner ? [{ ...brief(owner), role: "owner", joined: 0 }] : [];
-  for (const m of c.core.rooms.members(grp)) {
-    const u = c.core.users.get(m.member);
-    if (u) out.push({ ...brief(u), role: m.role, joined: m.joined });
-  }
-  return json({ members: out });
-}
+const dmDenied = (c: ReqCtx, what: string) => (dmPeers(param(c, 0)) ? fail(400, `${ERR_DM}${what}`) : null);
 
 // 直接拉已有账号进群 (群主 / 管理员)
 async function addMember(c: ReqCtx): Promise<Response> {
   const grp = param(c, 0);
-  if (!grp || grp.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
+  if (!grp || grp.length > MAX_ID_LENGTH) return fail(400, ERR_BAD_CHANNEL);
+  const deny = dmDenied(c, "加人");
+  if (deny) return deny;
   const mine = mustRole(c.core, c.who, grp, "admin");
   const body = ((await readJson(c.req)) ?? {}) as Record<string, unknown>;
   const u = typeof body.user === "string" ? c.core.users.find(body.user) : null;
@@ -72,6 +66,8 @@ async function addMember(c: ReqCtx): Promise<Response> {
 // 改身份只有群主能做; 踢人要比对方身份高; 自己可以退群
 async function patchMember(c: ReqCtx): Promise<Response> {
   const grp = param(c, 0);
+  const deny = dmDenied(c, "设管理员");
+  if (deny) return deny;
   mustRole(c.core, c.who, grp, "owner");
   const body = ((await readJson(c.req)) ?? {}) as Record<string, unknown>;
   const role = body.role === "admin" ? "admin" : "member";
@@ -85,6 +81,7 @@ function removeMember(c: ReqCtx): Response {
   const grp = param(c, 0);
   const uid = param(c, 1);
   const self = !c.who.owner && c.who.member?.user.id === uid;
+  if (!self && dmPeers(grp)) return fail(400, `${ERR_DM}踢人`);
   if (!self) {
     const mine = mustRole(c.core, c.who, grp, "admin");
     const target = c.core.rooms.member(grp, uid);
@@ -93,13 +90,15 @@ function removeMember(c: ReqCtx): Response {
   }
   if (!c.core.rooms.remove(grp, uid)) return fail(404, ERR_NOT_MEMBER, CODE_NOT_FOUND);
   c.core.chats.patchChat(grp, {});
-  syncChats(c.core, grp);
+  syncChat(c.core, grp, { also: [uid] });
   return json({ ok: true });
 }
 
 async function createInvite(c: ReqCtx): Promise<Response> {
   const grp = param(c, 0);
-  if (!grp || grp.length > MAX_ID_LENGTH) return fail(400, "群名不合法");
+  if (!grp || grp.length > MAX_ID_LENGTH) return fail(400, ERR_BAD_CHANNEL);
+  const deny = dmDenied(c, "邀请");
+  if (deny) return deny;
   mustRole(c.core, c.who, grp, "admin");
   const body = ((await readJson(c.req)) ?? {}) as Record<string, unknown>;
   const hours = clampInt(String(body.ttlHours ?? ""), ROOM_INVITE_TTL_HOURS, ROOM_INVITE_MAX_TTL_HOURS);

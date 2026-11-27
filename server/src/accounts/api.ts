@@ -36,6 +36,7 @@ const ROUTES: AcctRoute[] = [
   r(POST, PATH_JOIN, async (c) => join(c.a, await c.body())),
   r(POST, PATH_AUTH_LOGOUT, async (c) => admin.logout(c.a, await c.who())),
   r(GET, PATH_ME, async (c) => admin.me(c.a, await c.who())),
+  r(PATCH, PATH_ME, async (c) => admin.patchMe(c.a, await c.who(), await c.body())),
   r(POST, PATH_ME_PASSWORD, async (c) => admin.changePassword(c.a, await c.who(), await c.body())),
   r(DELETE, PATH_ME_DEVICE, async (c) => admin.dropDevice(c.a, await c.who(), c.id)),
   r(GET, PATH_INVITES, async (c) => admin.listInvites(c.a, await c.who())),

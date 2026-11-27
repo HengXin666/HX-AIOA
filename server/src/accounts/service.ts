@@ -17,6 +17,8 @@ export class Accounts {
   // 由 Hub 接上: 用群邀请码注册时直接进群, 删号时退出所有群
   joinRoom?: (uid: string, code: string) => Promise<string>;
   onDelete?: (uid: string) => void;
+  // 本人改了昵称或头像: 所在群的成员列表缓存要失效
+  onProfile?: (uid: string) => void;
   // 不再是可用的管理员 (降为成员, 停用, 删号): 撤掉他的开发插件
   onRetire?: (uid: string) => Promise<void>;
 
