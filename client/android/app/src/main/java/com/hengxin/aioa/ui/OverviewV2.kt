@@ -68,6 +68,9 @@ private const val KEY_MEMORY = "mem"
 private const val FULL_PCT = 100f
 private const val NEED_SHOWN = 5
 private const val LAYER_SHOWN = 3
+private const val STREAK_DAYS = 400
+private const val HUNDRED = 100
+private val CLOCK = 150.dp
 
 @Composable
 internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, openGithub: () -> Unit, show: (String) -> Unit) {
@@ -107,59 +110,86 @@ internal fun OverviewV2(chat: ChatModel, state: CardState, open: (Tab) -> Unit, 
     Column(Modifier.enter(7)) { Layer(chat, "值得一看", "日报, 周报与摘要", Constants.PRIORITY_WORTH_READING, state, "今天没有新内容", LAYER_SHOWN, show) }
 }
 
-/** 近 24 小时的消息与群 Agent 发言, 每小时一格; 新消息进来时重算 (本地查询)。 */
+/**
+ * 你和 Agent 一起做了多少 (#140): 不再画为了折线而折线的消息数, 改成成就视图。
+ * 左边 24 小时放射钟 (每小时一根光线, 现在这一小时在呼吸), 右边累计消息与一起走过的天数,
+ * 下面连续活跃 / 最忙一天 / Agent 占比 / 等你处理, 最后是下一个里程碑。全部本地算, 新消息进来时重算。
+ */
 @Composable
 private fun Pulse(chat: ChatModel, agentSids: Set<String>, needMe: Int, modifier: Modifier) {
     val c = Aioa.colors
     val pal = hxPalette()
     val db = MessageDb.get(LocalContext.current)
     val since = (System.currentTimeMillis() / HOUR_MS - (HOURS - 1)) * HOUR_MS
-    val data = produceState<Pair<IntArray, IntArray>?>(null, chat.messages.size, since, agentSids) {
-        value = withContext(Dispatchers.IO) { db.hourly(since, HOURS, agentSids) }
+    val data = produceState<Pair<IntArray, com.hengxin.aioa.data.Lifetime>?>(null, chat.messages.size, since, agentSids) {
+        value = withContext(Dispatchers.IO) { db.hourly(since, HOURS, agentSids).first to db.lifetime(agentSids, STREAK_DAYS) }
     }.value ?: return
-    val (all, agent) = data
+    val (all, life) = data
+    val today = java.time.LocalDate.now()
+    val streak = streakOf(life.perDay, today)
+    val best = life.perDay.values.maxOrNull() ?: 0
+    val together = if (life.first <= 0) 0 else java.time.temporal.ChronoUnit.DAYS.between(
+        java.time.Instant.ofEpochMilli(life.first).atZone(java.time.ZoneId.systemDefault()).toLocalDate(), today,
+    ).toInt() + 1
+    val agentPct = if (life.total == 0) 0 else life.agent * HUNDRED / life.total
+    val (prev, next) = com.hengxin.aioa.kit.milestoneOf(life.total)
     Panel(modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("近 24 小时", c.text, 15, weight = FontWeight.SemiBold)
+            Text("你和 ${Constants.CLOUD_AGENT} 一起", c.text, 15, weight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             LiveDot(pal.chart2, 6.dp)
             Text("实时", c.textSecondary, 12)
         }
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-            Metric(all.sum(), "消息", 0, Modifier.weight(1f))
-            Metric(agent.sum(), "${Constants.CLOUD_AGENT} 发言", 120, Modifier.weight(1f))
-            Metric(needMe, "等你处理", 240, Modifier.weight(1f))
+        Row(Modifier.padding(start = 8.dp, end = 16.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.hengxin.aioa.kit.RadialBars(all.map { it.toFloat() }, pal.chart1, pal.chart2, Modifier.size(CLOCK), highlight = HOURS - 1, delayMs = 150) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CountUp(all.sum(), 22, c.text, delayMs = 150)
+                    Text("近 24 小时", c.textSecondary, 11)
+                }
+            }
+            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CountUp(life.total, 32, c.text, delayMs = 250)
+                Text("条消息往来 · ${life.groups} 个群", c.textSecondary, 12)
+                Text(if (together > 1) "已经一起走过 $together 天" else "今天是第一天", pal.chart2, 13, weight = FontWeight.Medium)
+            }
         }
-        Row(Modifier.padding(start = 16.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Legend(pal.chart1, "消息")
-            Legend(pal.chart2, Constants.CLOUD_AGENT)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Feat(streak, "天连续活跃", pal.chart3, 300, Modifier.weight(1f))
+            Feat(best, "条最忙一天", pal.chart1, 380, Modifier.weight(1f))
+            Feat(agentPct, "% 是 Agent", pal.chart2, 460, Modifier.weight(1f))
+            Feat(needMe, "条等你", if (needMe > 0) c.danger else c.textSecondary, 540, Modifier.weight(1f))
         }
-        Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp).fillMaxWidth().height(104.dp)) {
-            AreaChart(all.map { it.toFloat() }, pal.chart1, Modifier.fillMaxWidth().height(104.dp), delayMs = 150)
-            if (agent.any { it > 0 }) AreaChart(agent.map { it.toFloat() }, pal.chart2, Modifier.fillMaxWidth().height(104.dp), delayMs = 300, grid = false)
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("24 小时前", "12 小时前", "现在").forEach { Text(it, c.textSecondary, 11) }
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row {
+                Text("下一个里程碑 ${grouped(next)} 条", c.text, 12, Modifier.weight(1f), weight = FontWeight.Medium)
+                Text("还差 ${grouped(next - life.total)}", c.textSecondary, 12)
+            }
+            com.hengxin.aioa.kit.Meter((life.total - prev).toFloat() / (next - prev).coerceAtLeast(1), pal.chart2, Modifier.fillMaxWidth().height(6.dp), segments = 32, delayMs = 600)
         }
     }
 }
 
+/** 一枚成就: 数字从 0 滚上来, 下面一行说明, 底色是它自己的颜色。 */
 @Composable
-private fun Metric(n: Int, label: String, delay: Int, modifier: Modifier) {
-    val c = Aioa.colors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        CountUp(n, 26, c.text, delayMs = delay)
-        Text(label, c.textSecondary, 12)
+private fun Feat(n: Int, label: String, tone: Color, delay: Int, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        CountUp(n, 18, tone, delayMs = delay)
+        Text(label, Aioa.colors.textSecondary, 11)
     }
 }
 
-@Composable
-private fun Legend(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
-        Text(label, Aioa.colors.textSecondary, 12)
+/** 到今天为止连续有消息的天数; 今天还没消息就从昨天往前数。 */
+internal fun streakOf(perDay: Map<String, Int>, today: java.time.LocalDate): Int {
+    var d = if ((perDay[today.toString()] ?: 0) > 0) today else today.minusDays(1)
+    var n = 0
+    while ((perDay[d.toString()] ?: 0) > 0) {
+        n++
+        d = d.minusDays(1)
     }
+    return n
 }
+
+private fun grouped(n: Int): String = "%,d".format(n)
 
 /** 一个 Agent: 环是 "从上次运行到下次触发" 走了多少; 逾期标红, 没上报触发方式时只显示名字。 */
 @Composable

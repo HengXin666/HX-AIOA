@@ -162,9 +162,11 @@ fun Ring(fraction: Float, color: Color, modifier: Modifier = Modifier, stroke: D
 
 /** 热力格 (GitHub 贡献图那种), 按列从左往右亮起来。levels 每格 0..4, 按列填。 */
 @Composable
-fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Modifier, delayMs: Int = 0) {
+fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Modifier, delayMs: Int = 0, highlight: Int = -1) {
     val p = rememberReveal(delayMs)
     val empty = Aioa.colors.surfaceAlt
+    // 今天那格 (#140): 描一圈会呼吸的边
+    val glow by rememberInfiniteTransition().animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)))
     Canvas(modifier) {
         val cols = (levels.size + rows - 1) / rows
         val gap = 3.dp.toPx()
@@ -174,7 +176,12 @@ fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Mod
             val col = i / rows
             val shown = col.toFloat() / cols <= p
             val tint = if (lv == 0 || !shown) empty else color.copy(alpha = 0.25f + 0.75f * lv / 4f)
-            drawRoundRect(tint, Offset(col * (cell + gap), (i % rows) * (cell + gap)), Size(cell, cell), r)
+            val at = Offset(col * (cell + gap), (i % rows) * (cell + gap))
+            drawRoundRect(tint, at, Size(cell, cell), r)
+            if (i == highlight && p >= 0.99f) {
+                val k = 1.5.dp.toPx() + 2.dp.toPx() * glow
+                drawRoundRect(color.copy(alpha = 0.7f * (1 - glow)), at - Offset(k, k), Size(cell + 2 * k, cell + 2 * k), CornerRadius(3.dp.toPx() + k), style = Stroke(1.5.dp.toPx()))
+            }
         }
     }
 }

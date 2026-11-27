@@ -3,6 +3,9 @@ package com.hengxin.aioa.ui
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,6 +49,7 @@ private const val CACHE_HEATMAP = "gh-heatmap"
 private val HEAT_STEP = 13.dp
 private val HEAT_GAP = 3.dp
 private val RECENT_H = 110.dp
+private val RING = 112.dp
 
 /** days 按日期从早到晚; years 是有数据的年份 (新的在前); pending 是全部历史还没回填完的仓库数。 */
 data class GhHeatmap(
@@ -85,6 +89,25 @@ fun weekCommits(h: GhHeatmap, today: LocalDate): Int {
     return h.days.filterKeys { !it.isBefore(monday) && !it.isAfter(today) }.values.sum()
 }
 
+/** 到今天为止连续有提交的天数; 今天还没提交就从昨天往前数 (按设备时区分好的天)。 */
+fun heatStreak(h: GhHeatmap, today: LocalDate): Int {
+    var d = if ((h.days[today] ?: 0) > 0) today else today.minusDays(1)
+    var n = 0
+    while ((h.days[d] ?: 0) > 0) {
+        n++
+        d = d.minusDays(1)
+    }
+    return n
+}
+
+/** 今天在 heatLevels 结果里的下标 (含前面补的空格); 不在范围里为 -1。 */
+fun todayIndex(h: GhHeatmap, today: LocalDate): Int {
+    val start = h.days.keys.minOrNull() ?: return -1
+    val end = h.days.keys.max()
+    if (today.isBefore(start) || today.isAfter(end)) return -1
+    return (start.dayOfWeek.value - DayOfWeek.MONDAY.value) + (today.toEpochDay() - start.toEpochDay()).toInt()
+}
+
 /** 回填进度一行: 还在拉就说还剩几个仓库, 拉完说覆盖到哪天。 */
 fun backfillLine(h: GhHeatmap): String? = when {
     h.pending > 0 -> "正在回填历史提交, 还有 ${h.pending} 个仓库"
@@ -119,16 +142,32 @@ fun GithubHeatCard(gh: GithubState) {
     if (map.days.isEmpty() && years.isEmpty()) return
     val c = Aioa.colors
     val total = map.days.values.sum()
+    val pal = com.hengxin.aioa.kit.hxPalette()
+    val today = LocalDate.now()
+    val streak = heatStreak(map, today)
+    val best = map.days.maxByOrNull { it.value }?.takeIf { it.value > 0 }
+    val active = map.days.count { it.value > 0 }
+    val (prev, next) = com.hengxin.aioa.kit.milestoneOf(total)
     Card {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(ICON_GITHUB, c.text, 18.dp)
-            Column(Modifier.weight(1f)) {
-                CountUp(if (year == RECENT) weekCommits(map, LocalDate.now()) else total, 26, c.text)
-                Text(if (year == RECENT) "本周提交" else "$year 年提交", c.textSecondary, GH_META_SP)
+        // 成就区 (#140): 里程碑环 (中间本周 / 这一年的提交), 右边连续天数, 最高一天, 点亮天数, 离下一个里程碑还差多少
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            com.hengxin.aioa.kit.MilestoneRing((total - prev).toFloat() / (next - prev).coerceAtLeast(1), pal.chart2, pal.chart4, Modifier.size(RING), delayMs = 100) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CountUp(if (year == RECENT) weekCommits(map, today) else total, 24, c.text, delayMs = 100)
+                    Text(if (year == RECENT) "本周提交" else "$year 年", c.textSecondary, 11)
+                }
             }
-            if (year == RECENT) Text("近 $HEAT_DAYS 天 $total 次", c.textSecondary, GH_META_SP)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    CountUp(streak, 28, pal.chart3, delayMs = 200)
+                    Text("天连续提交", c.textSecondary, GH_META_SP, Modifier.padding(bottom = 4.dp))
+                }
+                best?.let { Text("最高一天 ${it.value} 次 · ${it.key.monthValue}月${it.key.dayOfMonth}日", c.text, GH_META_SP) }
+                Text("${if (year == RECENT) "近 $HEAT_DAYS 天" else "这一年"} 亮了 $active 天, 共 $total 次", c.textSecondary, GH_META_SP)
+                Text("再 ${next - total} 次解锁 $next 次成就", pal.chart2, GH_META_SP, weight = FontWeight.Medium)
+            }
         }
-        HeatGrid(map, year != RECENT)
+        HeatGrid(map, year != RECENT, if (year == RECENT || year == today.year) todayIndex(map, today) else -1)
         if (years.size > 1 || years.firstOrNull()?.let { it != LocalDate.now().year } == true) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip("近 $HEAT_DAYS 天", year == RECENT) { year = RECENT }
@@ -141,14 +180,14 @@ fun GithubHeatCard(gh: GithubState) {
 
 /** 最近 140 天铺满宽度; 一整年按固定格宽横向滚动, 打开时滚到最右 (最近)。 */
 @Composable
-private fun HeatGrid(map: GhHeatmap, wide: Boolean) {
+private fun HeatGrid(map: GhHeatmap, wide: Boolean, today: Int) {
     val levels = heatLevels(map)
     val color = hxPalette().chart2
-    if (!wide) return Heatmap(levels, HEAT_ROWS, color, Modifier.fillMaxWidth().height(RECENT_H), delayMs = 200)
+    if (!wide) return Heatmap(levels, HEAT_ROWS, color, Modifier.fillMaxWidth().height(RECENT_H), delayMs = 200, highlight = today)
     val cols = (levels.size + HEAT_ROWS - 1) / HEAT_ROWS
     val scroll = rememberScrollState()
     LaunchedEffect(cols) { scroll.scrollTo(scroll.maxValue) }
     Row(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
-        Heatmap(levels, HEAT_ROWS, color, Modifier.width(HEAT_STEP * cols - HEAT_GAP).height(HEAT_STEP * HEAT_ROWS - HEAT_GAP))
+        Heatmap(levels, HEAT_ROWS, color, Modifier.width(HEAT_STEP * cols - HEAT_GAP).height(HEAT_STEP * HEAT_ROWS - HEAT_GAP), highlight = today)
     }
 }

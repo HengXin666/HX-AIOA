@@ -19,6 +19,9 @@ fun ServerFrame.Msg.replacedBy(n: ServerFrame.Msg): Boolean =
     seq != n.seq && ((n.id != null && id == n.id) || (n.deletedSeq > 0 && seq == n.deletedSeq))
 
 /** 群列表的一行: 最后一条消息与未读数。 */
+/** 本机消息库的累计 (#140), perDay 按设备时区分天。 */
+data class Lifetime(val total: Int, val agent: Int, val groups: Int, val first: Long, val perDay: Map<String, Int>)
+
 data class GroupSummary(val key: String, val last: ServerFrame.Msg, val unread: Int, val atMe: Boolean = false)
 
 // 两个进程共用的本地消息库: :link 收到即落库, 界面打开时先读库, 再只向服务端补拉增量
@@ -153,6 +156,25 @@ class MessageDb private constructor(context: Context) :
         return all to agent
     }
 
+    /**
+     * 总览成就 (#140): 本机消息库里一共多少条, Agent 说了多少, 涉及几个群, 最早一条的时间,
+     * 以及最近 days 天每天的条数 (按设备时区分天, key 为 yyyy-MM-dd)。撤回的不算。
+     */
+    fun lifetime(agentSids: Set<String>, days: Int): Lifetime {
+        val since = System.currentTimeMillis() - days * DAY_MS
+        val ag = if (agentSids.isEmpty()) "0" else "SUM(CASE WHEN $C_SID IN (${agentSids.joinToString(",") { "?" }}) THEN 1 ELSE 0 END)"
+        val head = readableDatabase.rawQuery(
+            "SELECT COUNT(*), IFNULL($ag, 0), COUNT(DISTINCT $C_GRP), IFNULL(MIN($C_TS), 0) FROM $T_MSG WHERE $LIVE",
+            agentSids.toTypedArray(),
+        ).use { if (it.moveToFirst()) listOf(it.getLong(0), it.getLong(1), it.getLong(2), it.getLong(3)) else listOf(0L, 0L, 0L, 0L) }
+        val perDay = LinkedHashMap<String, Int>()
+        readableDatabase.rawQuery(
+            "SELECT strftime('%Y-%m-%d', $C_TS / 1000, 'unixepoch', 'localtime') d, COUNT(*) FROM $T_MSG WHERE $C_TS >= ? AND $LIVE GROUP BY d ORDER BY d",
+            arrayOf(since.toString()),
+        ).use { c -> while (c.moveToNext()) perDay[c.getString(0)] = c.getInt(1) }
+        return Lifetime(head[0].toInt(), head[1].toInt(), head[2].toInt(), head[3], perDay)
+    }
+
     /** 按 seq 批量取 (合并转发详情先用本地有的)。 */
     fun bySeqs(seqs: Collection<Long>): List<ServerFrame.Msg> =
         if (seqs.isEmpty()) emptyList() else query("SELECT * FROM $T_MSG WHERE $C_SEQ IN (${seqs.joinToString(",")}) ORDER BY $C_SEQ", emptyArray())
@@ -273,6 +295,7 @@ class MessageDb private constructor(context: Context) :
     companion object {
         const val MEMO_GROUP = "备忘"
         private const val HOUR_MS = 3_600_000L
+        private const val DAY_MS = 86_400_000L
         private const val DB_NAME = "messages.db"
         private const val DB_VERSION = 6
         const val DELETE_MODE = "delete"
