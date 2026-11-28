@@ -8,8 +8,16 @@ import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.net.ErrKind
 import com.hengxin.aioa.net.Net
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,6 +42,10 @@ private const val PREFS = "drive"
 private const val PASS_MARGIN_MS = 5 * 60_000L
 private const val RECHECK_MS = 24 * 3600_000L
 private const val CACHE_DIR = "drive-cache"
+// 本机缓存 10 分钟内的子目录不再预取
+private const val PREFETCH_FRESH_MS = 10 * 60_000L
+private const val FLAG_ON = "1"
+private const val KEY_STATS = "stats"
 private const val GET = "GET"
 private const val POST = "POST"
 private const val DELETE = "DELETE"
@@ -60,6 +72,15 @@ object DriveGate {
     private var expires = 0L
     private var loaded = false
     private val lock = Mutex()
+    private val bg = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** 进 App 或进网盘时: 后台连上服务端, 网盘可用就顺手把快过期的通行证换好, 点开网盘时不用再等 (#159)。 */
+    fun warm(context: Context) {
+        val app = context.applicationContext
+        Net.warm(app)
+        load(app)
+        if (on == true) bg.launch { runCatching { pass(app) } }
+    }
 
     fun load(context: Context) {
         if (loaded) return
@@ -112,8 +133,13 @@ object DriveGate {
     }
 }
 
-/** 一次列目录的结果: changed 为 false 表示和缓存一样 (304)。 */
-class Listing(val items: List<DriveNode>, val changed: Boolean)
+/** 一次列目录的结果: changed 为 false 表示和缓存一样 (304); hasStats 为服务端回了用量 (stats=1, 令牌没权限时 stats 为 null)。 */
+class Listing(val items: List<DriveNode>, val changed: Boolean, val stats: DriveStats? = null, val hasStats: Boolean = false)
+
+private fun listingOf(b: JSONObject?, changed: Boolean): Listing = Listing(
+    parseNodes(b?.optJSONArray("items")), changed,
+    b?.optJSONObject(KEY_STATS)?.let { DriveStats(it.optLong("files"), it.optLong("dirs"), it.optLong("bytes")) }, b?.has(KEY_STATS) == true,
+)
 
 /** 网盘接口; 都在 IO 线程跑, 失败抛 [DriveError]。接口见 docs/features/drive.md。 */
 class DriveApi(context: Context) {
@@ -145,19 +171,37 @@ class DriveApi(context: Context) {
         send(method, sub, query, body?.toString()?.toRequestBody(JSON_TYPE.toMediaType())) { res -> parse(res) }
 
     /** 本机缓存的目录列表; 没有返回 null。 */
-    fun cached(path: String): List<DriveNode>? = runCatching { parseNodes(JSONObject(cacheFile(path).readText()).optJSONObject("body")?.optJSONArray("items")) }.getOrNull()
+    fun cached(path: String): List<DriveNode>? = cachedListing(path)?.items
 
-    /** 列目录: 带上次的 ETag, 没变回 304 时用缓存。 */
-    suspend fun list(path: String): Listing {
+    /** 本机缓存的整份列表 (含首页的用量); 没有返回 null。 */
+    fun cachedListing(path: String): Listing? = runCatching { listingOf(JSONObject(cacheFile(path).readText()).optJSONObject("body"), false) }.getOrNull()
+
+    /**
+     * 列目录: 带上次的 ETag, 没变回 304 时用缓存。fresh (下拉刷新) 让服务端绕过边缘缓存;
+     * withStats 让服务端顺带回网盘用量, 网盘首页一次请求拿齐 (#159)。
+     */
+    suspend fun list(path: String, fresh: Boolean = false, withStats: Boolean = false): Listing {
         val f = cacheFile(path)
         val old = runCatching { JSONObject(f.readText()) }.getOrNull()
         val etag = old?.optString("etag").orEmpty()
-        return send(GET, "list", mapOf("path" to path), headers = if (etag.isNotEmpty()) mapOf("If-None-Match" to etag) else emptyMap()) { res ->
-            if (res.code == HTTP_NOT_MODIFIED && old != null) return@send Listing(parseNodes(old.optJSONObject("body")?.optJSONArray("items")), false)
+        val query = buildMap { put("path", path); if (fresh) put("fresh", FLAG_ON); if (withStats) put(KEY_STATS, FLAG_ON) }
+        return send(GET, "list", query, headers = if (etag.isNotEmpty()) mapOf("If-None-Match" to etag) else emptyMap()) { res ->
+            if (res.code == HTTP_NOT_MODIFIED && old != null) {
+                runCatching { f.writeText(old.put("at", System.currentTimeMillis()).toString()) }
+                return@send listingOf(old.optJSONObject("body"), false)
+            }
             val b = parse(res)
-            runCatching { f.writeText(JSONObject().put("etag", res.header("ETag").orEmpty()).put("body", b).toString()) }
-            Listing(parseNodes(b.optJSONArray("items")), true)
+            runCatching { f.writeText(JSONObject().put("etag", res.header("ETag").orEmpty()).put("at", System.currentTimeMillis()).put("body", b).toString()) }
+            listingOf(b, true)
         }
+    }
+
+    /** 后台预取子目录 (#159): 本机缓存 10 分钟内的跳过, 同时最多 2 个请求, 失败不管。 */
+    suspend fun prefetch(paths: List<String>) = withContext(Dispatchers.IO) {
+        val gate = Semaphore(PREFETCH_PARALLEL)
+        val stale = paths.filter { p -> runCatching { System.currentTimeMillis() - JSONObject(cacheFile(p).readText()).optLong("at") > PREFETCH_FRESH_MS }.getOrDefault(true) }
+        coroutineScope { stale.map { p -> async { gate.withPermit { runCatching { list(p) } } } }.awaitAll() }
+        Unit
     }
 
     suspend fun search(q: String): List<DriveNode> = parseNodes(json(GET, "search", query = mapOf("q" to q)).optJSONArray("items"))

@@ -1,11 +1,17 @@
 import { DRIVE_LINK_TTL_SEC, type DriveNode, type DriveShare, isDriveId, isDriveName, normalizeDrivePath } from "@hx-aioa/protocol";
 import { sha256 } from "../auth";
 import { etagged, json, readJson } from "../http";
+import type { DriveCache } from "./cache";
 import type { DriveFs } from "./client";
-import { DriveFail, relay, toRel } from "./relay";
+import { DriveFail, failOf, relay, toRel } from "./relay";
 
 type Body = Record<string, unknown>;
-export type Op = (fs: DriveFs, req: Request, url: URL) => Promise<Response>;
+export type Op = (fs: DriveFs, req: Request, url: URL, cache: DriveCache) => Promise<Response>;
+
+/** 列表接口不先问 Drive 根目录: 边缘缓存命中时完全不碰 Drive (#159)。 */
+export const LAZY_OPS = new Set(["GET /list"]);
+const LIST_CACHE = "list";
+const FLAG_ON = "1";
 
 const SEARCH_MAX = 100;
 const Q_MAX = 100;
@@ -29,14 +35,34 @@ async function body(req: Request): Promise<Body> {
   return b && typeof b === "object" && !Array.isArray(b) ? (b as Body) : bad("请求体应为 JSON 对象");
 }
 
-const list: Op = async (fs, req, url) => {
-  const path = pathArg(url.searchParams.get("path") ?? "/");
-  const res = await fs.fetch("GET", `/fs/list?path=${encodeURIComponent(path)}`);
-  if (!res.ok) return relay(res);
+type Listed = { tag: string; out: Record<string, unknown> };
+
+async function listFresh(fs: DriveFs, path: string, withStats: boolean): Promise<Listed> {
+  const [res, st] = await Promise.all([fs.fetch("GET", `/fs/list?path=${encodeURIComponent(path)}`), withStats ? statsOf(fs).catch(() => null) : undefined]);
+  if (!res.ok) throw await failOf(res);
   const r = await res.json<{ node: DriveNode; children: DriveNode[] }>();
   if (r.node.kind !== "dir") throw new DriveFail(400, "不是文件夹");
-  const out = { path, items: r.children };
-  return etagged(req, (await sha256(JSON.stringify(out))).slice(0, 16), () => out);
+  const out: Record<string, unknown> = { path, items: r.children };
+  if (withStats) out.stats = st ?? null;
+  return { tag: (await sha256(JSON.stringify(out))).slice(0, 16), out };
+}
+
+/** 列目录; stats=1 时顺带网盘用量 (首页一次请求拿齐), fresh=1 (下拉刷新) 绕过边缘缓存。 */
+const list: Op = async (fs, req, url, cache) => {
+  const path = pathArg(url.searchParams.get("path") ?? "/");
+  const withStats = url.searchParams.get("stats") === FLAG_ON;
+  const key = `${withStats ? FLAG_ON : "0"}${path}`;
+  let hit = url.searchParams.get("fresh") === FLAG_ON ? null : await cache.get<Listed>(LIST_CACHE, key);
+  const from = hit ? "hit" : "miss";
+  if (!hit) {
+    await fs.ready();
+    hit = await listFresh(fs, path, withStats);
+    await cache.put(LIST_CACHE, key, hit);
+  }
+  const done = hit;
+  const res = etagged(req, done.tag, () => done.out);
+  res.headers.set("x-aioa-cache", from);
+  return res;
 };
 
 const search: Op = async (fs, _req, url) => {
@@ -153,14 +179,16 @@ export const unshare = async (fs: DriveFs, id: string): Promise<Response> => {
 
 type Stats = { nodes: { kind: string; n: number }[]; blobs: { n: number; bytes: number } };
 
-const stats: Op = async (fs) => {
+/** 网盘用量; 令牌没有 stats 权限时 null (用量不显示, 不算错)。 */
+async function statsOf(fs: DriveFs): Promise<{ files: number; dirs: number; bytes: number } | null> {
   const res = await fs.fetch("GET", "/admin/stats");
-  // 令牌没有 stats 权限: 用量不显示, 不算错
-  if (res.status === 403) return json({ stats: null });
-  return relay<Stats>(res, (s) => ({
-    stats: { files: s.nodes.find((x) => x.kind === "file")?.n ?? 0, dirs: s.nodes.find((x) => x.kind === "dir")?.n ?? 0, bytes: s.blobs.bytes },
-  }));
-};
+  if (res.status === 403) return null;
+  if (!res.ok) throw await failOf(res);
+  const s = await res.json<Stats>();
+  return { files: s.nodes.find((x) => x.kind === "file")?.n ?? 0, dirs: s.nodes.find((x) => x.kind === "dir")?.n ?? 0, bytes: s.blobs.bytes };
+}
+
+const stats: Op = async (fs) => json({ stats: await statsOf(fs) });
 
 /** "方法 子路径" → 处理函数; /shares/{id} 的删除单独处理。 */
 export const OPS: Record<string, Op> = {

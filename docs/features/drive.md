@@ -39,7 +39,7 @@
 
 | 方法 | 路径 | 转给 Drive | 说明 |
 | --- | --- | --- | --- |
-| GET | `/list?path=` | `/fs/list` | 返回 `{ path, items }`; 带弱 ETag, `If-None-Match` 命中回 304 |
+| GET | `/list?path=&stats=&fresh=` | `/fs/list` | 返回 `{ path, items }`; 带弱 ETag, `If-None-Match` 命中回 304。`stats=1` 顺带 `stats` (同 `/stats`, 首页一次请求拿齐, #159); 走边缘缓存 (§7), `fresh=1` 绕过; 响应头 `x-aioa-cache: hit / miss` |
 | GET | `/search?q=` | `/fs/search` | 只搜网盘根内, 返回网盘内路径; Drive 按令牌限 6 次/分钟, App 只在提交时搜 |
 | POST | `/mkdir {path}` | `/fs/mkdir` | |
 | POST | `/move {id, toPath?, name?}` | `/fs/move` | 改名 = 只给 name |
@@ -71,9 +71,10 @@
 
 ## 4. 请求量
 
-- 一次进入网盘: 先显示本机缓存, 再 1 次 `list` (Worker + Drive 各 1, Drive D1 读约 子项数 行), 没变回 304。不轮询, 只在进入目录, 下拉刷新, 自己改动之后刷新。
+- 一次进入网盘: 先显示本机缓存, 再 1 次 `list` (根目录带 `stats=1`, 不再单独问用量); 边缘缓存命中时只有 Worker 1 次, 不进 Drive / D1; 没命中 Worker 1 + Drive 1 (根目录带用量时 Drive 2, 并行), Drive D1 读约 子项数 行; 没变回 304。不轮询, 只在进入目录, 下拉刷新, 自己改动之后刷新。
+- 预取: 打开目录后后台预取前 4 个子目录, 同时最多 2 个, 本机缓存 10 分钟内的跳过, 每个 Worker 1 次 (多半命中边缘缓存或 304)。
 - 通行证: 用网盘的那 1 小时里 1 次 DO 请求, 不用不发。
-- 写操作: Worker 1 + Drive 1 到 2 (按 id 的写多问一次路径)。
+- 写操作: Worker 1 + Drive 1 到 2 (按 id 的写多问一次路径), 外加 1 次 Cache API 写版本号。
 - 主 Hub DO 只在 `pass`, `save`, `attach` 时被唤醒, 都是用户点了才有。
 
 ## 5. App
@@ -97,3 +98,22 @@
 - Drive 要支持 `X-Drive-Scope` (Drive #18 起), 否则网盘接口回 503 `drive_outdated`。
 - 可选: 建一个专用令牌 `{"name":"aioa-drive","scopes":["read","write","stats"],"rootPath":"/"}` 配成仓库 secret `CFD_DRIVE_TOKEN` (配了才同步到 Worker), 网盘根就是 Drive 的 `/drive`, 用量能显示。
 - 手机直传要 Drive v0.4 以上, Drive 的公网地址 (`CFD_ORIGIN`, 或 Drive 的 `PUBLIC_URL`) 要能从手机访问。
+
+## 7. 性能 (#159)
+
+实测 (主人电脑, Clash TUN fake-ip): 新连接 TLS 握手 0.5 到 1.7 秒; 复用连接 `/health` 约 0.2 秒, `list` 约 0.6 秒 (Worker → Binding → Drive → D1 约 0.4 秒), isolate 冷启动时 `list` 还要先问两次 Drive 的根目录, 1.2 到 1.8 秒。所以先省握手, 再省 Drive。
+
+- 连接: 安卓全部请求从 `Net.base` 用 `newBuilder` 派生, 共用一个连接池与调度器; HTTP/2, 空闲连接留 5 分钟。`:link` 进程的长连接在另一个进程, 界面进程用不上它的连接, 所以连上服务端时 (`HomeFrame`) 与进网盘时后台先 `HEAD /health` 预热一次 (一分钟内最多一次), 网盘可用时顺手把快过期的通行证换好。
+- 列表: 先显示本机缓存, 再带 ETag 刷新; 根目录的列表顺带用量 (`stats=1`), 首页一次请求。打开目录后预取子目录 (见 §4)。
+- 乐观更新: 新建文件夹, 改名, 移动, 删除先改列表再发请求, 弹窗立刻关; 请求在 App 级作用域里跑 (离开页面也做完), 失败回滚并提示 "xx失败: 原因", 成功后再刷新一次换成服务端的真数据。
+- 边缘缓存 (服务端): `list` 用 Worker Cache API (`caches.default`, 按数据中心) 缓存 5 分钟, 键为 网盘 (Drive 地址 + 令牌的哈希, 令牌决定网盘根) + 主人 id + 网盘版本号 + 路径 + 是否带用量。命中时不问 Drive 根目录也不进 Drive / D1, 每次请求 Cache API 最多 3 次 (读版本号, 读 / 写列表)。
+- 失效: 版本号也存在 Cache API 里 (1 天, 不占 D1 / DO 写入), 值是写入时的毫秒时间。网盘接口的写操作 (新建, 移动 / 改名, 复制, 删除, 恢复, 彻底删除, 清空回收站, 申请上传 (秒传), 提交上传) 做完不论成败都换新版本号, 主 Hub 的 "存到网盘" 与迁移也换; 同一网盘所有路径与主人视角的旧键一起作废, 不用算受影响的目录。主人在 Drive 后台直接改的东西最多 5 分钟后看到, 下拉刷新 (`fresh=1`) 立刻看到。换数据中心时另一处可能还有 5 分钟内的旧列表, 同样下拉刷新即可。
+- 预计: 连接已预热时首次进网盘从 "握手 0.5 到 1.7 秒 + list 0.6 秒 + stats 0.4 秒" 降到 "list 0.2 到 0.6 秒"; 边缘缓存命中的 `list` 与 `/health` 相当 (约 0.2 秒); 增删改在界面上即时生效。
+
+### Clash 等 fake-ip 模式
+
+fake-ip (TUN 或 DNS 劫持) 模式下, 域名先解析成 `198.18.x.x` 的假地址, 真正连哪个 IP 由代理内核决定: 规则命中代理时走节点, 系统 hosts 或优选 IP 都不生效, 每个新连接还多一跳。要让 AIOA 与 Drive 走 Cloudflare 优选 IP 直连:
+
+- 把 AIOA 的域名与 Drive 的域名 (`server/wrangler.toml` 里 `CFD_ORIGIN` 的主机, 下载直链与直传都走它) 设为 `DIRECT`, 例如 mihomo 规则 `DOMAIN-SUFFIX,<aioa 域名>,DIRECT` 与 `DOMAIN,<CFD_ORIGIN 主机>,DIRECT`。
+- 优选 IP 写在 Clash 的 `hosts` 里 (或这两个域名加进 `fake-ip-filter`, 让系统 DNS / hosts 给真实 IP), 否则 DIRECT 仍按代理内核自己解析的地址连。
+- App 内置代理 (订阅) 开着时, 网盘请求同样经本机 SOCKS, 规则一样适用。

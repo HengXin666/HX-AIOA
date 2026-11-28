@@ -5,6 +5,7 @@ import { OWNER, type ReqCtx, type Route, route } from "../core";
 import { type FileRow, type FileStore, driveName } from "../files/store";
 import { fail, json, readJson } from "../http";
 import { authorOf } from "../room-access";
+import { DriveCache } from "./cache";
 import { DriveFs } from "./client";
 import { signPass } from "./pass";
 import { migrateOld, withStamp } from "./migrate";
@@ -37,6 +38,7 @@ async function guarded(c: ReqCtx, run: (fs: DriveFs, b: Record<string, unknown>)
 const pass = (c: ReqCtx) =>
   guarded(c, async (fs) => {
     const migrated = await migrateOld(fs.unscoped()).catch((e: unknown) => (console.error("网盘迁移失败:", e), 0));
+    if (migrated > 0) await DriveCache.bumpFor(fs);
     return json({ ...(await signPass(c.core.env, (c.who.owner && c.who.user?.id) || "owner")), root: fs.root, whole: fs.whole, migrated });
   });
 
@@ -82,10 +84,12 @@ const save = (c: ReqCtx) =>
     if (!dir) return fail(400, "路径不合法");
     if (row.store !== "cfd" || !row.ext) {
       const node = row.store === "r2" ? await fromR2(c.core.files, fs, row, dir) : null;
+      if (node) await DriveCache.bumpFor(fs);
       return node ? json({ node, path: dir }) : needUpload("文件不在服务端存储里, 需要从手机上传");
     }
     // 附件节点在网盘根外, 要用令牌根视角复制, 目标换算成令牌根下的网盘路径
     const node = await copyInto(fs.unscoped(), row.ext, tokenPath(dir), row.name);
+    if (node) await DriveCache.bumpFor(fs);
     return node ? json({ node, path: dir }) : needUpload("网盘令牌看不到这个文件, 需要从手机上传");
   });
 

@@ -4,7 +4,6 @@ import android.content.Context
 import com.hengxin.aioa.Constants
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -15,7 +14,7 @@ import java.util.concurrent.TimeUnit
 class ProxyController(context: Context) {
 
     private val secret = ProxyCore.secret(context)
-    private val client = OkHttpClient.Builder()
+    private val client = Net.base.newBuilder()
         .proxy(Proxy.NO_PROXY)
         .readTimeout(Constants.PROXY_TEST_TIMEOUT_MS * 2L, TimeUnit.MILLISECONDS)
         .build()
