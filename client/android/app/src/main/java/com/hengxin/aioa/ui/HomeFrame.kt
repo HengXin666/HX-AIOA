@@ -94,7 +94,11 @@ fun HomeFrame(
     com.hengxin.aioa.ui.drive.DriveGate.load(context)
     val drive = com.hengxin.aioa.ui.drive.DriveGate.on == true
     androidx.compose.runtime.LaunchedEffect(chat.online) {
-        if (chat.online) com.hengxin.aioa.ui.drive.DriveGate.maybeProbe(context.applicationContext)
+        // 进 App 连上时先把连接与网盘通行证备好 (#159), 之后的请求复用连接不再握手
+        if (chat.online) {
+            com.hengxin.aioa.ui.drive.DriveGate.warm(context)
+            com.hengxin.aioa.ui.drive.DriveGate.maybeProbe(context.applicationContext)
+        }
     }
     val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons, drive = drive)
     val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces, drive)

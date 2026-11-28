@@ -86,20 +86,47 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<DriveNode?>(null) }
 
-    fun refresh() {
+    // 根目录的列表顺带用量 (stats=1), 首页一次请求拿齐; 列完在后台预取前几个子目录 (#159)
+    fun refresh(fresh: Boolean = false) {
+        val p = path
+        val root = p == SEP
         scope.launch {
             loading = true
-            runCatching { api.list(path) }.onSuccess { if (it.changed || items == null) items = it.items; err = null }.onFailure { err = it as? DriveError ?: DriveError(it.message ?: "加载失败") }
+            runCatching { api.list(p, fresh, withStats = root) }.onSuccess { l ->
+                if (path != p) return@onSuccess
+                if (l.changed || items == null) items = l.items
+                if (l.hasStats) stats = l.stats else if (root) stats = runCatching { api.stats() }.getOrNull()
+                err = null
+                DriveTransfers.ui.launch { api.prefetch(DriveEdits.prefetch(p, sortNodes(l.items, sort))) }
+            }.onFailure { if (path == p) err = it as? DriveError ?: DriveError(it.message ?: "加载失败") }
             loading = false
         }
     }
+
+    // 乐观更新: 先改列表, 请求在 App 级作用域里跑 (离开页面也做完), 失败回滚并提示 (#159)
+    fun apply(e: DriveEdit) {
+        val before = items
+        val beforeFound = found
+        items = items?.let(e.change)
+        found = found?.let(e.change)
+        DriveTransfers.ui.launch {
+            runCatching { e.run() }.onSuccess { refresh() }.onFailure {
+                items = before
+                found = beforeFound
+                toast(context.applicationContext, "${e.label}失败: ${it.message ?: "网络错误"}")
+                refresh()
+            }
+        }
+    }
+    LaunchedEffect(Unit) { DriveGate.warm(context) }
     LaunchedEffect(path) {
-        items = withContext(Dispatchers.IO) { api.cached(path) }
+        val c = withContext(Dispatchers.IO) { api.cachedListing(path) }
+        items = c?.items
+        if (path == SEP && c?.hasStats == true) stats = c.stats
         refresh()
     }
     // 上传完成就刷新一次当前目录
     LaunchedEffect(DriveTransfers.finished) { if (DriveTransfers.finished > 0) refresh() }
-    LaunchedEffect(Unit) { stats = runCatching { api.stats() }.getOrNull() }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         // 拿长期读权限: App 被杀后重选同一文件仍能接着传
         uris.forEach { u -> runCatching { context.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
@@ -122,7 +149,7 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
     }
     viewing?.let { n ->
         PreviewPage(n, { viewing = null }) { dialog = it }
-        dialog?.let { d -> DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }) { refresh() } }
+        dialog?.let { d -> DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }, ::apply) }
         return
     }
     val open: (DriveNode) -> Unit = { n ->
@@ -147,14 +174,14 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search))
         }
         Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            err?.let { e -> ErrorNote(e.message ?: "出错了", Modifier.fillMaxWidth().padding(top = 6.dp), e.kind, onRetry = ::refresh) { err = null } }
+            err?.let { e -> ErrorNote(e.message ?: "出错了", Modifier.fillMaxWidth().padding(top = 6.dp), e.kind, onRetry = { refresh(fresh = true) }) { err = null } }
             TransferSummary { sub = Sub.TRANSFERS }
             if (query == null) Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HxButton("上传", { pick.launch(arrayOf("*/*")) }, icon = "arrow-up", size = HxButtonSize.Sm)
                 HxButton("新建文件夹", { dialog = DriveDialog.Mkdir }, icon = "plus", size = HxButtonSize.Sm, variant = HxButtonVariant.Outline)
             }
         }
-        PullToRefreshBox(loading, ::refresh, Modifier.weight(1f).fillMaxWidth()) {
+        PullToRefreshBox(loading, { refresh(fresh = true) }, Modifier.weight(1f).fillMaxWidth()) {
             val more: (DriveNode) -> Unit = { acting = it }
             val footer = footerText(shown.size, items == null && err == null, found != null, stats)
             if (grid) LazyVerticalGrid(GridCells.Adaptive(GRID_MIN.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -166,10 +193,10 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
             }
         }
     }
-    if (menu) PageMenu({ menu = false }, { sub = Sub.TRANSFERS }, { sub = Sub.TRASH }, { sub = Sub.SHARES }, ::refresh) { dialog = DriveDialog.About }
+    if (menu) PageMenu({ menu = false }, { sub = Sub.TRANSFERS }, { sub = Sub.TRASH }, { sub = Sub.SHARES }, { refresh(fresh = true) }) { dialog = DriveDialog.About }
     acting?.let { n -> NodeActions(n, { acting = null }, open) { dialog = it } }
     dialog?.let { d ->
-        DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }) { refresh() }
+        DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }, ::apply)
     }
 }
 
