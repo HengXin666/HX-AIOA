@@ -2,7 +2,9 @@ import { Card } from "@hx/ui/ui/card";
 import type { OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Progress } from "@hx/ui/ui/progress";
-import { useFeed, useLinkState } from "../app/hooks";
+import { Button } from "@hx/ui/ui/button";
+import { HardDrive, ListTodo } from "lucide-react";
+import { useFeed, useLinkState, useUser } from "../app/hooks";
 import { go, link } from "../app/router";
 import { groupOf, textOf, type Message } from "../core/chats";
 import { TXT_LOADING } from "../core/constants";
@@ -19,6 +21,7 @@ const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "mut
 export default function Overview() {
   const snap = useFeed();
   const state = useLinkState();
+  const owner = useUser()?.role === "owner";
   const data = snap.loaded ? { generatedAt: snap.generatedAt, layers: snap.layers, tasks: Object.values(snap.tasks).sort((a, b) => b.updated - a.updated) } : null;
 
   return (
@@ -29,6 +32,22 @@ export default function Overview() {
           {data && <span className="text-xs text-muted-foreground">{shortTime(data.generatedAt)} 生成</span>}
         </header>
         {!data && <p className="text-sm text-muted-foreground">{state === "online" ? TXT_LOADING : "连上后加载"}</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline">
+            <a href={link("overview", "todo")}>
+              <ListTodo />
+              待办
+            </a>
+          </Button>
+          {owner && (
+            <Button asChild size="sm" variant="outline">
+              <a href={link("overview", "drive")}>
+                <HardDrive />
+                网盘
+              </a>
+            </Button>
+          )}
+        </div>
         <StarTodos />
         {data && data.tasks.length > 0 && <Tasks tasks={data.tasks} />}
         {data && (
