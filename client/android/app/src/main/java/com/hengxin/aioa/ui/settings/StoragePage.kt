@@ -29,6 +29,7 @@ import com.hengxin.aioa.kit.Chip
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.net.Api
 import com.hengxin.aioa.ui.chat.FileTransfer
+import com.hengxin.aioa.ui.drive.DRIVE_SCOPE_HINT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -132,8 +133,8 @@ private fun UsageGroup(body: JSONObject) {
     val r2 = by?.optJSONObject(STORE_R2)
     val cfd = by?.optJSONObject(STORE_CFD)
     val limit = body.optLong("limit")
-    // 一行一条 (#138): 图标, 名字, 用量压到右边, R2 带小进度条
-    SettingsGroup("用量") {
+    // 一行一条 (#138): 图标, 名字, 用量压到右边, R2 带小进度条; 接了 Drive 时写清网盘看哪里 (#157)
+    SettingsGroup("用量", footer = DRIVE_SCOPE_HINT.takeIf { ready?.optBoolean(STORE_CFD) == true }) {
         val r2Bytes = r2?.optLong("bytes") ?: 0
         val r2On = ready?.optBoolean(STORE_R2) == true
         OneRow("archive", "R2", if (r2On) "${FileTransfer.sizeText(r2Bytes)} / ${FileTransfer.sizeText(limit)} · ${r2?.optInt("count") ?: 0} 个" else "未绑定", pad = 16) {

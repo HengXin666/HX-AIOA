@@ -142,6 +142,7 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
         Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             err?.let { e -> ErrorNote(e.message ?: "出错了", Modifier.fillMaxWidth().padding(top = 6.dp), e.kind, onRetry = ::refresh) { err = null } }
             if (readonly) Note("shield-check", "这里是聊天附件目录, 只能看, 下载与分享")
+            if (!DriveGate.whole && path == SEP && query == null) Note("hard-drive", DRIVE_SCOPE_HINT)
             val list = DriveTransfers.items.toList()
             if (list.isNotEmpty()) TransferList(list.takeLast(5), { DriveTransfers.retry(context, it) }) { DriveTransfers.dismiss(it) }
             if (!readonly && query == null) Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

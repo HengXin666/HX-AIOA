@@ -136,3 +136,26 @@ fun iconOf(n: DriveNode): String = when {
 
 /** 分享有效期选项: (显示, 秒), 0 为永久。 */
 val SHARE_TTLS = listOf("1 天" to 86_400L, "7 天" to 7 * 86_400L, "30 天" to 30 * 86_400L, "永久" to 0L)
+
+/** 网盘只看 /aioa 时的说明 (#157): 设置与网盘页共用。 */
+const val DRIVE_SCOPE_HINT = "网盘默认复用聊天附件的 Drive 令牌 (CFD_TOKEN, 根目录 /aioa), 不用新建令牌。想看整个盘: 在 Drive 后台把这个令牌的根目录改成 /, 新附件会自动放在 /aioa 下; 或另配 CFD_DRIVE_TOKEN。"
+
+/** Drive 的分段大小, 与 protocol 的 DRIVE_PART_SIZE 一致: 超过这么多片的上传按组 fold (#157)。 */
+const val DRIVE_PART_SIZE = 256
+
+/** 分片上传按组提交的规则 (#157): 第 g 组是 [g*256, g*256+256) 片, 最后一组可以不足。 */
+object UploadParts {
+    fun groups(count: Int): Int = (count + DRIVE_PART_SIZE - 1) / DRIVE_PART_SIZE
+
+    fun range(g: Int, count: Int): IntRange = g * DRIVE_PART_SIZE until minOf(count, (g + 1) * DRIVE_PART_SIZE)
+
+    /** 要不要 fold: 只有超过一组的文件才折叠。 */
+    fun needed(count: Int): Boolean = count > DRIVE_PART_SIZE
+
+    /** 第 g 组的回执是否齐了。 */
+    fun full(g: Int, count: Int, has: (Int) -> Boolean): Boolean = range(g, count).all(has)
+
+    /** 还要传的片: 跳过已折叠的组与已有回执的片。 */
+    fun pending(count: Int, folded: (Int) -> Boolean, has: (Int) -> Boolean): List<Int> =
+        (0 until count).filter { i -> !folded(i / DRIVE_PART_SIZE) && !has(i) }
+}

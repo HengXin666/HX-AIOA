@@ -131,7 +131,7 @@ internal fun DriveDialogs(d: DriveDialog, api: DriveApi, chat: ChatModel, path: 
             attempt { api.move(d.n.id, to) }.also { if (it == null) done() }
         }
         is DriveDialog.Share -> ShareDialog(api, d.n, close)
-        is DriveDialog.Send -> ActionSheet("发到哪个群", chat.groups.rows().sortedByDescending { it.order }.take(SEND_MAX).map { r ->
+        is DriveDialog.Send -> ActionSheet("发到哪个群", chat.groups.rows().filter { com.hengxin.aioa.ui.chat.canPostTo(it.key, it.meta) }.sortedByDescending { it.order }.take(SEND_MAX).map { r ->
             SheetAction("message-circle", r.meta?.title?.takeIf { it.isNotBlank() } ?: r.key) {
                 close()
                 scope.launch { sendToGroup(context, chat, d.n, r.key) }

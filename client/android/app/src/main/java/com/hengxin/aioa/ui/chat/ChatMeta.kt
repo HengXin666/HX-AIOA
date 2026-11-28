@@ -81,6 +81,16 @@ data class ChatAgent(
 /** 收藏: 按引用取到的原消息当前版本; gone 表示原消息已没了, msg 只剩收藏时的摘要。 */
 data class Favorite(val seq: Long, val saved: Long, val msg: ServerFrame.Msg, val gone: Boolean = false)
 
+/** 服务端系统通知群的 channel, 与 protocol 的 SYSTEM_CHANNEL 一致。 */
+const val SYSTEM_CHANNEL = "system"
+
+/**
+ * 能不能往这个会话发消息 (#157, 转发与网盘发到群的选择列表): 邮件, 信息流, 系统通知, 已删除的群,
+ * 以及不认识的展示方式都不列出; 没建过资料的普通群可以发。
+ */
+fun canPostTo(key: String, meta: ChatMeta?): Boolean =
+    key != SYSTEM_CHANNEL && (meta == null || (meta.deleted == 0L && (meta.view == null || meta.view == VIEW_CHAT)))
+
 const val VIEW_MAIL = "mail"
 const val VIEW_FEED = "feed"
 const val VIEW_CHAT = "chat"

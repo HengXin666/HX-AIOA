@@ -187,8 +187,13 @@ class DriveApi(context: Context) {
     suspend fun initUpload(path: String, name: String, size: Long, mime: String): JSONObject =
         json(POST, "uploads", JSONObject().put("path", path).put("name", name).put("size", size).put("mime", mime))
 
-    suspend fun commit(ticket: String, receipts: List<String>): JSONObject =
-        json(POST, "commit", JSONObject().put("ticket", ticket).put("receipts", JSONArray(receipts)))
+    /** 提交: 已折叠的组交聚合回执, 其余交零散回执 (#157)。 */
+    suspend fun commit(ticket: String, receipts: List<String>, folds: List<String> = emptyList()): JSONObject =
+        json(POST, "commit", JSONObject().put("ticket", ticket).put("receipts", JSONArray(receipts)).put("folds", JSONArray(folds)))
+
+    /** 一组 (256 片) 的回执换一个聚合回执, 大文件提交时只验几个签名 (#157)。 */
+    suspend fun fold(ticket: String, receipts: List<String>): String =
+        json(POST, "fold", JSONObject().put("ticket", ticket).put("receipts", JSONArray(receipts))).optString("fold").ifEmpty { throw DriveError("折叠回执失败") }
 
     /** 聊天文件存到网盘 (服务端复制); 要客户端自己上传时抛 apiCode = need_upload。返回存到的目录。 */
     suspend fun save(fileId: String, dir: String? = null): String = hub("save", JSONObject().put("file", fileId).apply { dir?.let { put("path", it) } }).optString("path")
