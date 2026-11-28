@@ -1,9 +1,12 @@
 import {
+  DRIVE_NEED_UPLOAD,
   DRIVE_PART_SIZE,
+  DRIVE_SAVE_DIR,
   HEADER_DRIVE_PASS,
   PATH_DRIVE,
   PATH_DRIVE_ATTACH,
   PATH_DRIVE_PASS,
+  PATH_DRIVE_SAVE,
   type DriveAttachResult,
   type DriveList,
   type DriveNode,
@@ -13,9 +16,11 @@ import {
   type DriveStats,
   type DriveTrashItem,
   type DriveUploadInit,
+  type FileRef,
 } from "@hx-aioa/protocol";
 import { api, ApiError } from "./auth";
 import { Emitter } from "./emitter";
+import { fileUrl } from "./files";
 
 // 网盘 (对照安卓 ui/drive/DriveApi.kt, docs/features/drive.md): 先到 Hub 换 1 小时通行证, 之后的请求由 Worker 验证后转给 Drive, 不进 DO
 const PASS_EARLY_MS = 60_000;
@@ -142,4 +147,20 @@ async function putChunk(ticket: string, i: number, part: Blob, direct: string | 
   }
   const res = await call("PUT", "chunk", { query: { ticket, i: String(i) }, raw: part });
   return ((await res.json()) as { receipt: string }).receipt;
+}
+
+// 聊天文件存到网盘: Drive 上的附件服务端复制 (0 字节); 服务端复制不了 (409 need_upload) 时浏览器下载后再传
+export async function saveFile(ref: FileRef): Promise<string> {
+  try {
+    const r = await write(() => api<{ path: string }>(PATH_DRIVE_SAVE, { method: "POST", body: JSON.stringify({ file: ref.id }) }));
+    return r.path || DRIVE_SAVE_DIR;
+  } catch (e) {
+    if (!(e instanceof ApiError && e.code === DRIVE_NEED_UPLOAD)) throw e;
+  }
+  const url = await fileUrl(ref.id);
+  const blob = url ? await (await fetch(url)).blob() : null;
+  if (!blob) throw new ApiError(0, "下载附件失败");
+  await mkdir(DRIVE_SAVE_DIR).catch(() => undefined);
+  await upload(DRIVE_SAVE_DIR, new File([blob], ref.name, { type: ref.mime }), () => undefined, new AbortController().signal);
+  return DRIVE_SAVE_DIR;
 }

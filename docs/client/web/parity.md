@@ -20,7 +20,7 @@ Agent / 探针 / Webhook 侧的接口 (`PATH_AGENT_NEXT`, `PATH_AGENT_DONE`, `PA
 | hxoa 远程管理 | `PATH_HXOA*` | 已做 (336ab68); 新建文件夹 `PATH_HXOA_MKDIR` 未做 |
 | 待办 | `PATH_PDATA_COLL` `PATH_PDATA_ITEM` (待办集合) | 看板, 编辑, 总览重点待办已做; 外部接入密钥 `PATH_TODO_EXT*`, 群里的待办页, 周期与提醒编辑未做 |
 | 空间 / 看板 / 工作台组件 | `PATH_SPACES` `PATH_SPACE*` `PATH_PDATA_*` | 未做 |
-| 网盘 | `PATH_DRIVE*` | 浏览, 排序, 搜索, 新建, 上传 (直传优先, 失败转发, 大文件 fold), 预览 / 下载 (新标签页), 改名, 移动, 删除, 回收站, 分享, 发到群已做; 聊天文件 "存到网盘" `PATH_DRIVE_SAVE`, 断点续传未做 |
+| 网盘 | `PATH_DRIVE*` | 浏览, 排序, 搜索, 新建, 上传 (直传优先, 失败转发, 大文件 fold), 预览 / 下载 (新标签页), 改名, 移动, 删除, 回收站, 分享, 发到群已做; 聊天文件 "存到网盘" 已做; 断点续传未做 |
 | GitHub 卡, 走势, 分支, Issue | `PATH_GITHUB_*` `PATH_GH_*` | 部分 (资源栏仓库列表); 其余未做 |
 | 插件市场与开发者模式 (#156) | `PATH_PLUGIN*` | 未做 |
 | 终端 | `PATH_SHELL_TICKET` `PATH_PROBES` | 未做 |

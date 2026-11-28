@@ -2,11 +2,12 @@ import { PATH_EVENT_BY_SEQ, QUERY_MODE } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Checkbox } from "@hx/ui/ui/checkbox";
-import { CheckSquare, Copy, CornerUpLeft, Ellipsis, Forward, RotateCcw, Star, Trash2, Undo2 } from "lucide-react";
+import { CheckSquare, Copy, HardDrive, CornerUpLeft, Ellipsis, Forward, RotateCcw, Star, Trash2, Undo2 } from "lucide-react";
 import { memo, useState, type MouseEvent } from "react";
 import { toast } from "sonner";
 import { api, fill } from "../core/auth";
 import { mentionsMe, textOf, type Message } from "../core/chats";
+import { saveFile } from "../core/drive";
 import { favorite } from "../core/msg-actions";
 import { EXTERNAL } from "../core/constants";
 import type { Pending } from "../core/outbox";
@@ -109,6 +110,12 @@ export const MessageItem = memo(function MessageItem({ m, mine, owner, act, sele
               <Forward />
               转发
             </DropdownMenuItem>
+            {owner && d?.file && (
+              <DropdownMenuItem onSelect={() => void saveFile(d.file!).then((dir) => toast.success(`已存到网盘 ${dir}`), (e: Error) => toast.error(e.message))}>
+                <HardDrive />
+                存到网盘
+              </DropdownMenuItem>
+            )}
             {owner && (
               <DropdownMenuItem onSelect={() => star(m)}>
                 <Star />
