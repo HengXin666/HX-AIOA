@@ -32,6 +32,7 @@ private const val HTTP_UNAVAILABLE = 503
 private const val PREFS = "drive"
 // 通行证提前 5 分钟换新, 免得请求半路过期
 private const val PASS_MARGIN_MS = 5 * 60_000L
+private const val RECHECK_MS = 24 * 3600_000L
 private const val CACHE_DIR = "drive-cache"
 private const val GET = "GET"
 private const val POST = "POST"
@@ -90,8 +91,16 @@ object DriveGate {
         pass!!
     }
 
-    /** 问一次: 能换到通行证即可用; 没接入 (503) 或不是主人 (403) 即不可用; 断网不动状态。 */
-    suspend fun probe(context: Context) {
+    /**
+     * 连上时按需问一次: 没问过, 或上次不可用且已过一天 (服务端后来才接入 Drive) 时换一次通行证;
+     * 能换到即可用, 没接入 (503) 或不是主人 (403) 即不可用, 断网不动状态。可用时不问, 用的时候才换。
+     */
+    suspend fun maybeProbe(context: Context) {
+        load(context)
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stale = System.currentTimeMillis() - p.getLong("probed", 0) > RECHECK_MS
+        if (on == true || (on == false && !stale)) return
+        p.edit().putLong("probed", System.currentTimeMillis()).apply()
         runCatching { pass(context, force = true) }
     }
 

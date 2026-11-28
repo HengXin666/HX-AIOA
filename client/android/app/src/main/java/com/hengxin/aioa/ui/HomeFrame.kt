@@ -89,12 +89,12 @@ fun HomeFrame(
     val unread by remember { derivedStateOf { rows.sumOf { if (it.muted) 0 else it.unread } } }
     // 一级页面: 总览, 消息, 工作区 (agent harness), 开发, 服务器, 插件空间; 顶部标签与侧栏 "空间" 列同一份 (#121)
     // 置顶最多 5 个 (#139): 标签只放置顶的, 其余在侧栏 "更多空间" 与标题下的切换里
-    // 网盘 (#154): 本机没记过时连上问一次通行证, 能换到 (主人且服务端接入了 Drive) 才出现
+    // 网盘 (#154): 本机没记过 (或不可用已过一天) 时连上问一次通行证, 能换到 (主人且服务端接入了 Drive) 才出现
     val context = LocalContext.current
     com.hengxin.aioa.ui.drive.DriveGate.load(context)
     val drive = com.hengxin.aioa.ui.drive.DriveGate.on == true
     androidx.compose.runtime.LaunchedEffect(chat.online) {
-        if (chat.online && com.hengxin.aioa.ui.drive.DriveGate.on == null) com.hengxin.aioa.ui.drive.DriveGate.probe(context.applicationContext)
+        if (chat.online) com.hengxin.aioa.ui.drive.DriveGate.maybeProbe(context.applicationContext)
     }
     val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons, drive = drive)
     val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces, drive)
