@@ -45,6 +45,7 @@ hxaioa next --wait 300          # 再来, 直到退出码 2
 | 0 | 有待处理消息, 已打印 | 逐条处理, `send --covers` 或 `done`, 再 `next --wait <秒>` |
 | 10 | 本次到了 `--timeout` (默认 100 秒) 但 `--wait` 窗口没满 | 原样再跑 |
 | 2 | 没有消息, 窗口也满了 (或没给 `--wait`) | idle: 本轮结束 |
+| 11 | 同 2, 但服务端要求今天重算定时 (#161) | 按 skill 的 `references/schedule.md` 跑 `hxaioa plan`, 改定时, 结束 |
 | 1 | 出错 | 看最后一行; 过了大版本兼容期时停下告诉主人 |
 
 输出是纯文本, 依次是: `== 简报 <版本>` (有全文时), `== 长期记忆` (本轮第一次), `== 待处理 N 条` 加一行一条 `#seq 时间 名字 (回复 #seq): 正文` (多行正文缩进两格), 版本提示 (有的话), 最后一行总是 `下一步: ...`。
@@ -63,7 +64,8 @@ hxaioa next --wait 300          # 再来, 直到退出码 2
 | `hxaioa todo done <id> [--note s]` | 标完成; 放弃也用它, note 写 "放弃" |
 | `hxaioa todos [--all] [--json]` | 本群待办一行一条 `[状态] P优先级 id 标题 (repo#issue) <- 父 \| note`; `--all` 含已完成 |
 | `hxaioa skill install [--setup N] [--dir 目录]` | 从 Git 装核心 skill 和本群插件的 skill, 全部下载成功才替换旧目录。目录: `--dir`, 否则 `~/.claude/skills` 存在用它, 否则 `~/.agents/skills`。`--setup` 只照主人发的接入语写 |
-| `hxaioa me [--trigger 定时表达式]` | 我是谁; `--trigger "every 2h"` 上报定时任务的触发方式 (建定时任务后运行一次) |
+| `hxaioa me [--trigger 定时表达式]` | 我是谁; `--trigger "every 2h"` 上报定时任务的触发方式 (建定时任务与每次改定时后运行) |
+| `hxaioa plan` | 重算定时 (#161): `--pool-used <总额度已用%> --pool-reset <ISO 重置时间> --daily-used <今日已用%>` 三项要么都给要么都不给, `--min-interval <分钟>` 宿主最短间隔 (默认 10), `--json`。服务端按本群近 14 天人发消息的时段与额度算, 打印每天次数, 高峰间隔, 单次成本, cron (每行一条) 与只能写一条时的近似 |
 | `hxaioa upgrade` | 大更新自动执行: 更新命令行本身并按应有的接入版本重装 skill。只在主人开了 "大更新自动执行" 时有效, 否则报错并让你告诉主人 |
 | `hxaioa guide` | 装了 skill: 打印 SKILL.md 全文和当前简报 (给不支持 skill 的宿主); 没装: 打印专属指令, `--ack` 顺带报到 |
 | `hxaioa memory` | 长期记忆, 存服务端 (按 Agent 来源, 轮换密钥不丢, 最多 4000 字): 不带参数打印, `--add "一句话"` 追加一行 (带日期), `--set 全文\|-` 整段覆盖 |

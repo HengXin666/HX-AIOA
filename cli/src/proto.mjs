@@ -8,6 +8,8 @@ export const PATH_AGENT_NEXT = `${API}/chat-agent/next`;
 export const PATH_AGENT_DONE = `${API}/chat-agent/done`;
 export const PATH_AGENT_TRIGGER = `${API}/chat-agent/trigger`;
 export const PATH_AGENT_ME = `${API}/chat-agent/me`;
+// 来源 protocol/src/v1/agent-plan.ts
+export const PATH_AGENT_PLAN = `${API}/chat-agent/plan`;
 // 来源 protocol/src/v1/trigger.ts
 export const TRIGGER_TZ_MAX = 64;
 export const PATH_MESSAGES = `${API}/messages`;

@@ -1,4 +1,5 @@
 import { API_V1 } from "./constants";
+import type { AgentPlanState } from "./agent-plan";
 import type { AgentTrigger, SkillReport } from "./agent-skill";
 import type { Envelope } from "./event";
 import type { FeedTag } from "./feed-tags";
@@ -70,6 +71,8 @@ export type ChatAgent = {
   autoMajor?: boolean;
   trigger?: AgentTrigger;
   lastRun?: number;
+  // 自适应定时 (#161): 上次重算与之后的触发次数, 每轮开始时与 lastRun 一起写
+  plan?: AgentPlanState;
   // 已在群里提醒过的大版本缺失, 形如 "hengxin666.todo@2:new" 或 ":remind"
   warned?: string[];
 };

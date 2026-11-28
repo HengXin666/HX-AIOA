@@ -7,6 +7,7 @@ import { print } from "./format.mjs";
 import { ApiError, VERSION, call, enc } from "./http.mjs";
 import { syncHistory } from "./history.mjs";
 import { next } from "./next.mjs";
+import { plan } from "./plan.mjs";
 import { PATH_AGENT_DONE, PATH_AGENT_ME, PATH_AGENT_TRIGGER, PATH_MESSAGES, hostTimeZone } from "./proto.mjs";
 import { install, installedText, settleWant, skillGuide, upgrade } from "./skill.mjs";
 import { todoAdd, todoLine, todoSet } from "./todo.mjs";
@@ -15,7 +16,7 @@ import { watch } from "./watch.mjs";
 const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
 
 一轮 (装了 hx-aioa skill 的 Agent)
-  hxaioa next [--wait 秒] [--timeout 秒]   待处理消息; 没有就等人说话。退出码 0 有消息, 10 原样再跑, 2 idle 本轮结束
+  hxaioa next [--wait 秒] [--timeout 秒]   待处理消息; 没有就等人说话。退出码 0 有消息, 10 原样再跑, 2 idle 本轮结束, 11 空闲且今天要重算定时
   hxaioa send <文字|-> --reply seq --covers 849,850   回复并把这些 seq 记为已处理
   hxaioa done <seq...>             不用回复的记为已处理
   hxaioa todo add <标题> [--prio n] [--area 生活] [--due "11-30 18:00"] [--remind 分钟] [--every month|2week] [--star] [--alarm]
@@ -24,6 +25,8 @@ const HELP = `hxaioa ${VERSION}  HX-AIOA 群 Agent 命令行
   hxaioa todo done <id> [--note s]     冲突时打印当前行, 退出码 3
   hxaioa skill install [--setup N] [--dir 目录]   从 Git 装 skill (接入语里用)
   hxaioa me --trigger <定时表达式>     上报定时任务的触发方式 (顺带上报本机时区)
+  hxaioa plan [--pool-used % --pool-reset ISO时间 --daily-used %] [--min-interval 分钟] [--json]
+                                   按本群消息时段与宿主额度重算定时, 打印新 cron
   hxaioa upgrade                   大更新自动执行 (只在主人开了开关时有效)
 
 其它
@@ -52,7 +55,7 @@ const BOOL = { type: "boolean" };
 const OPTIONS = {
   channel: { ...STR, short: "c" },
   ...Object.fromEntries(["reply", "title", "html", "priority", "since", "before", "limit", "timeout", "exec", "interval", "window", "add", "set", "summary", "file", "dedupe"].map((k) => [k, STR])),
-  ...Object.fromEntries(["wait", "setup", "dir", "covers", "trigger", "prio", "repo", "issue", "parent", "note", "src", "state", "id", "area", "due", "remind", "every"].map((k) => [k, STR])),
+  ...Object.fromEntries(["wait", "setup", "dir", "covers", "trigger", "prio", "repo", "issue", "parent", "note", "src", "state", "id", "area", "due", "remind", "every", "pool-used", "pool-reset", "daily-used", "min-interval"].map((k) => [k, STR])),
   ...Object.fromEntries(["new", "json", "all", "once", "mine", "any", "ack", "star", "alarm"].map((k) => [k, BOOL])),
   help: { ...BOOL, short: "h" },
 };
@@ -112,6 +115,7 @@ const COMMANDS = {
     out(installedText(await install(cfg, { setup: v.setup, dir: v.dir })));
   },
   next: (cfg, v) => next(cfg, v),
+  plan: (cfg, v) => plan(cfg, v, out),
   async done(cfg, v, list) {
     const r = await call(cfg, "POST", PATH_AGENT_DONE, { seqs: seqs(list) });
     out(`已记为处理完, 游标 #${r.cursor}, 还剩 ${r.left} 条没处理`);

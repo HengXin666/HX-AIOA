@@ -119,3 +119,27 @@ test("next: 过了大版本兼容期 (409) 最后一行让停下告诉主人", a
     await srv.close();
   }
 });
+
+test("next: 空闲且服务端要求重算定时退出 11; plan 把额度交给服务端并打印 cron", async () => {
+  const result = { mode: "fitted", budget: "quota", cost: 0.5, runsPerDay: 7, perHour: [0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 1, ...new Array(13).fill(0)], cron: ["0,10,20,30,40,50 9 * * *", "0 10 * * *"], single: "0,30 9,10 * * *", peakHour: 9, peakIntervalMin: 10, daysUntilReset: 10, events: 40, days: 14, tz: "Asia/Shanghai" };
+  const srv = await fakeServer(({ path }) => {
+    if (path === "/api/v1/chat-agent/next") return { json: { pending: [], head: 100, cursor: 90, briefVersion: "b1", brief: BRIEF, replan: true } };
+    if (path === "/api/v1/chat-agent/plan") return { json: result };
+  });
+  const dir = home(CFG);
+  try {
+    const a = await run(dir, srv.base, ["next"]);
+    assert.equal(a.code, 11, a.stdout + a.stderr);
+    assert.match(lastLine(a.stdout), /schedule\.md/);
+    const bad = await run(dir, srv.base, ["plan", "--pool-used", "60"]);
+    assert.equal(bad.code, 1);
+    const b = await run(dir, srv.base, ["plan", "--pool-used", "60", "--pool-reset", "2026-12-08T00:00:00+08:00", "--daily-used", "10"]);
+    assert.equal(b.code, 0, b.stderr);
+    assert.deepEqual(srv.reqs.find((q) => q.path === "/api/v1/chat-agent/plan").body, { poolUsed: 60, dailyUsed: 10, poolReset: "2026-12-08T00:00:00+08:00" });
+    assert.match(b.stdout, /每天 7 次, 高峰 9 点每 10 分钟一次/);
+    assert.match(b.stdout, /  0,10,20,30,40,50 9 \* \* \*/);
+    assert.match(lastLine(b.stdout), /hxaioa me --trigger/);
+  } finally {
+    await srv.close();
+  }
+});

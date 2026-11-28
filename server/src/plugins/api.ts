@@ -183,7 +183,7 @@ async function install(c: ReqCtx): Promise<Response> {
   c.core.plugins.save(rec, m.name, prompt, job);
   const uid = c.core.users.ownerId();
   if (c.core.kernel.setEnabled(uid, id, true)) pushPlugin(c.core, id, "enabled", { uid, version: m.version });
-  return json({ install: rec, prompt: agentSetup(baseOf(c.url), { title, channel, setup: agent.setup ?? 1, interval: job.interval, key }), key } satisfies PluginInstalled);
+  return json({ install: rec, prompt: agentSetup(baseOf(c.url), { title, channel, setup: agent.setup ?? 1, key }), key } satisfies PluginInstalled);
 }
 
 // 手动更新: 不看自动开关, 版本一样也重新拉一遍 (市场缓存最多 5 分钟)
