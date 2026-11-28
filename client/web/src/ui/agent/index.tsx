@@ -3,11 +3,12 @@ import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
 import { useState } from "react";
-import { useFeed, useLinkState } from "../../app/hooks";
+import { useFeed, useLinkState, useUser } from "../../app/hooks";
 import { TXT_LOADING } from "../../core/constants";
 import { feed } from "../../core/feed";
 import { EmptyState, PageHeader } from "../kit/Panes";
 import type { AreaProps } from "../Shell";
+import { HxoaSection } from "./Hxoa";
 import { ACT_APPROVE, ACT_REJECT, TaskCard } from "./TaskCard";
 
 const ACTIVE = new Set(["waiting", "running"]);
@@ -18,6 +19,7 @@ type Ask = { task: TaskSnapshot; option: PromptOption };
 export default function AgentArea(_: AreaProps) {
   const snap = useFeed();
   const state = useLinkState();
+  const owner = useUser()?.role === "owner";
   const [asking, setAsking] = useState<Ask | null>(null);
   const all = Object.values(snap.tasks).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated);
   const active = all.filter((t) => ACTIVE.has(t.state));
@@ -63,6 +65,8 @@ export default function AgentArea(_: AreaProps) {
           {ended.map((t) => (
             <TaskCard key={t.id} task={t} />
           ))}
+          {/* hxoa 的工作区与 worker 也算 agent harness, 放在最后 (#144); 只有主人能管 */}
+          {owner && <HxoaSection />}
         </div>
       </div>
       <ConfirmDialog
