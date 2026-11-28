@@ -28,12 +28,15 @@ import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
-/** 一项传输: up 为上传; progress 0..1; error 非空为失败 (可重试); done 为完成。 */
-data class Transfer(val key: String, val name: String, val dir: String, val up: Boolean, val progress: Float = 0f, val error: String? = null, val done: Boolean = false)
+/** 一项上传: progress 0..1; speed 为字节每秒; error 非空为失败 (可重试); done 为完成。 */
+data class Transfer(
+    val key: String, val name: String, val dir: String, val up: Boolean, val progress: Float = 0f, val error: String? = null, val done: Boolean = false,
+    val size: Long = 0, val speed: Double = 0.0,
+)
 
 /**
- * 网盘的上传下载 (#154): 应用级单例, 离开页面也继续; 传输时起前台服务, 切到后台不被冻结。
- * 上传断点续传: Drive 的票据与每片回执存本机 (files/drive-up/), 24 小时内重来只补缺的片; 下载留 .part 按 Range 接着下。
+ * 网盘的上传 (#154): 应用级单例, 离开页面也继续; 传输时起前台服务, 切到后台不被冻结。
+ * 断点续传: Drive 的票据与每片回执存本机 (files/drive-up/), 24 小时内重来只补缺的片。保存到手机见 [DriveDownloads]。
  */
 object DriveTransfers {
     val items = mutableStateListOf<Transfer>()
@@ -46,7 +49,6 @@ object DriveTransfers {
     private val upLock = Mutex()
     private val uris = HashMap<String, Uri>()
     private const val UP_DIR = "drive-up"
-    private const val DL_DIR = "drive"
     private const val TICKET_TTL_MS = 23 * 3600_000L
     private const val CHUNK_TRIES = 3
     private const val RETRY_SEC = 2L
@@ -54,11 +56,12 @@ object DriveTransfers {
     private const val BUF = 64 * 1024
     private const val STEP = 0.02f
     private const val TITLE_UP = "网盘上传"
-    private const val TITLE_DL = "网盘下载"
     private const val PERCENT = 100
     private const val RENAME_TRIES = 3
-    private val links = HashMap<String, Pair<String, Long>>()
+    private val links = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
     private const val LINK_KEEP_MS = 5 * 3600_000L
+
+    val busy: Boolean get() = items.any { !it.done && it.error == null }
 
     /** 多选上传到 dir: 排队一个个传。 */
     fun upload(context: Context, list: List<Uri>, dir: String) {
@@ -68,7 +71,7 @@ object DriveTransfers {
             val key = sha1("$dir|$name|$size|$uri")
             uris[key] = uri
             items.removeAll { it.key == key }
-            items.add(Transfer(key, name, dir, up = true))
+            items.add(Transfer(key, name, dir, up = true, size = size))
             scope.launch { upLock.withLock { runUpload(app, key) } }
         }
     }
@@ -108,7 +111,7 @@ object DriveTransfers {
 
     /** 除了刚结束的 key 没有别的在传时才停前台服务。 */
     private suspend fun finishIfIdle(app: Context, key: String) {
-        if (withContext(Dispatchers.Main) { items.none { !it.done && it.error == null && it.key != key } }) TransferService.finish(app)
+        if (withContext(Dispatchers.Main) { items.none { !it.done && it.error == null && it.key != key } } && !DriveDownloads.busy) TransferService.finish(app)
     }
 
     private suspend fun uploadOne(app: Context, api: DriveApi, key: String, uri: Uri, t: Transfer) {
@@ -134,15 +137,18 @@ object DriveTransfers {
         // 直传 Drive 公网 (#157): 地址不通就这次上传剩下的片都退回 AIOA 转发
         val route = ChunkRoute(s.optString("direct").ifEmpty { null })
         var last = 0f
+        val meter = SpeedMeter()
         for (i in UploadParts.pending(count, { folds.has(it.toString()) }, { receipts.has(it.toString()) })) {
             val off = i * chunkSize
             val len = minOf(chunkSize, size - off)
             val rc = putChunk(app, api, route, uri, ticket, i, off, len, mime) { sent ->
                 val p = (off + sent).toFloat() / size.coerceAtLeast(1)
+                meter.add(System.currentTimeMillis(), off + sent)
                 if (p - last >= STEP) {
                     last = p
-                    update(key) { it.copy(progress = p) }
-                    notify(app, TITLE_UP, t, p)
+                    val sp = meter.speed()
+                    update(key) { it.copy(progress = p, speed = sp) }
+                    notify(app, TITLE_UP, t.copy(name = "${t.name} · ${speedText(sp)}"), p)
                 }
             }
             receipts.put(i.toString(), rc)
@@ -185,7 +191,7 @@ object DriveTransfers {
             try {
                 return api.initUpload(dir, n, size, mime)
             } catch (e: DriveError) {
-                if (e.code != HTTP_CONFLICT || e.apiCode == READONLY) throw e
+                if (e.code != HTTP_CONFLICT) throw e
                 n = numbered(name, k + 1)
             }
         }
@@ -259,11 +265,6 @@ object DriveTransfers {
         }
     }
 
-    /** 本机已下载的副本, 没有返回 null。 */
-    fun cached(context: Context, n: DriveNode): File? = target(context, n).takeIf { it.isFile && it.length() == n.size }
-
-    private fun target(context: Context, n: DriveNode): File = File(File(context.filesDir, "$DL_DIR/${n.id}"), n.name.replace(UNSAFE, "_"))
-
     /** 签名直链 (6 小时), 按节点缓存 5 小时。 */
     suspend fun link(context: Context, n: DriveNode): String {
         links[n.id]?.let { (url, at) -> if (System.currentTimeMillis() - at < LINK_KEEP_MS) return url }
@@ -272,95 +273,18 @@ object DriveTransfers {
         return url
     }
 
-    /** 下到本机后执行 then (主线程); 已经有了直接执行。 */
-    fun download(context: Context, n: DriveNode, then: (File) -> Unit) {
-        val app = context.applicationContext
-        cached(app, n)?.let { return then(it) }
-        val t = Transfer("dl:${n.id}", n.name, "", up = false)
-        if (items.any { it.key == t.key && !it.done && it.error == null }) return
-        items.removeAll { it.key == t.key }
-        items.add(t)
-        scope.launch {
-            notify(app, TITLE_DL, t, 0f)
-            val r = runCatching {
-                fetch(app, n) { p ->
-                    update(t.key) { it.copy(progress = p) }
-                    notify(app, TITLE_DL, t, p)
-                }
-            }
-            finishIfIdle(app, t.key)
-            r.onSuccess { f ->
-                update(t.key) { it.copy(progress = 1f, done = true) }
-                withContext(Dispatchers.Main) { then(f) }
-            }.onFailure { e -> update(t.key) { it.copy(error = e.message ?: "下载失败") } }
-        }
-    }
-
-    private suspend fun fetch(app: Context, n: DriveNode, progress: (Float) -> Unit): File {
-        val out = target(app, n)
-        out.parentFile?.mkdirs()
-        val tmp = File(out.path + ".part")
-        if (tmp.length() > n.size) tmp.delete()
-        var stalls = 0
-        var last = 0f
-        var relinked = false
-        while (tmp.length() < n.size) {
-            val before = tmp.length()
-            val req = Request.Builder().url(link(app, n)).apply { if (before > 0) header("Range", "bytes=$before-") }.build()
-            val gone = withContext(Dispatchers.IO) {
-                Net.client(app).newCall(req).execute().use { res ->
-                    // 直链过期或文件换了位置: 换一次地址再下
-                    if (res.code in RELINK && !relinked) return@use true
-                    if (!res.isSuccessful) throw DriveError("下载失败 (HTTP ${res.code})", res.code)
-                    val append = res.code == HTTP_PARTIAL && before > 0
-                    var done = if (append) before else 0L
-                    res.body!!.byteStream().use { input ->
-                        java.io.FileOutputStream(tmp, append).use { o ->
-                            val buf = ByteArray(BUF)
-                            while (true) {
-                                val k = input.read(buf)
-                                if (k < 0) break
-                                o.write(buf, 0, k)
-                                done += k
-                                val p = done.toFloat() / n.size.coerceAtLeast(1)
-                                if (p - last >= STEP) {
-                                    last = p
-                                    progress(p)
-                                }
-                            }
-                        }
-                    }
-                    false
-                }
-            }
-            if (gone) {
-                links.remove(n.id)
-                relinked = true
-                continue
-            }
-            if (tmp.length() == before && ++stalls >= CHUNK_TRIES) error("下载没有进展, 稍后再试")
-        }
-        if (!tmp.renameTo(out)) error("保存失败")
-        return out
-    }
-
-    fun cacheBytes(context: Context): Long = File(context.filesDir, DL_DIR).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
-
-    fun clearCache(context: Context) {
-        File(context.filesDir, DL_DIR).deleteRecursively()
+    /** 直链过期 (403 / 410): 丢掉缓存, 下次重新要。 */
+    fun forgetLink(id: String) {
+        links.remove(id)
     }
 
     private fun sha1(s: String) = MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
-    private val UNSAFE = Regex("[\\\\/:*?\"<>|]")
-    private val RELINK = setOf(403, 404, 410)
-    private const val HTTP_PARTIAL = 206
     private const val HTTP_CONFLICT = 409
     private const val HTTP_BAD = 400
     private const val HTTP_CLIENT_MAX = 499
     private const val HTTP_TOO_MANY = 429
     private const val HTTP_SERVER = 500
-    private const val READONLY = "drive_readonly"
     private const val HTTP_BAD_GATEWAY = 502
     // 直传时这些状态可能是公网地址用不了 (被 WAF 拦, 不存在, 方法不对, 旧版要令牌), 改走转发; 真是票据的问题转发也会再报
     private val DIRECT_FALLBACK = setOf(401, 403, 404, 405, 407, 413, 451)

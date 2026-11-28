@@ -56,17 +56,18 @@ private class ViewPrefs(context: Context) {
         set(v) = p.edit().putString("key", v.key.name).putBoolean("desc", v.desc).apply()
 }
 
-private enum class Sub { FILES, TRASH, SHARES }
+private enum class Sub { FILES, TRASH, SHARES, TRANSFERS }
 
 /**
- * 网盘页 (#154): HX-CF-Drive 的目录树。先显示本机缓存再刷新, 不轮询; 只在进目录, 下拉刷新, 自己改动之后刷新。
- * 返回键先退回上一级目录, 到根后交给外壳 (回总览)。
+ * 网盘页 (#154): HX-CF-Drive 里网盘独立根目录下的目录树 (#158), 路径都是网盘内的。先显示本机缓存再刷新, 不轮询;
+ * 只在进目录, 下拉刷新, 自己改动之后刷新。点文件先进预览页; 返回键先关预览与子页, 再退回上一级目录, 到根后交给外壳 (回总览)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     DriveGate.load(context)
+    DriveDownloads.load(context)
     val api = remember { DriveApi(context) }
     val prefs = remember { ViewPrefs(context) }
     val scope = rememberCoroutineScope()
@@ -83,8 +84,7 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
     var acting by remember { mutableStateOf<DriveNode?>(null) }
     var dialog by remember { mutableStateOf<DriveDialog?>(null) }
     var menu by remember { mutableStateOf(false) }
-    val readonly = DrivePaths.readonly(path, DriveGate.whole)
-    val rootLabel = if (DriveGate.whole) "网盘" else "网盘 (aioa)"
+    var viewing by remember { mutableStateOf<DriveNode?>(null) }
 
     fun refresh() {
         scope.launch {
@@ -105,9 +105,10 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
         uris.forEach { u -> runCatching { context.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         if (uris.isNotEmpty()) DriveTransfers.upload(context, uris, path)
     }
-    val back = query != null || path != "/" || sub != Sub.FILES
+    val back = viewing != null || query != null || path != "/" || sub != Sub.FILES
     BackHandler(back) {
         when {
+            viewing != null -> viewing = null
             sub != Sub.FILES -> sub = Sub.FILES
             query != null -> { query = null; found = null }
             else -> path = DrivePaths.parent(path)
@@ -116,16 +117,22 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
     when (sub) {
         Sub.TRASH -> return TrashPage(api, modifier) { sub = Sub.FILES; refresh() }
         Sub.SHARES -> return SharesPage(api, modifier) { sub = Sub.FILES }
+        Sub.TRANSFERS -> return TransfersPage { sub = Sub.FILES }
         Sub.FILES -> Unit
+    }
+    viewing?.let { n ->
+        PreviewPage(n, { viewing = null }) { dialog = it }
+        dialog?.let { d -> DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }) { refresh() } }
+        return
     }
     val open: (DriveNode) -> Unit = { n ->
         if (n.dir) { query = null; found = null; path = if (n.path.isNotEmpty()) n.path else DrivePaths.join(path, n.name) }
-        else preview(context, scope, n) { dialog = it }
+        else viewing = n
     }
     val shown = sortNodes(found ?: items.orEmpty(), sort)
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Crumbs(path, rootLabel, Modifier.weight(1f)) { query = null; found = null; path = it }
+            Crumbs(path, "网盘", Modifier.weight(1f)) { query = null; found = null; path = it }
             ToolIcon("search", query != null) { query = if (query == null) "" else null; found = null }
             ToolIcon(if (grid) "menu" else "layout-dashboard") { grid = !grid; prefs.grid = grid }
             ToolIcon("chevrons-up-down") { dialog = DriveDialog.Sort }
@@ -141,11 +148,8 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
         }
         Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             err?.let { e -> ErrorNote(e.message ?: "出错了", Modifier.fillMaxWidth().padding(top = 6.dp), e.kind, onRetry = ::refresh) { err = null } }
-            if (readonly) Note("shield-check", "这里是聊天附件目录, 只能看, 下载与分享")
-            if (!DriveGate.whole && path == SEP && query == null) Note("hard-drive", DRIVE_SCOPE_HINT)
-            val list = DriveTransfers.items.toList()
-            if (list.isNotEmpty()) TransferList(list.takeLast(5), { DriveTransfers.retry(context, it) }) { DriveTransfers.dismiss(it) }
-            if (!readonly && query == null) Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TransferSummary { sub = Sub.TRANSFERS }
+            if (query == null) Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HxButton("上传", { pick.launch(arrayOf("*/*")) }, icon = "arrow-up", size = HxButtonSize.Sm)
                 HxButton("新建文件夹", { dialog = DriveDialog.Mkdir }, icon = "plus", size = HxButtonSize.Sm, variant = HxButtonVariant.Outline)
             }
@@ -162,8 +166,8 @@ fun DrivePage(chat: ChatModel, modifier: Modifier = Modifier) {
             }
         }
     }
-    if (menu) PageMenu({ menu = false }, { sub = Sub.TRASH }, { sub = Sub.SHARES }, ::refresh)
-    acting?.let { n -> NodeActions(n, DrivePaths.readonly(if (n.path.isNotEmpty()) n.path else DrivePaths.join(path, n.name), DriveGate.whole), { acting = null }, open) { dialog = it } }
+    if (menu) PageMenu({ menu = false }, { sub = Sub.TRANSFERS }, { sub = Sub.TRASH }, { sub = Sub.SHARES }, ::refresh) { dialog = DriveDialog.About }
+    acting?.let { n -> NodeActions(n, { acting = null }, open) { dialog = it } }
     dialog?.let { d ->
         DriveDialogs(d, api, chat, path, sort, { sort = it; prefs.sort = it }, { dialog = null }) { refresh() }
     }

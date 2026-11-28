@@ -61,12 +61,7 @@ object DrivePaths {
     fun validName(name: String): Boolean =
         name.isNotBlank() && name == name.trim() && name.length <= NAME_MAX && !name.contains(SEP) && !name.contains('\\') && name != "." && name != ".." && name.none { it.code < 0x20 }
 
-    /** 附件目录 (protocol isDriveReadonly): 整盘在 /aioa 与 /aioa/YYYY-MM 下, 退回时在根下的 /YYYY-MM。 */
-    fun readonly(path: String, whole: Boolean): Boolean =
-        if (whole) path == AIOA_DIR || Regex("^$AIOA_DIR/\\d{4}-\\d{2}(/|$)").containsMatchIn(path) else Regex("^/\\d{4}-\\d{2}(/|$)").containsMatchIn(path)
-
     private const val NAME_MAX = 255
-    private const val AIOA_DIR = "/aioa"
 }
 
 enum class SortKey(val label: String) { NAME("名字"), SIZE("大小"), TIME("修改时间") }
@@ -107,29 +102,45 @@ fun sizeText(bytes: Long): String = when {
     else -> "%.2f GB".format(bytes / (KB * KB * KB).toDouble())
 }
 
-/** 预览方式: 图片与小文本在 App 里看, 视频交给系统播放器播直链, 其余下载后交给系统。 */
-enum class Preview { IMAGE, TEXT, VIDEO, AUDIO, SYSTEM }
+/** 预览方式 (#158): 点文件先进预览页, 不进下载目录; INFO 只显示信息卡。 */
+enum class Preview { IMAGE, TEXT, PDF, AUDIO, VIDEO, INFO }
 
-private const val TEXT_PREVIEW_MAX = 2L * KB * KB
-private val TEXT_EXT = setOf("txt", "md", "log", "json", "csv", "xml", "yml", "yaml", "ini", "conf", "kt", "ts", "js", "py", "sh", "toml")
+// 文本只读前 1 MB (Range), 图片与 PDF 太大就只给信息卡
+internal const val TEXT_PREVIEW_MAX = KB * KB
+private const val IMAGE_PREVIEW_MAX = 50L * KB * KB
+private const val PDF_PREVIEW_MAX = 200L * KB * KB
+private val TEXT_EXT = setOf(
+    "txt", "md", "log", "json", "csv", "xml", "yml", "yaml", "ini", "conf", "kt", "kts", "java", "ts", "tsx", "js", "jsx", "py", "sh", "toml",
+    "c", "h", "cpp", "hpp", "cc", "go", "rs", "rb", "php", "sql", "html", "css", "gradle", "properties", "env", "srt", "vtt",
+)
+private val IMAGE_EXT = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif")
+private val VIDEO_EXT = setOf("mp4", "mkv", "webm", "mov", "3gp", "m4v", "ts")
+private val AUDIO_EXT = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "amr")
+private val TEXT_MIME = setOf("application/json", "application/xml", "application/javascript", "application/x-sh", "application/toml", "application/yaml")
+
+fun extOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 
 fun previewOf(n: DriveNode): Preview {
-    val ext = n.name.substringAfterLast('.', "").lowercase()
+    val ext = extOf(n.name)
+    val mime = n.mime.lowercase()
     return when {
-        n.mime.startsWith("image/") -> Preview.IMAGE
-        n.mime.startsWith("video/") -> Preview.VIDEO
-        n.mime.startsWith("audio/") -> Preview.AUDIO
-        (n.mime.startsWith("text/") || ext in TEXT_EXT) && n.size <= TEXT_PREVIEW_MAX -> Preview.TEXT
-        else -> Preview.SYSTEM
+        n.dir -> Preview.INFO
+        mime.startsWith("image/") || ext in IMAGE_EXT -> if (n.size <= IMAGE_PREVIEW_MAX) Preview.IMAGE else Preview.INFO
+        mime.startsWith("video/") || (ext in VIDEO_EXT && !mime.startsWith("text/")) -> Preview.VIDEO
+        mime.startsWith("audio/") || ext in AUDIO_EXT -> Preview.AUDIO
+        mime == "application/pdf" || ext == "pdf" -> if (n.size <= PDF_PREVIEW_MAX) Preview.PDF else Preview.INFO
+        mime.startsWith("text/") || mime in TEXT_MIME || ext in TEXT_EXT -> Preview.TEXT
+        else -> Preview.INFO
     }
 }
 
 /** 列表里的图标 (Lucide 名)。 */
 fun iconOf(n: DriveNode): String = when {
     n.dir -> "folder"
-    n.mime.startsWith("image/") -> "image"
-    n.mime.startsWith("video/") -> "circle-play"
-    n.mime.startsWith("text/") || previewOf(n) == Preview.TEXT -> "file-text"
+    previewOf(n) == Preview.IMAGE -> "image"
+    previewOf(n) == Preview.VIDEO -> "circle-play"
+    previewOf(n) == Preview.AUDIO -> "mic"
+    previewOf(n) == Preview.TEXT || previewOf(n) == Preview.PDF -> "file-text"
     n.mime.contains("zip") || n.mime.contains("compressed") -> "archive"
     else -> "file"
 }
@@ -137,8 +148,8 @@ fun iconOf(n: DriveNode): String = when {
 /** 分享有效期选项: (显示, 秒), 0 为永久。 */
 val SHARE_TTLS = listOf("1 天" to 86_400L, "7 天" to 7 * 86_400L, "30 天" to 30 * 86_400L, "永久" to 0L)
 
-/** 网盘只看 /aioa 时的说明 (#157): 设置与网盘页共用。 */
-const val DRIVE_SCOPE_HINT = "网盘默认复用聊天附件的 Drive 令牌 (CFD_TOKEN, 根目录 /aioa), 不用新建令牌。想看整个盘: 在 Drive 后台把这个令牌的根目录改成 /, 新附件会自动放在 /aioa 下; 或另配 CFD_DRIVE_TOKEN。"
+/** 网盘页菜单 "关于网盘" 的说明 (#158), 页面上不再常驻长说明。 */
+const val DRIVE_ABOUT = "网盘是独立的存储区, 和聊天附件, 邮件附件分开。聊天里 \"存到网盘\" 的文件在 \"聊天文件\" 里。"
 
 /** Drive 的分段大小, 与 protocol 的 DRIVE_PART_SIZE 一致: 超过这么多片的上传按组 fold (#157)。 */
 const val DRIVE_PART_SIZE = 256

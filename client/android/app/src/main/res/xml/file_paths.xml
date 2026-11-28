@@ -3,4 +3,6 @@
     <cache-path name="update" path="update/" />
     <files-path name="att" path="att/" />
     <files-path name="drive" path="drive/" />
+    <cache-path name="preview" path="drive-preview/" />
+    <external-files-path name="dl" path="Download/" />
 </paths>

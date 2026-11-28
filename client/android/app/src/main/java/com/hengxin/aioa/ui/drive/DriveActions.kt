@@ -18,25 +18,35 @@ private const val MEMO = "备忘"
 
 internal fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
-/** 本机文件给系统与上传用的 content:// 地址 (FileProvider 的 att / drive 目录)。 */
+/** 本机文件给系统与上传用的 content:// 地址 (FileProvider 的 att, 预览缓存, 旧系统的下载目录)。 */
 internal fun shareUri(context: Context, file: File): Uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
 
 /** 视频与音频交给系统播放器直接播直链 (支持拖动), 不先下载。 */
-internal suspend fun stream(context: Context, n: DriveNode): Boolean {
+private suspend fun stream(context: Context, n: DriveNode): Boolean {
     val url = DriveTransfers.link(context, n)
     val view = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), n.mime.ifEmpty { "video/*" }).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return runCatching { context.startActivity(Intent.createChooser(view, "播放").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
 }
 
-/** 下载后用系统里能打开它的应用打开。 */
+/** 用其他应用打开 (#158): 保存过的直接打开; 音视频播直链; 其余下到预览缓存再交给系统, 不进下载目录。 */
 internal fun openWithSystem(context: Context, n: DriveNode) {
-    DriveTransfers.download(context, n) { f ->
-        if (!FileTransfer.open(context, f, n.mime.ifEmpty { "application/octet-stream" })) toast(context, "没有能打开它的应用")
+    val app = context.applicationContext
+    DriveDownloads.saved(app, n)?.let { if (!DriveDownloads.open(app, it, n.mime)) toast(app, "没有能打开它的应用"); return }
+    DriveTransfers.ui.launch {
+        val p = previewOf(n)
+        if (p == Preview.VIDEO || p == Preview.AUDIO) {
+            if (!runCatching { stream(app, n) }.getOrDefault(false)) toast(app, "没有能播放它的应用")
+            return@launch
+        }
+        if (n.size > TEXT_PREVIEW_MAX) toast(app, "正在准备文件...")
+        runCatching { PreviewCache.file(app, n) }
+            .onSuccess { f -> if (!FileTransfer.open(app, f, n.mime.ifEmpty { "application/octet-stream" })) toast(app, "没有能打开它的应用") }
+            .onFailure { toast(app, it.message ?: "下载失败") }
     }
 }
 
 /**
- * 聊天文件存到网盘 (#154): 文件在 Drive 上时服务端复制 (0 字节); 否则用本机副本 (没有就先下载) 上传到 /聊天文件。
+ * 聊天文件存到网盘 (#154): 文件在 Drive 上时服务端复制 (0 字节); 否则用本机副本 (没有就先下载) 上传到网盘根下的 /聊天文件 (#158)。
  */
 suspend fun saveChatFile(context: Context, f: FileRef) {
     val app = context.applicationContext
@@ -71,11 +81,8 @@ suspend fun sendToGroup(context: Context, chat: ChatModel, n: DriveNode, groupKe
         return
     }
     toast(app, "正在下载后发送")
-    DriveTransfers.download(app, n) { f ->
-        DriveTransfers.ui.launch {
-            FileTransfer.upload(app, shareUri(app, f), channel) {}.onSuccess { ref ->
-                toast(app, if (chat.sendFileRef(channel, text, ref.id)) "已发送" else "没连上服务端, 稍后再试")
-            }.onFailure { toast(app, it.message ?: "上传失败") }
-        }
-    }
+    val f = runCatching { PreviewCache.file(app, n) }.getOrElse { return toast(app, it.message ?: "下载失败") }
+    FileTransfer.upload(app, shareUri(app, f), channel) {}.onSuccess { ref ->
+        toast(app, if (chat.sendFileRef(channel, text, ref.id)) "已发送" else "没连上服务端, 稍后再试")
+    }.onFailure { toast(app, it.message ?: "上传失败") }
 }

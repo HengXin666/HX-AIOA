@@ -34,7 +34,7 @@ import com.hengxin.aioa.ui.hxoa.FullPage
 import com.hengxin.aioa.ui.hxoa.copyText
 import kotlinx.coroutines.launch
 
-/** 选目标文件夹: 面包屑 + 子文件夹, "移到这里"; 不能移到自己里面, 附件目录不能选。 */
+/** 选目标文件夹: 面包屑 + 子文件夹, "移到这里"; 不能移到自己里面。 */
 @Composable
 internal fun MovePicker(api: DriveApi, start: String, n: DriveNode, close: () -> Unit, submit: suspend (String) -> String?) {
     val scope = rememberCoroutineScope()
@@ -47,7 +47,7 @@ internal fun MovePicker(api: DriveApi, start: String, n: DriveNode, close: () ->
         runCatching { api.list(at) }.onSuccess { l -> dirs = l.items.filter { it.dir }; err = null }.onFailure { err = it.message }
     }
     val self = n.path.ifEmpty { null }
-    val bad = DrivePaths.readonly(at, DriveGate.whole) || (n.dir && self != null && (at == self || at.startsWith("$self/")))
+    val bad = n.dir && self != null && (at == self || at.startsWith("$self/"))
     AlertDialog(
         onDismissRequest = { if (!busy) close() },
         title = { androidx.compose.material3.Text("移动 ${n.name}") },

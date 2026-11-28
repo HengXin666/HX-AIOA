@@ -24,7 +24,6 @@ import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Glyph
 import com.hengxin.aioa.kit.HomeRow
 import com.hengxin.aioa.kit.Icon
-import com.hengxin.aioa.kit.ProgressLine
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.chartPalette
 import com.hengxin.aioa.kit.pointerTap
@@ -96,25 +95,17 @@ internal fun NodeCell(n: DriveNode, onOpen: () -> Unit, onMore: () -> Unit) {
     }
 }
 
-/** 正在传的与传完 / 失败的: 进度条, 失败可重试, 完成或失败可划掉。 */
+/** 网盘首页的一行传输摘要: 有正在传的才显示, 点开进传输页。 */
 @Composable
-internal fun TransferList(list: List<Transfer>, onRetry: (Transfer) -> Unit, onDismiss: (Transfer) -> Unit) {
+internal fun TransferSummary(onOpen: () -> Unit) {
+    val ups = DriveTransfers.items.count { !it.done && it.error == null }
+    val dls = DriveDownloads.tasks.filter { it.state == DlState.RUNNING }
+    if (ups == 0 && dls.isEmpty()) return
+    val speed = dls.sumOf { it.speed } + DriveTransfers.items.filter { !it.done && it.error == null }.sumOf { it.speed }
     val c = Aioa.colors
     val shape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.border.copy(alpha = 0.6f), shape)) {
-        list.forEachIndexed { i, t ->
-            val sub = when {
-                t.error != null -> t.error
-                t.done -> if (t.up) "已上传到 ${t.dir}" else "已下载"
-                else -> "${if (t.up) "上传" else "下载"} ${(t.progress * 100).toInt()}%"
-            }
-            HomeRow(t.name, sub, divider = i > 0, lead = { Glyph(if (t.up) "arrow-up" else "download", if (t.error != null) c.danger else c.text) }, end = {
-                Row {
-                    if (t.error != null && t.up) Box(Modifier.size(32.dp).clip(CircleShape).pointerTap { onRetry(t) }, contentAlignment = Alignment.Center) { Icon("refresh-cw", c.textSecondary, 16.dp) }
-                    if (t.done || t.error != null) Box(Modifier.size(32.dp).clip(CircleShape).pointerTap { onDismiss(t) }, contentAlignment = Alignment.Center) { Icon("x", c.textSecondary, 16.dp) }
-                }
-            }) { if (!t.done && t.error == null) ProgressLine(t.progress) }
-        }
+        HomeRow("正在传输 ${ups + dls.size} 项", "${speedText(speed)} · 点开看详情", lead = { Glyph("download") }, onClick = onOpen)
     }
 }
 
