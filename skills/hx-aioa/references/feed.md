@@ -12,7 +12,7 @@ hxaioa api POST /api/v1/messages '{"feed":{"source":"<来源名>","items":[{"id"
 - `status`: `ok` 有效, `go` 进行中, `doubt` 存疑, `dead` 失效。
 - `summary` 400 字内, 写结论和关键时间; `todo` 写要做什么才能拿到; `until` 截止日期。
 - `heat` 热度 (综合热度或浏览数), `likes` 点赞数, `replies` 评论数; 拿不到就不写。
-- `at` 原帖发布时间 (ISO 或毫秒), 不写用推送时间; `links` 最多 4 个 `{label,url}`。
+- `at` 原帖发布时间 (ISO 或毫秒), 不写用推送时间; 动态定时按它学来源的活跃时段, 能拿到就一定写。`links` 最多 4 个 `{label,url}`。
 - `id` 写帖子 id 这类稳定值: 同一条再推时只保留最新, 已失效的可以带 `status: dead` 再推一次。
 
 ## 标签 (kind)

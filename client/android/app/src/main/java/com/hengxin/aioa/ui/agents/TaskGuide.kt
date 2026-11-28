@@ -61,7 +61,7 @@ fun TaskGuide() {
             }
         }
     }
-    Text("多久跑一次不用选: 它会按群里消息的时段和自己的额度自动安排, 没事时几乎不花额度。想要固定时刻 (如每天 9 点), 写进任务或之后在群里跟它说, 它照做并替你权衡。", fontSize = 12.sp, lineHeight = 18.sp, color = c.outline)
+    Text("多久跑一次不用选: 它按事件集中的时段自动安排 (群里有人说话的时间, 或任务要盯的来源发新内容的时间), 闲时少跑, 没事时几乎不花额度。想要固定时刻 (如每天 9 点), 写进任务或之后在群里跟它说, 它照做并替你权衡。", fontSize = 12.sp, lineHeight = 18.sp, color = c.outline)
 }
 
 private fun nextSteps(name: String) = listOf(
@@ -77,5 +77,29 @@ fun NextSteps(name: String) {
     Column(Modifier.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.6f), BOX).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("接下来", fontSize = 14.sp, fontWeight = FontWeight.Medium)
         nextSteps(name).forEach { Text("· $it", fontSize = 13.sp, lineHeight = 19.sp) }
+    }
+}
+
+// 接入语里的任务段 (#165), 与 protocol SETUP_TASK_MARK / SETUP_TASK_FILL / SETUP_TASK_KEEP 一致
+private const val TASK_MARK = "要你做的事"
+private const val TASK_FILL = "发出前把这一行换成你的任务"
+private const val TASK_KEEP = "原来定时任务里写的任务, 原样保留"
+
+/** 复制接入语前的提示: 没写任务时醒目地指到 "要你做的事" 那一段, 与 Web 的 TaskHint 一致。 */
+@Composable
+fun TaskHint(prompt: String) {
+    val c = MaterialTheme.colorScheme
+    val fill = TASK_FILL in prompt
+    val text = when {
+        fill -> "复制后先找到 \"$TASK_MARK\" 那一段 (两条 === 线中间), 把尖括号那一行换成你的任务再发。别加在最后, 不然它会当成一句普通的话。"
+        TASK_KEEP in prompt -> "它会保留原来定时任务里写的任务, 不用重写; 想换任务就在群里跟它说。"
+        TASK_MARK in prompt -> "任务已经写在 \"$TASK_MARK\" 那一段 (两条 === 线中间), 想改就改那一段再发。"
+        else -> return
+    }
+    val bg = if (fill) c.errorContainer else c.surfaceVariant.copy(alpha = 0.6f)
+    val fg = if (fill) c.onErrorContainer else c.onSurfaceVariant
+    Column(Modifier.fillMaxWidth().background(bg, BOX).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (fill) Text("先填任务再发", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = fg)
+        Text(text, fontSize = 13.sp, lineHeight = 19.sp, color = fg)
     }
 }
