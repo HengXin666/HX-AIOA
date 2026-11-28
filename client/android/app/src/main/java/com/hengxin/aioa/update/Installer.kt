@@ -27,7 +27,8 @@ object Installer {
 
     // 返回给界面看的说明
     fun install(context: Context, apk: File, foreground: Boolean): String {
-        if (runCatching { session(context, apk) }.isSuccess) {
+        // 会话安装在这台机器上被系统中止过 (MIUI 等), 直接用系统安装界面
+        if (!preferView(context) && runCatching { session(context, apk) }.isSuccess) {
             return if (canSilent(context)) "正在安装, 完成后应用会自动重启" else "正在安装, 首次需要在系统界面确认一次"
         }
         val intent = viewIntent(context, apk)
@@ -103,6 +104,16 @@ object Installer {
             runCatching { installer.abandonSession(sessionId) }
             throw it
         }
+    }
+
+    private const val PREFS = "installer"
+    private const val KEY_VIEW = "prefer_view"
+
+    fun preferView(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_VIEW, false)
+
+    fun setPreferView(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_VIEW, on).apply()
     }
 
     private fun installerOf(context: Context): String? = runCatching {

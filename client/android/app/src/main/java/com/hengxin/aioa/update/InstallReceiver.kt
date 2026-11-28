@@ -23,7 +23,15 @@ class InstallReceiver : BroadcastReceiver() {
                 if (confirm != null && AutoUpdate.foreground && runCatching { context.startActivity(confirm) }.isSuccess) return
                 Installer.notify(context, context.getString(R.string.update_confirm), confirm ?: manual(context))
             }
-            PackageInstaller.STATUS_FAILURE_ABORTED -> toast(context, context.getString(R.string.update_aborted))
+            // MIUI 等会直接中止会话安装 (不弹确认就回 ABORTED), 用户点 "取消" 也是这个状态:
+            // 两种都改用系统安装界面, 并记住这台机器以后直接走系统安装界面
+            PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                Installer.setPreferView(context, true)
+                val view = manual(context)
+                if (view != null && AutoUpdate.foreground && runCatching { context.startActivity(view) }.isSuccess) return
+                toast(context, context.getString(R.string.update_aborted))
+                Installer.notify(context, context.getString(R.string.update_confirm), view)
+            }
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
                 val text = context.getString(R.string.update_failed, message)
