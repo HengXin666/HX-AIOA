@@ -15,6 +15,7 @@ const SHARE_ID_RE = /^[A-Za-z0-9_-]{4,32}$/;
 // 分享有效期上限 10 年, 0 / 不给为永久
 const SHARE_TTL_MAX = 10 * 365 * 86400;
 const PASSWORD_MAX = 64;
+const HTTP_URL = /^https?:\/\//;
 
 const bad = (msg: string): never => {
   throw new DriveFail(400, msg);
@@ -45,7 +46,7 @@ const search: Op = async (fs, _req, url) => {
   if (!res.ok) return relay(res);
   const items: (DriveNode & { path: string })[] = [];
   for (const it of (await res.json<{ items: (DriveNode & { path: string })[] }>()).items) {
-    const rel = await toRel(fs, it.path);
+    const rel = toRel(fs, it.path);
     if (rel !== null) items.push({ ...it, path: rel });
   }
   return json({ items });
@@ -101,7 +102,10 @@ const uploads: Op = async (fs, req) => {
   const mime = typeof b.mime === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(b.mime) ? b.mime : undefined;
   const sha = typeof b.sha256 === "string" && /^[0-9a-f]{64}$/i.test(b.sha256) ? b.sha256.toLowerCase() : undefined;
   guardPath(fs, path);
-  return relay(await fs.json("POST", "/uploads", { path, name, size, mime, sha256: sha }));
+  // Drive v0.4 起给公网分片地址 chunkUrl: 改名成 direct 交给 App 直传; 旧版没有, App 退回 /drive/chunk 转发 (#157)
+  return relay<Record<string, unknown>>(await fs.json("POST", "/uploads", { path, name, size, mime, sha256: sha }), ({ chunkUrl, ...r }) =>
+    typeof chunkUrl === "string" && HTTP_URL.test(chunkUrl) ? { ...r, direct: chunkUrl } : r,
+  );
 };
 
 const ticketOf = (v: unknown): string => (typeof v === "string" && v.length > 0 && v.length <= TICKET_MAX ? v : bad("票据不合法"));

@@ -1,21 +1,27 @@
 import { DRIVE_AIOA_DIR } from "@hx-aioa/protocol";
 import type { Env } from "../env";
-import { driveDir } from "../files/store";
+import { attachDirOf, tokenRoot } from "../files/drive";
 
 const API = "/api/v1";
 
 /**
- * 网盘用的 Drive 客户端: 只走 Service Binding。整盘令牌 CFD_DRIVE_TOKEN 优先, 没配时退回附件令牌 CFD_TOKEN (根目录 /aioa)。
- * 和附件的 Drive 客户端分开: 令牌不同, 这里只做转发, 状态码与错误交给调用方。
+ * 网盘用的 Drive 客户端: 只走 Service Binding。整盘令牌 CFD_DRIVE_TOKEN 优先, 没配时用附件令牌 CFD_TOKEN。
+ * 和附件的 Drive 客户端分开: 这里只做转发, 状态码与错误交给调用方。
+ * 令牌能看到哪里以 Drive 里的根目录为准 (#157): 根是 / 就是整盘, 根是 /aioa 只看附件所在的目录; 用前先 ready()。
  */
 export class DriveFs {
+  // 令牌根在 Drive 里的绝对路径, ready() 后才准
+  rootAbs: string;
+
   constructor(
     private readonly fetcher: Fetcher,
     readonly origin: string,
     private readonly token: string,
-    // 整盘令牌: 路径从 Drive 根算; 否则从 /aioa 算
-    readonly whole: boolean,
-  ) {}
+    dedicated: boolean,
+  ) {
+    // 问到之前按令牌种类猜: 专用令牌按整盘, 附件令牌按 /aioa
+    this.rootAbs = dedicated ? "/" : DRIVE_AIOA_DIR;
+  }
 
   static from(env: Env): DriveFs | undefined {
     const origin = env.CFD_ORIGIN?.trim().replace(/\/+$/, "");
@@ -23,14 +29,25 @@ export class DriveFs {
     return env.DRIVE && token && origin ? new DriveFs(env.DRIVE, origin, token, !!env.CFD_DRIVE_TOKEN) : undefined;
   }
 
-  /** 网盘里显示的根: 整盘为 /, 退回时为 /aioa。 */
-  get root(): string {
-    return this.whole ? "/" : DRIVE_AIOA_DIR;
+  /** 问一次令牌根 (每个 isolate 按令牌缓存 10 分钟); 问不到时保持猜测。 */
+  async ready(): Promise<this> {
+    this.rootAbs = (await tokenRoot(this.fetcher, this.origin, this.token)) ?? this.rootAbs;
+    return this;
   }
 
-  /** 附件月目录在本令牌下的路径 (attach 复制到这里)。 */
-  attachDir(now = Date.now()): string {
-    return this.whole ? `${DRIVE_AIOA_DIR}${driveDir(now)}` : driveDir(now);
+  /** 整盘: 令牌根是 /, 路径从 Drive 根算, 附件在 /aioa 下; 否则路径从令牌根算。 */
+  get whole(): boolean {
+    return this.rootAbs === "/";
+  }
+
+  /** 网盘里显示的根 (Drive 里的绝对路径)。 */
+  get root(): string {
+    return this.rootAbs;
+  }
+
+  /** 附件月目录在本令牌下的路径 (attach 复制到这里); 令牌看不到 /aioa 时为 null。 */
+  attachDir(now = Date.now()): string | null {
+    return attachDirOf(this.rootAbs, now);
   }
 
   fetch(method: string, path: string, body?: BodyInit | null, headers: Record<string, string> = {}): Promise<Response> {

@@ -19,7 +19,7 @@ const BASE = "https://aioa.example";
 type Call = { method: string; path: string; auth: string | null; body?: unknown };
 
 /** 假 Drive: 记下每次调用; stat 按 id 给路径, 根目录的绝对路径由 rootAbs 决定。 */
-function fakeDrive(calls: Call[], rootAbs = "/", paths: Record<string, string> = {}) {
+function fakeDrive(calls: Call[], rootAbs = "/", paths: Record<string, string> = {}, chunkUrl?: string) {
   return {
     async fetch(req: Request): Promise<Response> {
       const u = new URL(req.url);
@@ -35,19 +35,21 @@ function fakeDrive(calls: Call[], rootAbs = "/", paths: Record<string, string> =
       if (p === "/shares" && req.method === "GET") return Response.json({ items: [{ id: "abcdef1234", node_id: "n1", expires_at: null, created_at: 1, name: "a.txt", has_password: 1 }] });
       if (p === "/admin/stats") return Response.json({ error: "missing scope: stats" }, { status: 403 });
       if (p === "/fs/move") return Response.json({ error: "target exists" }, { status: 409 });
+      if (p === "/uploads") return Response.json({ done: false, ticket: "t", chunkSize: 8, chunkCount: 1, ...(chunkUrl ? { chunkUrl } : {}) });
+      if (p === "/fs/copy") return Response.json({ node: { id: "c1", name: "x", kind: "file", size: 1 } });
       return Response.json({ ok: true });
     },
   };
 }
 
-function envOf(calls: Call[], opts: { whole?: boolean; drive?: boolean; rootAbs?: string; paths?: Record<string, string>; origin?: string } = {}): Env {
+function envOf(calls: Call[], opts: { whole?: boolean; drive?: boolean; rootAbs?: string; paths?: Record<string, string>; origin?: string; chunkUrl?: string } = {}): Env {
   return {
     TOKEN_SECRET: "k",
     AUTH_TOKEN: "owner-token",
     CFD_ORIGIN: opts.origin ?? "https://drive.example",
     CFD_TOKEN: "hxd_aioa",
     ...(opts.whole === false ? {} : { CFD_DRIVE_TOKEN: "hxd_whole" }),
-    ...(opts.drive === false ? {} : { DRIVE: fakeDrive(calls, opts.rootAbs, opts.paths) }),
+    ...(opts.drive === false ? {} : { DRIVE: fakeDrive(calls, opts.rootAbs, opts.paths, opts.chunkUrl) }),
   } as unknown as Env;
 }
 
@@ -109,8 +111,9 @@ test("列目录: 路径穿越 400 且不转发; 正常转发并带 ETag, 再问 
   assert.equal(calls.length, 0);
   const r = (await call(env, "GET", "/api/v1/drive/list?path=//docs/"))!;
   assert.equal(r.status, 200);
-  assert.equal(calls[0]?.path, "/api/v1/fs/list?path=%2Fdocs");
-  assert.equal(calls[0]?.auth, "Bearer hxd_whole");
+  const listed = calls.find((x) => x.path.startsWith("/api/v1/fs/list"));
+  assert.equal(listed?.path, "/api/v1/fs/list?path=%2Fdocs");
+  assert.equal(listed?.auth, "Bearer hxd_whole");
   const body = await r.json<{ path: string; items: unknown[] }>();
   assert.deepEqual([body.path, body.items.length], ["/docs", 1]);
   const again = await call(env, "GET", "/api/v1/drive/list?path=/docs", { headers: { "if-none-match": r.headers.get("etag")! } });
@@ -176,4 +179,33 @@ test("通行证只签给真主人: 子号, 转发到子号 DO 的请求都 403; 
   const b = await r.json<{ pass: string; root: string; whole: boolean }>();
   assert.deepEqual([r.status, b.root, b.whole], [200, "/", true]);
   assert.equal((await call(env, "GET", "/api/v1/drive/list?path=/", { pass: b.pass }))?.status, 200);
+});
+
+test("申请上传: Drive 给了公网分片地址就交给 App 直传 (direct), 旧版 Drive 没有就不给 (#157)", async () => {
+  const body = { path: "/docs", name: "a.bin", size: 8 };
+  const neu = await (await call(envOf([], { chunkUrl: "https://drive.example/api/v1/uploads/chunk" }), "POST", "/api/v1/drive/uploads", { body }))!.json<Record<string, unknown>>();
+  assert.equal(neu.direct, "https://drive.example/api/v1/uploads/chunk");
+  assert.equal(neu.chunkUrl, undefined);
+  const old = await (await call(envOf([]), "POST", "/api/v1/drive/uploads", { body }))!.json<Record<string, unknown>>();
+  assert.deepEqual([old.ticket, old.direct], ["t", undefined]);
+});
+
+test("只配 CFD_TOKEN 但它的根在 Drive 后台改成了 /: 自动按整盘, 附件 /aioa 仍只读, 发到群复制进 /aioa/YYYY-MM (#157)", async () => {
+  const calls: Call[] = [];
+  const env = envOf(calls, { whole: false, rootAbs: "/", paths: { att: "/aioa/2026-11/f_1", doc: "/docs/a.txt", n1: "/docs/a.txt" }, origin: "https://moved.example" });
+  const owner = { owner: true, user: { id: "u_owner", role: "owner" } };
+  const p = await (await passRoute.handler(ctx(env, owner))).json<{ root: string; whole: boolean }>();
+  assert.deepEqual([p.root, p.whole], ["/", true]);
+  assert.equal((await call(env, "POST", "/api/v1/drive/delete", { body: { id: "att" } }))?.status, 409);
+  assert.equal((await call(env, "POST", "/api/v1/drive/delete", { body: { id: "doc" } }))?.status, 200);
+  const files = { drive: {}, create: () => ({ id: "f_x", name: "a.txt", size: 1, mime: "text/plain" }), done: () => true };
+  const attach = DRIVE_ROUTES.find((r) => r.re.test("/api/v1/drive/attach"))!;
+  const c = { req: new Request(new URL("/api/v1/drive/attach", BASE), { method: "POST", body: JSON.stringify({ id: "n1" }) }), url: new URL("/api/v1/drive/attach", BASE), params: [], who: owner, core: { env, files } } as never;
+  calls.length = 0;
+  const fake = (env as unknown as { DRIVE: { fetch: (r: Request) => Promise<Response> } }).DRIVE;
+  const orig = fake.fetch.bind(fake);
+  fake.fetch = async (req) => (new URL(req.url).searchParams.get("id") === "n1" ? Response.json({ node: { id: "n1", name: "a.txt", kind: "file", size: 1, mime: "text/plain" }, path: "/docs/a.txt" }) : orig(req));
+  assert.equal((await attach.handler(c)).status, 200);
+  const copy = calls.find((x) => x.path.startsWith("/api/v1/fs/copy"));
+  assert.match(String((copy?.body as { toPath: string }).toPath), /^\/aioa\/\d{4}-\d{2}$/);
 });

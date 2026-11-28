@@ -26,6 +26,7 @@ export async function driveWorker(req: Request, env: Env, url: URL): Promise<Res
   if (!fs) return reject(req, 503, "服务端还没接入 HX-CF-Drive", "drive_unavailable");
   const sub = url.pathname.slice(PATH_DRIVE.length);
   try {
+    await fs.ready();
     if (req.method === "DELETE" && sub.startsWith(SHARE_PREFIX)) return await unshare(fs, decodeURIComponent(sub.slice(SHARE_PREFIX.length)));
     const op = OPS[`${req.method} ${sub}`];
     if (!op) return reject(req, 404, "没有这个网盘接口", "not_found");

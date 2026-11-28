@@ -1,5 +1,6 @@
-import type { FileDirect } from "@hx-aioa/protocol";
+import { DRIVE_AIOA_DIR, DRIVE_PART_SIZE, type FileDirect } from "@hx-aioa/protocol";
 import type { Env } from "../env";
+import { driveDir } from "./store";
 
 const API = "/api/v1";
 const DAY_SEC = 86400;
@@ -17,8 +18,34 @@ export class DriveError extends Error {
 
 type NodeOut = { id: string; size: number };
 
+// 令牌根目录 (Drive 里的绝对路径) 每个 isolate 按令牌缓存 10 分钟: 主人在 Drive 后台改了根目录, 最多 10 分钟后跟上
+const ROOT_TTL_MS = 10 * 60_000;
+const roots = new Map<string, { path: string; at: number }>();
+
+/** 令牌根目录在 Drive 里的绝对路径 (#157); 问不到返回 null。 */
+export async function tokenRoot(fetcher: Fetcher, origin: string, token: string, now = Date.now()): Promise<string | null> {
+  const key = `${origin} ${token}`;
+  const hit = roots.get(key);
+  if (hit && now - hit.at < ROOT_TTL_MS) return hit.path;
+  const res = await fetcher.fetch(new Request(`${origin}${API}/fs/stat?path=%2F`, { headers: { authorization: `Bearer ${token}` } })).catch(() => null);
+  if (!res?.ok) return null;
+  const path = (await res.json<{ path?: unknown }>().catch(() => ({}) as { path?: unknown })).path;
+  if (typeof path !== "string" || !path.startsWith("/")) return null;
+  roots.set(key, { path, at: now });
+  return path;
+}
+
 /**
- * HX-CF-Drive 客户端。只走 Service Binding (同账号, 不经过公网和 WAF), 令牌是 Drive 后台建的受限令牌 (根目录 /aioa)。
+ * 聊天附件的月目录, 相对令牌根 (#157): 附件一律放在 Drive 的 /aioa/YYYY-MM。
+ * 根是 / (主人把 CFD_TOKEN 的根改成了整盘) 时带上 /aioa; 根是 /aioa 或问不到时按原约定 /YYYY-MM; 根在别处返回 null。
+ */
+export function attachDirOf(root: string | null, now = Date.now()): string | null {
+  if (root === "/") return `${DRIVE_AIOA_DIR}${driveDir(now)}`;
+  return root === null || root === DRIVE_AIOA_DIR ? driveDir(now) : null;
+}
+
+/**
+ * HX-CF-Drive 客户端。只走 Service Binding (同账号, 不经过公网和 WAF), 令牌是 Drive 后台建的令牌 (根目录 /aioa, 或整盘 /, 见 dir)。
  * CFD_ORIGIN 是 Drive 的公网地址: 经 Binding 发的请求也用它做 URL, Drive 按请求地址生成的直链才是客户端能访问的。
  */
 export class Drive {
@@ -45,6 +72,11 @@ export class Drive {
 
   private json<T>(path: string, body: unknown): Promise<T> {
     return this.call<T>("POST", path, JSON.stringify(body), { "content-type": "application/json" });
+  }
+
+  /** 新附件放哪个目录 (相对令牌根): 根在 /aioa 与 / 之外时照旧放根下的 /YYYY-MM。 */
+  async dir(now = Date.now()): Promise<string> {
+    return attachDirOf(await tokenRoot(this.fetcher, this.origin, this.token, now), now) ?? driveDir(now);
   }
 
   /** 一次性上传 (≤ 95 MB): 字节流式转给 Drive, 不在 Worker 里缓冲。 */
@@ -76,10 +108,27 @@ export class Drive {
     return (await this.call<{ receipt: string }>("PUT", `/uploads/chunk?${q}`, fixed.readable, { "content-length": String(len) })).receipt;
   }
 
-  /** 第 3 步: 交全部回执, 返回 Drive 的文件节点。 */
+  /**
+   * 第 3 步: 交全部回执, 返回 Drive 的文件节点。超过一组 (256 片, 约 4.75 GB) 时先每组 fold 成一个聚合回执,
+   * commit 只验几个签名, 不超 Drive 的 CPU (#157)。回执按片序排好 (客户端按序交); 顺序不对 fold 会 400, 退回整体提交。
+   */
   async commit(ticket: string, receipts: string[]): Promise<NodeOut> {
-    const r = await this.json<{ node: NodeOut }>("/uploads/commit", { ticket, receipts });
+    const folds = receipts.length > DRIVE_PART_SIZE ? await this.foldAll(ticket, receipts) : null;
+    const r = await this.json<{ node: NodeOut }>("/uploads/commit", folds ? { ticket, folds } : { ticket, receipts });
     return { id: r.node.id, size: r.node.size };
+  }
+
+  private async foldAll(ticket: string, receipts: string[]): Promise<string[] | null> {
+    const out: string[] = [];
+    for (let i = 0; i < receipts.length; i += DRIVE_PART_SIZE) {
+      try {
+        out.push((await this.json<{ fold: string }>("/uploads/fold", { ticket, receipts: receipts.slice(i, i + DRIVE_PART_SIZE) })).fold);
+      } catch (e) {
+        if (e instanceof DriveError && e.status === 400) return null;
+        throw e;
+      }
+    }
+    return out;
   }
 
   /** 分片清单: 每片的 Bot, TG file_id, 大小 (Drive v0.3.1 起)。 */

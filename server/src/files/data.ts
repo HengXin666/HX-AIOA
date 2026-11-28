@@ -3,7 +3,7 @@ import { HUB_NAME } from "../constants";
 import type { Env } from "../env";
 import { json } from "../http";
 import { Drive, DriveError } from "./drive";
-import { driveDir, driveName } from "./store";
+import { driveName } from "./store";
 import { checkChunk, checkTicket } from "./ticket";
 
 const DATA_RE = new RegExp(`^${PATH_FILE_DATA.replace("{id}", "([^/]+)")}$`);
@@ -85,7 +85,7 @@ async function toDrive(body: ReadableStream, env: Env, url: URL, id: string, len
   if (!drive) return err(503, "服务端还没接入 HX-CF-Drive");
   let node: { id: string; size: number };
   try {
-    node = await drive.upload(driveDir(), driveName(id, url.searchParams.get(QUERY_NAME) ?? "file"), len, type ?? "application/octet-stream", body);
+    node = await drive.upload(await drive.dir(), driveName(id, url.searchParams.get(QUERY_NAME) ?? "file"), len, type ?? "application/octet-stream", body);
   } catch (e) {
     if (!(e instanceof DriveError)) throw e;
     return driveErr(e);
