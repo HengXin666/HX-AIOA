@@ -9,7 +9,6 @@ import { useChats, useUser } from "../../app/hooks";
 import { chats } from "../../core/chats";
 import { buildPulse, lifetime, recentEvents, streakOf, type PulseSpan } from "../../core/pulse";
 import type { Envelope } from "@hx-aioa/protocol";
-import { useTodos } from "../todo/TodoBoard";
 import { Feat, Panel, Quiet, TONE } from "./parts";
 
 const HUNDRED = 100;
@@ -18,7 +17,6 @@ const HUNDRED = 100;
 export function Pulse({ needMe }: { needMe: number }) {
   const { version } = useChats();
   const me = useUser();
-  const todos = useTodos();
   const [span, setSpan] = useState<PulseSpan>("day");
   const [events, setEvents] = useState<Envelope[] | null>(null);
   const head = chats.latest();
@@ -28,7 +26,8 @@ export function Pulse({ needMe }: { needMe: number }) {
     void recentEvents(head).then(setEvents, () => setEvents([]));
   }, [head > 0]);
   const agentSids = useMemo(() => new Set(chats.ordered().flatMap((c) => (c.agents ?? []).map((a) => a.sourceId))), [version]);
-  const doneAt = todos.flatMap((t) => (t.state === "done" && t.doneAt ? [t.doneAt] : []));
+  // 完成待办属于待办插件, 内置总览不画
+  const doneAt: number[] = [];
   const uid = me?.id ?? "";
   const data = events && buildPulse(span, events, uid, agentSids, doneAt);
   const life = events && lifetime(events, uid, agentSids);

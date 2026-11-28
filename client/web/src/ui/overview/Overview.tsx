@@ -1,15 +1,13 @@
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@hx/ui/ui/tabs";
-import { HardDrive, ListTodo } from "lucide-react";
+import { HardDrive } from "lucide-react";
 import { useState } from "react";
 import { useChats, useFeed, useLinkState, useUser } from "../../app/hooks";
 import { link } from "../../app/router";
 import { chats } from "../../core/chats";
 import { CLOUD_AGENT_LABEL, LOCALE } from "../../core/constants";
-import { StarTodos } from "../todo/StarTodos";
 import { Agents } from "./Agents";
-import { DevBoard } from "./Dev";
 import { Hosts } from "./Hosts";
 import { Layer, NeedMe } from "./Layers";
 import { Pulse } from "./Pulse";
@@ -17,19 +15,18 @@ import { ServerBoard } from "./Server";
 
 const BOARDS = [
   { id: "daily", label: "日常" },
-  { id: "dev", label: "开发" },
   { id: "server", label: "服务器" },
 ] as const;
 type Board = (typeof BOARDS)[number]["id"];
 const BOARD_KEY = "aioa.overview.board";
 
-// 总览 (对照安卓 OverviewV2 + OverviewBoards, #121 #138): 头部一句话状态, 下面按看板切换 日常 / 开发 / 服务器
+// 总览 (对照安卓 OverviewV2 + OverviewBoards, #121 #138): 只放所有人都有的内置内容; 插件 (待办, GitHub 等) 的东西走插件自己的空间, 不进这里
 export default function Overview() {
   const snap = useFeed();
   const state = useLinkState();
   const owner = useUser()?.role === "owner";
   useChats();
-  const [board, setBoard] = useState<Board>(() => (localStorage.getItem(BOARD_KEY) as Board) || "daily");
+  const [board, setBoard] = useState<Board>(() => BOARDS.some((b) => b.id === localStorage.getItem(BOARD_KEY)) ? (localStorage.getItem(BOARD_KEY) as Board) : "daily");
   const pick = (b: string) => {
     setBoard(b as Board);
     localStorage.setItem(BOARD_KEY, b);
@@ -63,12 +60,6 @@ export default function Overview() {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <Button asChild size="sm" variant="outline">
-              <a href={link("overview", "todo")}>
-                <ListTodo />
-                待办
-              </a>
-            </Button>
             {owner && (
               <Button asChild size="sm" variant="outline">
                 <a href={link("overview", "drive")}>
@@ -83,12 +74,10 @@ export default function Overview() {
           <Pulse needMe={needMe} />
           <NeedMe snap={snap} waiting={waiting} className="lg:col-span-4" />
           <Agents />
-          <StarTodos className="lg:col-span-7" />
-          <Hosts className="lg:col-span-5" />
+          <Hosts className="lg:col-span-12" />
           <Layer snap={snap} priority="happening" className="lg:col-span-6" />
           <Layer snap={snap} priority="worth_reading" className="lg:col-span-6" />
         </TabsContent>
-        <TabsContent value="dev">{board === "dev" && <DevBoard />}</TabsContent>
         <TabsContent value="server">{board === "server" && (owner ? <ServerBoard /> : <p className="text-sm text-muted-foreground">服务器看板只有主人能看</p>)}</TabsContent>
       </Tabs>
     </div>
