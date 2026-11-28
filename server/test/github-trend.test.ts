@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { TrendStore, emptyTrend, trendOf, trendStep } from "../src/github/trend";
+import { TREND_KEEP_MS, TrendStore, emptyTrend, trendOf, trendStep } from "../src/github/trend";
 import { type TrendVars, parseTrend } from "../src/github/trend-fetch";
 import { GithubService } from "../src/github/service";
 import { memKv } from "./github-kv";
@@ -116,4 +116,25 @@ test("单仓库走势: repo 只算这个仓库的行, 不带足迹, ETag 分开 
   assert.deepEqual(one.body.created, []);
   assert.ok(all.body.created.length > 0);
   assert.notEqual(one.tag, all.tag);
+});
+
+test("走势同步: 超出保留期的旧提交不写, 数据没变时第二次同步写入 0 行 (#145)", async () => {
+  const sql = memSql();
+  const store = new TrendStore(sql);
+  const st = emptyTrend(NOW);
+  const DAY = 24 * 3600_000;
+  // 贡献集合拉回的 200 天前那天: 以前每次同步都先插后删, 一天 48 次 cron 白写上千行
+  const oldDay = new Date(NOW - 200 * DAY).toISOString().slice(0, 10);
+  const cc = FULL.viewer.contributionsCollection;
+  const nodes = [...cc.commitContributionsByRepository[0]!.contributions.nodes, { occurredAt: `${oldDay}T07:00:00Z`, commitCount: 3 }];
+  const page = { ...FULL, viewer: { ...FULL.viewer, contributionsCollection: { ...cc, commitContributionsByRepository: [{ repository: { nameWithOwner: "a/b" }, contributions: { nodes } }] } } };
+  const asked: TrendVars[] = [];
+  const fake = async (_t: string, v: TrendVars) => (asked.push(v), page);
+  const first = await trendStep(store, "t", "me", st, NOW, 1, fake);
+  assert.ok(first > 0);
+  assert.equal(sql.exec("SELECT 1 FROM gh_trend WHERE k = ?", `c:a/b:${oldDay}`).toArray().length, 0);
+  // 只向 GitHub 要保留期内的贡献
+  assert.ok(Date.parse(asked[0]!.from) >= NOW - TREND_KEEP_MS);
+  const second = await trendStep(store, "t", "me", st, NOW + 30 * 60_000, 1, fake);
+  assert.equal(second, 0);
 });

@@ -7,7 +7,8 @@ const DAY_MS = 24 * 3600_000;
 const WEEK = 7;
 // 往前补多久: 12 周 + 本周 + 余量; 行按最后一次动静留 HORIZON + 7 天
 export const TREND_HORIZON_MS = 98 * DAY_MS;
-const KEEP_MS = TREND_HORIZON_MS + WEEK * DAY_MS;
+export const TREND_KEEP_MS = TREND_HORIZON_MS + WEEK * DAY_MS;
+const KEEP_MS = TREND_KEEP_MS;
 // 搜索游标往回让一点, 防同一秒更新的漏掉
 const OVERLAP_MS = 60_000;
 // 新建仓库与 star 每次整份重拿, 不按时间删
@@ -24,10 +25,15 @@ export class TrendStore {
     sql.exec("CREATE INDEX IF NOT EXISTS gh_trend_ts ON gh_trend (ts)");
   }
 
-  /** 按 k 去重, 内容没变不写; full 时删掉这次没出现的新建仓库 / star; 返回写入行数。 */
+  /**
+   * 按 k 去重, 内容没变不写; full 时删掉这次没出现的新建仓库 / star; 返回写入行数。
+   * 超出保留期的行 (新建仓库 / star 除外) 不写: 写了也会被同一次清理删掉, 每次同步白白一插一删 (#145)。
+   */
   put(rows: TrendRow[], full: boolean, now: number): number {
     let n = 0;
+    const cut = now - KEEP_MS;
     for (const r of rows) {
+      if (r.ts < cut && !KEPT.includes(r.kind)) continue;
       n += this.sql.exec("INSERT INTO gh_trend (k, kind, ts, body) VALUES (?, ?, ?, ?) ON CONFLICT(k) DO UPDATE SET ts = excluded.ts, body = excluded.body WHERE body != excluded.body OR ts != excluded.ts", r.k, r.kind, r.ts, JSON.stringify(r.body)).rowsWritten;
     }
     if (full) {
@@ -67,7 +73,8 @@ export async function trendStep(store: TrendStore, token: string, login: string,
     if (!full && state.caught && !older) break;
     // to 放到明天: 今天的提交在 GitHub 那边记在 "今天 (提交者本地日期) 太平洋零点", 可能晚于现在
     const q = `author:${login} updated:>=${iso(state.cursor)} sort:updated-asc`;
-    const data = await fetcher(token, { from: iso(now - 364 * DAY_MS), to: iso(now + DAY_MS), q, full, older, ...(older ? { before: state.before } : {}) });
+    // 贡献集合只拉保留期内的: 拉一年的话一大半是马上要删的旧提交 (#145)
+    const data = await fetcher(token, { from: iso(now - KEEP_MS), to: iso(now + DAY_MS), q, full, older, ...(older ? { before: state.before } : {}) });
     const page: TrendPage = parseTrend(data, full);
     wrote += store.put(page.rows, full, now);
     advance(state, page, now);
