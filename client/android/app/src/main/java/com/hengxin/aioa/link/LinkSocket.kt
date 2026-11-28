@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
+import androidx.core.content.pm.PackageInfoCompat
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
@@ -41,6 +42,8 @@ class LinkSocket(
     enum class Probe { ALIVE, SKIPPED, DEAD, OFFLINE }
 
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    // 构建号 = versionCode = Release 标签 android-N 的 N, 握手时带上, 服务端按它过滤插件界面 (#156)
+    private val build by lazy { runCatching { PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0)) }.getOrDefault(0L) }
     // 建连 (含读配置, 探测本机代理端口) 放在后台线程, 回调统一切回主线程
     private val handler = Handler(worker.looper)
     private val main = Handler(Looper.getMainLooper())
@@ -217,6 +220,8 @@ class LinkSocket(
         } else {
             builder.addPathSegments(Constants.STREAM_PATH).addQueryParameter(Constants.QUERY_ROLE, Constants.ROLE_CLIENT)
                 .addQueryParameter(Constants.QUERY_PROTOCOL, Constants.PROTOCOL_VERSION.toString())
+                .addQueryParameter(Constants.QUERY_CLIENT, Constants.CLIENT_ANDROID)
+                .addQueryParameter(Constants.QUERY_CLIENT_BUILD, build.toString())
         }
         val url = builder
             .addQueryParameter(Constants.QUERY_TOKEN, Auth.bearer(context, config))

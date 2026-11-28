@@ -11,6 +11,10 @@ object Constants {
     // 握手: 带上 App 按哪个协议大版本写的, 服务端在 welcome 里给出兼容档位
     const val QUERY_PROTOCOL = "pv"
     const val PROTOCOL_VERSION = 2
+    // 握手: 哪个端与构建号 (versionCode), 服务端按它给插件界面 (与 protocol QUERY_CLIENT / QUERY_CLIENT_BUILD 一致)
+    const val QUERY_CLIENT = "client"
+    const val QUERY_CLIENT_BUILD = "cb"
+    const val CLIENT_ANDROID = "android"
 
     const val DEVICE_PREFIX = "android"
     // 点通知打开对应的群

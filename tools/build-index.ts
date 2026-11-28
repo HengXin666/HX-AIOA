@@ -10,6 +10,8 @@ const index = JSON.parse(readFileSync(file, "utf8")) as { plugins: Record<string
 for (const e of index.plugins) {
   const m = JSON.parse(readFileSync(join(root, String(e.id), PLUGIN_MANIFEST_FILE), "utf8")) as Record<string, unknown>;
   e.version = m.version;
+  // 按端兼容 (#156): 列表不拉清单就能按端判断; 没写的不加, 读的一方按 ["android"] 处理
+  for (const k of ["clients", "engines"] as const) if (m[k] !== undefined) e[k] = m[k];
   e.manifest = m;
 }
 writeFileSync(file, `${JSON.stringify(index, null, 2)}\n`);

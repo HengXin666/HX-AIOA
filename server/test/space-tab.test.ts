@@ -36,7 +36,7 @@ function setup(meta: Record<string, unknown> = {}) {
   if (typeof m === "string") throw new Error(m);
   kernel.put({ meta: { id: ID, version: m.version, name: m.name, by: OWNER, at: 1, ...meta }, manifest: m, prompt: "" });
   const spaces = new Spaces(fakeStorage());
-  const core = { kernel, market: new Market("https://official.test/plugins", sql, async () => "t"), spaces, users: { ownerId: () => OWNER }, sockets: { toV1Clients: () => {} } };
+  const core = { kernel, market: new Market("https://official.test/plugins", sql, async () => "t"), spaces, users: { ownerId: () => OWNER }, sockets: { toV1Clients: () => {}, toV1ClientsBy: () => {} } };
   return { m, spaces, core: core as never };
 }
 

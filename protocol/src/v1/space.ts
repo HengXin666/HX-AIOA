@@ -1,3 +1,4 @@
+import { CLIENT_KINDS, isClientKind, type ClientKind } from "./client-caps";
 import { ITEM_TYPES, MAX_ID_LENGTH, MAX_TITLE_LENGTH, type ItemType } from "./constants";
 
 export const MAX_PANELS = 20;
@@ -43,6 +44,8 @@ export type Item = {
   bind?: Bind[];
   props?: Record<string, unknown>;
   action?: ButtonAction;
+  // 只在这些端显示 (#156); 不写就是都显示
+  clients?: ClientKind[];
 };
 export type Refresh = { mode: "push" } | { mode: "interval"; everySec: number };
 export type Panel = {
@@ -52,6 +55,7 @@ export type Panel = {
   size?: PanelSize;
   refresh: Refresh;
   items: Item[];
+  clients?: ClientKind[];
 };
 // 对顶部标签的提示 (#139): primary 优先补空位 (只给可信来源的插件), auto 缺省, none 从不自动置顶; 用户设过的永远优先
 export const SPACE_TABS = ["primary", "auto", "none"] as const;
@@ -76,6 +80,7 @@ const idOk = (v: unknown): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= MAX_ID_LENGTH && /^[\w.:-]+$/.test(v);
 const titleOk = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_TITLE_LENGTH;
 const optStr = (v: unknown) => v === undefined || typeof v === "string";
+const clientsOk = (v: unknown) => v === undefined || (Array.isArray(v) && v.length > 0 && v.length <= CLIENT_KINDS.length && v.every(isClientKind));
 export const isPanelSize = (v: unknown): v is PanelSize => (PANEL_SIZES as readonly unknown[]).includes(v);
 
 function checkBind(b: unknown, at: string, errs: string[]): void {
@@ -94,6 +99,7 @@ function checkItem(it: unknown, at: string, errs: string[]): void {
   const type = String(it.type);
   if (!(ITEM_TYPES as readonly string[]).includes(type)) errs.push(`${at}: 未知组件类型 ${type}`);
   if (!optStr(it.title) || !optStr(it.icon)) errs.push(`${at}: title/icon 必须是字符串`);
+  if (!clientsOk(it.clients)) errs.push(`${at}: clients 只能写 ${CLIENT_KINDS.join("/")}`);
   if (it.bind !== undefined) {
     if (!Array.isArray(it.bind) || it.bind.length > MAX_BINDS) errs.push(`${at}: bind 必须是数组 (最多 ${MAX_BINDS} 个)`);
     else it.bind.forEach((b, i) => checkBind(b, `${at}.bind[${i}]`, errs));
@@ -142,6 +148,7 @@ export function validateSpace(raw: unknown): string[] {
     else ids.add(p.id);
     if (!titleOk(p.title)) errs.push(`${at}: 需要 title`);
     if (p.size !== undefined && !isPanelSize(p.size)) errs.push(`${at}: size 只能是 ${PANEL_SIZES.join("/")}`);
+    if (!clientsOk(p.clients)) errs.push(`${at}: clients 只能写 ${CLIENT_KINDS.join("/")}`);
     checkRefresh(p.refresh, at, errs);
     if (!Array.isArray(p.items) || p.items.length > MAX_ITEMS) return void errs.push(`${at}: items 必须是数组 (最多 ${MAX_ITEMS} 个)`);
     p.items.forEach((it, j) => {

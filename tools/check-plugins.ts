@@ -1,11 +1,12 @@
 // 市场 CI: 校验 plugins/ 下每个清单, 按 "全部放进白名单" 做静态冲突检测与每日请求估算, 输出兼容报告
 // 用法: node --import tsx tools/check-plugins.ts [市场目录]; 环境变量 PR_AUTHOR + CHANGED (改动的插件目录, 逗号分隔) 时校验命名空间,
-// BASE (git 引用, 如 origin/main) 时检查改了的插件与 skill 有没有升版本
+// BASE (git 引用, 如 origin/main) 时检查改了的插件与 skill 有没有升版本, 新增或升版本的插件按严格规则查端声明 (#156)
 import { existsSync, readdirSync, readFileSync, appendFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { checkBumps, checkClosures, checkCycles, checkIndex, depTable, type IndexEntry } from "./plugin-index";
+import { bumpedSince, checkBumps, checkClosures, checkCycles, checkIndex, depTable, type IndexEntry } from "./plugin-index";
+import { releasedLookup } from "./client-builds";
 import { checkSkillBumps, checkSkills } from "./skill-check";
-import { PLUGIN_DAILY_BUDGET, PROTOCOL_VERSION, checkPlugins, dailyRequests, isL2a, parseManifest, pluginNamespace, type PluginManifest } from "@hx-aioa/protocol";
+import { CLIENT_KINDS, PLUGIN_DAILY_BUDGET, PROTOCOL_VERSION, checkManifest, checkPlugins, dailyRequests, isL2a, matrixCell, pluginNamespace, type PluginManifest } from "@hx-aioa/protocol";
 
 const root = process.argv[2] ?? "plugins";
 // 维护者可以动任何命名空间 (含旧 id 的插件)
@@ -19,15 +20,18 @@ const index = JSON.parse(readFileSync(join(root, "index.json"), "utf8")) as { pl
 const listed = new Map(index.plugins.map((p) => [p.id, p.version]));
 const ms: PluginManifest[] = [];
 const raws = new Map<string, unknown>();
-for (const dir of readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory())) {
-  const file = join(root, dir.name, "plugin.json");
-  if (!existsSync(file)) continue;
-  const json = JSON.parse(readFileSync(file, "utf8")) as unknown;
-  const m = parseManifest(json);
-  if (typeof m === "string") {
-    errors.push(`${dir.name}: ${m}`);
-    continue;
-  }
+const dirs = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(root, d.name, "plugin.json")));
+// 没有基线 (本地直接跑) 判断不了新增或升版本: 端声明缺了只提示
+const strict = process.env.BASE ? bumpedSince(process.env.BASE, dirs.map((d) => d.name), root) : new Set<string>();
+const notes: string[] = [];
+const released = releasedLookup(dirname(resolve(import.meta.dirname)), notes);
+for (const dir of dirs) {
+  const json = JSON.parse(readFileSync(join(root, dir.name, "plugin.json"), "utf8")) as unknown;
+  const r = checkManifest(json, { strict: strict.has(dir.name), released });
+  for (const w of r.warns) warns.push(`${dir.name}: ${w}`);
+  for (const e of r.errors) errors.push(`${dir.name}: ${e}`);
+  const m = r.manifest;
+  if (!m) continue;
   if (m.id !== dir.name) errors.push(`${dir.name}: 目录名与 id ${m.id} 不一致`);
   if (listed.get(m.id) !== m.version) errors.push(`${m.id}: index.json 里的版本 ${listed.get(m.id) ?? "缺失"} 与清单 ${m.version} 不一致`);
   for (const f of [m.readme, m.prompt]) if (!existsSync(join(root, dir.name, f))) errors.push(`${m.id}: 缺少文件 ${f}`);
@@ -66,6 +70,14 @@ const lines = [
   `合计每天约 ${r.total} 次, 上限 ${PLUGIN_DAILY_BUDGET}。`,
   "",
   ...depTable(ms),
+  "### 插件 × 端",
+  "",
+  `| 插件 | ${CLIENT_KINDS.join(" | ")} |`,
+  `| --- |${CLIENT_KINDS.map(() => " --- |").join("")}`,
+  ...ms.map((m) => `| ${m.id} | ${CLIENT_KINDS.map((k) => matrixCell(m, k)).join(" | ")} |`),
+  "",
+  ...notes.map((n) => `> ${n}`),
+  ...(notes.length ? [""] : []),
   ...(errors.length ? ["### 错误", ...errors.map((e) => `- ${e}`), ""] : []),
   ...(warns.length ? ["### 提示 (放行时由管理员裁决)", ...warns.map((w) => `- ${w}`), ""] : []),
 ];

@@ -4,6 +4,7 @@ import { CODE_BAD_REQUEST, CODE_CONFLICT, CODE_NOT_FOUND } from "../constants";
 import type { Core } from "../core";
 import { ApiFail } from "../http";
 import { pushPlugin } from "./notify";
+import { pushSpace } from "./client";
 import { trustedPlugin } from "./private";
 import { bumpSetup, pluginSkill } from "../agent-want";
 
@@ -17,7 +18,7 @@ export async function applySpace(core: Core, id: string, m: PluginManifest, chan
   const space = trustedPlugin(core, id) ? raw : demoteTab(raw);
   const r = await core.spaces.put({ ...space, id: pluginSpaceId(id) }, `plugin:${id}`);
   if ("errors" in r) throw new ApiFail(400, CODE_BAD_REQUEST, `插件布局有误: ${r.errors.join("; ")}`);
-  core.sockets.toV1Clients({ t: "space_update", id: r.space.id, space: r.space });
+  pushSpace(core, r.space);
   return r.space.id;
 }
 

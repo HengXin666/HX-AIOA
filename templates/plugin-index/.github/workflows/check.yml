@@ -37,9 +37,12 @@ jobs:
             echo "CHANGED=$dirs" >> "$GITHUB_ENV"
           fi
       # 脚本在 HX-AIOA 里跑 (依赖它的 node_modules), 市场目录指向本仓库
+      # 按端兼容 (#156): 在 HX-AIOA 的检出里查 android-N 标签与 Web 部署运行号, 查不到时按能力表降级为警告
       - name: 市场检查
         working-directory: aioa
         run: node --import tsx tools/check-plugins.ts ../index
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: 内嵌清单是否同步
         working-directory: aioa
         run: |

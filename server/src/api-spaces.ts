@@ -3,6 +3,7 @@ import { CODE_NOT_FOUND, DELETE, ERR_NO_RESOURCE, GET, POST, PUT, RECENT_SCAN } 
 import { OWNER, type ReqCtx, type Route, keyIdOf, route } from "./core";
 import { fail, json, readJson } from "./http";
 import { resolveSpaceData } from "./space-data";
+import { clientOfUrl, pushSpace, spaceFor } from "./plugins/client";
 
 const notFound = () => fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
 const idParam = (c: ReqCtx) => decodeURIComponent(c.params[0] ?? "");
@@ -15,12 +16,12 @@ async function putSpace(c: ReqCtx): Promise<Response> {
   // Agent 下发的空间不能抢顶部标签 (tab: "primary" 降为 auto, #139); 主人手动的照收
   const r = await c.core.spaces.put(c.who.owner ? raw : demoteTab(raw), origin);
   if ("errors" in r) return fail(400, "布局校验失败", undefined, { errors: r.errors });
-  c.core.sockets.toV1Clients({ t: "space_update", id: r.space.id, space: r.space });
+  pushSpace(c.core, r.space);
   return json({ ok: true, delivered: 1 });
 }
 
 export const SPACE_ROUTES: Route[] = [
-  route(GET, PATH_SPACES, OWNER, async (c) => json({ spaces: await c.core.spaces.list() })),
+  route(GET, PATH_SPACES, OWNER, async (c) => json({ spaces: (await c.core.spaces.list()).map((s) => spaceFor(c.core, s, clientOfUrl(c.url))).filter((s) => s !== null) })),
   route(POST, PATH_SPACES, "spaces:write", putSpace),
   route(DELETE, PATH_SPACE, OWNER, async (c) => {
     const id = idParam(c);
@@ -33,7 +34,7 @@ export const SPACE_ROUTES: Route[] = [
     if (r === null) return notFound();
     if (typeof r === "string") return fail(400, r);
     // 其他设备同步排序与尺寸
-    c.core.sockets.toV1Clients({ t: "space_update", id: r.id, space: r });
+    pushSpace(c.core, r);
     return json({ space: r });
   }),
   route(GET, PATH_SPACE_DATA, OWNER, async (c) => {

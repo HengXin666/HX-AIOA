@@ -4,7 +4,7 @@
       "id": "hengxin666.todo",
       "name": "点子待办",
       "summary": "在群里随手丢想法, Agent 整理成待办, 并对值得做的点子写可行性分析; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-      "version": "2.3.1",
+      "version": "2.4.0",
       "icon": "list-checks",
       "tags": [
         "待办",
@@ -16,11 +16,18 @@
         "id": "hengxin666.todo",
         "name": "点子待办",
         "summary": "在群里随手丢想法, Agent 整理成待办, 并对值得做的点子写可行性分析; 可关联 GitHub issue, issue 关闭时待办自动完成。",
-        "version": "2.3.1",
+        "version": "2.4.0",
         "api": "2",
         "server": true,
         "engines": {
-          "aioa": "^2"
+          "aioa": "^2",
+          "android": ">=121"
+        },
+        "clients": [
+          "android"
+        ],
+        "builtWith": {
+          "android": 154
         },
         "optional": {
           "service:gh.issues": "^1"
@@ -112,13 +119,20 @@
             }
           ]
         }
+      },
+      "clients": [
+        "android"
+      ],
+      "engines": {
+        "aioa": "^2",
+        "android": ">=121"
       }
     },
     {
       "id": "hengxin666.gh",
       "name": "GitHub 授权",
       "summary": "授权一次 GitHub, 令牌只存在服务端; 别的插件和你允许的 Agent 通过服务端操作 issue。",
-      "version": "2.0.2",
+      "version": "2.1.0",
       "icon": "github",
       "tags": [
         "GitHub",
@@ -130,7 +144,7 @@
         "id": "hengxin666.gh",
         "name": "GitHub 授权",
         "summary": "授权一次 GitHub, 令牌只存在服务端; 别的插件和你允许的 Agent 通过服务端操作 issue。",
-        "version": "2.0.2",
+        "version": "2.1.0",
         "icon": "github",
         "tags": [
           "GitHub",
@@ -146,7 +160,14 @@
         "api": "2",
         "server": true,
         "engines": {
-          "aioa": "^2"
+          "aioa": "^2",
+          "android": ">=110"
+        },
+        "clients": [
+          "android"
+        ],
+        "builtWith": {
+          "android": 154
         },
         "provides": {
           "service:gh.issues": "1.0.0"
@@ -157,13 +178,20 @@
         "budget": {
           "requestsPerDay": 100
         }
+      },
+      "clients": [
+        "android"
+      ],
+      "engines": {
+        "aioa": "^2",
+        "android": ">=110"
       }
     },
     {
       "id": "hengxin666.github",
       "name": "GitHub 接入",
       "summary": "关注仓库的 PR, Issue, CI 与本人动态: webhook 实时入库, 有 GITHUB_TOKEN 时每 30 分钟回填; 云 Agent 也能用 events:read 的 key 读。",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "icon": "github",
       "tags": [
         "GitHub",
@@ -174,7 +202,7 @@
         "id": "hengxin666.github",
         "name": "GitHub 接入",
         "summary": "关注仓库的 PR, Issue, CI 与本人动态: webhook 实时入库, 有 GITHUB_TOKEN 时每 30 分钟回填; 云 Agent 也能用 events:read 的 key 读。",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "icon": "github",
         "tags": [
           "GitHub",
@@ -189,7 +217,14 @@
         "api": "2",
         "server": true,
         "engines": {
-          "aioa": "^2"
+          "aioa": "^2",
+          "android": ">=121"
+        },
+        "clients": [
+          "android"
+        ],
+        "builtWith": {
+          "android": 154
         },
         "permissions": [
           "net:api.github.com"
@@ -220,6 +255,13 @@
           "cron": "*/30 * * * *",
           "requestsPerDay": 200
         }
+      },
+      "clients": [
+        "android"
+      ],
+      "engines": {
+        "aioa": "^2",
+        "android": ">=121"
       }
     }
   ]

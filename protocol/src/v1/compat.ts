@@ -1,3 +1,4 @@
+import type { ClientRef } from "./client-caps";
 import { API_V1 } from "./constants";
 
 // 握手三档 (docs/design/plugin-arch.md): 启动不等更新, 只有安全漏洞才拒绝
@@ -14,7 +15,8 @@ export const STATUS_BLOCKED = 426;
 export const COMPAT_LEVELS = ["ok", "update", "floor", "blocked"] as const;
 export type CompatLevel = (typeof COMPAT_LEVELS)[number];
 // ok 兼容; update 建议更新; floor 低于支持窗口, 新功能灰掉; blocked 有安全漏洞, 拒绝
-export type Compat = { level: CompatLevel; server: number; min: number; msg?: string };
+// client: 服务端认下的端与构建号 (#156), 客户端带了 client 参数才有
+export type Compat = { level: CompatLevel; server: number; min: number; msg?: string; client?: ClientRef };
 
 const MSG: Record<Exclude<CompatLevel, "ok">, string> = {
   update: "服务端已升级, 建议更新 App, 旧版照常能用",

@@ -1,8 +1,10 @@
 // 市场索引与依赖的检查, 给 tools/check-plugins.ts 用: 索引整洁, 版本号递增, 依赖闭包能单独装, 依赖不成环
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { checkPlugins, cmpVer, parseVer, satisfies, type PluginManifest } from "@hx-aioa/protocol";
 
-export type IndexEntry = { id: string; version: string; name?: string; summary?: string; icon?: string; author?: string; manifest?: unknown };
+export type IndexEntry = { id: string; version: string; name?: string; summary?: string; icon?: string; author?: string; clients?: unknown; engines?: unknown; manifest?: unknown };
 const INDEX_FIELDS = ["name", "summary", "icon", "author"] as const;
 
 /** index.json 自身: 不重复, 必填字段齐, 每条都有目录, 名字和清单一致。 */
@@ -20,6 +22,8 @@ export function checkIndex(entries: IndexEntry[], ms: PluginManifest[], errors: 
     for (const f of INDEX_FIELDS) if (!e[f]) errors.push(`index.json: ${e.id} 缺少 ${f}`);
     // 内嵌的清单必须和目录里的一字不差, 不然服务端列表与详情会用到旧内容
     if (e.manifest !== undefined && JSON.stringify(e.manifest) !== JSON.stringify(raw.get(e.id))) errors.push(`index.json: ${e.id} 内嵌的清单与 plugin.json 不一致, 跑 npm run build:index`);
+    // 按端字段 (#156) 与清单同步, 市场列表靠它按端判断
+    for (const k of ["clients", "engines"] as const) if (JSON.stringify(e[k]) !== JSON.stringify(m[k])) errors.push(`index.json: ${e.id} 的 ${k} 与 plugin.json 不一致, 跑 npm run build:index`);
     if (e.name && e.name !== m.name) warns.push(`index.json: ${e.id} 的名字 "${e.name}" 与清单 "${m.name}" 不一致`);
   }
 }
@@ -56,6 +60,22 @@ export function checkBumps(base: string, ms: PluginManifest[], root: string, err
     if (d < 0) errors.push(`${m.id}: 版本从 ${old.version} 倒退到 ${m.version}`);
     else if (d === 0 && m.version === old.version) errors.push(`${m.id}: 目录有改动但版本仍是 ${m.version}, 升一下版本 (plugin.json 与 index.json 一起改)`);
   }
+}
+
+/** 相对基线新增或升了版本的插件目录: 这些要按严格规则写端声明 (#156)。 */
+export function bumpedSince(base: string, dirs: string[], root: string): Set<string> {
+  const out = new Set<string>();
+  for (const dir of dirs) {
+    const old = baseManifest(base, dir, root);
+    let cur: { version?: string } = {};
+    try {
+      cur = JSON.parse(readFileSync(join(root, dir, "plugin.json"), "utf8")) as { version?: string };
+    } catch {
+      continue;
+    }
+    if (!old || old.version !== cur.version) out.add(dir);
+  }
+  return out;
 }
 
 type Dep = { from: string; to: string; range: string; optional: boolean };

@@ -37,6 +37,10 @@ plugins/
 | 字段 | 说明 |
 | --- | --- |
 | `engines.aioa` | 需要的宿主协议版本范围, 例 `^2` |
+| `clients` | 支持的端 (#156): `["android"]`, `["web"]`, `["android", "web"]`; 只依赖服务端与 Agent, 没有界面贡献的写 `["*"]`。不写按 `["android"]` |
+| `engines.android` / `engines.web` | 客户端最低构建号, 只能写 `>=N` (可加 `<M` 表示上限), 例 `>=121`。安卓构建号是 Release 标签 `android-N` 的 N (= versionCode), Web 是部署构建号 (`version.json` 的 `web`) |
+| `builtWith` | 开发与验证时用的构建号, 例 `{ "android": 154 }`, 只展示与排查 |
+| 组件级 `clients` | `contributes` 的单项, `space` 的面板与组件可以再收窄到某些端, 例 `{ "id": "a.b.board", "clients": ["android"] }` |
 | `requires` / `optional` / `provides` | 服务接口与版本, 例 `{ "service:calendar.events": "^1" }` |
 | `conflicts` | 声明与哪些插件的哪些版本不能共存 |
 | `contributes` | 扩展点贡献, 目录见 `docs/api/plugins.md`; 非集合的 id 必须以插件 id 加 `.` 开头 |
@@ -53,6 +57,7 @@ api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa w
 
 - `index.json`: 不重复, 每条都有目录, `name` / `summary` / `icon` / `author` 齐全, 版本与清单一致。
 - 升版本: 插件目录有任何改动就必须升 `version` (与 `index.json` 一起改), 不能倒退; 否则已装的部署收不到更新。
+- 按端兼容 (#156, 能力表 `protocol/src/v1/client-caps.ts`): 新增或升版本的插件必须写 `clients` 与每个端的 `engines.<端>`; 用到的工作台组件类型, 客户端渲染的扩展点 (commands, widgets, settings, core.theme.base, core.chat.renderer) 与 `ui.webview` 必须在每个端的最低构建号上都支持, 否则列出缺项; 最低构建号必须发布过 (安卓查 `android-N` 标签, Web 查 main 上成功的部署运行号), 查不到时按能力表的已知最大构建号检查并警告。报告里有 "插件 × 端" 矩阵。
 - 依赖: `requires` 不能成环; 每个插件只带上它依赖的提供者 (取满足范围的最高版本) 也要能单独装上, 不冲突; `optional` 的提供者版本不满足时提示。报告里列出依赖表。
 
 模板占位符: `{{channel}}` 群 channel, `{{title}}` 群标题, `{{base}}` 服务地址。`prompt.md` 与 `space` 里都能用。

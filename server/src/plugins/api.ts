@@ -31,6 +31,7 @@ import { acctOf, isAdmin } from "./who";
 import { L2A } from "./l2a";
 import { renderTask } from "./store";
 import { pushPlugin } from "./notify";
+import { clientOfUrl, fitOf } from "./client";
 import { allowed, applySpace, autoUpgrade, upgrade } from "./update";
 
 const param = (c: ReqCtx, i: number) => pathParam(c.params, i);
@@ -84,7 +85,10 @@ async function list(c: ReqCtx): Promise<Response> {
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
-  const plugins = [...devs, ...index, ...leftover(new Set(index.map((p) => p.id)))].map((p) => ({ ...p, ...extra(p.id) }));
+  // 每项对请求方的端与构建号标级别 (#156); 索引里没写端字段的 (开发插件, 市场里已没有的) 看白名单快照
+  const ref = clientOfUrl(c.url);
+  const fit = (p: PluginEntry) => fitOf(p.clients || p.engines ? p : (c.core.kernel.get(p.id)?.manifest ?? p), ref);
+  const plugins = [...devs, ...index, ...leftover(new Set(index.map((p) => p.id)))].map((p) => ({ ...p, ...extra(p.id), client: fit(p) }));
   return json({ plugins, ...(error ? { error } : {}), admin, owner: c.who.owner } satisfies PluginList);
 }
 

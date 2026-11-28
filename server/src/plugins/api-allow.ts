@@ -8,6 +8,7 @@ import {
   L2A_PLUGINS,
   OFFICIAL_SOURCE,
   PLUGIN_DAILY_BUDGET,
+  CLIENT_POINTS,
   SERVICE_PREFIX,
   cardOf,
   isExtPoint,
@@ -31,6 +32,7 @@ import { CODE_NOT_ALLOWED, autoUpgrade } from "./update";
 import { acctOf, isAdmin } from "./who";
 import { privatePlugin } from "./private";
 import { relocateMoved } from "./relocate";
+import { clientOfUrl, fitOf } from "./client";
 
 const QUERY_PURGE = "purge";
 
@@ -167,7 +169,13 @@ function contrib(c: ReqCtx): Response {
   const uid = acct(c);
   const point = param(c, 0);
   if (!isExtPoint(point)) return fail(404, ERR_NO_RESOURCE, CODE_NOT_FOUND);
-  const items = c.core.kernel.contributions(uid, point).map((e) => ({ ...e.c, plugin: e.plugin }));
+  // 客户端渲染的扩展点按端过滤 (#156): 插件不支持这个端, 或单项写了 clients 且不含这个端的不给; 服务端执行的扩展点照常
+  const ref = clientOfUrl(c.url);
+  const byClient = CLIENT_POINTS.includes(point);
+  const items = c.core.kernel
+    .contributions(uid, point)
+    .map((e) => ({ ...e.c, plugin: e.plugin, client: fitOf(c.core.kernel.get(e.plugin)?.manifest ?? {}, ref) }))
+    .filter((e) => !byClient || (e.client.level !== "unsupported" && (!e.clients || e.clients.includes(ref.kind))));
   return json({ point, card: cardOf(point), items } satisfies PluginContribView);
 }
 

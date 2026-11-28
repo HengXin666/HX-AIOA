@@ -1,6 +1,6 @@
 # 插件接口: 白名单, 账号启用, 插件数据
 
-设计与取舍见 `docs/design/plugin-arch.md`, 清单格式见 `plugins/README.md`。类型真源: `protocol/src/v1/plugin-api.ts`, `plugin-v2.ts`, `plugin-check.ts`。
+设计与取舍见 `docs/design/plugin-arch.md`, 清单格式见 `plugins/README.md`。类型真源: `protocol/src/v1/plugin-api.ts`, `plugin-v2.ts`, `plugin-check.ts`, 按端兼容见 `client-caps.ts`, `plugin-clients.ts`, `manifest-check.ts`。
 
 ## 三层
 
@@ -137,6 +137,45 @@
 
 启动不等更新: 档位只影响提示与新功能, 不阻塞连接。`/compat` 需要登录 (与其它接口同一套凭证)。
 
+## 按端兼容 (#156)
+
+插件清单 (api 2, 只加不改) 声明支持哪些端与最低客户端构建号; 服务端按请求方的端给级别, 不支持的端不给界面贡献, 数据照常同步。
+
+### 清单字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `clients` | `("android" \| "web" \| "*")[]`; 不写按 `["android"]` (存量插件都是按安卓做的); `["*"]` 只给没有界面贡献 (工作台, 客户端扩展点, `ui.webview`) 的插件, 且不能和具体端混写 |
+| `engines.android` / `engines.web` | 客户端构建号范围, 复用 `semver.ts`, 构建号 N 当作 `N.0.0`; 只允许 `>=N`, `<N`, `*`, 空格连接表示 "且", 例 `">=121"`, `">=121 <200"`。最低构建号 = 各 `>=N` 里最大的 |
+| `builtWith` | `{ android?: N, web?: N }`, 开发与验证时用的构建号, 只展示与排查 |
+| 组件级 `clients` | `contributes` 的单项, `space` 的面板与组件可以写 `clients: ["android"]` 之类再收窄; 不写跟插件 |
+
+构建号: 安卓 = versionCode = `android.yml` 的 `GITHUB_RUN_NUMBER` = Release 标签 `android-N` 的 N; Web = `deploy.yml` 的 `GITHUB_RUN_NUMBER` (`version.json` 与 `__WEB_BUILD__` 的 `web`)。
+
+### 级别 `clientLevel(manifest, client, build)`
+
+| level | 条件 | 客户端 |
+| --- | --- | --- |
+| `ok` | 声明了这个端 (或 `*`), 构建号在范围里或不知道构建号 | 照常 |
+| `update` | 构建号低于 `engines.<端>` 的下界, `need` 是要更新到的构建号 | 显示 "需要更新到 N", 灰掉该插件的界面贡献 |
+| `unsupported` | 没声明这个端, 或构建号超出范围上界 | 显示 "仅安卓 / 仅 Web", 不给启用到该端的界面入口 |
+
+### 能力表 `protocol/src/v1/client-caps.ts`
+
+每个端从哪个构建号起支持: 插件工作台, 每种组件类型, 客户端渲染的扩展点 (`commands`, `widgets`, `settings`, `core.theme.base`, `core.chat.renderer`), 客户端权限 (`ui.webview`; Web 上是沙箱 iframe), 以及客户端手写了界面的插件 (`native`, 如安卓的 GitHub 接入页)。`collections`, `push.route`, `message.beforeSend`, `core.push.transport` 与其它权限在服务端执行, 与端无关。现状: 安卓工作台全部组件自 17 起, `todo` 自 85, 主题插件自 125, GitHub 接入手写页自 121, `ui.webview` 插槽未做; Web (React 版) 只有聊天, 能力表为空。客户端新增或接上一种能力时同一 PR 改能力表 (安卓附画廊截图, Web 附截图测试), `known` 跟着最新发布的构建号。
+
+### 握手与接口
+
+- `/api/v1/stream` 与 `GET /api/v1/compat` 除 `pv` 外带 `client=android|web&cb=<构建号>` (常量 `QUERY_CLIENT`, `QUERY_CLIENT_BUILD`)。服务端记在连接上 (`client`, `cb`), `welcome.compat` 与 `/compat` 回带认下的 `client: { kind, build? }`; 端不认识就当没带, 构建号不对只丢构建号。
+- `GET /api/v1/plugins` 与 `GET /api/v1/plugin-contrib/{point}` 读同样的查询参数; 没带按安卓, 构建号未知 (老安卓客户端照旧)。
+- 市场列表每项带 `clients`, `engines` (来自 `index.json`, 格式不对的丢掉) 与 `client: { level, need? }`。
+- `plugin-contrib`: 客户端渲染的扩展点只给 `level` 不是 `unsupported` 且单项 `clients` 含这个端的贡献, 每项带 `client`; 服务端执行的扩展点不过滤。
+- 工作台: 插件工作台 (`origin: plugin:<id>`) 在不支持的端上不下发 (`welcome` 后的 `space_update`, 之后的变化推送, `GET /api/v1/spaces`), 写了组件级 `clients` 的面板与组件按端裁掉; 数据 (`pdata`, 事件) 照常。
+
+### 校验入口 `checkManifest(raw, { strict, released })`
+
+市场 CI 与服务端拉市场源 (官方, 第三方, 主人私有源) 共用。依次: 清单格式 (`parseManifest`), `*` 不能有界面贡献, 每个声明的端在最低构建号上能力表都支持 (否则列出缺项)。`strict` (新增或升版本的插件) 时必须写 `clients` 与每个端的 `engines.<端>`, 否则只警告。`released` 查构建号是否发布过: 市场 CI 安卓用 `git ls-remote --tags origin 'android-*'`, Web 用 `gh run list --workflow deploy.yml --branch main --status success`; 查不到 (离线) 时退回能力表的 `known`: 超过它报错 (不能写未来版本), 否则警告。服务端拉源时不传 `released` (部署的能力表可能比客户端旧), 其余同一套, 不合格的清单 400, 不进市场。
+
 ## 插件数据 pdata
 
 集合必须在清单 `contributes.collections` 里声明, 插件要有 `data:own` 权限。
@@ -201,6 +240,6 @@
 
 ## 验证
 
-- 单元: `npm test` (清单, 冲突检测, 内核, pdata, 逐扩展点契约 `plugin-ext-contract.test.ts`, 开发插件, 握手档位)。
+- 单元: `npm test` (清单, 按端兼容 `plugin-clients.test.ts`, 冲突检测, 内核, pdata, 逐扩展点契约 `plugin-ext-contract.test.ts`, 开发插件, 握手档位)。
 - 端到端: 本机 `wrangler dev --var PLUGIN_MARKET:http://127.0.0.1:8797` 后跑 `tools/e2e-plugins.mjs` (官方市场的待办插件) 与 `tools/e2e-plugin-kernel.mjs` (`tools/fixtures/plugin-market` 里的测试插件)。待办迁移: 同一个 `--persist-to` 目录先用旧版服务端跑 `AIOA_PHASE=seed tools/e2e-todo-migrate.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次验证幂等)。 GitHub 插件: `tools/e2e-github-plugin.mjs` (放行, 启用, 停用 404, 再启用数据还在, purge)。GitHub 授权与待办关联: `tools/e2e-gh-todo.mjs`。开发模式与握手: `tools/e2e-plugin-dev.mjs`。hxoa 管理 (打真实 hxoa 2.4.1+, 需 `HXOA_BASE` / `HXOA_ADMIN` / `HXOA_DIR`, `AIOA_MARKET_ROOT` 指私有插件仓库的本地克隆): `tools/e2e-hxoa-plugin.mjs`。线上版 (插件体系之前) 升级: 同一个 `--persist-to` 目录先用旧版跑 `AIOA_PHASE=seed tools/e2e-upgrade-main.mjs` (`AIOA_MARKET_ROOT` 指旧版的 `plugins/`), 再换新版跑 `AIOA_PHASE=check` (重启后再跑一次)。
-- 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`)。
+- 市场 CI: `npm run check:plugins` (`.github/workflows/plugins.yml`), 运行摘要里有 "插件 × 端" 矩阵。

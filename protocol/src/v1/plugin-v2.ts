@@ -1,3 +1,4 @@
+import type { ClientDecl, ClientKind } from "./client-caps";
 import { isRange } from "./semver";
 
 // 清单 v2 (定稿见 docs/design/plugin-arch.md): 只在 v1 字段上加, 不写 api 的旧清单按 "1" 理解
@@ -63,6 +64,8 @@ export type Contribution = {
   // core.theme.base: 亮色 / 暗色下覆盖的颜色令牌 (THEME_TOKENS 里的名字 -> #RRGGBB 或 #RRGGBBAA), 没写的沿用默认主题
   light?: Record<string, string>;
   dark?: Record<string, string>;
+  // 只在这些端渲染 (#156), 不写跟插件的 clients
+  clients?: ClientKind[];
 };
 
 // 主题插件能覆盖的颜色令牌, 与安卓 kit/Tokens.kt 的 AioaColors 字段一致
@@ -92,7 +95,11 @@ export type PluginBudget = { cron?: string; agentPoll?: number; requestsPerDay?:
 
 export type PluginExtras = {
   api?: (typeof PLUGIN_APIS)[number];
-  engines?: { aioa: string };
+  // aioa: 服务端协议大版本; android / web: 客户端构建号范围 (#156, 见 plugin-clients.ts)
+  engines?: { aioa: string } & Partial<Record<ClientKind, string>>;
+  // 支持的端, 不写按 ["android"]; 开发验证时用的客户端构建号, 只展示与排查
+  clients?: ClientDecl[];
+  builtWith?: Partial<Record<ClientKind, number>>;
   requires?: Record<string, string>;
   optional?: Record<string, string>;
   provides?: Record<string, string>;
@@ -170,7 +177,7 @@ export function checkExtras(raw: Record<string, unknown>): string | null {
   const api = raw.api ?? PLUGIN_API_LEGACY;
   if (!(PLUGIN_APIS as readonly unknown[]).includes(api)) return `api 只能是 ${PLUGIN_APIS.join(" / ")}`;
   if (api === PLUGIN_API_LEGACY) {
-    for (const k of ["engines", "requires", "optional", "provides", "conflicts", "contributes", "emits", "listens", "permissions", "budget", "server"]) if (raw[k] !== undefined) return `用 ${k} 需要 "api": "${PLUGIN_API}"`;
+    for (const k of ["engines", "requires", "optional", "provides", "conflicts", "contributes", "emits", "listens", "permissions", "budget", "server", "clients", "builtWith"]) if (raw[k] !== undefined) return `用 ${k} 需要 "api": "${PLUGIN_API}"`;
     return null;
   }
   if (!isObj(raw.engines) || !isRange(raw.engines.aioa)) return "api 2 需要 engines.aioa 版本范围";

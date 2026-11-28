@@ -31,7 +31,8 @@ export const TODO_FIELDS: Record<string, FieldType> = { channel: STR, title: STR
 // 清单 v2 的数据声明; 迁移旧快照时补上, 与 plugins/hengxin666.todo/plugin.json 一致 (单测校验)
 export const TODO_V2: PluginExtras = {
   api: PLUGIN_API,
-  engines: { aioa: "^2" },
+  engines: { aioa: "^2", android: ">=121" },
+  clients: ["android"],
   optional: { [GH_SERVICE]: "^1" },
   permissions: [PERM_DATA_OWN],
   contributes: { collections: [{ id: TODO_COLL, fields: TODO_FIELDS }] },

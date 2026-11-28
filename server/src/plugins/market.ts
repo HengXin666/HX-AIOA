@@ -8,7 +8,8 @@ import {
   isL2a,
   isNsPluginId,
   officialOnly,
-  parseManifest,
+  checkManifest,
+  clientFieldsError,
   parseMarketLink,
   resolvePluginId,
   type MarketSource,
@@ -87,6 +88,13 @@ export function entryBad(id: string, src: Pick<MarketSource, "official" | "priva
   if (src.private) return null;
   if (officialOnly(id)) return "官方命名空间";
   return isL2a(id) ? "id 要写成 <作者>.<名字>" : null;
+}
+
+/** 索引里的端字段 (#156): 格式不对就当没写 (按 ["android"]), 不让第三方源的脏数据进列表。 */
+function clientSide(clients: unknown, engines: unknown): Pick<PluginEntry, "clients" | "engines"> {
+  const eng = typeof engines === "object" && engines !== null && !Array.isArray(engines) ? (engines as Record<string, unknown>) : undefined;
+  if (clientFieldsError({ clients, engines: eng }) !== null) return {};
+  return { ...(clients !== undefined ? { clients: clients as PluginEntry["clients"] } : {}), ...(eng && typeof eng.aioa === "string" ? { engines: eng as PluginEntry["engines"] } : {}) };
 }
 
 async function sha256(text: string): Promise<string> {
@@ -258,8 +266,8 @@ export class Market {
   /** 给客户端的列表: 去掉内嵌清单, 标上来源。 */
   async index(mode: FetchMode = "cache"): Promise<PluginEntry[]> {
     return (await this.merged(mode)).map(({ src, entry }) => {
-      const { manifest: _m, ...e } = entry;
-      return { ...e, source: src.id, ...(src.official ? {} : { sourceName: src.name }) };
+      const { manifest: _m, clients, engines, ...e } = entry;
+      return { ...e, ...clientSide(clients, engines), source: src.id, ...(src.official ? {} : { sourceName: src.name }) };
     });
   }
 
@@ -322,8 +330,10 @@ export class Market {
   }
 
   private check(id: string, raw: unknown, src: MarketSource): PluginManifest {
-    const m = parseManifest(raw);
-    if (typeof m === "string") throw new ApiFail(400, CODE_BAD_REQUEST, `插件 ${id} 的 plugin.json 有误: ${m}`);
+    // 与市场 CI 同一套校验 (#156): 格式, 端声明, 能力表; 不查构建号是否发布过 (部署的能力表可能比客户端旧)
+    const r = checkManifest(raw);
+    if (r.errors.length || !r.manifest) throw new ApiFail(400, CODE_BAD_REQUEST, `插件 ${id} 的 plugin.json 有误: ${r.errors.join("; ")}`);
+    const m = r.manifest;
     if (m.id !== id) throw new ApiFail(400, CODE_BAD_REQUEST, `插件目录 ${id} 与 plugin.json 的 id 不一致`);
     // 服务端代码只能编进部署, 第三方源不能带; 主人的私有源可以提供这次部署里已有的 (从官方源搬过去的)
     if (m.server && !src.official && !(src.private && isL2a(id))) throw new ApiFail(400, CODE_BAD_REQUEST, `${id} 声明了服务端代码, 只有官方源能提供`);

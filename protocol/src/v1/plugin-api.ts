@@ -39,6 +39,7 @@ export type PluginAllowView = {
   // 本账号开没开开发模式 (只有管理员能开)
   dev: boolean;
 };
+// items 每项带 client: { level, need? } (#156); 客户端渲染的扩展点不给请求方端不支持的贡献
 export type PluginContribView = { point: string; card: string; items: ({ plugin: string } & Record<string, unknown>)[] };
 // PUT /plugin-dev 开关开发模式; 关掉时本账号的开发插件全部撤掉
 export type PluginDevMode = { on: boolean };

@@ -2,6 +2,8 @@ import type { MajorChange } from "./agent-skill";
 import { API_V1 } from "./constants";
 import { SPACE_TABS, isSpaceTab, type Space } from "./space";
 import type { PluginAllow } from "./plugin-api";
+import type { ClientDecl } from "./client-caps";
+import { clientFieldsError, type ClientFit } from "./plugin-clients";
 import { PLUGIN_API_LEGACY, checkExtras, isPluginId, type PluginExtras } from "./plugin-v2";
 
 export { isPluginId };
@@ -31,6 +33,9 @@ export type PluginEntry = {
   source?: string;
   // 第三方源的名字, 列表上标出来; 官方源不带
   sourceName?: string;
+  // 按端兼容 (#156): index.json 带上, 列表不拉清单就能按端判断
+  clients?: ClientDecl[];
+  engines?: PluginExtras["engines"];
 };
 export type PluginIndex = { name?: string; plugins: (PluginEntry & { manifest?: unknown })[] };
 
@@ -76,7 +81,8 @@ export type PluginSettings = { auto: boolean };
 // allowed: 管理员放行的版本; 没放行的也列出来, 方便管理员放行
 // enabled: 本账号启用了 (无 Agent 的插件没有安装记录, 靠这个归到 "已安装")
 // dev: 开发模式装的本地插件 (不在市场里); foreign: 别人的开发插件, 只有主人看得到, 只能撤
-export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall; allowed?: PluginAllow; enabled?: true; dev?: true; foreign?: true })[]; error?: string; admin?: boolean; owner?: boolean };
+// client: 对请求方这个端与构建号的级别 (#156)
+export type PluginList = { plugins: (PluginEntry & { installed?: PluginInstall; allowed?: PluginAllow; enabled?: true; dev?: true; foreign?: true; client?: ClientFit })[]; error?: string; admin?: boolean; owner?: boolean };
 // task: 插件的任务提示词 (已代入群和服务地址, 不含密钥), 可单独复制给任何 Agent; 未安装时按默认群预览
 export type PluginDetail = { manifest: PluginManifest; readme: string; readmeType: "markdown" | "html"; installed?: PluginInstall; allowed?: PluginAllow; task?: string; admin?: boolean; owner?: boolean; deploy?: boolean; foreign?: boolean; source?: string; digest?: string; gone?: boolean };
 // source: 第三方市场源的名字, 官方源不带; digest: 第三方插件的内容摘要, 放行时原样带回; gone: 市场里已没有, 显示的是放行时的快照
@@ -282,7 +288,7 @@ export function parseManifest(raw: unknown): PluginManifest | string {
   }
   if (raw.space !== undefined && !isObj(raw.space)) return "space 必须是工作台布局对象";
   if (isObj(raw.space) && raw.space.tab !== undefined && !isSpaceTab(raw.space.tab)) return `space.tab 只能是 ${SPACE_TABS.join("/")}`;
-  const extra = checkExtras(raw);
+  const extra = checkExtras(raw) ?? clientFieldsError(raw);
   if (extra) return extra;
   return raw as unknown as PluginManifest;
 }
