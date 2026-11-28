@@ -2,14 +2,16 @@ import type { ChatMeta } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Input } from "@hx/ui/ui/input";
-import { Bell, BellOff, Ellipsis, Pin, PinOff, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Bell, BellOff, Ellipsis, Pin, PinOff, Search, Star } from "lucide-react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useChats, useLinkState } from "../app/hooks";
+import { useChats, useLinkState, useUser } from "../app/hooks";
 import { href } from "../app/router";
 import { chats, textOf, titleOf, type Message } from "../core/chats";
 import { TXT_EMPTY_CHATS, TXT_LOADING, LOCALE } from "../core/constants";
 import { UserAvatar } from "./UserAvatar";
+
+const Favorites = lazy(() => import("./chat/Favorites"));
 
 const STATE_TEXT = { idle: "", connecting: "连接中", online: "", offline: "重连中" } as const;
 const MAX_BADGE = 99;
@@ -20,6 +22,8 @@ export function ChatList({ active }: { active: string | null }) {
   const { last, version } = useChats();
   const state = useLinkState();
   const [q, setQ] = useState("");
+  const [fav, setFav] = useState(false);
+  const owner = useUser()?.role === "owner";
   // version 变化即重算 (置顶, 已读, 新消息都会改它)
   const rows = useMemo(() => {
     const k = q.trim().toLowerCase();
@@ -32,8 +36,18 @@ export function ChatList({ active }: { active: string | null }) {
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 p-3">
         <h2 className="text-base font-semibold text-foreground">消息</h2>
-        <span className="text-xs text-muted-foreground">{STATE_TEXT[state]}</span>
+        <span className="flex-1 text-xs text-muted-foreground">{STATE_TEXT[state]}</span>
+        {owner && (
+          <Button size="icon-sm" variant="ghost" aria-label="收藏" title="收藏" onClick={() => setFav(true)}>
+            <Star />
+          </Button>
+        )}
       </header>
+      {fav && (
+        <Suspense fallback={null}>
+          <Favorites side="right" onClose={() => setFav(false)} />
+        </Suspense>
+      )}
       <div className="px-3 pb-2">
         <Input size="sm" leading={<Search />} placeholder="搜索会话" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

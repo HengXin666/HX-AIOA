@@ -1,17 +1,25 @@
 import { PATH_EVENT_BY_SEQ, QUERY_MODE } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
-import { Copy, CornerUpLeft, Ellipsis, Forward, RotateCcw, Trash2, Undo2 } from "lucide-react";
-import { memo } from "react";
+import { Checkbox } from "@hx/ui/ui/checkbox";
+import { CheckSquare, Copy, CornerUpLeft, Ellipsis, Forward, RotateCcw, Star, Trash2, Undo2 } from "lucide-react";
+import { memo, useState, type MouseEvent } from "react";
 import { toast } from "sonner";
 import { api, fill } from "../core/auth";
 import { mentionsMe, textOf, type Message } from "../core/chats";
+import { favorite } from "../core/msg-actions";
 import { EXTERNAL } from "../core/constants";
 import type { Pending } from "../core/outbox";
 import { shortTime } from "./ChatList";
 import { BundleCard, FileView, HtmlCard, richText } from "./MessageParts";
 
-type Props = { m: Message; mine: boolean; owner: boolean; onReply: (m: Message) => void };
+export type MessageActions = {
+  onReply: (m: Message) => void;
+  onForward: (m: Message) => void;
+  // 进入多选并选中这一条; 多选中点消息切换选中
+  onSelect: (m: Message) => void;
+};
+type Props = { m: Message; mine: boolean; owner: boolean; act: MessageActions; selecting: boolean; selected: boolean };
 
 // 触屏没有悬停: 操作按钮常显
 const HOVER_REVEAL = "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100";
@@ -24,13 +32,19 @@ async function remove(m: Message, mode: "recall" | "delete"): Promise<void> {
   }
 }
 
+const star = (m: Message) =>
+  void favorite(m.seq)
+    .then(() => toast.success("已收藏"))
+    .catch((e: Error) => toast.error(e.message));
+
 function jump(seq: number): void {
   const el = document.getElementById(`m-${seq}`);
   if (!el) return void toast("原消息不在已加载的记录里");
   el.scrollIntoView({ block: "center" });
 }
 
-export const MessageItem = memo(function MessageItem({ m, mine, owner, onReply }: Props) {
+export const MessageItem = memo(function MessageItem({ m, mine, owner, act, selecting, selected }: Props) {
+  const [menu, setMenu] = useState(false);
   if (m.deleted) {
     return <p className="text-center text-xs text-muted-foreground">{m.deleted.mode === "recall" ? `${mine ? "你" : m.source.name}撤回了一条消息` : "消息已删除"}</p>;
   }
@@ -39,8 +53,15 @@ export const MessageItem = memo(function MessageItem({ m, mine, owner, onReply }
   const hit = !mine && mentionsMe(m);
   const text = textOf(m);
   const copy = () => void navigator.clipboard.writeText(text).then(() => toast.success("已复制"));
-  return (
-    <div id={`m-${m.seq}`} className={`group flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
+  // 右键等同安卓长按: 打开同一个菜单; 多选中右键与点击都只切换选中
+  const onContext = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest("a")) return;
+    e.preventDefault();
+    if (selecting) act.onSelect(m);
+    else setMenu(true);
+  };
+  const body = (
+    <div id={`m-${m.seq}`} onContextMenu={onContext} className={`group flex min-w-0 flex-1 flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
       <span className="text-xs text-muted-foreground">
         {mine ? "" : `${m.source.name} · `}
         {shortTime(m.ts)}
@@ -67,20 +88,34 @@ export const MessageItem = memo(function MessageItem({ m, mine, owner, onReply }
             </a>
           )}
         </div>
-        <DropdownMenu>
+        <DropdownMenu open={menu} onOpenChange={setMenu}>
           <DropdownMenuTrigger asChild>
-            <Button size="icon-xs" variant="ghost" aria-label="更多操作" className={HOVER_REVEAL}>
+            <Button size="icon-xs" variant="ghost" aria-label="更多操作" className={selecting ? "invisible" : HOVER_REVEAL}>
               <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align={mine ? "end" : "start"}>
-            <DropdownMenuItem onSelect={() => onReply(m)}>
-              <CornerUpLeft />
-              引用
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={copy}>
               <Copy />
               复制
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => act.onForward(m)}>
+              <Forward />
+              转发
+            </DropdownMenuItem>
+            {owner && (
+              <DropdownMenuItem onSelect={() => star(m)}>
+                <Star />
+                收藏
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => act.onReply(m)}>
+              <CornerUpLeft />
+              回复
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => act.onSelect(m)}>
+              <CheckSquare />
+              多选
             </DropdownMenuItem>
             {mine && (
               <DropdownMenuItem onSelect={() => void remove(m, "recall")}>
@@ -98,8 +133,15 @@ export const MessageItem = memo(function MessageItem({ m, mine, owner, onReply }
         </DropdownMenu>
       </div>
       {d?.file && <FileView file={d.file} />}
-      {d?.bundle && <BundleCard b={d.bundle} />}
+      {d?.bundle && <BundleCard b={d.bundle} via={[m.seq]} />}
       {html && <HtmlCard html={html} />}
+    </div>
+  );
+  if (!selecting) return body;
+  return (
+    <div className="flex items-start gap-2" onClick={() => act.onSelect(m)}>
+      <Checkbox className="mt-6" checked={selected} aria-label="选中" onClick={(e) => e.stopPropagation()} onCheckedChange={() => act.onSelect(m)} />
+      {body}
     </div>
   );
 });

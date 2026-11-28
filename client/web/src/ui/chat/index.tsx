@@ -21,7 +21,7 @@ export default function ChatArea({ loc, layout }: AreaProps) {
   useEffect(() => setDrawer(false), [channel, layout]);
   useChatKeys(channel, () => (layout === "wide" ? setPane(false) : setDrawer(false)));
 
-  const detail = channel ? <Conversation key={channel} channel={channel} narrow={layout === "narrow"} pane={paneOpen} onPane={togglePane} /> : <EmptyState>{TXT_PICK_CHAT}</EmptyState>;
+  const detail = channel ? <Conversation key={channel} channel={channel} focus={Number(loc.path[1]) || undefined} narrow={layout === "narrow"} pane={paneOpen} onPane={togglePane} /> : <EmptyState>{TXT_PICK_CHAT}</EmptyState>;
   const aside =
     channel && layout === "wide" && pane ? (
       <Suspense fallback={null}>
