@@ -19,7 +19,20 @@ export type ChatView = (typeof CHAT_VIEWS)[number];
  * body: 有完整正文可取 (GET /mail/{id}/body), html 为原版网页, text 为长纯文本。
  * spoof: 发件域名的 DMARC 校验失败, 可能是冒充。
  */
-export type MailInfo = { from: string; name?: string; to: string; rcpt?: string; list?: string; vendor: string; category?: MailCategory; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean };
+export type MailInfo = {
+  from: string; name?: string; to: string; rcpt?: string; list?: string; vendor: string; category?: MailCategory; code?: string; via: MailVia; body?: MailBodyKind; spoof?: boolean;
+  // 收信时提取一次 (#146), 老信没有这些字段, 客户端按同一套规则兜底
+  kind?: MailKind; otp?: MailOtp; brief?: string; links?: MailLink[]; facts?: MailFact[];
+};
+/** 按内容分的类型: 验证码, 账单, 物流, GitHub 通知, 营销, 普通。 */
+export const MAIL_KINDS = ["otp", "bill", "shipping", "github", "marketing", "normal"] as const;
+export type MailKind = (typeof MAIL_KINDS)[number];
+/** 验证码; expiresAt 为毫秒时间戳 (信里写了有效期才有)。 */
+export type MailOtp = { code: string; expiresAt?: number };
+/** 关键链接: 登录 / 确认 / 重置之类的按钮。 */
+export type MailLink = { label: string; url: string };
+/** 关键信息: 金额, 商家, 单号, 仓库之类。 */
+export type MailFact = { label: string; value: string };
 export type MailBodyKind = "html" | "text";
 /** GET /mail/{id}/body: 统一给 HTML (纯文本已转成可显示的 HTML)。 */
 export type MailBody = { html: string };
@@ -183,46 +196,6 @@ export function vendorOf(addr: string): string {
 export function categoryOf(addr: string): MailCategory {
   const d = domainOf(addr);
   return known(d)?.[1] ?? GUESS.find(([re]) => re.test(d))?.[1] ?? MAIL_CATEGORY_OTHER;
-}
-
-// 英文词按整词匹配 (避免 Unicode / barcode); 码只在提示词后面不远处找 (避免资讯信里的年份 "2026")
-const CODE_HINT = /(验证码|校验码|动态码|一次性|\b(?:code|otp|verification|verify|passcode)\b)/gi;
-const CODE_RE = /(?<![\w-])([A-Z0-9]{4,8})(?![\w-])/g;
-const CODE_NEAR = 60;
-const YEAR = /^(19|20)\d{2}$/;
-
-/** 只取 "验证码 / code" 字样附近 (先看后 60 字, 再看前 30 字, 中间不隔句读) 的码: 优先纯数字 (年份除外), 再取含数字的大写串。 */
-export function extractCode(subject: string, text: string): string | undefined {
-  const hay = `${subject}\n${text.slice(0, 4000)}`;
-  const hints = [...hay.matchAll(CODE_HINT)];
-  for (const h of hints) {
-    const start = (h.index ?? 0) + h[0].length;
-    const code = pick(hay.slice(start, start + CODE_NEAR), false);
-    if (code) return code;
-  }
-  // "123456 是你的验证码": 提示词前面紧挨着的
-  for (const h of hints) {
-    const end = h.index ?? 0;
-    const code = pick(hay.slice(Math.max(0, end - CODE_NEAR / 2), end), true);
-    if (code) return code;
-  }
-  return undefined;
-}
-
-// 提示词与码之间不能隔着句读 ("write code, win 25000" 不算)
-const BREAK = /[,.;!?，。；！？]/;
-
-function pick(near: string, before: boolean): string | undefined {
-  const hits = [...near.matchAll(CODE_RE)]
-    .filter((m) => {
-      const at = m.index ?? 0;
-      const gap = before ? near.slice(at + m[0].length) : near.slice(0, at);
-      return !BREAK.test(gap);
-    })
-    .map((m) => m[1] ?? "")
-    .filter((s) => /\d/.test(s) && !YEAR.test(s));
-  if (before) hits.reverse();
-  return hits.find((s) => /^\d{4,8}$/.test(s)) ?? hits.find((s) => /^[A-Z0-9]{6,8}$/.test(s));
 }
 
 const isStr = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max;

@@ -1,0 +1,161 @@
+{
+  "otp-zh": {
+    "body": "尊敬的用户,\n您正在进行登录操作, 本次验证码为:\n385 172\n验证码 10 分钟内有效, 请勿泄露给他人。如非本人操作, 请忽略本邮件。",
+    "brief": "",
+    "kind": "otp",
+    "links": [],
+    "facts": [],
+    "otp": {
+      "code": "385172",
+      "expiresAt": 1795824600000
+    }
+  },
+  "otp-en": {
+    "body": "Verify your email address\nHi there,\nEnter the following verification code to finish signing in to Example Cloud. Your code is below.\n482913\nThis code expires in 15 minutes. Order #20261128 is not affected.\nOr click the button: Sign in to Example Cloud\nIf you didn't request this, you can safely ignore this email.",
+    "brief": "",
+    "kind": "otp",
+    "links": [
+      {
+        "label": "Sign in to Example Cloud",
+        "url": "https://auth.example.com/magic?token=REDACTED"
+      }
+    ],
+    "facts": [],
+    "otp": {
+      "code": "482913",
+      "expiresAt": 1795824900000
+    }
+  },
+  "otp-text": {
+    "body": "【示例】123456 是你的登录验证码, 5 分钟内有效。若非本人操作, 请修改密码。",
+    "brief": "",
+    "kind": "otp",
+    "links": [],
+    "facts": [],
+    "otp": {
+      "code": "123456",
+      "expiresAt": 1795824300000
+    }
+  },
+  "otp-alnum": {
+    "body": "Hello,\nYour one-time passcode: K7Q2ZP\nIt is valid for 30 minutes. Your account ID is 88123 and plan costs $12.99/month.",
+    "brief": "",
+    "kind": "otp",
+    "links": [],
+    "facts": [],
+    "otp": {
+      "code": "K7Q2ZP",
+      "expiresAt": 1795825800000
+    }
+  },
+  "github-comment": {
+    "body": "Agent Notes: 4 项错误, 183 项待审核\n检查范围: a7b2d0446a..d5ee574b43, 包含这次 push 或 PR 比较范围内的全部提交\n规则统计: note-format: 1, note-path: 1, code-path: 1, anchor-cardinality: 1, note-only-diff: 1, unowned-code: 2, resource-review: 179, unowned-directory: 1\n未关联决策文件\n- .agents/skills/hx-agent-notes/SKILL.md:1 | 待审核 resource-review: 受保护资源已改动, 其格式不在 AST 支持范围内; 请审核对应决策及引用 (诊断: .agents/skills/hx-agent-notes/SKILL.md:1)\n- src/components/KBNote/Chart.tsx:1 | 待审核 unowned-code: 受保护源码已改动, 其直接父目录尚无对应决策记录, 请审核 (诊断: src/components/KBNote/Chart.tsx:1)\n- src/components/KBNote/index.tsx:1 | 待审核 unowned-code: 受保护源码已改动, 其直接父目录尚无对应决策记录, 请审核 (诊断: src/components/KBNote/index.tsx:1)\n.agents/notes/implemented/architecture/2026-11-08-rules-feed-forward-gates-confirm.md:1\n- .agents/notes/implemented/architecture/2026-11-08-rules-feed-forward-gates-confirm.md:1 | 错误 note-format: Alternatives considered 必须包含什么都不做 / 复用现有方案 (诊断: .agents/notes/implemented/architecture/2026-11-08-rules-feed-forward-gates-confirm.md:1)\n- .agents/skills/hx-note/scripts/cli/voice/voice_rules.py:178 | 错误 note-path: 精确仓库路径上不存在有效的决策记录: .agents/notes/implemented/architecture/2026-11-08-rules-feed-forward-gates-confirm.md (诊断: .agents/skills/hx-note/scripts/cli/voice/voice_rules.py:178)\n.agents/notes/implemented/simplification/2026-09-13-obsidian-second-brain-consolidation.md:1\n- .agents/notes/implemented/simplification/2026-09-13-obsidian-second-brain-consolidation.md:13 | 待审核 note-only-diff: 决策记录已改动, 目录 ai-docs/003-AI/004-记忆/003-obsidian-second-brain 中的代码未同步修改; 请审核 (诊断: .agents/notes/implemented/simplification/2026-09-13-obsidian-second-brain-consolidation.md:1)\n- ai-docs/003-AI/004-记忆/003-obsidian-second-brain/obsidian-second-brain-deck.tsx:1 | 错误 code-path: Code 路径必须指向现存且受保护的源码文件: ai-docs/003-AI/004-记忆/003-obsidian-second-brain/obsidian-second-brain-deck.tsx (诊断: .agents/notes/implemented/simplification/2026-09-13-obsidian-second-brain-consolidation.md:13); 错误 anchor-cardinality: ai-docs/003-AI/004-记忆/003-obsidian-second-brain/obsidian-second-brain-deck.tsx 中必须有且仅有一个 AST 声明锚点; 当前在其目录内找到 0 个 (诊断: .agents/notes/implemented/simplification/2026-09-13-obsidian-second-brain-consolidation.md:13)\n其余 179 项见完整 JSON 诊断附件, 待审核提示不等于结构错误\n完整诊断与运行日志",
+    "brief": "Agent Notes: 4 项错误, 183 项待审核 · 检查范围: a7b2d0446a..d5ee574b43, 包含这次 push 或 PR 比较范围内的全部提交",
+    "kind": "github",
+    "links": [],
+    "facts": [
+      {
+        "label": "仓库",
+        "value": "octo-user/notes-repo"
+      }
+    ]
+  },
+  "github-run": {
+    "body": "[octo-user/flows-repo] TG Orchestrator workflow run\nTG Orchestrator: All jobs have failed\nView workflow run\nStatus\nJob\nAnnotations\nTG Orchestrator / tg\nFailed in 1 minute and 9 seconds\n2",
+    "brief": "[octo-user/flows-repo] TG Orchestrator workflow run",
+    "kind": "github",
+    "links": [],
+    "facts": [
+      {
+        "label": "仓库",
+        "value": "octo-user/flows-repo"
+      }
+    ]
+  },
+  "github-dependabot": {
+    "body": "Bumps vlucas/phpdotenv from 5.7.0 to 5.8.1.\nRelease notes\nSourced from vlucas/phpdotenv's releases.\nv5.8.1\nWhat's Changed\n- Resolve nested variables without repeated copying by @contributor in phpdotenv/phpdotenv#623\n- Collect multiline values in linear time by @contributor in phpdotenv/phpdotenv#624\nFull Changelog: phpdotenv/phpdotenv@v5.8.0...v5.8.1\nv5.8.0\nWhat's Changed\n- Rename nul.env test fixture to prevent Windows checkout failure by @contributor in phpdotenv/phpdotenv#620\n- Report unterminated double-quoted values instead of dropping them by @contributor in phpdotenv/phpdotenv#621\n- Recognise a multiline closing quote at the start of a line by @contributor in phpdotenv/phpdotenv#622\nNew Contributors\n- @contributor made their first contribution in phpdotenv/phpdotenv#620\nFull Changelog: phpdotenv/phpdotenv@v5.7.0...v5.8.0\nCommits\n- ba37876 Collect multiline values in linear time (#624)\n- 25dc13b Resolve nested variables without repeated copying (#623)\n- 9614910 Bump branch alias\n- 7f5e066 Recognise a multiline closing quote at the start of a line (#622)\n- 3f7ae97 Report unterminated double-quoted values instead of dropping them (#621)\n- d704058 Rename nul.env test fixture to prevent Windows checkout failure (#620)\n- See full diff in compare view\nDependabot will resolve any conflicts with this PR as long as you don't alter it yourself. You can also trigger a rebase manually by commenting @dependabot rebase.\nDependabot commands and options\nYou can trigger Dependabot actions by commenting on this PR:\n- @dependabot rebase will rebase this PR\n- @dependabot recreate will recreate this PR, overwriting any edits that have been made to it\n- @dependabot show <dependency name> ignore conditions will show all of the ignore conditions of the specified dependency\n- @dependabot ignore this major version will close this PR and stop Dependabot creating any more for this major version (unless you reopen the PR or upgrade to it yourself)\n- @dependabot ignore this minor version will close this PR and stop Dependabot creating any more for this minor version (unless you reopen the PR or upgrade to it yourself)\n- @dependabot ignore this dependency will close this PR and stop Dependabot creating any more for this dependency (unless you reopen the PR or upgrade to it yourself)\nYou can view, comment on, or merge this pull request online at:\nhttps://github.com/octo-user/github-readme-streak-stats/pull/9\nCommit Summary\n- 4283c53 Bump vlucas/phpdotenv from 5.7.0 to 5.8.1\nFile Changes\n(1 file)\n- M composer.lock (42)\nPatch Links:\n- https://github.com/octo-user/github-readme-streak-stats/pull/9.patch\n- https://github.com/octo-user/github-readme-streak-stats/pull/9.diff",
+    "brief": "Bumps vlucas/phpdotenv from 5.7.0 to 5.8.1.",
+    "kind": "github",
+    "links": [],
+    "facts": [
+      {
+        "label": "仓库",
+        "value": "octo-user/stats-repo"
+      }
+    ]
+  },
+  "bill-zh": {
+    "body": "支付成功\n商户名称\n示例便利店\n订单号\n202611281234567890\n支付时间\n2026-11-28 12:30:05\n实付金额\n¥128.50\n查看订单详情\n如有疑问请联系客服 400-000-0000。",
+    "brief": "商户名称 · 示例便利店 · 202611281234567890",
+    "kind": "bill",
+    "links": [],
+    "facts": [
+      {
+        "label": "金额",
+        "value": "¥128.50"
+      },
+      {
+        "label": "商家",
+        "value": "示例支付"
+      }
+    ]
+  },
+  "shipping-zh": {
+    "body": "亲爱的用户:\n您购买的商品已发货, 正在运输中。\n快递公司: 示例速运\n运单号: SF1234567890123\n预计 11 月 30 日送达。\n点击查看物流详情: https://track.example.cn/SF1234567890123",
+    "brief": "您购买的商品已发货, 正在运输中。 · 快递公司: 示例速运",
+    "kind": "shipping",
+    "links": [],
+    "facts": [
+      {
+        "label": "单号",
+        "value": "SF1234567890123"
+      },
+      {
+        "label": "状态",
+        "value": "已发货"
+      }
+    ]
+  },
+  "marketing-sale": {
+    "body": "EXAMPLEPROXY\n% Black Friday Sale %\nUp to 40% off\nacross the site\nOur Black Friday sale is live. Prices are already lowered across the site until November 28, with no code needed.\nShop the sale\nWhat's on sale\nThe discount is already in the price\nStandard Residential\nBiggest deal\n40% OFF\nPremium Residential\n30% OFF\nMobile\nPremium ISP\n20% OFF\nEverything else\nDatacenter, IPv6 and Custom ISP\n10% OFF\nGood to know\nRenewals included\nThe sale price also applies when you renew or extend a plan you already have, so it's a good time to stock up for December.\nNo code needed\nThe discount is applied on its own. Coupons can't be combined with the sale, and Full Subnet plans are not included.\nEnds November 28\nThe sale prices are only here for a few days\nSee all prices →\nEXAMPLEPROXY\nA portion of every plan supports cat shelter donations monthly.",
+    "brief": "% Black Friday Sale % · across the site",
+    "kind": "marketing",
+    "links": [],
+    "facts": []
+  },
+  "newsletter": {
+    "body": "Hi,\nCodeGuard Security is officially in beta.\nOur first product, CodeGuard Guard, is now live for all existing customers. Guard reviews your PRs for missing permission checks, injection vulnerabilities, and leaked secrets before you merge. It’s available on every plan at 3 credits per review.\nCodeGuard builds a threat model for each repo, mapping its architecture, trust boundaries, and critical code paths. The agent performs better than products like Codex Security, but at $3 per review, it is much more efficient, meaning you can run it on every code change.\nYou can choose when the agent runs or let Intelligent Routing decide which PRs need a security review.\nVisit app.codeguard.com/security to enable the feature!\nThe CodeGuard team\nCodeGuard · Docs",
+    "brief": "CodeGuard Security is officially in beta.",
+    "kind": "normal",
+    "links": [],
+    "facts": []
+  },
+  "status-alert": {
+    "body": "故障更新\nExampleAI API 性能下降（ExampleAI API Degraded Performance）\n已恢复开始于 2026年11月25日 01:16:45 UTC\n本次问题已解决，服务已恢复。\nThe incident has been resolved and service has been restored.\n受影响组件\nExampleAI V4 Pro API服务(API Service)运行正常\n查看详情",
+    "brief": "故障更新 · ExampleAI API 性能下降（ExampleAI API Degraded Performance）",
+    "kind": "normal",
+    "links": [],
+    "facts": []
+  },
+  "reply-en": {
+    "body": "Sounds good, let's ship it on Friday. I'll update the release notes tonight.\nThanks,\nAlex",
+    "brief": "Sounds good, let's ship it on Friday. I'll update the release notes tonight.",
+    "kind": "normal",
+    "links": [],
+    "facts": []
+  },
+  "reply-zh": {
+    "body": "好的, 周五上线, 我今晚把发布说明更新一下。",
+    "brief": "好的, 周五上线, 我今晚把发布说明更新一下。",
+    "kind": "normal",
+    "links": [],
+    "facts": []
+  },
+  "outlook-reply": {
+    "body": "收到, 我下午三点前把报价单发给你。\n王五",
+    "brief": "收到, 我下午三点前把报价单发给你。",
+    "kind": "normal",
+    "links": [],
+    "facts": []
+  }
+}

@@ -31,6 +31,8 @@ export * from "./v1/plugin-market";
 export * from "./v1/semver";
 export * from "./v1/mail";
 export * from "./v1/mail-rules";
+export * from "./v1/mail-clean";
+export * from "./v1/mail-extract";
 export * from "./v1/translate";
 export * from "./v1/term";
 export * from "./v1/presence";

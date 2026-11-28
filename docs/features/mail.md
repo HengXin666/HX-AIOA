@@ -52,13 +52,24 @@ HX-Email → 设置 → 通知 → Webhook:
 
 ## 存储
 
-- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, category, code, via, body, spoof }`; 标题是主题, 摘要是正文前 500 字
+- 每封信是 `mail` 群里的一条事件, `data.mail = { from, name, to, vendor, category, code, via, body, spoof, kind, otp, brief, links, facts }`; 标题是主题, 摘要是精简正文前 500 字 (见下面 "精简正文")
 - 完整正文 (HTML 原文, 或超过 500 字的纯文本) 存 R2 (`data.file`), 库里只留摘要, 删信时随引用计数一起删; `body` 为 `html` / `text`。CF 入口的 HTML 上限 2MB。没绑 R2 时 HTML 不超过 64KB 才内联保存
 - `spoof`: CF 校验头里发件域名 DMARC 失败 (经 Gmail 等可信转发时看转发方那一跳), 显示 "可疑", 带验证码也不响铃
 - 同一个 Message-ID 再来只覆盖, 不重复 (HX-Email 用 `hx-email:<message_id>`)
 - 另有 `mail` 索引表 (事件 id, 时间, 账号, 厂商, 分类, 发件人, 主题), 筛选, 搜索和统计只走索引; 消息删掉或清空后自动不算, 每天清理一次残留索引
 - 统计在内存缓存 1 分钟, 新信到达立即失效
 - 有验证码的信优先级为 "需要我", 会响铃; 其余为 "值得看"
+
+## 精简正文与验证码 (#146)
+
+收信时跑一次 `digestMail` (`protocol/src/v1/mail-extract.ts`), 结果随事件一起写入, 不另写表, 不多发请求:
+
+- 正文 (`mail-clean.ts`): HTML 转文本, 跳过 style/script/head, 隐藏元素 (display:none, preheader), 引用块 (Gmail/Outlook), 追踪像素; 再逐行去掉 "On ... wrote" / "在 ... 写道" 之后的历史, `-- ` 签名, 后半段的退订 / 系统自动发送 / 版权 / 地址页脚, 社交图标行
+- `brief`: 两行以内的要点 (跳过问候语与重复主题的行); 验证码信不做摘要
+- `otp = { code, expiresAt? }`: 强提示词 (验证码, verification code, one-time passcode 等) 附近 60 字内的 4-8 位数字或大写字母数字, 支持 `385 172` 分组; 弱提示词 (your code, code:) 只在主题或开头像登录验证时认; 排除年份, 金额, 单位 (项, 分钟, %), 订单号, 版本号。"10 分钟内有效" / "valid for 15 minutes" 换算成 `expiresAt`。旧字段 `code` 照旧写, 兼容老客户端
+- `links`: 登录, 确认, 验证, 重置之类的按钮 (最多 3 个); `kind`: otp / bill / shipping / github / marketing / normal, `facts` 给金额与商家, 单号与状态, 仓库
+- 客户端 (`ui/chat/MailClean.kt`, `MailExtract.kt`) 是同一套规则的移植, 老信没有 `kind` 时用摘要兜底; 两边用 `protocol/fixtures/mail` 的去敏样例做快照测试 (`server/test/mail-digest.test.ts` 生成快照, 安卓 `MailDigestTest` 对比)
+- 总览: 验证码信显示大号验证码 + 复制 + 剩余时间, 过期灰显; 营销信只留标题; 其余显示要点
 
 ## 查询 (主人)
 
@@ -78,9 +89,9 @@ HX-Email → 设置 → 通知 → Webhook:
 
 - 原文直接内嵌 (WebView 不跑脚本, 不读文件), 按屏宽排版; 设计稿 `docs/design/mockups/mail-detail.html`
 - 远程图片: 白名单 (上面的厂商表, 含子域名) 默认放行, 其余拦截; 冒充的信 (spoof) 只认明确放行。详情里可 "显示" (本次) 或 "总是显示" (记到发件人主域名)
-- 样式: 深色适配 (默认, 深色主题下反色, 图片不反) / 原样 / 纯文本, 按发件人主域名记住
+- 样式: 精简 (默认, #146) / 深色适配 (深色主题下反色, 图片不反) / 原样 / 纯文本, 按发件人主域名记住; 给发件人选了精简以外的样式即 "总是显示原始样式"
 - 点链接先弹出真实去向: 跳转参数 (url, u, redirect 等) 里带目标的直接解开, 去掉跟踪; 只走内置浏览器或复制
-- 验证码只取 "验证码 / code" 字样附近, 中间不隔句读, 年份 (19xx / 20xx) 不算
+- 验证码规则见上面 "精简正文与验证码"; 验证码信不自动翻译
 
 偏好存服务端, 各端共用:
 

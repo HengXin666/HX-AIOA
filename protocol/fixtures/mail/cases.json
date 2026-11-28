@@ -1,0 +1,17 @@
+[
+  { "name": "otp-zh", "subject": "【示例科技】登录验证码", "from": "noreply@account.example.cn", "sender": "示例科技" },
+  { "name": "otp-en", "subject": "Verify your email address", "from": "no-reply@example.com", "sender": "Example Cloud" },
+  { "name": "otp-text", "subject": "登录提醒", "from": "service@example.cn" },
+  { "name": "otp-alnum", "subject": "Sign in to Example", "from": "security@example.org" },
+  { "name": "github-comment", "subject": "Re: [octo-user/notes-repo] [bot] 同步数据 (a7b2d04)", "from": "notifications@github.com", "sender": "github-actions[bot]" },
+  { "name": "github-run", "subject": "[octo-user/flows-repo] Run failed: Orchestrator - main (9c271e3)", "from": "notifications@github.com", "sender": "octo-user" },
+  { "name": "github-dependabot", "subject": "[octo-user/stats-repo] Bump vlucas/phpdotenv from 5.7.0 to 5.8.1 (PR #12)", "from": "notifications@github.com", "sender": "dependabot[bot]" },
+  { "name": "bill-zh", "subject": "支付成功通知", "from": "notice@pay.example.cn", "sender": "示例支付" },
+  { "name": "shipping-zh", "subject": "您的订单已发货", "from": "service@shop.example.cn", "sender": "示例商城" },
+  { "name": "marketing-sale", "subject": "Black Friday: up to 40% off ExampleProxy", "from": "support@exampleproxy.com", "sender": "ExampleProxy" },
+  { "name": "newsletter", "subject": "Early access to CodeGuard Security", "from": "hello@codeguard.com", "sender": "CodeGuard" },
+  { "name": "status-alert", "subject": "故障: ExampleAI API 性能下降", "from": "no-reply@status.example.com", "sender": "ExampleAI 状态页" },
+  { "name": "reply-en", "subject": "Re: release on Friday?", "from": "alex@example.com", "sender": "Alex" },
+  { "name": "reply-zh", "subject": "回复: 上线时间", "from": "ming@example.cn", "sender": "小明" },
+  { "name": "outlook-reply", "subject": "答复: 报价单", "from": "wang@example.cn", "sender": "王五" }
+]

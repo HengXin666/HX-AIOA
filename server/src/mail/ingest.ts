@@ -4,7 +4,7 @@ import {
   MAIL_TITLE,
   MAX_TITLE_LENGTH,
   categoryOf,
-  extractCode,
+  digestMail,
   vendorOf,
   type EventData,
   type FileRef,
@@ -43,16 +43,24 @@ export async function mailIn(core: Core, input: MailInput, via: MailVia, who: Pr
   const vendor = vendorOf(from);
   const subject = (input.subject ?? "").trim().slice(0, MAX_TITLE_LENGTH) || NO_SUBJECT;
   const text = input.text?.trim() || (input.html ? htmlToText(input.html) : "");
-  const code = input.code ?? extractCode(subject, text);
+  // 精简正文与验证码等随事件一次写入 (#146), 不另写表
+  const d = digestMail({ subject, from, name: input.name, html: input.html, text: input.text, ts: input.ts ?? Date.now(), code: input.code });
+  const code = d.otp?.code;
   const category = categoryOf(from);
-  const mail: MailInfo = { from, to, vendor, category, via };
+  const mail: MailInfo = { from, to, vendor, category, via, kind: d.kind };
   if (input.name) mail.name = input.name.trim();
   if (input.rcpt && clean(input.rcpt) !== to) mail.rcpt = clean(input.rcpt);
   if (input.list) mail.list = clean(input.list);
-  if (code) mail.code = code;
+  if (d.otp) {
+    mail.otp = d.otp;
+    mail.code = d.otp.code;
+  }
+  if (d.brief) mail.brief = d.brief;
+  if (d.links.length) mail.links = d.links;
+  if (d.facts.length) mail.facts = d.facts;
   if (input.spoof) mail.spoof = true;
   const data: EventData = { title: subject, severity: input.spoof ? "warning" : code ? "normal" : "info", mail };
-  const summary = text.slice(0, MAX_SUMMARY);
+  const summary = (d.body || text).slice(0, MAX_SUMMARY);
   if (summary) data.summary = summary;
   const source: SourceRef = { id: MAIL_SOURCE_PREFIX + vendor, name: vendor, type: "email", icon: MAIL_ICON };
   const key = input.messageId?.trim();
