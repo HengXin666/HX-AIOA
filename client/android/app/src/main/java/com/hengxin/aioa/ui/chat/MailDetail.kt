@@ -64,7 +64,8 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
     val trPrefs = MailTrPrefs.of(context)
     @Suppress("UNUSED_VARIABLE") val tv = trPrefs.version
     val lang = remember(m.id) { trLangOf(m.subject + "\n" + m.summary) }
-    val trOn = lang != null && MailAddr.site(m.from) !in trPrefs.muted
+    // 验证码信不翻译 (#146)
+    val trOn = lang != null && MailAddr.site(m.from) !in trPrefs.muted && m.digest.kind != MailExtract.KIND_OTP
     var trJob by remember(m.id) { mutableStateOf<Job?>(null) }
     fun runTr() {
         trJob = scope.launch {
@@ -92,15 +93,7 @@ fun MailDetail(t: MailThread, s: MailState, back: () -> Unit) {
                 Sender(m)
                 if (trOn && lang != null) TranslateLine(m, tr, lang, { runTr() }) { trJob?.cancel() }
                 Recipient(m)
-                m.code?.let { code ->
-                    Row(Modifier.padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = SOFT)).clickable { copyCode(context, code) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("验证码", color = c.accent, fontSize = 13.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(code, color = c.accent, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Icon("copy", c.accent, 16.dp)
-                    }
-                }
+                MailKeyInfo(m) { link = it }
             }
             MailBody(m, s, tr) { link = it }
             if (t.items.size > 1) Others(t, m.id) { cur = it; s.seen.set(t.items.filter { x -> x.id == it }, true) }
@@ -168,7 +161,7 @@ private fun Others(t: MailThread, cur: String, pick: (String) -> Unit) {
             Row(Modifier.fillMaxWidth().clickable { pick(x.id) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(x.name ?: x.from, color = if (on) c.accent else c.text, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
-                    Text(x.summary.ifEmpty { x.subject }, color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(x.preview.ifEmpty { x.subject }, color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(mailTime(context, x.ts), color = c.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
             }
@@ -201,4 +194,3 @@ private fun Action(icon: String, label: String, onClick: () -> Unit) {
     }
 }
 
-private const val SOFT = 0.1f

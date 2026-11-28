@@ -11,13 +11,16 @@ import com.hengxin.aioa.kit.Tone
 import com.hengxin.aioa.proto.OverviewItem
 import com.hengxin.aioa.proto.TaskSnapshot
 import com.hengxin.aioa.proto.plainLine
+import com.hengxin.aioa.ui.chat.MailExtract
+import com.hengxin.aioa.ui.chat.mailDigestOf
+import org.json.JSONObject
 
 // 协议对象到组件展示数据的转换, 组件库不认识协议
 
 fun ago(ts: Long, now: Long = System.currentTimeMillis()): String =
     if (ts <= 0) "" else DateUtils.getRelativeTimeSpanString(ts, now, DateUtils.MINUTE_IN_MILLIS).toString()
 
-fun OverviewItem.toFeed(): FeedItem {
+fun OverviewItem.toFeed(now: Long = System.currentTimeMillis()): FeedItem {
     val tone = when (ev.severity) {
         Constants.SEVERITY_CRITICAL -> Tone.Critical
         Constants.SEVERITY_WARNING -> Tone.Warning
@@ -32,8 +35,25 @@ fun OverviewItem.toFeed(): FeedItem {
     val title = if (ev.resolved) "已恢复: $plain" else plain
     // 列表里只放一两行摘要: 去掉 Markdown / HTML 标记, 点开再完整渲染; 和标题一样的不重复
     val summary = ev.summary?.let(::plainLine)?.takeIf { it.isNotBlank() && it != plain } ?: if (ev.html != null) "卡片, 点开查看" else null
-    return FeedItem(ev.id, icon, title, summary, ev.source.name, ago(ev.ts), if (ev.resolved) Tone.Info else tone, count)
+    val item = FeedItem(ev.id, icon, title, summary, ev.source.name, ago(ev.ts), if (ev.resolved) Tone.Info else tone, count)
+    return ev.mail?.let { mailFeed(item, it, now) } ?: item
 }
+
+/** 邮件 (#146): 用精简要点; 验证码信显示大号验证码与剩余时间, 不放摘要; 营销信只留标题。 */
+private fun OverviewItem.mailFeed(item: FeedItem, json: String, now: Long): FeedItem? {
+    val m = runCatching { JSONObject(json) }.getOrNull() ?: return null
+    val d = mailDigestOf(m, ev.title, ev.summary.orEmpty(), ev.ts)
+    val otp = d.otp
+    if (otp != null) {
+        val left = otp.expiresAt?.let { it - now }
+        val note = left?.let { if (it > 0) "${(it + MINUTE_MS - 1) / MINUTE_MS} 分钟内有效" else "已过期" }
+        return item.copy(summary = null, code = otp.code, codeNote = note, codeExpired = left != null && left <= 0)
+    }
+    if (d.kind == MailExtract.KIND_MARKETING) return item.copy(summary = null)
+    return item.copy(summary = d.brief.ifEmpty { null }?.takeIf { it != item.title } ?: item.summary)
+}
+
+private const val MINUTE_MS = 60_000L
 
 fun TaskSnapshot.phase(): TaskPhase = when (state) {
     Constants.TASK_WAITING -> TaskPhase.Waiting

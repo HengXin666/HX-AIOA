@@ -73,7 +73,7 @@ fun MailBody(m: MailItem, s: MailState, tr: MailTr, onLink: (String) -> Unit) {
     val page = html
     if (page == null) {
         Column(Modifier.fillMaxWidth().background(c.surface).padding(MAIL_PAD.dp)) {
-            SelectionContainer { Text((tr.summary.takeIf { tr.showing } ?: m.summary).ifEmpty { "(没有正文)" }, color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
+            SelectionContainer { Text((tr.summary.takeIf { tr.showing } ?: m.digest.body.ifEmpty { m.summary }).ifEmpty { "(没有正文)" }, color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
             if (m.body != null) Text(err ?: "正在加载原文...", Modifier.padding(top = 10.dp), color = if (err != null) c.danger else c.textSecondary, fontSize = 12.sp)
         }
         return
@@ -83,7 +83,7 @@ fun MailBody(m: MailItem, s: MailState, tr: MailTr, onLink: (String) -> Unit) {
     val show = once || s.prefs.imagesAllowed(m.from, m.spoof)
     val blocked = if (show) 0 else REMOTE_IMG.findAll(page).count()
     fun setPref(p: MailSenderPref) = scope.launch { s.savePrefs(s.prefs.withSender(site, p)) }
-    if (blocked > 0) {
+    if (blocked > 0 && style != STYLE_CLEAN) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon("eye-off", c.textSecondary, 16.dp)
             Text("已拦截 $blocked 张远程图片", Modifier.padding(start = 8.dp).weight(1f), color = c.textSecondary, fontSize = 12.sp)
@@ -96,13 +96,14 @@ fun MailBody(m: MailItem, s: MailState, tr: MailTr, onLink: (String) -> Unit) {
             STYLE_LABEL.forEach { (k, label) ->
                 val on = k == style
                 Text(label, Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) c.accent.copy(alpha = 0.12f) else c.surfaceAlt)
-                    .clickable { if (!on) setPref(s.prefs.pref(m.from).copy(style = k.takeIf { it != STYLE_ADAPT })) }.padding(horizontal = 10.dp, vertical = 4.dp),
+                    .clickable { if (!on) setPref(s.prefs.pref(m.from).copy(style = k.takeIf { it != STYLE_CLEAN })) }.padding(horizontal = 10.dp, vertical = 4.dp),
                     color = if (on) c.accent else c.textSecondary, fontSize = 12.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
             }
         }
-        if (style == STYLE_TEXT) {
+        if (style == STYLE_TEXT || style == STYLE_CLEAN) {
             val src = if (tr.showing) tr.bare ?: page else page
-            val text = remember(src) { mailPlain(src) }
+            // 精简: 去掉隐藏文字, 引用历史, 签名与页脚 (#146); 纯文本: 原文整篇转文字
+            val text = remember(src, style) { if (style == STYLE_CLEAN) MailClean.mailText(src, null).text.ifEmpty { mailPlain(src) } else mailPlain(src) }
             SelectionContainer { Text(text, Modifier.padding(MAIL_PAD.dp), color = c.text, fontSize = 14.sp, lineHeight = 22.sp) }
         } else {
             val dark = cardTheme().dark

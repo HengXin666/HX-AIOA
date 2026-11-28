@@ -122,7 +122,9 @@ private fun ThreadRow(t: MailThread, unread: Boolean, onClick: () -> Unit) {
                 Text(mailTime(context, m.ts), Modifier.padding(start = 8.dp), color = if (unread) c.accent else c.textSecondary, fontSize = 12.sp, maxLines = 1)
             }
             Text(m.subject, color = c.text, fontSize = 14.sp, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            if (m.summary.isNotEmpty()) Text(m.summary, color = c.textSecondary, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            // 精简要点 (#146); 营销信只留标题, 验证码信看下面的验证码标签
+            val preview = m.preview.takeIf { m.digest.kind != MailExtract.KIND_MARKETING && m.digest.kind != MailExtract.KIND_OTP }.orEmpty()
+            if (preview.isNotEmpty()) Text(preview, color = c.textSecondary, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             MailTags(m)
         }
     }

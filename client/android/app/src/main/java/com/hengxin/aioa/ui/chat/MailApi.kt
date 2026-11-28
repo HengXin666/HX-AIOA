@@ -30,7 +30,12 @@ data class MailItem(
     val code: String?,
     // 发件域名校验失败, 可能是冒充
     val spoof: Boolean,
-)
+    // 精简结果 (#146): 类型, 验证码与有效期, 要点, 关键链接与信息
+    val digest: MailDigest = MailDigest(summary, "", MailExtract.KIND_NORMAL),
+) {
+    /** 列表与总览显示的一两行: 要点, 没有就用摘要。 */
+    val preview get() = digest.brief.ifEmpty { summary }
+}
 
 /** 筛选项: 厂商或账号, 封数与最新一封的时间。 */
 data class MailFacet(val key: String, val count: Int, val last: Long, val from: String? = null)
@@ -129,12 +134,16 @@ class MailApi(private val context: Context) {
         val to = m.optString("to")
         // 旧信把中转地址当了账号: 归为未知, 中转地址挪到 list
         val relay = MailAddr.isRelay(to)
+        val subject = data.optString("title")
+        val summary = data.optString("summary")
+        val ts = o.optLong("ts")
+        val digest = mailDigestOf(m, subject, summary, ts)
         return MailItem(
             id = o.optString("id"),
             seq = o.optLong("seq"),
-            ts = o.optLong("ts"),
-            subject = data.optString("title"),
-            summary = data.optString("summary"),
+            ts = ts,
+            subject = subject,
+            summary = summary,
             body = m.s("body"),
             from = m.optString("from"),
             name = m.s("name"),
@@ -144,8 +153,9 @@ class MailApi(private val context: Context) {
             via = m.optString("via"),
             vendor = m.optString("vendor"),
             category = m.s("category"),
-            code = m.s("code"),
+            code = digest.otp?.code,
             spoof = m.optBoolean("spoof"),
+            digest = digest,
         )
     }
 

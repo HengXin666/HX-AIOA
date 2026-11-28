@@ -10,12 +10,14 @@ const val IMAGES_ALL = "all"
 const val IMAGES_NONE = "none"
 const val SHOW = "show"
 const val BLOCK = "block"
+// 精简正文 (#146) 是默认, 不存; 给发件人选了其它样式就是 "总是显示原始样式"
+const val STYLE_CLEAN = "clean"
 const val STYLE_ADAPT = "adapt"
 const val STYLE_ORIGINAL = "original"
 const val STYLE_TEXT = "text"
 
 val IMAGE_POLICY_LABEL = linkedMapOf(IMAGES_KNOWN to "只放行白名单", IMAGES_ALL to "全部显示", IMAGES_NONE to "全部拦截")
-val STYLE_LABEL = linkedMapOf(STYLE_ADAPT to "深色适配", STYLE_ORIGINAL to "原样", STYLE_TEXT to "纯文本")
+val STYLE_LABEL = linkedMapOf(STYLE_CLEAN to "精简", STYLE_ADAPT to "深色适配", STYLE_ORIGINAL to "原样", STYLE_TEXT to "纯文本")
 
 data class MailSenderPref(val images: String? = null, val style: String? = null) {
     val empty get() = images == null && style == null
@@ -55,7 +57,7 @@ data class MailPrefs(
         return images == IMAGES_ALL || (images == IMAGES_KNOWN && knownSender(from))
     }
 
-    fun style(from: String): String = pref(from).style ?: STYLE_ADAPT
+    fun style(from: String): String = pref(from).style ?: STYLE_CLEAN
 
     /** 改一个发件人 (地址或域名) 的设置; 两项都空就删掉。 */
     fun withSender(key: String, p: MailSenderPref): MailPrefs =

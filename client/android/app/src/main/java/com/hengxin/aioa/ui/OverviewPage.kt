@@ -10,6 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.hengxin.aioa.kit.Chip
@@ -46,6 +49,7 @@ private const val TITLE_NEED_ME = "需要我"
 private const val TITLE_HAPPENING = "正在发生"
 private const val NEED_ME_SHOWN = 5
 private const val LAYER_SHOWN = 3
+private const val CODE_TICK_MS = 30_000L
 
 /** 总览三层: 需要我 (等待确认的任务与重要告警), 正在发生 (动态与资源), 值得一看 (报告与摘要)。 */
 @Composable
@@ -88,7 +92,16 @@ private fun findEvent(feed: FeedState, id: String): Envelope? = feed.layers.valu
 // 点开看过或点 x 划掉的不再占位置; 新来的照常出现
 @Composable
 internal fun Layer(chat: ChatModel, title: String, hint: String, priority: String, state: CardState, empty: String, limit: Int, show: (String) -> Unit) {
-    val list = items(chat.feed, priority).filter { !chat.seen.has(it.id) }
+    val context = LocalContext.current
+    // 验证码剩余时间 (#146): 有验证码时每半分钟刷新一次
+    val now by produceState(System.currentTimeMillis(), chat.feed.layers[priority]) {
+        if (chat.feed.layers[priority].orEmpty().none { it.ev.mail != null }) return@produceState
+        while (true) {
+            delay(CODE_TICK_MS)
+            value = System.currentTimeMillis()
+        }
+    }
+    val list = items(chat.feed, priority, now).filter { !chat.seen.has(it.id) }
     // 总览里看过的同一条, 群里也算已读
     val seqs = chat.feed.layers[priority].orEmpty().associate { it.ev.id to it.ev.seq }
     val mark = { ids: List<String> ->
@@ -100,6 +113,7 @@ internal fun Layer(chat: ChatModel, title: String, hint: String, priority: Strin
         limit = limit,
         onDismiss = { mark(listOf(it.id)) },
         onClear = { mark(list.map { it.id }) },
+        onCopy = { it.code?.let { code -> com.hengxin.aioa.ui.chat.copyCode(context, code) } },
     ) {
         mark(listOf(it.id))
         show(it.id)
@@ -114,8 +128,8 @@ fun layerState(online: Boolean, loaded: Boolean, updatedAt: Long): CardState = w
 }
 
 // 任务由任务卡与 Agent 页展示, 层里只放事件与报告
-internal fun items(feed: FeedState, priority: String): List<FeedItem> =
-    feed.layers[priority].orEmpty().filter { it.ev.kind != Constants.KIND_TASK }.map { it.toFeed() }
+internal fun items(feed: FeedState, priority: String, now: Long = System.currentTimeMillis()): List<FeedItem> =
+    feed.layers[priority].orEmpty().filter { it.ev.kind != Constants.KIND_TASK }.map { it.toFeed(now) }
 
 // 旧服务端只有消息: 近 24 小时的探针告警算 "需要我", 其余照旧
 @Composable

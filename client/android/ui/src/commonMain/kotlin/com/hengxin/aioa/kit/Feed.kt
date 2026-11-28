@@ -19,6 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 
 /** 事件的语气, 由严重程度映射而来, 只决定强调色。 */
 enum class Tone { Critical, Warning, Normal, Info }
@@ -33,6 +40,10 @@ data class FeedItem(
     val time: String? = null,
     val tone: Tone = Tone.Normal,
     val count: Int = 1,
+    // 验证码 (#146): 大字显示 + 复制; note 为剩余时间之类的说明, expired 时灰显
+    val code: String? = null,
+    val codeNote: String? = null,
+    val codeExpired: Boolean = false,
 )
 
 @Composable
@@ -48,7 +59,7 @@ fun toneColor(tone: Tone): Color {
 
 /** 一行动态: 左侧语气圆点, 标题 + 摘要, 右侧时间与聚合数。 */
 @Composable
-fun FeedRow(item: FeedItem, onClick: (() -> Unit)? = null, onDismiss: (() -> Unit)? = null) {
+fun FeedRow(item: FeedItem, onClick: (() -> Unit)? = null, onDismiss: (() -> Unit)? = null, onCopy: (() -> Unit)? = null) {
     val c = Aioa.colors
     Row(
         Modifier.fillMaxWidth().pressable(onClick).padding(vertical = 6.dp),
@@ -61,6 +72,7 @@ fun FeedRow(item: FeedItem, onClick: (() -> Unit)? = null, onDismiss: (() -> Uni
                 Text(item.title, c.text, 15, Modifier.weight(1f), FontWeight.Medium)
                 if (item.count > 1) Text(" ×${item.count}", c.textSecondary, 12)
             }
+            item.code?.let { CodeLine(it, item.codeNote, item.codeExpired, onCopy) }
             item.summary?.let { Paragraph(it, c.textSecondary, 13, maxLines = 2) }
             val meta = listOfNotNull(item.source, item.time).joinToString(" · ")
             if (meta.isNotEmpty()) Text(meta, c.textSecondary.copy(alpha = 0.8f), 11)
@@ -86,6 +98,7 @@ fun LayerSection(
     limit: Int = Int.MAX_VALUE,
     onDismiss: ((FeedItem) -> Unit)? = null,
     onClear: (() -> Unit)? = null,
+    onCopy: ((FeedItem) -> Unit)? = null,
     onItem: ((FeedItem) -> Unit)? = null,
 ) {
     val c = Aioa.colors
@@ -102,7 +115,7 @@ fun LayerSection(
             StateBody(shown, emptyText, onRetry) {
                 val visible = if (all) items else items.take(limit)
                 AnimatedItems(visible, { it.id }) { item ->
-                    FeedRow(item, onItem?.let { { it(item) } }, onDismiss?.let { { it(item) } })
+                    FeedRow(item, onItem?.let { { it(item) } }, onDismiss?.let { { it(item) } }, onCopy?.let { { it(item) } })
                 }
                 val rest = items.size - visible.size
                 if (rest > 0 || (all && items.size > limit)) {
@@ -113,5 +126,20 @@ fun LayerSection(
     }
 }
 
+/** 验证码一行: 大号等宽数字, 复制按钮, 剩余时间; 过期灰显。 */
+@Composable
+private fun CodeLine(code: String, note: String?, expired: Boolean, onCopy: (() -> Unit)?) {
+    val c = Aioa.colors
+    val tone = if (expired) c.textSecondary else c.accent
+    Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicText(code, style = TextStyle(color = tone, fontSize = CODE_SP.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = CODE_SPACING.sp))
+        if (onCopy != null) Text(COPY_LABEL, tone, 13, Modifier.clip(RoundedCornerShape(8.dp)).background(tone.copy(alpha = 0.12f)).pressable(onCopy).padding(horizontal = 10.dp, vertical = 4.dp), FontWeight.Medium)
+        note?.let { Text(it, c.textSecondary, 12) }
+    }
+}
+
+private const val CODE_SP = 24
+private const val CODE_SPACING = 2
+private const val COPY_LABEL = "复制"
 private const val CLEAR_LABEL = "全部已读"
 private val DISMISS_TOUCH = 28.dp
