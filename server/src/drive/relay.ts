@@ -1,4 +1,3 @@
-import { DRIVE_READONLY, isDriveReadonly } from "@hx-aioa/protocol";
 import { json } from "../http";
 import type { DriveFs } from "./client";
 
@@ -15,7 +14,11 @@ const MESSAGES: Record<string, string> = {
   "not a file": "不是文件",
   "bad or expired upload ticket": "上传票据无效或已过期, 请重新上传",
   "a file with that name exists": "已有同名文件",
+  "outside token root": "不在网盘里",
+  "scope not found": "网盘根目录不存在",
 };
+// 越界 (Drive 403 outside token root) 对外统一成 404, 不暴露网盘外有什么
+const OUTSIDE = new Set(["outside token root"]);
 
 export class DriveFail extends Error {
   constructor(
@@ -33,7 +36,8 @@ export const fail = (status: number, error: string, code = "drive") => json({ er
 export async function failOf(res: Response): Promise<DriveFail & { retryAfter?: string }> {
   const raw = await res.json<{ error?: string }>().then((j) => j.error ?? "", () => "");
   const msg = MESSAGES[raw] ?? (raw ? `网盘出错: ${raw}` : `网盘出错 (HTTP ${res.status})`);
-  const f = Object.assign(new DriveFail(res.status < 500 || res.status === 503 ? res.status : 502, msg), { retryAfter: res.headers.get("retry-after") ?? undefined });
+  const status = OUTSIDE.has(raw) ? 404 : res.status < 500 || res.status === 503 ? res.status : 502;
+  const f = Object.assign(new DriveFail(status, msg), { retryAfter: res.headers.get("retry-after") ?? undefined });
   return f;
 }
 
@@ -50,24 +54,10 @@ export async function relay<T>(res: Response, map: (body: T) => unknown = (b) =>
   return json(map(await res.json<T>()));
 }
 
-/** Drive 的绝对路径换成令牌根下的相对路径; 不在根下返回 null。 */
+/** Drive 的绝对路径换成本客户端根 (收窄时是网盘根) 下的相对路径; 不在根下返回 null。 */
 export function toRel(fs: DriveFs, abs: string): string | null {
   const root = fs.rootAbs;
   if (root === "/") return abs;
   if (abs === root) return "/";
   return abs.startsWith(`${root}/`) ? abs.slice(root.length) : null;
-}
-
-/** 附件目录只读: 写到这些位置一律 409。 */
-export function guardPath(fs: DriveFs, rel: string): void {
-  if (isDriveReadonly(rel, fs.whole)) throw new DriveFail(409, "这里是聊天附件目录, 网盘里只读", DRIVE_READONLY);
-}
-
-/** 按 id 写之前先问一次路径再判只读。 */
-export async function guardId(fs: DriveFs, id: string): Promise<void> {
-  const abs = await fs.pathOf(id);
-  if (abs === null) throw new DriveFail(404, "不存在或已删除");
-  const rel = toRel(fs, abs);
-  if (rel === null) throw new DriveFail(403, "不在网盘范围内");
-  guardPath(fs, rel);
 }

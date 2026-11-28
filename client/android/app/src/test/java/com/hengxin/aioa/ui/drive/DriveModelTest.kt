@@ -36,15 +36,6 @@ class DriveModelTest {
     }
 
     @Test
-    fun 附件目录只读() {
-        assertTrue(DrivePaths.readonly("/aioa", whole = true))
-        assertTrue(DrivePaths.readonly("/aioa/2026-11/f_1_a.png", whole = true))
-        assertFalse(DrivePaths.readonly("/aioa/备份", whole = true))
-        assertTrue(DrivePaths.readonly("/2026-11", whole = false))
-        assertFalse(DrivePaths.readonly("/照片", whole = false))
-    }
-
-    @Test
     fun 大小格式() {
         assertEquals("0 B", sizeText(0))
         assertEquals("1023 B", sizeText(1023))
@@ -72,8 +63,18 @@ class DriveModelTest {
         assertEquals(Preview.IMAGE, previewOf(node("a.png", mime = "image/png")))
         assertEquals(Preview.VIDEO, previewOf(node("a.mp4", mime = "video/mp4")))
         assertEquals(Preview.TEXT, previewOf(node("a.md", size = 10, mime = "application/octet-stream")))
-        assertEquals(Preview.SYSTEM, previewOf(node("a.log", size = 10L * 1024 * 1024, mime = "text/plain")))
-        assertEquals(Preview.SYSTEM, previewOf(node("a.pdf", mime = "application/pdf")))
+        // 大文本也能预览, 只读前 1 MB
+        assertEquals(Preview.TEXT, previewOf(node("a.log", size = 10L * 1024 * 1024, mime = "text/plain")))
+        assertEquals(Preview.TEXT, previewOf(node("main.kt", size = 10, mime = "")))
+        assertEquals(Preview.PDF, previewOf(node("a.pdf", size = 10, mime = "application/pdf")))
+        assertEquals(Preview.PDF, previewOf(node("b.PDF", size = 10, mime = "application/octet-stream")))
+        assertEquals(Preview.AUDIO, previewOf(node("a.flac", size = 10, mime = "")))
+        assertEquals(Preview.VIDEO, previewOf(node("a.mkv", size = 10, mime = "application/octet-stream")))
+        assertEquals(Preview.IMAGE, previewOf(node("a.JPG", size = 10, mime = "")))
+        // 太大的图片只给信息卡, 不认识的类型也是
+        assertEquals(Preview.INFO, previewOf(node("huge.png", size = 80L * 1024 * 1024, mime = "image/png")))
+        assertEquals(Preview.INFO, previewOf(node("a.zip", size = 10, mime = "application/zip")))
+        assertEquals(Preview.INFO, previewOf(node("文档", dir = true)))
     }
 
     @Test
