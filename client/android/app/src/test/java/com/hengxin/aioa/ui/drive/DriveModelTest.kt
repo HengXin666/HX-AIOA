@@ -90,4 +90,31 @@ class DriveModelTest {
         assertFalse(tabs.first { it.id == BOARD_DRIVE }.pinned)
         assertTrue(homeTabs(emptyList(), 0, pins = mapOf(BOARD_DRIVE to true), drive = true).first { it.id == BOARD_DRIVE }.pinned)
     }
+
+    @Test
+    fun 大文件按组折叠_10GB_540片3组() {
+        val count = 540
+        assertEquals(3, UploadParts.groups(count))
+        assertEquals(512 until 540, UploadParts.range(2, count))
+        assertTrue(UploadParts.needed(count))
+        assertFalse(UploadParts.needed(DRIVE_PART_SIZE))
+        val has = (0 until 300).toSet()
+        assertTrue(UploadParts.full(0, count) { it in has })
+        assertFalse(UploadParts.full(1, count) { it in has })
+        // 第 0 组已折叠, 1..299 有回执: 只剩 300..539
+        assertEquals((300 until 540).toList(), UploadParts.pending(count, { it == 0 }, { it in has && it >= 256 }))
+    }
+
+    @Test
+    fun 发到群与转发只列能发消息的会话() {
+        fun meta(view: String? = null, deleted: Long = 0) = com.hengxin.aioa.ui.chat.ChatMeta("g", "群", null, false, false, 0, null, emptyList(), 0, view = view, deleted = deleted)
+        assertTrue(com.hengxin.aioa.ui.chat.canPostTo("g", null))
+        assertTrue(com.hengxin.aioa.ui.chat.canPostTo("g", meta()))
+        assertTrue(com.hengxin.aioa.ui.chat.canPostTo("g", meta(com.hengxin.aioa.ui.chat.VIEW_CHAT)))
+        assertFalse(com.hengxin.aioa.ui.chat.canPostTo("g", meta(com.hengxin.aioa.ui.chat.VIEW_MAIL)))
+        assertFalse(com.hengxin.aioa.ui.chat.canPostTo("g", meta(com.hengxin.aioa.ui.chat.VIEW_FEED)))
+        assertFalse(com.hengxin.aioa.ui.chat.canPostTo("g", meta("board")))
+        assertFalse(com.hengxin.aioa.ui.chat.canPostTo("g", meta(deleted = 1)))
+        assertFalse(com.hengxin.aioa.ui.chat.canPostTo(com.hengxin.aioa.ui.chat.SYSTEM_CHANNEL, null))
+    }
 }

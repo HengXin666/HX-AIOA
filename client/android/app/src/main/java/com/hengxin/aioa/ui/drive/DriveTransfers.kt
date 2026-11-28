@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -122,19 +123,21 @@ object DriveTransfers {
                 return
             }
             s = JSONObject().put("ticket", init.getString("ticket")).put("chunkSize", init.getLong("chunkSize")).put("chunkCount", init.getInt("chunkCount"))
-                .put("receipts", JSONObject()).put("at", System.currentTimeMillis())
+                .put("direct", init.optString("direct")).put("receipts", JSONObject()).put("folds", JSONObject()).put("at", System.currentTimeMillis())
             state.writeText(s.toString())
         }
         val ticket = s.getString("ticket")
         val chunkSize = s.getLong("chunkSize")
         val count = s.getInt("chunkCount")
         val receipts = s.getJSONObject("receipts")
+        val folds = s.optJSONObject("folds") ?: JSONObject().also { s.put("folds", it) }
+        // 直传 Drive 公网 (#157): 地址不通就这次上传剩下的片都退回 AIOA 转发
+        val route = ChunkRoute(s.optString("direct").ifEmpty { null })
         var last = 0f
-        for (i in 0 until count) {
-            if (receipts.has(i.toString())) continue
+        for (i in UploadParts.pending(count, { folds.has(it.toString()) }, { receipts.has(it.toString()) })) {
             val off = i * chunkSize
             val len = minOf(chunkSize, size - off)
-            val rc = putChunk(app, api, uri, ticket, i, off, len, mime) { sent ->
+            val rc = putChunk(app, api, route, uri, ticket, i, off, len, mime) { sent ->
                 val p = (off + sent).toFloat() / size.coerceAtLeast(1)
                 if (p - last >= STEP) {
                     last = p
@@ -143,16 +146,36 @@ object DriveTransfers {
                 }
             }
             receipts.put(i.toString(), rc)
+            if (UploadParts.needed(count)) fold(api, ticket, count, i / DRIVE_PART_SIZE, receipts, folds)
             state.writeText(s.toString())
         }
+        // 上次停在 fold 之前的组补折一次; 折不了的组照样交零散回执
+        if (UploadParts.needed(count)) for (g in 0 until UploadParts.groups(count)) fold(api, ticket, count, g, receipts, folds)
+        state.writeText(s.toString())
+        val groups = (0 until UploadParts.groups(count))
         try {
-            api.commit(ticket, (0 until count).map { receipts.getString(it.toString()) })
+            api.commit(
+                ticket,
+                (0 until count).filter { !folds.has((it / DRIVE_PART_SIZE).toString()) }.map { receipts.getString(it.toString()) },
+                groups.filter { folds.has(it.toString()) }.map { folds.getString(it.toString()) },
+            )
         } catch (e: DriveError) {
             // 票据失效或回执不认: 下次从头传; 网络错误留着回执下次补
             if (e.code in HTTP_BAD..HTTP_CLIENT_MAX) state.delete()
             throw e
         }
         state.delete()
+    }
+
+    /** 第 g 组回执齐了且还没折叠时换成聚合回执, 换到后丢掉这组的零散回执; 失败不算错, 提交时交零散回执。 */
+    private suspend fun fold(api: DriveApi, ticket: String, count: Int, g: Int, receipts: JSONObject, folds: JSONObject) {
+        val k = g.toString()
+        if (folds.has(k) || !UploadParts.full(g, count) { receipts.has(it.toString()) }) return
+        val range = UploadParts.range(g, count)
+        runCatching { api.fold(ticket, range.map { receipts.getString(it.toString()) }) }.onSuccess { f ->
+            folds.put(k, f)
+            range.forEach { receipts.remove(it.toString()) }
+        }
     }
 
     /** 同名时自动改成 "名字 (1).扩展名" 再试, 最多 3 次。 */
@@ -169,17 +192,26 @@ object DriveTransfers {
         return api.initUpload(dir, n, size, mime)
     }
 
-    private suspend fun putChunk(app: Context, api: DriveApi, uri: Uri, ticket: String, i: Int, off: Long, len: Long, mime: String, progress: (Long) -> Unit): String {
+    /** 这次上传的分片走哪: direct 为 Drive 公网分片地址 (只凭票据), null 为经 AIOA Worker 转发。 */
+    private class ChunkRoute(@Volatile var direct: String?)
+
+    private suspend fun putChunk(app: Context, api: DriveApi, route: ChunkRoute, uri: Uri, ticket: String, i: Int, off: Long, len: Long, mime: String, progress: (Long) -> Unit): String {
         var last: Exception? = null
         repeat(CHUNK_TRIES) { attempt ->
             val body = CountingBody(rangeBody(app, uri, off, len, mime)) { sent, _ -> progress(sent) }
             try {
-                return api.send("PUT", "chunk", mapOf("ticket" to ticket, "i" to i.toString()), body) { res ->
-                    val text = res.body?.string().orEmpty()
-                    if (res.isSuccessful) return@send JSONObject(text).getString("receipt")
-                    val msg = runCatching { JSONObject(text).optString("error") }.getOrNull()?.ifEmpty { null } ?: "上传失败 (HTTP ${res.code})"
-                    throw DriveError(msg, res.code).also { it.retryAfter = res.header("Retry-After")?.toLongOrNull() }
+                val direct = route.direct
+                if (direct != null) {
+                    try {
+                        return directPut(app, direct, ticket, i, body)
+                    } catch (e: DriveError) {
+                        // 公网地址不通或不认 (网络错误, 被拦, 旧版): 改走转发, 这片立刻重传; 片本身的错照常处理
+                        if (e.code != 0 && e.code !in DIRECT_FALLBACK) throw e
+                        route.direct = null
+                        return@repeat
+                    }
                 }
+                return api.send("PUT", "chunk", mapOf("ticket" to ticket, "i" to i.toString()), body) { res -> receiptOf(res) }
             } catch (e: DriveError) {
                 last = e
                 val retriable = e.code == 0 || e.code == HTTP_TOO_MANY || e.code >= HTTP_SERVER
@@ -187,7 +219,26 @@ object DriveTransfers {
                 delay((e.retryAfter ?: RETRY_SEC).coerceAtMost(RETRY_MAX_SEC) * 1000)
             }
         }
+        // 最后一次在直传上失败并改走转发: 再转发一次
+        if (last == null && route.direct == null) {
+            val body = CountingBody(rangeBody(app, uri, off, len, mime)) { sent, _ -> progress(sent) }
+            return api.send("PUT", "chunk", mapOf("ticket" to ticket, "i" to i.toString()), body) { res -> receiptOf(res) }
+        }
         throw last ?: DriveError("上传失败")
+    }
+
+    /** 直传 Drive: 不带任何凭证, 只凭 URL 里的票据 (#157)。 */
+    private suspend fun directPut(app: Context, url: String, ticket: String, i: Int, body: RequestBody): String = withContext(Dispatchers.IO) {
+        val u = url.toHttpUrlOrNull()?.newBuilder()?.addQueryParameter("ticket", ticket)?.addQueryParameter("i", i.toString())?.build() ?: throw DriveError("直传地址不对")
+        val res = runCatching { Net.client(app).newCall(Request.Builder().url(u).put(body).build()).execute() }.getOrElse { throw DriveError(it.message ?: "网络错误") }
+        res.use(::receiptOf)
+    }
+
+    private fun receiptOf(res: okhttp3.Response): String {
+        val text = res.body?.string().orEmpty()
+        if (res.isSuccessful) return runCatching { JSONObject(text).getString("receipt") }.getOrElse { throw DriveError("上传失败 (回执不对)", HTTP_BAD_GATEWAY) }
+        val msg = runCatching { JSONObject(text).optString("error") }.getOrNull()?.ifEmpty { null } ?: "上传失败 (HTTP ${res.code})"
+        throw DriveError(msg, res.code).also { it.retryAfter = res.header("Retry-After")?.toLongOrNull() }
     }
 
     /** 文件的 [offset, offset + length) 一段作为请求体; 每次写出都重新打开, 重试时从头写这一段。 */
@@ -195,13 +246,7 @@ object DriveTransfers {
         override fun contentType(): MediaType? = mime.toMediaTypeOrNull()
         override fun contentLength(): Long = length
         override fun writeTo(sink: BufferedSink) {
-            (app.contentResolver.openInputStream(uri) ?: error("读不了这个文件")).use { input ->
-                var skipped = 0L
-                while (skipped < offset) {
-                    val n = input.skip(offset - skipped)
-                    if (n <= 0) error("读不了这个文件")
-                    skipped += n
-                }
+            com.hengxin.aioa.net.RangeInput.open(app, uri, offset).use { input ->
                 val buf = ByteArray(BUF)
                 var done = 0L
                 while (done < length) {
@@ -316,6 +361,9 @@ object DriveTransfers {
     private const val HTTP_TOO_MANY = 429
     private const val HTTP_SERVER = 500
     private const val READONLY = "drive_readonly"
+    private const val HTTP_BAD_GATEWAY = 502
+    // 直传时这些状态可能是公网地址用不了 (被 WAF 拦, 不存在, 方法不对, 旧版要令牌), 改走转发; 真是票据的问题转发也会再报
+    private val DIRECT_FALLBACK = setOf(401, 403, 404, 405, 407, 413, 451)
 }
 
 /** 同名时的编号名: a.txt → a (1).txt。 */

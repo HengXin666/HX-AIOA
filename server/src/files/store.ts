@@ -120,13 +120,18 @@ export class FileStore {
     if (Array.isArray(k)) return null;
     const ref = this.create(grp, name, size, mime, by, k);
     if (k === "cfd") {
-      const n = await (this.drive as Drive).upload(driveDir(), driveName(ref.id, name), size, mime, body);
+      const n = await (this.drive as Drive).upload(await (this.drive as Drive).dir(), driveName(ref.id, name), size, mime, body);
       this.done(ref.id, n.size, n.id);
       return { ...ref, size: n.size };
     }
     const obj = await (this.bucket as R2Bucket).put(ref.id, body, { httpMetadata: { contentType: mime } });
     this.done(ref.id, obj.size);
     return { ...ref, size: obj.size };
+  }
+
+  /** R2 上的字节 (存到网盘时服务端直接转给 Drive, #157); 没有返回 null。 */
+  async r2Body(id: string): Promise<R2ObjectBody | null> {
+    return (await this.bucket?.get(id)) ?? null;
   }
 
   async text(id: string): Promise<string | null> {
@@ -150,7 +155,7 @@ export class FileStore {
   /** 分片上传: 向 Drive 申请上传票据并记在行上, 提交时用。 */
   async startChunked(id: string, name: string, size: number, mime: string): Promise<{ ticket: string; chunkSize: number; chunkCount: number }> {
     if (!this.drive) throw new Error("服务端还没接入 HX-CF-Drive");
-    const t = await this.drive.init(driveDir(), driveName(id, name), size, mime);
+    const t = await this.drive.init(await this.drive.dir(), driveName(id, name), size, mime);
     this.sql.exec("UPDATE file SET up = ? WHERE id = ?", t.ticket, id);
     return t;
   }
@@ -209,7 +214,7 @@ export class FileStore {
       if (!this.drive || !this.bucket) throw new Error("R2 或 Drive 没接入");
       const obj = await this.bucket.get(r.id);
       if (!obj) throw new Error("R2 里没有这个文件");
-      const node = await this.drive.upload(driveDir(), driveName(r.id, r.name), obj.size, obj.httpMetadata?.contentType ?? r.mime, obj.body);
+      const node = await this.drive.upload(await this.drive.dir(), driveName(r.id, r.name), obj.size, obj.httpMetadata?.contentType ?? r.mime, obj.body);
       if (this.sql.exec("UPDATE file SET store = 'cfd', ext = ? WHERE id = ? AND store = 'r2'", node.id, r.id).rowsWritten === 0) {
         await this.drive.remove(node.id);
         return;

@@ -108,7 +108,7 @@ internal fun SelectBar(model: ChatModel, group: String, picking: Picking) {
 @Composable
 internal fun ForwardSheet(model: ChatModel, title: String, close: () -> Unit, onPick: (String) -> Unit) {
     val g = model.groups
-    val rows = remember { g.rows() }
+    val rows = remember { g.rows().filter { com.hengxin.aioa.ui.chat.canPostTo(it.key, it.meta) } }
     ActionSheet(title, rows.map { r ->
         SheetAction(if (r.meta?.isDm == true) "user" else "message-circle", r.meta?.title ?: r.key, lead = { com.hengxin.aioa.ui.chat.GroupAvatar(r.key, r.meta, FORWARD_FACE) }) { onPick(r.key); close() }
     }, close)

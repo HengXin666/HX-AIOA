@@ -25,7 +25,7 @@ export interface Env {
   DRIVE?: Fetcher;
   CFD_ORIGIN?: string;
   CFD_TOKEN?: string;
-  // 可选, 网盘 (#154) 用的 Drive 令牌 (根目录 /, read+write, 要用量加 stats); 没配时网盘退回 CFD_TOKEN 只看 /aioa
+  // 可选, 网盘 (#154) 用的 Drive 令牌 (根目录 /, read+write, 要用量加 stats); 没配时网盘用 CFD_TOKEN, 范围是它的根目录 (#157)
   CFD_DRIVE_TOKEN?: string;
   // 可选, 插件市场根地址 (本地测试指向本机目录服务); 不配就用仓库 main 分支的 plugins/
   PLUGIN_MARKET?: string;

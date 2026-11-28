@@ -240,14 +240,7 @@ object FileTransfer {
         override fun contentLength(): Long = length
 
         override fun writeTo(sink: BufferedSink) {
-            val input = context.contentResolver.openInputStream(uri) ?: error("读不了这个文件")
-            input.use {
-                var skipped = 0L
-                while (skipped < offset) {
-                    val n = it.skip(offset - skipped)
-                    if (n <= 0) error("读不了这个文件")
-                    skipped += n
-                }
+            com.hengxin.aioa.net.RangeInput.open(context, uri, offset).use {
                 val buf = ByteArray(CHUNK)
                 var done = 0L
                 while (done < length) {

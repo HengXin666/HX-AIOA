@@ -178,19 +178,24 @@ test("存储设置校验: 合并缺省键, 拒绝没绑定的后端与非法值"
   assert.equal((checkStorage({ coldDays: 90 }, STORAGE_DEFAULTS, all) as StorageSettings).coldDays, 90);
 });
 
-/** Worker 侧: Drive 的 Service Binding 与 Hub 都是假的, 记下收到的请求。 */
-function driveEnv() {
+/** Worker 侧: Drive 的 Service Binding 与 Hub 都是假的, 记下收到的请求 (问令牌根的 stat 另记); root 为令牌根。 */
+function driveEnv(root = "/aioa", token = "cfd-tok") {
   const seen: { url: string; auth: string | null; len: string | null; type: string | null; body: string }[] = [];
+  const stats: string[] = [];
   const done: unknown[][] = [];
   const DRIVE = {
     async fetch(req: Request) {
+      if (new URL(req.url).pathname.endsWith("/fs/stat")) {
+        stats.push(req.url);
+        return Response.json({ node: { id: "r" }, path: root });
+      }
       seen.push({ url: req.url, auth: req.headers.get("authorization"), len: req.headers.get("content-length"), type: req.headers.get("content-type"), body: await req.text() });
       return Response.json({ success: true, data: { node: { id: "n_9", size: 5 } } });
     },
   };
   const hub = { fileDone: async (...a: unknown[]) => (done.push(a), true) };
-  const env = { TOKEN_SECRET: "k", AUTH_TOKEN: "k", DRIVE, CFD_ORIGIN: `${DRIVE_ORIGIN}/`, CFD_TOKEN: "cfd-tok", HUB: { idFromName: () => "x", get: () => hub } } as unknown as Env;
-  return { env, seen, done };
+  const env = { TOKEN_SECRET: "k", AUTH_TOKEN: "k", DRIVE, CFD_ORIGIN: `${DRIVE_ORIGIN}/`, CFD_TOKEN: token, HUB: { idFromName: () => "x", get: () => hub } } as unknown as Env;
+  return { env, seen, done, stats };
 }
 
 async function put(env: Env, path: string, body = "hello"): Promise<Response> {
@@ -228,4 +233,36 @@ test("没接 Drive 时 cfd 票据上传 503, 不改写 R2", async () => {
   const path = await ticketPath(env, "up", "f_3", Date.now() + 60_000, 5, "cfd");
   const noDrive = { ...env, DRIVE: undefined } as unknown as Env;
   assert.equal((await put(noDrive, path)).status, 503);
+});
+
+test("CFD_TOKEN 的根改成整盘 / 后, 新附件自动放进 /aioa/YYYY-MM (#157); 令牌根每个 isolate 只问一次", async () => {
+  const { env, seen, stats } = driveEnv("/", "cfd-whole");
+  for (const id of ["f_7", "f_8"]) {
+    const path = `${await ticketPath(env, "up", id, Date.now() + 60_000, 5, "cfd")}&n=a.txt`;
+    assert.equal((await put(env, path)).status, 200);
+  }
+  assert.equal(stats.length, 1);
+  assert.match(new URL(seen[0]?.url ?? "").searchParams.get("path") ?? "", /^\/aioa\/\d{4}-\d{2}$/);
+});
+
+test("超过 256 片的提交先按组 fold 再 commit (#157)", async () => {
+  const { Drive } = await import("../src/files/drive");
+  const sent: { path: string; body: { receipts?: string[]; folds?: string[] } }[] = [];
+  const fetcher = {
+    async fetch(req: Request) {
+      const path = new URL(req.url).pathname;
+      const body = (await req.json()) as { receipts?: string[]; folds?: string[] };
+      sent.push({ path, body });
+      if (path.endsWith("/fold")) return Response.json({ fold: `f${body.receipts?.[0]}` });
+      return Response.json({ node: { id: "n", size: 1 } });
+    },
+  } as unknown as Fetcher;
+  const d = new Drive(fetcher, DRIVE_ORIGIN, "t");
+  await d.commit("tk", Array.from({ length: 540 }, (_, i) => String(i)));
+  assert.deepEqual(sent.map((s) => s.path.replace("/api/v1/uploads/", "")), ["fold", "fold", "fold", "commit"]);
+  assert.deepEqual(sent.map((s) => s.body.receipts?.length ?? 0), [256, 256, 28, 0]);
+  assert.deepEqual(sent.at(-1)?.body.folds, ["f0", "f256", "f512"]);
+  sent.length = 0;
+  await d.commit("tk", ["a", "b"]);
+  assert.deepEqual(sent.map((s) => [s.path.endsWith("/commit"), s.body.receipts?.length]), [[true, 2]]);
 });

@@ -21,6 +21,8 @@ export const DRIVE_SAVE_DIR = "/聊天文件";
 // 409 的 code: 服务端复制不了, 客户端改为自己上传
 export const DRIVE_NEED_UPLOAD = "need_upload";
 export const DRIVE_READONLY = "drive_readonly";
+// Drive 的分段大小: 超过这么多片的上传按组 fold 再 commit (#157)
+export const DRIVE_PART_SIZE = 256;
 
 /** Drive 的节点 (publicNode), 时间为毫秒。 */
 export type DriveNode = {
@@ -40,7 +42,8 @@ export type DrivePass = { pass: string; expires: number; root: string; whole: bo
 export type DriveShare = { id: string; nodeId: string; name: string; url: string; expiresAt: number | null; createdAt: number; hasPassword: boolean };
 export type DriveUploadInit =
   | { done: true; node: DriveNode }
-  | { done: false; ticket: string; chunkSize: number; chunkCount: number };
+  // direct: Drive (v0.4 起) 的公网分片地址, 客户端不带令牌只凭票据直传; 没有时只能经 Worker 的 /drive/chunk 转发 (#157)
+  | { done: false; ticket: string; chunkSize: number; chunkCount: number; direct?: string };
 export type DriveStats = { files: number; dirs: number; bytes: number } | null;
 export type DriveAttachResult = { file: FileRef };
 

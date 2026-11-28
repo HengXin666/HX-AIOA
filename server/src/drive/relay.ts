@@ -50,21 +50,9 @@ export async function relay<T>(res: Response, map: (body: T) => unknown = (b) =>
   return json(map(await res.json<T>()));
 }
 
-// 令牌根在 Drive 里的绝对路径: Drive 返回的路径是绝对的, 请求用的路径相对令牌根; 每个 isolate 只问一次
-let rootAbs: { token: string; path: string } | undefined;
-
-async function rootOf(fs: DriveFs): Promise<string> {
-  if (rootAbs?.token === fs.origin + fs.whole) return rootAbs.path;
-  const res = await fs.fetch("GET", "/fs/stat?path=%2F");
-  if (!res.ok) throw new DriveFail(502, "网盘令牌根目录读不到");
-  const path = (await res.json<{ path?: string }>()).path ?? "/";
-  rootAbs = { token: fs.origin + fs.whole, path };
-  return path;
-}
-
 /** Drive 的绝对路径换成令牌根下的相对路径; 不在根下返回 null。 */
-export async function toRel(fs: DriveFs, abs: string): Promise<string | null> {
-  const root = await rootOf(fs);
+export function toRel(fs: DriveFs, abs: string): string | null {
+  const root = fs.rootAbs;
   if (root === "/") return abs;
   if (abs === root) return "/";
   return abs.startsWith(`${root}/`) ? abs.slice(root.length) : null;
@@ -79,7 +67,7 @@ export function guardPath(fs: DriveFs, rel: string): void {
 export async function guardId(fs: DriveFs, id: string): Promise<void> {
   const abs = await fs.pathOf(id);
   if (abs === null) throw new DriveFail(404, "不存在或已删除");
-  const rel = await toRel(fs, abs);
+  const rel = toRel(fs, abs);
   if (rel === null) throw new DriveFail(403, "不在网盘范围内");
   guardPath(fs, rel);
 }

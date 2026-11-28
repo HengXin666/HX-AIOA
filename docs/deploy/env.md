@@ -39,8 +39,8 @@
 | `CF_ACCOUNT_ID` | 由 `CLOUDFLARE_ACCOUNT_ID` 同步 | 可选 | 跟着上一项一起同步 |
 | `DRIVE` | wrangler.toml 绑定 (Service) | 可选 | HX-CF-Drive, 和下面两项三项都配了才算接入, 见 [files.md](../features/files.md) |
 | `CFD_ORIGIN` | wrangler.toml `[vars]` | 可选 | Drive 公网地址, 生成直链 |
-| `CFD_TOKEN` | `CFD_TOKEN` (secret) | 可选 | Drive 受限令牌 (根目录 /aioa, 读写)。缺了文件只走 R2 |
-| `CFD_DRIVE_TOKEN` | `CFD_DRIVE_TOKEN` (secret) | 可选 | 网盘用的 Drive 令牌 (根目录 /, read+write, 要用量加 stats), 见 [drive.md](../features/drive.md)。缺了网盘退回 `CFD_TOKEN` 只看 /aioa |
+| `CFD_TOKEN` | `CFD_TOKEN` (secret) | 可选 | Drive 受限令牌 (根目录 /aioa, 读写)。缺了文件只走 R2。网盘默认也用它; 根目录改成 / 即整盘, 附件自动放 /aioa 下 |
+| `CFD_DRIVE_TOKEN` | `CFD_DRIVE_TOKEN` (secret) | 可选 | 网盘用的 Drive 令牌 (根目录 /, read+write, 要用量加 stats), 见 [drive.md](../features/drive.md)。缺了网盘用 `CFD_TOKEN`, 范围是它的根目录 |
 | `AZURE_TRANSLATOR_KEY` | `AZURE_TRANSLATOR_KEY` (secret) | 可选 | 微软翻译 F0, 见 [translate.md](../features/translate.md)。缺了用谷歌免费通道 |
 | `AZURE_TRANSLATOR_REGION` | `AZURE_TRANSLATOR_REGION` (secret) | 可选 | 区域资源的区域, 全局资源不填 |
 | `TRANSLATE_MONTH_LIMIT` | 手动 | 可选 | 每月自动停止线 (字符), 默认 180 万 |
