@@ -32,12 +32,17 @@ class PageState {
     var canForward by mutableStateOf(false)
     var blocked by mutableIntStateOf(0)
     var proxied by mutableStateOf(false)
+    var forceDark by mutableStateOf(false)
     val loading get() = progress in 1..99
 }
 
 class BrowserHooks(
     val onNavigate: () -> Unit,
     val chooseFile: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Boolean,
+    // 进入新页面时按站点套用深色设置; 加载完记一条站点记录; 收到图标存本机
+    val onStarted: (WebView, String) -> Unit,
+    val onFinished: (String, String) -> Unit,
+    val onIcon: (String, Bitmap) -> Unit,
 )
 
 // WebView 默认 UA 带 "; wv", 不少站点据此降级或拒绝登录; 去掉后按普通手机 Chrome 对待
@@ -47,7 +52,7 @@ private const val FALLBACK_URL = "browser_fallback_url"
 private const val FULL = 100
 
 @SuppressLint("SetJavaScriptEnabled")
-fun createWebView(context: Context, page: PageState, hooks: BrowserHooks): WebView = WebView(context).apply {
+fun createWebView(context: Context, dark: Boolean, page: PageState, hooks: BrowserHooks): WebView = WebView(BrowserDark.themed(context, dark)).apply {
     settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
@@ -102,6 +107,7 @@ private class Client(val context: Context, val page: PageState, val hooks: Brows
         page.url = url
         page.blocked = 0
         hooks.onNavigate()
+        hooks.onStarted(view, url)
         sync(view)
     }
 
@@ -109,6 +115,7 @@ private class Client(val context: Context, val page: PageState, val hooks: Brows
         page.url = url
         sync(view)
         CookieManager.getInstance().flush()
+        hooks.onFinished(url, view.title.orEmpty())
     }
 
     override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
@@ -129,6 +136,11 @@ private class Chrome(val page: PageState, val hooks: BrowserHooks) : WebChromeCl
 
     override fun onReceivedTitle(view: WebView, title: String?) {
         page.title = title.orEmpty()
+    }
+
+    override fun onReceivedIcon(view: WebView, icon: Bitmap?) {
+        val url = view.url
+        if (icon != null && url != null) hooks.onIcon(url, icon)
     }
 
     override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =

@@ -20,7 +20,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,11 +53,16 @@ class BrowserActions(
     val reloadOrStop: () -> Unit,
     val copy: () -> Unit,
     val external: () -> Unit,
+    val forceDark: () -> Unit,
+    val sites: () -> Unit,
+    val darkSupported: Boolean,
 )
 
 private const val ADDRESS_SP = 14
 private const val HINT_SP = 12
 private const val PROGRESS_MAX = 100f
+private const val MENU_SP = 15
+private val MENU_ICON = 18.dp
 private val BAR_ICON = 20.dp
 
 @Composable
@@ -65,10 +73,13 @@ fun BrowserScreen(web: WebView, page: PageState, actions: BrowserActions) {
         Box(Modifier.fillMaxWidth().height(2.dp)) {
             if (page.loading) Box(Modifier.fillMaxWidth(page.progress / PROGRESS_MAX).height(2.dp).background(c.accent))
         }
-        AndroidView(
-            factory = { web.apply { layoutParams = ViewGroup.LayoutParams(-1, -1) } },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        )
+        // 换主题时 WebView 会换一个新的, 按实例重建
+        key(web) {
+            AndroidView(
+                factory = { web.apply { (parent as? ViewGroup)?.removeView(this); layoutParams = ViewGroup.LayoutParams(-1, -1) } },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
         BottomBar(web, page, actions)
     }
 }
@@ -124,8 +135,26 @@ private fun BottomBar(web: WebView, page: PageState, actions: BrowserActions) {
             Icon(if (page.proxied) "globe" else "shield-off", c.textSecondary, 14.dp)
             Text(status(page), c.textSecondary, HINT_SP, Modifier.padding(start = 4.dp))
         }
-        BarIcon("copy", c.text, actions.copy)
-        BarIcon("external-link", c.text, actions.external)
+        Box {
+            var menu by remember { mutableStateOf(false) }
+            BarIcon("ellipsis", c.text) { menu = true }
+            DropdownMenu(menu, { menu = false }) {
+                val item: @Composable (String, String, () -> Unit) -> Unit = { label, icon, run ->
+                    DropdownMenuItem({ Text(label, c.text, MENU_SP) }, { menu = false; run() }, leadingIcon = { Icon(icon, c.text, MENU_ICON) })
+                }
+                item("复制链接", "copy", actions.copy)
+                item("用其他应用打开", "external-link", actions.external)
+                if (actions.darkSupported && page.url.isNotEmpty()) {
+                    DropdownMenuItem(
+                        { Text("此站强制深色", c.text, MENU_SP) },
+                        { menu = false; actions.forceDark() },
+                        leadingIcon = { Icon("moon", c.text, MENU_ICON) },
+                        trailingIcon = { Icon(if (page.forceDark) "square-check" else "square", if (page.forceDark) c.accent else c.textSecondary, MENU_ICON) },
+                    )
+                }
+                item(SITES_TITLE, "key-round", actions.sites)
+            }
+        }
     }
 }
 

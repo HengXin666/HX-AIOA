@@ -30,6 +30,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.hengxin.aioa.R
+import com.hengxin.aioa.browser.BrowserSites
+import com.hengxin.aioa.browser.SITES_TITLE
 import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.config.ThemeMode
@@ -109,6 +111,8 @@ fun MeRoot(summary: MeSummary, selected: SettingsPage?, open: (SettingsPage) -> 
             PageRow(SettingsPage.SERVER, host.ifEmpty { "未配置" }, selected, open)
             RowDivider()
             PageRow(SettingsPage.PROXY, if (config?.proxyEnabled == true) "订阅" else TEXT_DIRECT, selected, open)
+            RowDivider()
+            NavRow("key-round", SITES_TITLE, "内置浏览器") { BrowserSites.open(context) }
             RowDivider()
             PageRow(SettingsPage.LINK_LOG, "", selected, open)
         }
