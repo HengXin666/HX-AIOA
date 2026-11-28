@@ -75,6 +75,7 @@ fun GuideSheet(name: String, text: String, close: () -> Unit) {
                 }
                 TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text("复制全文") }
             }
+            TaskHint(text)
             sections.forEachIndexed { i, s ->
                 val shown = i in open
                 Column(Modifier.fillMaxWidth().background(c.surfaceVariant.copy(alpha = 0.6f), BOX)) {

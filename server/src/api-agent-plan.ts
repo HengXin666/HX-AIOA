@@ -8,6 +8,7 @@ import {
   planSchedule,
   type AgentPlanInput,
   type AgentTrigger,
+  type Envelope,
   type PlanQuota,
 } from "@hx-aioa/protocol";
 import { isHuman } from "./agent-cursor";
@@ -18,7 +19,8 @@ import { DAY_MS } from "./constants";
 import type { Core, ReqCtx } from "./core";
 import { fail, json, readJson } from "./http";
 
-// POST /chat-agent/plan (#161): 按本群近 14 天人发消息的时段与宿主额度重算定时, 一天一次
+// POST /chat-agent/plan (#161): 按本群近 14 天事件到达的时段与宿主额度重算定时, 一天一次
+// 事件两种, 拓扑一样 (#165): 等来的 (人发的消息, 按发送时间) 与去找的 (信息流条目, 按原帖时间 at)
 const SCAN_BATCH = 200;
 // 最多往回翻这么多页, 消息再多的群也只读有限行
 const SCAN_PAGES = 20;
@@ -28,10 +30,24 @@ const PCT_MAX = 100;
 const RUNS_MAX = 1000;
 const ERR_QUOTA = "poolUsed, poolReset, dailyUsed 要么都给 (百分比 0-100 与 ISO 时间), 要么都不给";
 
-/** 本群人发消息的时刻 (只看最近 PLAN_HISTORY_DAYS 天) 与实际覆盖的天数。 */
-function humanTimes(core: Core, channel: string, now: number): { times: number[]; days: number } {
+/** 信息流条目的原帖时间: 只算写了 at 的 (没写时是推送时间, 跟着定时走, 会自我强化), 同一条只算一次。 */
+function feedTimes(ev: Envelope, since: number, seen: Set<string>): number[] {
+  if (ev.deleted || ev.kind !== "event") return [];
+  const out: number[] = [];
+  for (const it of ev.data.feed?.items ?? []) {
+    const id = it.id ?? it.url ?? it.title;
+    if (it.at === undefined || it.at < since || seen.has(id)) continue;
+    seen.add(id);
+    out.push(it.at);
+  }
+  return out;
+}
+
+/** 本群事件到达的时刻 (只看最近 PLAN_HISTORY_DAYS 天) 与实际覆盖的天数。 */
+export function arrivalTimes(core: Core, channel: string, now: number): { times: number[]; days: number } {
   const since = now - PLAN_HISTORY_DAYS * DAY_MS;
   const times: number[] = [];
+  const seen = new Set<string>();
   let before = core.store.head() + 1;
   let oldest = now;
   for (let page = 0; page < SCAN_PAGES; page++) {
@@ -39,6 +55,7 @@ function humanTimes(core: Core, channel: string, now: number): { times: number[]
     for (const ev of batch) {
       oldest = Math.min(oldest, ev.ts);
       if (ev.ts >= since && isHuman(ev)) times.push(ev.ts);
+      times.push(...feedTimes(ev, since, seen));
     }
     const first = batch[0];
     if (batch.length < SCAN_BATCH || !first || first.ts < since) break;
@@ -76,7 +93,7 @@ export async function plan(c: ReqCtx): Promise<Response> {
   if (typeof input === "string") return fail(400, input);
   touchAgent(c.core, agent.keyId);
   const tz = agent.trigger?.tz && isTimeZone(agent.trigger.tz) ? agent.trigger.tz : PLAN_DEFAULT_TZ;
-  const { times, days } = humanTimes(c.core, channel, now);
+  const { times, days } = arrivalTimes(c.core, channel, now);
   const { result, state } = planSchedule({
     hourly: hourlyOf(times, tz),
     days,

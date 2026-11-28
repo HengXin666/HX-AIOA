@@ -1,6 +1,6 @@
 {
   "name": "hx-aioa",
-  "version": "3.0",
+  "version": "4.0",
   "files": [
     "SKILL.md",
     "references/cli.md",

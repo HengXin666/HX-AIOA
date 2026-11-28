@@ -35,7 +35,7 @@ const TZ_MS = 8 * 3600_000;
 const END_OF_DAY = "T23:59:59+08:00";
 const WARN_NEW = ":new";
 const WARN_REMIND = ":remind";
-const CORE_CHANGE = { changes: "核心 skill 大版本更新: 接入语写明来源, 密钥范围与每一步的作用 (#165); 2.0 起定时按群消息时段与额度自适应 (#161)", missing: "定时不会自动调整, 空跑多费额度; 兼容期过后本群停止处理" };
+const CORE_CHANGE = { changes: "核心 skill 大版本更新: 定时任务带上每轮任务, 主动去看来源的任务按原帖时间动态定时 (#165); 定时按事件时段与额度自适应 (#161)", missing: "主动去看来源的任务在群里没人说话时不会执行, 定时也不按来源的时段调整; 兼容期过后本群停止处理" };
 
 export type Missing = MajorChange & { key: string; until: string };
 type PluginSkill = { id: string; version: string; url: string; changes: MajorChange[] };

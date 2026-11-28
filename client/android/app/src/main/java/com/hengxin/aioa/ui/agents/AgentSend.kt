@@ -37,6 +37,14 @@ import com.hengxin.aioa.ui.chat.Onboard
 private val BOX = RoundedCornerShape(12.dp)
 private const val KEY_SHOWN = 8
 private const val COMMAND_MARK = "hxaioa"
+// 接入语的步骤行 "1. 装命令行 (...): <命令>", 命令在第一个 ": " 之后 (#165)
+private val STEP = Regex("""^\d+\. .*?: (.+)$""")
+
+/** 接入语里能直接在终端跑的命令: 步骤行冒号后面以 mkdir 或 hxaioa 开头的那部分。 */
+internal fun commandsOf(prompt: String): String = prompt.lines().mapNotNull { l ->
+    val cmd = (STEP.find(l)?.groupValues?.get(1) ?: l).trim()
+    cmd.takeIf { it.startsWith(COMMAND_MARK) || it.startsWith("mkdir") }
+}.joinToString("\n")
 
 /** 接入语里密钥打码, 只留前几位。 */
 private fun masked(text: String, key: String): String =
@@ -53,12 +61,13 @@ fun SendPane(model: ChatModel, group: String, name: String, ob: Onboard) {
     var showKey by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf<String?>(null) }
-    val commands = ob.prompt.lines().filter { it.trimStart().startsWith(COMMAND_MARK) || it.startsWith("mkdir") }.joinToString("\n")
+    val commands = commandsOf(ob.prompt)
     val live = model.groups.directory.metas[group]?.agents?.firstOrNull { it.keyId == ob.agent.keyId }
     val joined = live?.joined != null && live.pending != true
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("发给 $name", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text("把整段接入语发给它最省事; 你自己在电脑上跑也行, 就复制下面三行命令。密钥只显示这一次。", fontSize = 12.sp, color = c.outline)
+        TaskHint(ob.prompt)
         Code(if (showKey) commands else masked(commands, ob.key))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button({ clipboard.setText(AnnotatedString(ob.prompt)); copied = "已复制接入语" }) { Text("复制接入语") }
