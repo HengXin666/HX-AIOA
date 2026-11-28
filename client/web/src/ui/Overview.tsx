@@ -6,6 +6,7 @@ import { go, link } from "../app/router";
 import { groupOf, textOf, type Message } from "../core/chats";
 import { TXT_LOADING } from "../core/constants";
 import { shortTime } from "./ChatList";
+import { StarTodos } from "./todo/StarTodos";
 
 const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "muted" }[] = [
   { key: "need_me", title: "需要我", dot: "destructive" },
@@ -27,6 +28,7 @@ export default function Overview() {
           {data && <span className="text-xs text-muted-foreground">{shortTime(data.generatedAt)} 生成</span>}
         </header>
         {!data && <p className="text-sm text-muted-foreground">{state === "online" ? TXT_LOADING : "连上后加载"}</p>}
+        <StarTodos />
         {data && data.tasks.length > 0 && <Tasks tasks={data.tasks} />}
         {data && (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">

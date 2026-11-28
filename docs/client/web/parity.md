@@ -12,13 +12,13 @@ Agent / 探针 / Webhook 侧的接口 (`PATH_AGENT_NEXT`, `PATH_AGENT_DONE`, `PA
 | 信息流群 | 消息里的 `data.feed` | 已做 (25cf4a0); 标签编辑 `PATH_AGENT_FEED_TAGS` 未做 |
 | 群资料 (群名, 公告, 开关, 邀请, 清空, 删除, 退出) | `PATH_CHAT` `PATH_CHAT_INVITES` `PATH_CHAT_MEMBER` | 已做 (6e98447) |
 | 发送者头像, 成员头像, 自己的旧版头像 | `PATH_SENDERS` `PATH_CHAT_MEMBERS` `PATH_SETTINGS` | 已做 (765b9b2); 主人改发送者别名 / 头像 `PATH_SENDER` 未做 |
-| 群 Agent 设置与接入向导 | `PATH_CHAT_AGENTS` `PATH_CHAT_AGENT*` | 未做 |
+| 群 Agent 设置与接入向导 | `PATH_CHAT_AGENTS` `PATH_CHAT_AGENT*` | 已做 (69f379a) |
 | 单聊, 资料卡, 共同群, 按邀请码进群 | `PATH_DMS` `PATH_USER_ROOMS` `PATH_ROOM_JOIN` | 未做 |
 | 账号, 成员与邀请, 邀请码注册 | `PATH_ME*` `PATH_USERS` `PATH_INVITES` `PATH_JOIN` | 已做 (4030f64) |
 | 数据源, 接入总览 | `PATH_SOURCES` `PATH_SOURCE_TYPES` `PATH_INTEGRATIONS` `PATH_KEYS` | 已做 (fca1a40); 规则 `PATH_RULES*` 未做 |
 | 存储与迁移 | `PATH_FILES` `PATH_FILES_MIGRATE` | 已做 (fca1a40) |
 | hxoa 远程管理 | `PATH_HXOA*` | 已做 (336ab68); 新建文件夹 `PATH_HXOA_MKDIR` 未做 |
-| 待办 | `PATH_TODOS` `PATH_TODO` `PATH_TODOS_SYNC` `PATH_TODO_EXT*` | 未做 |
+| 待办 | `PATH_PDATA_COLL` `PATH_PDATA_ITEM` (待办集合) | 看板, 编辑, 总览重点待办已做; 外部接入密钥 `PATH_TODO_EXT*`, 群里的待办页, 周期与提醒编辑未做 |
 | 空间 / 看板 / 工作台组件 | `PATH_SPACES` `PATH_SPACE*` `PATH_PDATA_*` | 未做 |
 | 网盘 | `PATH_DRIVE*` | 未做 |
 | GitHub 卡, 走势, 分支, Issue | `PATH_GITHUB_*` `PATH_GH_*` | 部分 (资源栏仓库列表); 其余未做 |
