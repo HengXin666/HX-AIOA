@@ -45,8 +45,11 @@ data class HomeSpace(
 /** 侧栏里的固定入口 (消息, Agent, 资源...) 或底部工具钮。 */
 data class SideLink(val key: String, val title: String, val icon: String, val badge: Int = 0)
 
-/** 侧栏 "最近" 里的一个群或会话。 */
-data class SideRecent(val key: String, val title: String, val sub: String, val initial: String, val unread: Int = 0)
+/** 侧栏 "最近" 里的一个群或会话; avatar 为真实头像 (#147), 为空时用首字。 */
+data class SideRecent(
+    val key: String, val title: String, val sub: String, val initial: String, val unread: Int = 0,
+    val avatar: (@Composable () -> Unit)? = null,
+)
 
 /** 侧栏头部的账号: 名字, 连的服务端, 是否在线。 */
 /** 侧栏账号头 (#139): 我的头像与昵称, 下面一行连接状态与服务器; avatar 为空时用昵称首字。 */
@@ -59,6 +62,9 @@ fun Modifier.pointerTap(onTap: () -> Unit): Modifier = this.then(
 
 private val ROW_SHAPE = RoundedCornerShape(10.dp)
 private const val MORE_KEY = "#more"
+
+/** 侧栏 "最近" 的头像边长 (dp), 调用方传真实头像时用同一尺寸。 */
+const val RECENT_AVATAR = 28
 
 /** Telegram 结构 + ChatGPT 样子的侧栏: 账号头, 搜索, 固定入口, 空间 (可编辑), 最近, 底部工具钮。 */
 @Composable
@@ -198,7 +204,7 @@ private fun RecentRow(r: SideRecent, on: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
-        Initial(r.initial, 28)
+        r.avatar?.invoke() ?: Initial(r.initial, RECENT_AVATAR)
         Column(Modifier.weight(1f)) {
             Text(r.title, c.text, 14)
             Text(r.sub, c.textSecondary, 12)

@@ -109,7 +109,9 @@ internal fun SelectBar(model: ChatModel, group: String, picking: Picking) {
 internal fun ForwardSheet(model: ChatModel, title: String, close: () -> Unit, onPick: (String) -> Unit) {
     val g = model.groups
     val rows = remember { g.rows() }
-    ActionSheet(title, rows.map { r -> SheetAction(if (r.meta?.isDm == true) "user" else "message-circle", r.meta?.title ?: r.key) { onPick(r.key); close() } }, close)
+    ActionSheet(title, rows.map { r ->
+        SheetAction(if (r.meta?.isDm == true) "user" else "message-circle", r.meta?.title ?: r.key, lead = { com.hengxin.aioa.ui.chat.GroupAvatar(r.key, r.meta, FORWARD_FACE) }) { onPick(r.key); close() }
+    }, close)
 }
 
 /** 转发一条 (气泡长按, 收藏页)。 */
@@ -118,3 +120,5 @@ internal fun ForwardDialog(model: ChatModel, msg: ServerFrame.Msg, close: () -> 
     ForwardSheet(model, "转发到", close) { key -> if (!model.groups.forward(msg, key)) model.groups.notify(FORWARD_FAIL) }
 
 private const val FORWARD_FAIL = "没连上服务器, 转发没发出去, 联网后再试"
+// 和抽屉行首图标一样大
+private val FORWARD_FACE = 36.dp

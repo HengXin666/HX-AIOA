@@ -24,8 +24,11 @@ import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.pointerTap
 
-/** 抽屉里的一项: on 非空时右边画勾 (勾选类), danger 为红字。 */
-data class SheetAction(val icon: String, val title: String, val hint: String = "", val danger: Boolean = false, val on: Boolean? = null, val run: () -> Unit)
+/** 抽屉里的一项: on 非空时右边画勾 (勾选类), danger 为红字; lead 非空时代替图标 (选会话时放头像, #147)。 */
+data class SheetAction(
+    val icon: String, val title: String, val hint: String = "", val danger: Boolean = false, val on: Boolean? = null,
+    val lead: (@Composable () -> Unit)? = null, val run: () -> Unit,
+)
 
 /** 底部操作抽屉 (长按群, 资料卡, 更多): 标题 + 一行一项; 点完是否关闭由 run 自己决定。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,7 +53,7 @@ private fun SheetRow(a: SheetAction) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Glyph(a.icon, tone)
+        a.lead?.invoke() ?: Glyph(a.icon, tone)
         Column(Modifier.weight(1f)) {
             Text(a.title, tone, 15, weight = FontWeight.Medium)
             if (a.hint.isNotEmpty()) Text(a.hint, c.textSecondary, 12)

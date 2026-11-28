@@ -160,7 +160,9 @@ fun HomeFrame(
     HomeShell(shell, modifier = edge, gestures = bars, sidebar = {
         val recents = rows.sortedByDescending { it.order }.take(RECENTS).map { r ->
             val title = r.meta?.title?.takeIf { it.isNotBlank() } ?: r.key
-            SideRecent(RECENT_PREFIX + r.key, title, r.last?.text?.let(::plainPreview).orEmpty(), title.take(1), r.unread)
+            SideRecent(RECENT_PREFIX + r.key, title, r.last?.text?.let(::plainPreview).orEmpty(), title.take(1), r.unread) {
+                com.hengxin.aioa.ui.chat.GroupAvatar(r.key, r.meta, com.hengxin.aioa.kit.RECENT_AVATAR.dp)
+            }
         }
         HomeSidebar(
             SideAccount(com.hengxin.aioa.data.Me.label, server, chat.online, avatar = myAvatar?.let { id -> { com.hengxin.aioa.ui.chat.ChatAvatar(com.hengxin.aioa.data.Me.label, id, 40.dp) } }),

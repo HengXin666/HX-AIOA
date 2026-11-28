@@ -37,6 +37,8 @@ import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.pointerTap
 import com.hengxin.aioa.proto.ServerFrame
+import com.hengxin.aioa.ui.chat.GroupAvatar
+import com.hengxin.aioa.ui.chat.SenderAvatar
 import com.hengxin.aioa.ui.chat.plainPreview
 import com.hengxin.aioa.ui.groupinfo.SearchBox
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +51,8 @@ import java.util.Locale
 private const val SCAN = 5000
 private const val GROUPS_SHOWN = 20
 private const val MSGS_SHOWN = 60
+// 和 HomeRow 行首图标一样大
+private val FACE = 36.dp
 private val TIME = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
 
 /** 搜索结果: 群 (按名字或 id) 与消息 (按正文或文件名), 都只取本机的。纯函数, 便于单测。 */
@@ -85,7 +89,7 @@ fun HomeSearchPage(chat: ChatModel, onOpenGroup: (String) -> Unit, onOpenAt: (St
                 }
                 if (gHits.isNotEmpty()) HomeSection("群与会话", gHits.size) {
                     gHits.forEachIndexed { i, (key, title) ->
-                        HomeRow(title, divider = i > 0, lead = { Glyph("message-circle", c.textSecondary) }, onClick = { onOpenGroup(key) })
+                        HomeRow(title, divider = i > 0, lead = { GroupAvatar(key, dir.metas[key], FACE) }, onClick = { onOpenGroup(key) })
                     }
                 }
                 HomeSection("消息", mHits.size) {
@@ -95,7 +99,7 @@ fun HomeSearchPage(chat: ChatModel, onOpenGroup: (String) -> Unit, onOpenAt: (St
                         val key = m.groupKey()
                         HomeRow(
                             m.file?.name ?: plainPreview(m.text), dir.title(key), TIME.format(Date(m.ts)), divider = i > 0,
-                            lead = { Glyph(if (m.file != null) "file" else "message-square", c.textSecondary) },
+                            lead = { if (m.file != null) Glyph("file", c.textSecondary) else SenderAvatar(m, FACE) },
                             onClick = { onOpenAt(key, m.seq) },
                         )
                     }

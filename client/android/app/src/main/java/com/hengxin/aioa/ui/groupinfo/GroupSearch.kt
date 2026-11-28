@@ -44,6 +44,8 @@ import java.util.Locale
 private const val SCAN = 3000
 private const val SHOWN = 200
 private const val KB = 1024L
+// 和 HomeRow 行首图标一样大
+private val FACE = 36.dp
 private val TIME = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
 
 /** 搜索框: 圆角矩形, 放大镜 + 输入。 */
@@ -98,7 +100,7 @@ internal fun GroupSearchPage(model: ChatModel, group: String, files: Boolean, on
                 val f = m.file
                 if (f != null) HomeRow(f.name, divider = i > 0, trail = TIME.format(Date(m.ts)), lead = { Glyph("file", c.textSecondary) }, onClick = { open(model, group, m) },
                     end = { Text(sizeText(f.size), c.textSecondary, 11) })
-                else HomeRow(plainPreview(m.text), divider = i > 0, trail = TIME.format(Date(m.ts)), lead = { Glyph("message-square", c.textSecondary) }, onClick = { open(model, group, m) })
+                else HomeRow(plainPreview(m.text), divider = i > 0, trail = TIME.format(Date(m.ts)), lead = { com.hengxin.aioa.ui.chat.SenderAvatar(m, FACE) }, onClick = { open(model, group, m) })
             }
         }
     }
@@ -114,7 +116,7 @@ internal fun GroupPicksPage(model: ChatModel, group: String, onBack: () -> Unit)
         HomeSection("日报 / 周报群", digests.size) {
             if (digests.isEmpty()) GiNote("还没有日报 / 周报群。在某个群的设置里把群类型标成日报或周报, 这里的消息长按就能收录过去。")
             digests.forEachIndexed { i, m ->
-                HomeRow(m.title ?: m.channel, com.hengxin.aioa.ui.chat.digestLabel(m.digest).orEmpty(), divider = i > 0, lead = { Glyph("sparkles", c.textSecondary) },
+                HomeRow(m.title ?: m.channel, com.hengxin.aioa.ui.chat.digestLabel(m.digest).orEmpty(), divider = i > 0, lead = { com.hengxin.aioa.ui.chat.GroupAvatar(m.channel, m, FACE) },
                     onClick = { g.page = ChatPage.CHAT; g.openGroup(m.channel) }, end = { Icon(ICON_NEXT, c.textSecondary, 14.dp) })
             }
         }

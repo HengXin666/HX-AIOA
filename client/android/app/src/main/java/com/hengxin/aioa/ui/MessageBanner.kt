@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.data.groupKey
 import com.hengxin.aioa.proto.ServerFrame
-import com.hengxin.aioa.ui.chat.ChatAvatar
+import com.hengxin.aioa.ui.chat.GroupAvatar
 
 private val AVATAR = com.hengxin.aioa.ui.chat.MESSAGE_AVATAR
 private val CORNER = 16.dp
@@ -57,7 +57,7 @@ fun MessageBanner(chat: ChatModel, onOpen: () -> Unit) {
                 shadowElevation = 6.dp,
             ) {
                 Row(Modifier.padding(EDGE), horizontalArrangement = Arrangement.spacedBy(EDGE), verticalAlignment = Alignment.CenterVertically) {
-                    ChatAvatar(key, chat.groups.directory.metas[key]?.avatar, AVATAR)
+                    GroupAvatar(key, chat.groups.directory.metas[key], AVATAR)
                     Column(Modifier.weight(1f)) {
                         Text(chat.groups.directory.title(key), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(shown.text.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)

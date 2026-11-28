@@ -125,3 +125,8 @@ fun ChatAvatar(key: String, avatar: String?, size: Dp, modifier: Modifier = Modi
         LetterAvatar(key, size, modifier)
     }
 }
+
+/** 群, 单聊或来源会话的头像 (#147): 群资料 avatar (单聊由服务端填对方头像) > 同名来源的发送者头像 > 字母头像。 */
+@Composable
+fun GroupAvatar(key: String, meta: ChatMeta?, size: Dp, modifier: Modifier = Modifier) =
+    ChatAvatar(key, meta?.avatar ?: Senders.avatarOf(key), size, modifier)

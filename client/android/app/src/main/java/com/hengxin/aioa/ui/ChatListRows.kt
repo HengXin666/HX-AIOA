@@ -33,7 +33,7 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.hxPalette
 import com.hengxin.aioa.kit.pointerTap
 import com.hengxin.aioa.proto.Mentions
-import com.hengxin.aioa.ui.chat.ChatAvatar
+import com.hengxin.aioa.ui.chat.GroupAvatar
 import com.hengxin.aioa.ui.chat.Names
 import com.hengxin.aioa.ui.chat.digestLabel
 import com.hengxin.aioa.ui.chat.plainPreview
@@ -52,7 +52,7 @@ internal fun ConvRow(r: GroupRowData, pinned: Boolean, divider: Boolean, live: S
     Column(modifier.fillMaxWidth().tapHold(onOpen, onLong)) {
         if (divider) Box(Modifier.padding(start = DIVIDER_INSET).fillMaxWidth().height(1.dp).background(c.border.copy(alpha = 0.5f)))
         Row(Modifier.padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChatAvatar(r.key, meta?.avatar, ROW_AVATAR.dp)
+            GroupAvatar(r.key, meta, ROW_AVATAR.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
