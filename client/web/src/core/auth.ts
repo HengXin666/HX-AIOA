@@ -1,4 +1,4 @@
-import { PATH_AUTH_LOGIN, PATH_AUTH_LOGOUT, PATH_AUTH_REFRESH, PATH_SETUP, type TokenPair, type UserPublic } from "@hx-aioa/protocol";
+import { PATH_AUTH_LOGIN, PATH_AUTH_LOGOUT, PATH_AUTH_REFRESH, PATH_JOIN, PATH_SETUP, type JoinResult, type TokenPair, type UserPublic } from "@hx-aioa/protocol";
 import { clearCache } from "./cache";
 import { DEVICE_PREFIX, LOCK_REFRESH, PLATFORM_WEB, REFRESH_EARLY_MS, STORAGE_DEVICE, STORAGE_REFRESH, TXT_NETWORK } from "./constants";
 import { Emitter } from "./emitter";
@@ -30,6 +30,12 @@ export function deviceId(): string {
 }
 
 export const currentUser = (): UserPublic | null => session?.user ?? null;
+// 改了昵称 / 头像后更新本地会话里的自己
+export function setCurrentUser(user: UserPublic): void {
+  if (!session) return;
+  session = { ...session, user };
+  authChanged.emit(user);
+}
 // 还新鲜的访问令牌 (不触发刷新), 给共享连接握手用
 export const currentToken = (): { value: string; exp: number } | null =>
   session && session.expires - Date.now() > REFRESH_EARLY_MS ? { value: session.access, exp: session.expires } : null;
@@ -71,6 +77,14 @@ export async function setupDone(): Promise<boolean> {
 export async function login(name: string, password: string): Promise<UserPublic> {
   const pair = await post<TokenPair>(PATH_AUTH_LOGIN, { name, password, device: { name: deviceName(), platform: PLATFORM_WEB } });
   return accept(pair);
+}
+
+// 用邀请码注册; 需要主人批准时返回 pending, 不登录
+export async function join(code: string, name: string, password: string, display?: string): Promise<"ok" | "pending"> {
+  const r = await post<JoinResult>(PATH_JOIN, { code, name, password, display, device: { name: deviceName(), platform: PLATFORM_WEB } });
+  if ("pending" in r) return "pending";
+  accept(r);
+  return "ok";
 }
 
 // 跨标签串行: 刷新令牌每次都会换新, 别的标签刚换过时这里读到的已是新值
