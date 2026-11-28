@@ -14,6 +14,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { api, fill } from "../../core/auth";
 import { chats, titleOf } from "../../core/chats";
+import { TaskHint } from "../agent/TaskHint";
 import { shortTime } from "../ChatList";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : String(e));
@@ -182,6 +183,7 @@ function PromptDialog({ title, prompt, key, onClose }: { title: string; prompt: 
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{key ? "key 只显示这一次; 接入语里已经带上。" : "原样发给 Agent。"}</DialogDescription>
         </DialogHeader>
+        <TaskHint prompt={prompt} />
         <pre className="min-h-0 flex-1 overflow-auto rounded-md bg-muted p-3 text-xs break-words whitespace-pre-wrap text-foreground">{prompt}</pre>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => copy(prompt, "接入语已复制")}>

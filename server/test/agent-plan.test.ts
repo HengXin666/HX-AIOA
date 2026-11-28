@@ -117,3 +117,20 @@ test("接口: 上报过定时才要求重算; plan 记下状态, 之后每轮开
   const bad = await call(core, who, "POST", PATH_AGENT_PLAN, { poolUsed: 50 });
   assert.equal(bad.status, 400, "额度三项要么都给要么都不给");
 });
+
+test("去找的事件也算到达: 信息流条目按原帖时间 at 计, 同一条只算一次, 没写 at 的不算 (#165)", async () => {
+  const { core, who } = setup({ trigger: { expr: "0 * * * *", at: 1, tz: "UTC" } });
+  const now = Date.now();
+  const items = [
+    { id: "p1", title: "a", at: now - 2 * DAY },
+    { id: "p2", title: "b", at: now - DAY },
+    { id: "p3", title: "c" },
+  ];
+  const push = (n: number) =>
+    core.store.put({ id: `f${n}`, seq: 0, ts: now - 1000 * n, kind: "event", source: { id: "s1", name: "a", type: "agent" }, channel: CH, priority: "info", data: { title: "f", feed: { items } } } as unknown as Envelope);
+  push(1);
+  push(2);
+  const p = await call(core, who, "POST", PATH_AGENT_PLAN, {});
+  assert.equal(p.status, 200);
+  assert.equal(p.body.events, 2);
+});

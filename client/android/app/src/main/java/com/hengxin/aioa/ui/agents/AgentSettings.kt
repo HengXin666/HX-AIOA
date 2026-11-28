@@ -155,7 +155,7 @@ private fun AgentLayers(model: ChatModel, group: String, a: ChatAgent, layer: La
         is Layer.Auto -> AlertDialog(
             onDismissRequest = close,
             title = { androidx.compose.material3.Text(if (layer.on) "开启大更新自动执行?" else "关闭大更新自动执行?") },
-            text = { androidx.compose.material3.Text("开着时 Agent 遇到大更新自己运行 hxaioa upgrade; 触发语会变, 需要把新接入语发给 Agent 一次。") },
+            text = { androidx.compose.material3.Text("开着时 Agent 遇到大更新自己运行 hxaioa upgrade; 定时任务的内容会变, 需要把新接入语发给 Agent 一次。") },
             confirmButton = {
                 TextButton({ scope.launch { dir.setAutoMajor(group, a.keyId, layer.on)?.let { dir.error = it } }; onAuto(); close() }) {
                     androidx.compose.material3.Text(if (layer.on) "开启" else "关闭")

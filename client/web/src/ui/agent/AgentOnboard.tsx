@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useChats } from "../../app/hooks";
 import { api, fill } from "../../core/auth";
 import { chats } from "../../core/chats";
+import { TaskHint } from "./TaskHint";
 import { TASK_EXAMPLE, TASK_TEMPLATES, TASK_TIPS, TXT_AGENT_INTRO, TXT_SCHEDULE, nextSteps } from "./onboard-text";
 
 // 接入群 Agent (#161): 1 名字与任务 (附写法引导, 定时不用选), 2 复制接入语并等它报到
@@ -105,6 +106,7 @@ function SendStep({ channel, ob }: { channel: string; ob: OnboardResult }) {
   const copy = (text: string, what: string) => void navigator.clipboard.writeText(text).then(() => toast.success(`已复制${what}`));
   return (
     <div className="flex flex-col gap-3">
+      <TaskHint prompt={ob.prompt} />
       <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono text-xs">{show ? ob.prompt : masked(ob.prompt, ob.key)}</pre>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => copy(ob.prompt, "接入语")}>

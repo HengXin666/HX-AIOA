@@ -8,7 +8,12 @@ import type { ChatView } from "./mail";
 
 export const CORE_SKILL = "hx-aioa";
 // 必须和 skills/hx-aioa/manifest.json 的 version 一致 (check:plugins 校验)
-export const CORE_SKILL_VERSION = "3.0";
+export const CORE_SKILL_VERSION = "4.0";
+// 接入语里主人填任务的那一段的标题; 各端的接入提示按它指路 (#165)
+export const SETUP_TASK_MARK = "要你做的事";
+// 没写任务时那一段的占位开头, 与更新用接入语里 "保留原来任务" 的占位
+export const SETUP_TASK_FILL = "发出前把这一行换成你的任务";
+export const SETUP_TASK_KEEP = "原来定时任务里写的任务, 原样保留";
 // 命令行 -> 服务端, 每个请求都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0
 export const HEADER_SKILL = "X-Aioa-Skill";
 // 服务端 -> 命令行, 群 Agent 的每个响应都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0[,auto]
