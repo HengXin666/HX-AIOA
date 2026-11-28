@@ -24,7 +24,11 @@ import com.hengxin.aioa.kit.Text as KitText
 
 private val ACTIVE = setOf(Constants.TASK_WAITING, Constants.TASK_RUNNING)
 
-/** agent harness 页 (电脑上 Codex, Claude Code 这类交互式 CLI 的任务): 等待确认在最上, 然后是运行中, 最后是已结束的任务; 卡片上直接批准 / 拒绝。 */
+/**
+ * 工作区页 (一级栏 "工作区", 即 agent harness, #139 #144): 电脑上 Codex, Claude Code 这类交互式 CLI 的任务,
+ * 等待确认在最上, 然后是运行中, 最后是已结束的任务, 卡片上直接批准 / 拒绝; 接入的电脑在顶部;
+ * hxoa (工作区, worker, 连接令牌) 分组在最后, 插件没启用不显示。服务器页只放服务器资源。
+ */
 @Composable
 fun AgentPage(chat: ChatModel) {
     val feed = chat.feed
@@ -40,6 +44,7 @@ fun AgentPage(chat: ChatModel) {
         }
         if (!feed.v1 && feed.loaded) {
             Card { KitText("服务端还没有升级到 v1 协议, 暂时看不到 ${Constants.HARNESS} 任务", Aioa.colors.textSecondary, 14) }
+            com.hengxin.aioa.ui.hxoa.HxoaSection()
             return@PageColumn
         }
         if (feed.agents.isNotEmpty()) {
@@ -54,6 +59,8 @@ fun AgentPage(chat: ChatModel) {
         val ended = all.filter { it.state !in ACTIVE }
         if (ended.isNotEmpty()) PageSection("已结束")
         AnimatedItems(ended, { it.id }) { task -> TaskCard(task.toCard(null), stateOf(state)) }
+        // hxoa 插件 (hengxin666.hxoa) 的工作区与 worker 也是 agent harness, 分组放这里 (#144, 原在服务器页)
+        com.hengxin.aioa.ui.hxoa.HxoaSection()
     }
 }
 

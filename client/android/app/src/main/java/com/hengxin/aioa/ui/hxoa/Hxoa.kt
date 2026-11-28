@@ -45,7 +45,7 @@ import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.pressable
 import kotlinx.coroutines.launch
 
-// hxoa 管理 (插件 hengxin666.hxoa, 现由主人私有源提供, #124 #142): "服务器" 页里的 hxoa 分组 (home-spaces §3 区块),
+// hxoa 管理 (插件 hengxin666.hxoa, 现由主人私有源提供, #124 #142): "工作区" 页 (agent harness, #144) 里的 hxoa 分组 (home-spaces §3 区块),
 // 点开是全屏的 列表 → 一台 hxoa → 工作区 / 添加工作区 (页面栈见 HxoaHost.kt)。
 // 列表先显示本机缓存 (内存 → 磁盘), 后台刷新; 各项自上而下逐个渐显 (#108)。
 
@@ -81,7 +81,7 @@ internal fun FullPage(onBack: () -> Unit, title: String, sub: String, action: Pa
 internal fun connHint(conn: HxoaConn): String = if (conn.legacy) "需重新接入" else conn.server ?: "离线"
 
 /**
- * "服务器" 页的 hxoa 分组: 每台的在线状态与版本, 点一台进它的工作区, "全部" 进列表页。
+ * "工作区" 页的 hxoa 分组: 每台的在线状态与版本, 点一台进它的工作区, "全部" 进列表页。
  * 主人没启用插件 (接口 404 / 403) 时整组不显示; 页面也挂着 hxoa 的全屏页 (侧栏入口同样打开它)。
  */
 @Composable

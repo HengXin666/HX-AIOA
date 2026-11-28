@@ -87,7 +87,7 @@ fun HomeFrame(
     val g = chat.groups
     val rows by remember { derivedStateOf { g.rows() } }
     val unread by remember { derivedStateOf { rows.sumOf { if (it.muted) 0 else it.unread } } }
-    // 一级页面: 总览, 消息, 开发, 服务器, 插件空间, agent harness, 资源; 顶部标签与侧栏 "空间" 列同一份 (#121)
+    // 一级页面: 总览, 消息, 工作区 (agent harness), 开发, 服务器, 插件空间; 顶部标签与侧栏 "空间" 列同一份 (#121)
     // 置顶最多 5 个 (#139): 标签只放置顶的, 其余在侧栏 "更多空间" 与标题下的切换里
     val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons)
     val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces)
@@ -101,7 +101,7 @@ fun HomeFrame(
     // 侧栏账号头用账号的头像 (#139 #142): 连上时 welcome 帧带来 user.avatar (成员列表读的同一个), 没有再用旧设置里的;
     // 不再另问 /me (以前只在本机没记过时问, 账号上换了头像这里不跟)
     val myAvatar by com.hengxin.aioa.data.Me.face.collectAsState()
-    // hxoa 插件是否启用 (#142): 本机没记过时连上问一次, 之后由服务器页与 plugin_update 更新
+    // hxoa 插件是否启用 (#142): 本机没记过时连上问一次, 之后由工作区页与 plugin_update 更新
     com.hengxin.aioa.ui.hxoa.HxoaGate.load(context)
     androidx.compose.runtime.LaunchedEffect(chat.online) {
         if (chat.online && com.hengxin.aioa.ui.hxoa.HxoaGate.on == null) com.hengxin.aioa.ui.hxoa.HxoaGate.probe(context.applicationContext)
@@ -131,8 +131,8 @@ fun HomeFrame(
             key.startsWith(RECENT_PREFIX) -> onOpenGroup(key.removePrefix(RECENT_PREFIX))
             key == KEY_FAV -> onFavorites()
             key == KEY_GITHUB -> onGithub()
-            // hxoa 的全屏页挂在服务器页的 hxoa 分组上 (#142)
-            key == KEY_HXOA -> { onTab(Tab.RESOURCES); com.hengxin.aioa.ui.hxoa.HxoaNav.openList() }
+            // hxoa 属于 agent harness (#144): 全屏页挂在工作区页的 hxoa 分组上
+            key == KEY_HXOA -> { onTab(Tab.AGENT); com.hengxin.aioa.ui.hxoa.HxoaNav.openList() }
             key == KEY_THEME -> setMode(nextMode)
             key == KEY_SEARCH -> searching = true
             key == KEY_JOIN -> { g.pendingInvite = ""; onGo(Tab.CHAT) }

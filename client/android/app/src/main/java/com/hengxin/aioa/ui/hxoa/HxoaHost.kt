@@ -48,7 +48,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 // hxoa 的全屏页 (#142): 一层全屏窗口 + 页面栈 (列表 → 一台 → 工作区 / 添加工作区), 返回键逐级退;
-// 以前每级各开一个全屏 Dialog 叠起来 (ui-spec 标了 "改成子页")。入口: "服务器" 页的 hxoa 分组, 侧栏 "hxoa"。
+// 以前每级各开一个全屏 Dialog 叠起来 (ui-spec 标了 "改成子页")。入口: "工作区" 页 (agent harness, #144) 的 hxoa 分组, 侧栏 "hxoa"。
 
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_NOT_FOUND = 404
@@ -181,7 +181,7 @@ private fun rememberConnState(conn: String): Pair<HxoaState?, String> {
     return body?.let(::parseState) to error
 }
 
-/** hxoa 的全屏窗口; 栈空时什么也不画。只在一处挂 ("服务器" 页的 [HxoaSection])。 */
+/** hxoa 的全屏窗口; 栈空时什么也不画。只在一处挂 ("工作区" 页的 [HxoaSection])。 */
 @Composable
 fun HxoaHost() {
     val top = HxoaNav.stack.lastOrNull() ?: return
@@ -240,7 +240,7 @@ private fun ListPage(api: HxoaApi) {
 private fun ConnPage(api: HxoaApi, id: String) {
     val c = Aioa.colors
     val scope = rememberCoroutineScope()
-    // 接入列表由 "服务器" 页的分组或列表页拉好放在缓存里, 这里只读不再请求
+    // 接入列表由 "工作区" 页的分组或列表页拉好放在缓存里, 这里只读不再请求
     val conns = remember(HxoaNav.reload) { PageCache.get<JSONObject>(CACHE_CONNS)?.let(::parseConns) }
     val conn = conns?.firstOrNull { it.id == id }
     if (conn == null || HxoaGate.on == false) {
