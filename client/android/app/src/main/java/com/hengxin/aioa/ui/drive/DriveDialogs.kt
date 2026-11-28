@@ -26,13 +26,6 @@ sealed interface DriveDialog {
     data object About : DriveDialog
 }
 
-private suspend fun attempt(block: suspend () -> Unit): String? = try {
-    block()
-    null
-} catch (e: DriveError) {
-    e.message ?: "失败"
-}
-
 /** 长按或 "..." 的操作抽屉。 */
 @Composable
 internal fun NodeActions(n: DriveNode, close: () -> Unit, open: (DriveNode) -> Unit, show: (DriveDialog) -> Unit) {
@@ -68,31 +61,32 @@ internal fun PageMenu(close: () -> Unit, transfers: () -> Unit, trash: () -> Uni
 }
 
 @Composable
-internal fun DriveDialogs(d: DriveDialog, api: DriveApi, chat: ChatModel, path: String, sort: DriveSort, setSort: (DriveSort) -> Unit, close: () -> Unit, changed: () -> Unit) {
+internal fun DriveDialogs(d: DriveDialog, api: DriveApi, chat: ChatModel, path: String, sort: DriveSort, setSort: (DriveSort) -> Unit, close: () -> Unit, edit: (DriveEdit) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val done = { close(); changed() }
+    // 改动先上列表再发请求 (#159), 弹窗立刻关掉; 失败由 edit 回滚并提示
+    val act = { e: DriveEdit -> close(); edit(e); null }
     when (d) {
         DriveDialog.Sort -> ActionSheet("排序 (文件夹在前)", SortKey.entries.map { k ->
             SheetAction("chevrons-up-down", k.label, on = sort.key == k) { setSort(sort.copy(key = k)); close() }
         } + SheetAction("arrow-up", "倒序", on = sort.desc) { setSort(sort.copy(desc = !sort.desc)); close() }, close)
         DriveDialog.Mkdir -> InputDialog("新建文件夹", "", "在 $path 下", close, DrivePaths::validName) { name ->
-            attempt { api.mkdir(DrivePaths.join(path, name)) }.also { if (it == null) done() }
+            act(DriveEdit("新建文件夹", { DriveEdits.add(it, name) }) { api.mkdir(DrivePaths.join(path, name)) })
         }
         is DriveDialog.Rename -> InputDialog("改名", d.n.name, "不能含 /", close, { DrivePaths.validName(it) && it != d.n.name }) { name ->
-            attempt { api.rename(d.n.id, name) }.also { if (it == null) done() }
+            act(DriveEdit("改名", { DriveEdits.rename(it, d.n.id, name) }) { api.rename(d.n.id, name) })
         }
         is DriveDialog.Delete -> AlertDialog(
             onDismissRequest = close,
             title = { androidx.compose.material3.Text("删除 ${d.n.name}?") },
             text = { androidx.compose.material3.Text("移到回收站, 可以在回收站恢复。") },
             confirmButton = {
-                TextButton({ scope.launch { attempt { api.delete(d.n.id) }?.let { toast(context, it) }; done() } }) { androidx.compose.material3.Text("删除", color = Aioa.colors.danger) }
+                TextButton({ act(DriveEdit("删除", { DriveEdits.remove(it, d.n.id) }) { api.delete(d.n.id) }) }) { androidx.compose.material3.Text("删除", color = Aioa.colors.danger) }
             },
             dismissButton = { TextButton(close) { androidx.compose.material3.Text("取消") } },
         )
         is DriveDialog.Move -> MovePicker(api, DrivePaths.parent(d.n.path.ifEmpty { DrivePaths.join(path, d.n.name) }), d.n, close) { to ->
-            attempt { api.move(d.n.id, to) }.also { if (it == null) done() }
+            act(DriveEdit("移动", { DriveEdits.move(it, d.n.id, path, to) }) { api.move(d.n.id, to) })
         }
         is DriveDialog.Share -> ShareDialog(api, d.n, close)
         is DriveDialog.Send -> ActionSheet("发到哪个群", chat.groups.rows().filter { com.hengxin.aioa.ui.chat.canPostTo(it.key, it.meta) }.sortedByDescending { it.order }.take(SEND_MAX).map { r ->

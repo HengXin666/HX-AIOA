@@ -1,13 +1,15 @@
-import type { Overview as OverviewData, OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
+import { Card } from "@hx/ui/ui/card";
+import type { OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Progress } from "@hx/ui/ui/progress";
-import { useEffect, useState } from "react";
-import { useLinkState } from "../app/hooks";
-import { go } from "../app/router";
+import { Button } from "@hx/ui/ui/button";
+import { HardDrive, ListTodo } from "lucide-react";
+import { useFeed, useLinkState, useUser } from "../app/hooks";
+import { go, link } from "../app/router";
 import { groupOf, textOf, type Message } from "../core/chats";
 import { TXT_LOADING } from "../core/constants";
-import { link } from "../core/link";
 import { shortTime } from "./ChatList";
+import { StarTodos } from "./todo/StarTodos";
 
 const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "muted" }[] = [
   { key: "need_me", title: "需要我", dot: "destructive" },
@@ -15,14 +17,12 @@ const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "mut
   { key: "worth_reading", title: "值得一看", dot: "muted" },
 ];
 
-// 总览: 进页时发一次 overview 帧 (连上后若还没有再发), 不轮询
+// 总览: overview 快照打底, ev / task 帧实时合并 (core/feed.ts), 不轮询
 export default function Overview() {
-  const [data, setData] = useState<OverviewData | null>(null);
+  const snap = useFeed();
   const state = useLinkState();
-  useEffect(() => link.frames.on((f) => f.t === "overview" && setData(f.overview as OverviewData)), []);
-  useEffect(() => {
-    if (state === "online" && !data) link.write({ t: "overview" });
-  }, [state, data]);
+  const owner = useUser()?.role === "owner";
+  const data = snap.loaded ? { generatedAt: snap.generatedAt, layers: snap.layers, tasks: Object.values(snap.tasks).sort((a, b) => b.updated - a.updated) } : null;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -32,11 +32,28 @@ export default function Overview() {
           {data && <span className="text-xs text-muted-foreground">{shortTime(data.generatedAt)} 生成</span>}
         </header>
         {!data && <p className="text-sm text-muted-foreground">{state === "online" ? TXT_LOADING : "连上后加载"}</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline">
+            <a href={link("overview", "todo")}>
+              <ListTodo />
+              待办
+            </a>
+          </Button>
+          {owner && (
+            <Button asChild size="sm" variant="outline">
+              <a href={link("overview", "drive")}>
+                <HardDrive />
+                网盘
+              </a>
+            </Button>
+          )}
+        </div>
+        <StarTodos />
         {data && data.tasks.length > 0 && <Tasks tasks={data.tasks} />}
         {data && (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
             {LAYERS.map((l) => (
-              <section key={l.key} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+              <Card key={l.key} className="flex flex-col gap-2 p-3">
                 <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <Badge variant="outline" dot={l.dot}>
                     {l.title}
@@ -49,7 +66,7 @@ export default function Overview() {
                   ))}
                   {!data.layers[l.key]?.length && <li className="text-xs text-muted-foreground">暂无</li>}
                 </ul>
-              </section>
+              </Card>
             ))}
           </div>
         )}
@@ -86,8 +103,13 @@ const TASK_TEXT: Record<string, string> = { running: "进行中", waiting: "等�
 
 function Tasks({ tasks }: { tasks: TaskSnapshot[] }) {
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
-      <h3 className="text-sm font-medium text-foreground">任务</h3>
+    <Card className="flex flex-col gap-2 p-3">
+      <h3 className="flex items-center text-sm font-medium text-foreground">
+        <span className="flex-1">任务</span>
+        <a href={link("agent")} className="text-xs text-muted-foreground hover:text-foreground">
+          去 Agent 栏
+        </a>
+      </h3>
       <ul className="flex flex-col gap-2">
         {tasks.map((t) => (
           <li key={t.id} className="flex flex-col gap-1">
@@ -102,6 +124,6 @@ function Tasks({ tasks }: { tasks: TaskSnapshot[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }

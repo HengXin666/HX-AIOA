@@ -1,9 +1,11 @@
-import type { BundleInfo, FileRef } from "@hx-aioa/protocol";
+import { BUNDLE_VIA_DEPTH, type BundleInfo, type FileRef } from "@hx-aioa/protocol";
 import { File as FileIcon, Layers } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { fileUrl, openFile } from "../core/files";
 import { EXTERNAL } from "../core/constants";
+
+const BundleView = lazy(() => import("./chat/BundleView"));
 
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
 const MENTION_RE = /(@[^\s@,.!?，。!?]+)/g;
@@ -74,20 +76,29 @@ export function FileView({ file }: { file: FileRef }) {
   );
 }
 
-// 合并转发卡片: 只显示摘要 (前 4 条), 详情接口后续再接
-export function BundleCard({ b }: { b: BundleInfo }) {
+// 合并转发卡片: 点开看详情 (懒加载); 嵌套超过服务端允许的层数时只显示摘要
+export function BundleCard({ b, via }: { b: BundleInfo; via: number[] }) {
+  const [open, setOpen] = useState(false);
+  const can = via.length <= BUNDLE_VIA_DEPTH;
   return (
-    <div className="w-64 max-w-full rounded-lg border border-border bg-card p-2 text-sm">
-      <div className="mb-1 flex items-center gap-1 font-medium text-foreground">
-        <Layers className="size-4 text-muted-foreground" />
-        {b.from} 的聊天记录
-      </div>
-      {b.head.map((h, i) => (
-        <p key={i} className="truncate text-xs text-muted-foreground">
-          {h.src}: {h.text}
-        </p>
-      ))}
-      <p className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">共 {b.count} 条</p>
-    </div>
+    <>
+      <button type="button" disabled={!can} onClick={() => setOpen(true)} className="w-64 max-w-full rounded-lg border border-border bg-card p-2 text-left text-sm hover:bg-muted disabled:hover:bg-card">
+        <div className="mb-1 flex items-center gap-1 font-medium text-foreground">
+          <Layers className="size-4 text-muted-foreground" />
+          {b.from} 的聊天记录
+        </div>
+        {b.head.map((h, i) => (
+          <p key={i} className="truncate text-xs text-muted-foreground">
+            {h.src}: {h.text}
+          </p>
+        ))}
+        <p className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">共 {b.count} 条</p>
+      </button>
+      {open && (
+        <Suspense fallback={null}>
+          <BundleView b={b} via={via} onClose={() => setOpen(false)} />
+        </Suspense>
+      )}
+    </>
   );
 }

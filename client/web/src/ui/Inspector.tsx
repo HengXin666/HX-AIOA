@@ -14,10 +14,12 @@ import { Button } from "@hx/ui/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@hx/ui/ui/sheet";
 import { Bot, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { useChats, usePresence } from "../app/hooks";
-import { api, currentUser, fill } from "../core/auth";
+import { useChats, usePresence, useUser } from "../app/hooks";
+import { api, fill } from "../core/auth";
 import { chats, titleOf } from "../core/chats";
 import { TXT_LOAD_MORE, TXT_LOADING } from "../core/constants";
+import { AgentSettings } from "./chat/AgentSettings";
+import { GroupActions } from "./chat/GroupActions";
 import { shortTime } from "./ChatList";
 import { UserAvatar } from "./UserAvatar";
 import { AgentOnboard } from "./agent/AgentOnboard";
@@ -61,6 +63,7 @@ function Inspector({ channel }: { channel: string }) {
   useChats();
   const meta = chats.meta(channel);
   const pres = usePresence(channel);
+  const me = useUser();
   if (!meta) return <p className="p-4 text-sm text-muted-foreground">{TXT_LOADING}</p>;
   const room = meta.members !== undefined || meta.kind === "dm";
   const listening = new Set(pres.listening.map((l) => l.id));
@@ -76,11 +79,16 @@ function Inspector({ channel }: { channel: string }) {
           </p>
         </div>
       </div>
-      <Section title="群公告">
+      {!(me?.role === "owner" || meta.role === "owner" || meta.role === "admin") && <Section title="群公告">
         <p className="whitespace-pre-wrap break-words text-sm text-foreground">{meta.notice || <span className="text-muted-foreground">暂无公告</span>}</p>
-      </Section>
-      <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} canAdd={currentUser()?.role === "owner" && meta.kind !== "dm"} />
+      </Section>}
+      {me?.role === "owner" && meta.kind !== "dm" && meta.view !== "mail" ? (
+        <AgentSettings meta={meta} listening={listening} />
+      ) : (
+        <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} canAdd={false} />
+      )}
       {room && <Members key={channel} channel={channel} />}
+      <GroupActions meta={meta} />
     </div>
   );
 }

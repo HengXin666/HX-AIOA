@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import type { HostCard } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -133,13 +134,13 @@ function Detail({ subject, row, back }: { subject: string; row?: Row; back?: boo
         )}
         {!groups.length && <p className="text-sm text-muted-foreground">{row?.online ? "等探针推送指标" : "探针离线, 没有实时数据"}</p>}
         {groups.map(([unit, defs]) => (
-          <section key={unit || "-"} className="rounded-xl border border-border bg-card p-3">
+          <Card key={unit || "-"} className="p-3 gap-0">
             <h4 className="mb-1 text-sm font-medium text-foreground">
               {defs.map((d) => d.label).join(" / ")}
               {unit && <span className="ml-1 text-xs text-muted-foreground">({unit})</span>}
             </h4>
             <TimeSeries source={buf} series={defs} unit={unit} windowMs={LIVE_WINDOW_MS} yMax={unit === PERCENT ? 100 : undefined} />
-          </section>
+          </Card>
         ))}
       </div>
     </div>

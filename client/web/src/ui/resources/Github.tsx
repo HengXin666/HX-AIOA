@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import {
   GITHUB_HISTORY_KINDS,
   PATH_GITHUB_HEATMAP,
@@ -43,14 +44,14 @@ function RepoList() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
       {heat.data && heat.data.days.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+        <Card className="flex flex-col gap-2 p-3">
           <h3 className="text-sm font-medium text-foreground">
             提交热力格 <span className="text-xs text-muted-foreground">最近 {heat.data.days.length} 天 {total} 次提交</span>
           </h3>
           <div className="overflow-x-auto">
             <Heatmap days={heat.data.days} />
           </div>
-        </section>
+        </Card>
       )}
       {repos.busy && <p className="text-sm text-muted-foreground">{TXT_LOADING}</p>}
       {repos.error && <p className="text-sm text-destructive">{repos.error}</p>}
@@ -140,7 +141,7 @@ type LinkRow = { key: string; title: string; sub: string; url: string };
 
 function Links({ title, items }: { title: string; items: LinkRow[] }) {
   return (
-    <section className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-1 p-3">
       <h4 className="mb-1 text-sm font-medium text-foreground">{title}</h4>
       {!items.length && <p className="text-xs text-muted-foreground">暂无</p>}
       {items.slice(0, 10).map((x) => (
@@ -149,7 +150,7 @@ function Links({ title, items }: { title: string; items: LinkRow[] }) {
           <span className="block truncate text-xs text-muted-foreground">{x.sub}</span>
         </a>
       ))}
-    </section>
+    </Card>
   );
 }
 
@@ -186,7 +187,7 @@ function History({ owner, name }: { owner: string; name: string }) {
   }, [kind, owner, name]);
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <div className="flex items-center gap-1">
         <h4 className="mr-2 text-sm font-medium text-foreground">历史</h4>
         {GITHUB_HISTORY_KINDS.map((k) => (
@@ -220,6 +221,6 @@ function History({ owner, name }: { owner: string; name: string }) {
         </Button>
       )}
       {!busy && !next && items.length > 0 && <p className="text-center text-xs text-muted-foreground">已到最早一条</p>}
-    </section>
+    </Card>
   );
 }
