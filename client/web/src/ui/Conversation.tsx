@@ -1,45 +1,59 @@
 import { Button } from "@hx/ui/ui/button";
-import { Textarea } from "@hx/ui/ui/textarea";
-import { ArrowLeft, SendHorizontal } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowLeft, PanelRight } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useChats, useLinkState, useUser } from "../app/hooks";
+import { useChats, usePresence, useUser, useVisible } from "../app/hooks";
 import { go } from "../app/router";
-import { chats } from "../core/chats";
-import { MEMO_GROUP, TXT_LOADING } from "../core/constants";
-import { link } from "../core/link";
-import { MessageItem } from "./MessageItem";
+import { chats, titleOf, type Message } from "../core/chats";
+import { TXT_LOADING } from "../core/constants";
+import { Composer } from "./Composer";
+import { MessageItem, PendingItem } from "./MessageItem";
 
 const NEAR_BOTTOM_PX = 80;
 
-export function Conversation({ channel, narrow }: { channel: string; narrow: boolean }) {
+export function Conversation({ channel, narrow, pane, onPane }: { channel: string; narrow: boolean; pane: boolean; onPane: () => void }) {
   useChats();
-  const meta = chats.snapshot().chats.find((c) => c.channel === channel);
+  const meta = chats.meta(channel);
   const thread = chats.thread(channel);
+  const pending = chats.outbox.of(channel);
   const me = useUser();
+  const pres = usePresence(channel);
+  const visible = useVisible();
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [reply, setReply] = useState<Message | null>(null);
 
   useEffect(() => {
     void chats.loadThread(channel).catch((e: Error) => toast.error(e.message));
   }, [channel]);
 
   // 新消息到达时, 只有本来就在底部才跟着滚, 往上翻历史时不打扰
-  const count = thread?.items.length ?? 0;
+  const count = (thread?.items.length ?? 0) + pending.length;
   useLayoutEffect(() => {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [count]);
 
+  // 看得见才算读过: 页面在前台时上报, 切回来再补
+  const top = thread?.items[thread.items.length - 1]?.seq ?? 0;
+  useEffect(() => {
+    if (visible && meta) chats.markRead(channel);
+  }, [channel, top, visible, meta]);
+
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
-    if (el.scrollTop === 0 && thread?.more) {
+    if (el.scrollTop === 0 && thread?.more && thread.synced) {
       const h = el.scrollHeight;
       void chats.loadThread(channel).then(() => requestAnimationFrame(() => (el.scrollTop = el.scrollHeight - h)));
     }
   };
+
+  const onReply = useCallback((m: Message) => setReply(m), []);
+  const myId = me ? `user:${me.id}` : "";
+  const typing = pres.typing.filter((t) => t.id !== myId);
+  const owner = me?.role === "owner";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -49,44 +63,31 @@ export function Conversation({ channel, narrow }: { channel: string; narrow: boo
             <ArrowLeft />
           </Button>
         )}
-        <h2 className="truncate text-base font-semibold text-foreground">{meta?.title || channel}</h2>
-        {meta?.members ? <span className="text-xs text-muted-foreground">{meta.members} 人</span> : null}
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-semibold text-foreground">{meta ? titleOf(meta) : channel}</h2>
+          <p className="truncate text-xs text-muted-foreground">
+            {meta?.members ? `${meta.members} 人` : ""}
+            {meta?.members && pres.listening.length ? " · " : ""}
+            {pres.listening.length ? `${pres.listening.map((l) => l.name).join(", ")} 在听` : ""}
+          </p>
+        </div>
+        <Button size="icon-sm" variant={pane ? "secondary" : "ghost"} aria-label="群资料" aria-pressed={pane} onClick={onPane}>
+          <PanelRight />
+        </Button>
       </header>
       <div ref={box} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {!thread && <p className="text-center text-sm text-muted-foreground">{TXT_LOADING}</p>}
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          {thread?.items.map((m) => <MessageItem key={m.id} m={m} mine={Boolean(me && m.by === me.id)} />)}
+          {thread?.items.map((m) => <MessageItem key={m.id} m={m} mine={Boolean(me && m.by === me.id)} owner={owner} onReply={onReply} />)}
+          {pending.map((p) => (
+            <PendingItem key={p.cid} p={p} onRetry={() => chats.outbox.retry(p.cid)} onDiscard={() => chats.outbox.discard(p.cid)} />
+          ))}
         </div>
       </div>
-      <Composer channel={channel} />
-    </div>
-  );
-}
-
-function Composer({ channel }: { channel: string }) {
-  const [text, setText] = useState("");
-  const state = useLinkState();
-  const send = () => {
-    const t = text.trim();
-    if (!t) return;
-    const ok = link.send({ body: { kind: "text", text: t }, channel: channel === MEMO_GROUP ? undefined : channel });
-    if (!ok) return void toast.error("还没连上, 稍后再发");
-    setText("");
-  };
-  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      send();
-    }
-  };
-  return (
-    <div className="safe-bottom border-t border-border p-3">
-      <div className="mx-auto flex max-w-3xl items-end gap-2">
-        <Textarea rows={1} className="max-h-40 min-h-10 resize-none" placeholder="发消息 (Enter 发送, Shift+Enter 换行)" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
-        <Button size="icon" aria-label="发送" disabled={!text.trim() || state !== "online"} onClick={send}>
-          <SendHorizontal />
-        </Button>
-      </div>
+      <p className="h-5 px-4 text-xs text-muted-foreground" aria-live="polite">
+        {typing.length ? `${typing.map((t) => t.name).join(", ")} 正在输入` : ""}
+      </p>
+      <Composer key={channel} channel={channel} reply={reply} onClearReply={() => setReply(null)} />
     </div>
   );
 }

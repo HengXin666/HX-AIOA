@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <title>HX-AIOA</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="HX-AIOA" />
     <!-- 首屏前定好亮暗与皮肤, 避免闪烁; 键名与 HX-UI ThemeProvider 一致 -->
     <script>(()=>{try{var s=JSON.parse(localStorage.getItem("hx-theme")||"{}");var m=s.mode||"system";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);var e=document.documentElement;e.classList.toggle("dark",d);e.dataset.theme=s.accent||"ink";}catch(_){}})()</script>
   </head>

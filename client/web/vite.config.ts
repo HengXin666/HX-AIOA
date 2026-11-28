@@ -34,6 +34,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwind(), versionFile(info)],
     define: { __WEB_BUILD__: JSON.stringify(info) },
     build: { target: "es2022", sourcemap: false, chunkSizeWarningLimit: 600 },
+    // 连接共享用模块 SharedWorker (link-worker.ts)
+    worker: { format: "es" },
     server: target ? { proxy: { "/api": { target, changeOrigin: true, ws: true } } } : undefined,
   };
 });

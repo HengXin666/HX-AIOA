@@ -6,6 +6,13 @@ import { watchVersion } from "./core/version";
 import "./index.css";
 
 watchVersion();
+// Service Worker 与 Web Push 由 core/push.ts 提供 (W3); 该文件不存在时这里什么都不做
+const push = import.meta.glob<{ registerSW?: () => unknown; syncPush?: () => Promise<void> }>("./core/push.ts");
+// 注册 SW; 浏览器自己换过订阅时重报一次 (未登录或没开通知时 syncPush 什么也不做)
+void push["./core/push.ts"]?.().then(async (m) => {
+  await m.registerSW?.();
+  await m.syncPush?.().catch(() => undefined);
+});
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(

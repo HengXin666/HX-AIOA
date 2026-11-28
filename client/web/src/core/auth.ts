@@ -1,5 +1,6 @@
 import { PATH_AUTH_LOGIN, PATH_AUTH_LOGOUT, PATH_AUTH_REFRESH, PATH_SETUP, type TokenPair, type UserPublic } from "@hx-aioa/protocol";
-import { DEVICE_PREFIX, PLATFORM_WEB, REFRESH_EARLY_MS, STORAGE_DEVICE, STORAGE_REFRESH, TXT_NETWORK } from "./constants";
+import { clearCache } from "./cache";
+import { DEVICE_PREFIX, LOCK_REFRESH, PLATFORM_WEB, REFRESH_EARLY_MS, STORAGE_DEVICE, STORAGE_REFRESH, TXT_NETWORK } from "./constants";
 import { Emitter } from "./emitter";
 
 // 访问令牌只放内存; 刷新令牌放 localStorage, 关页再开用它换新 (60 天未用失效)
@@ -29,6 +30,9 @@ export function deviceId(): string {
 }
 
 export const currentUser = (): UserPublic | null => session?.user ?? null;
+// 还新鲜的访问令牌 (不触发刷新), 给共享连接握手用
+export const currentToken = (): { value: string; exp: number } | null =>
+  session && session.expires - Date.now() > REFRESH_EARLY_MS ? { value: session.access, exp: session.expires } : null;
 export const hasRefresh = (): boolean => Boolean(localStorage.getItem(STORAGE_REFRESH));
 
 function deviceName(): string {
@@ -69,9 +73,14 @@ export async function login(name: string, password: string): Promise<UserPublic>
   return accept(pair);
 }
 
+// 跨标签串行: 刷新令牌每次都会换新, 别的标签刚换过时这里读到的已是新值
+function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  return navigator.locks ? (navigator.locks.request(LOCK_REFRESH, fn) as unknown as Promise<T>) : fn();
+}
+
 // 并发调用共用同一次刷新, 刷新令牌每次都会换新, 不能各刷各的
 export function refresh(): Promise<boolean> {
-  refreshing ??= (async () => {
+  refreshing ??= exclusive(async () => {
     const token = localStorage.getItem(STORAGE_REFRESH);
     if (!token) return false;
     try {
@@ -80,10 +89,10 @@ export function refresh(): Promise<boolean> {
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) signOutLocal();
       return false;
-    } finally {
-      refreshing = null;
     }
-  })();
+  }).finally(() => {
+    refreshing = null;
+  });
   return refreshing;
 }
 
@@ -94,9 +103,16 @@ export async function accessToken(): Promise<string | null> {
 
 export function signOutLocal(): void {
   localStorage.removeItem(STORAGE_REFRESH);
+  void clearCache();
+  if (!session) return;
   session = null;
   authChanged.emit(null);
 }
+
+// 别的标签退出登录: 这里也回登录页
+window.addEventListener("storage", (e) => {
+  if (e.key === STORAGE_REFRESH && e.newValue === null && session) signOutLocal();
+});
 
 export async function logout(): Promise<void> {
   await api(PATH_AUTH_LOGOUT, { method: "POST" }).catch(() => undefined);

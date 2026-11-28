@@ -155,7 +155,7 @@ server/public/           现有静态资源 (install.sh, probe*.mjs, hxaioa.mjs)
 
 设置页 (`docs/client/android/settings-map.md`) 里 "连接 · 代理" "系统 · 系统权限" 的安卓项在 Web 端不显示; "服务端" 一项在 Web 端也不需要 (同源), 只显示账号与连接状态。
 
-## 6. 推送 (浏览器原生通道)
+## 6. 推送 (浏览器原生通道, W3 已做)
 
 ```
 页面开着: WebSocket 收消息 → 页面不在前台时 SW registration.showNotification
@@ -168,6 +168,15 @@ server/public/           现有静态资源 (install.sh, probe*.mjs, hxaioa.mjs)
 - 额度: 推送是 DO 里的出站 `fetch` (子请求), 不算 Worker / DO 请求; 不新增 cron。
 - 密钥: VAPID 私钥 `VAPID_PRIVATE_KEY` (secret), 公钥 `VAPID_PUBLIC_KEY` (var), 主体 `VAPID_SUBJECT`; 按规范同一个提交更新 `docs/deploy/env.md`。不配就不提供 Web Push, Web 端只靠 WebSocket。
 - 限制 (写进界面提示): 通知权限必须由用户点击申请; Linux / Windows 上浏览器进程没在运行时收不到; Chrome 的推送服务在 FCM, 大陆网络需要用户自己的代理, Firefox 用 Mozilla 的服务。
+
+实现 (W3) 与上面的差异, 部署见 [deploy/web/push.md](../deploy/web/push.md):
+
+- 订阅存新表 `webpush` (账号 + 设备一行), 不复用安卓 `pushToken` 的 KV 单键; 兜底只发给主人账号的订阅 (与 mipush 一致), 子号的订阅先存着。
+- Web 端不发 ACK, "页面开着" 改为看该设备 (`web-` 开头) 有没有前台长连接, 有就跳过; 是否触发兜底仍只看安卓 ACK。没配 VAPID 或主人没有订阅时, 不会因为 webpush 去等 ACK 超时。
+- `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` 在仓库里是 variable, 部署时和私钥一起写成 Worker secret (三项缺一部署报错)。
+- 规则默认渠道加了 `webpush`; 自己写了 `channels` 的规则不会自动加。
+- 同一个群用同一个 tag 与 `Topic` (tag 的哈希), 还没送达的旧通知被新的替换; SW 只在没有可见窗口时弹通知, 不缓存不拦截 fetch。
+- 客户端 `core/push.ts` 多导出 `syncPush()`: 浏览器自己换订阅时 SW 拿不到令牌, 由页面登录后重报一次。
 
 ## 7. 图表重做
 
@@ -206,6 +215,8 @@ Recharts 适合静态报表; 实时指标每秒重渲染整张 SVG, 点多时主
 - GitHub: 热力格整年一行铺开 (53 列), 下面走势图与热力格共用时间轴, 点格子联动。
 
 ## 8. 插件: 客户端兼容声明与版本校验
+
+> W5 已做 (#156), 接口与字段以 `docs/api/plugins.md` 的 "按端兼容" 为准。与下文设计的差异见 8.5。
 
 ### 8.1 问题
 
@@ -246,6 +257,17 @@ Recharts 适合静态报表; 实时指标每秒重渲染整张 SVG, 点多时主
 4. 能力表由客户端维护: 安卓新增组件类型时改能力表要附画廊截图; Web 同理附截图测试。能力表变化不触发插件重新校验以外的任何部署。
 5. 报告里加一张 "插件 × 端" 矩阵 (支持 / 需更新 / 不支持), 写进运行摘要。
 
+### 8.5 实现与设计的差异 (W5)
+
+- 构建号范围只允许 `>=N`, `<N`, `*` (不允许 `^N`, `~N`, 精确值): 构建号是整数, `^121` 按 semver 只含 121 一个号, 容易写错。
+- 能力表 (`client-caps.ts`) 除组件类型, 扩展点, 权限外多了 `space` (能不能渲染插件工作台) 与 `native` (客户端手写了这个插件的界面, 如安卓 GitHub 接入页自 121 起); 只有客户端渲染的扩展点 (`commands`, `widgets`, `settings`, `core.theme.base`, `core.chat.renderer`) 与 `ui.webview` 要看端, 其余在服务端执行。主题令牌安卓与 `THEME_TOKENS` 同名, 表里不单列映射, Web 接主题时再加。
+- Web 能力表现在为空 (React 版只有聊天), 所以存量插件都只写 `["android"]`; Web 接上工作台组件后改能力表, 再给插件加 `web`。
+- 存量插件写的最低构建号按功能真实上线的 Release 定: 待办 `>=121` (组件改读 pdata), GitHub 接入 `>=121`, GitHub 授权 `>=110` (设置页)。
+- "构建号真实存在": 安卓要求正好有 `android-N` 标签, Web 要求是 `deploy.yml` 在 main 上一次成功运行的号; CI 离线 (查不到) 时降级为按能力表 `known` 判断并警告, 超过 `known` 仍然失败。没有基线 (`BASE`, 本地直接跑) 时判断不了新增或升版本, 缺端声明只警告。
+- 握手参数除 `/stream` 与 `/compat` 外, `GET /plugins`, `/plugin-contrib/{point}`, `/spaces` 也读 (HTTP 请求不经过长连接); 没带按安卓。`/compat` 与 `welcome.compat` 回带认下的 `client`。
+- 服务端拉任何市场源都跑同一个 `checkManifest` (第三方与私有源 #118 已实现), 只是不查构建号是否发布过 (部署的能力表可能比客户端旧)。
+- 安卓 / Web 市场与详情页显示 "仅安卓 / 仅 Web / 需要更新到 N" 的界面还没做: 服务端已给 `client.level` 与 `need`, 客户端各自接。
+
 ## 9. 桌面客户端 (搁置, 只记录)
 
 需求: Arch Linux 优先, AppImage 直接运行, 读写配置, 自动升级。候选:
@@ -264,7 +286,34 @@ Recharts 适合静态报表; 实时指标每秒重渲染整张 SVG, 点多时主
 | --- | --- | --- |
 | W0 | 本文定稿; issue 标签按端拆分 (`安卓` / `Web`); 文档目录按端整理 | 合并 |
 | W1 (已做) | `client/web` 换成 React + HX-UI 骨架: 登录 (访问令牌只在内存, 不再把 token 打进包), 三档布局, 会话列表与聊天收发, hash 路由, `_headers`, `version.json`, 版本偏移提示; `deploy.yml` 随服务端一起部署 | 部署后打开页面 Worker 请求数为 0 (导航与静态资源) |
-| W2 | 连接层: SharedWorker 单连接, IndexedDB 缓存, 推送失效; 三栏布局; 消息与会话 | 常开 24 小时请求数在预算内 |
-| W3 | Web Push 渠道 (服务端 + SW) | 关掉页面后 3 秒内收到通知 (浏览器在运行) |
-| W4 | 图表层与资源 / CF 额度 / GitHub 页 | 实时图隐藏时 CPU 为 0, 可见时单核占用 < 2% |
-| W5 | 插件兼容声明, 能力表, 市场 CI, 握手带端与构建号 (#156) | 存量插件在 Web 显示 "仅安卓"; 缺能力的 PR 被 CI 拦下 |
+| W2 (已做, 差异见 10.1) | 连接层: SharedWorker 单连接, IndexedDB 缓存, 推送失效; 三栏布局; 消息与会话 | 常开 24 小时请求数在预算内 |
+| W3 (已做) | Web Push 渠道 (服务端 + SW), 设置页 "通知" 开关 | 关掉页面后 3 秒内收到通知 (浏览器在运行) |
+| W4 (已做, 差异见 10.1) | 图表层与资源 / CF 额度 / GitHub 页 | 实时图隐藏时 CPU 为 0, 可见时单核占用 < 2% |
+| W5 (已做, 差异见 8.5) | 插件兼容声明, 能力表, 市场 CI, 握手带端与构建号 (#156) | 存量插件在 Web 显示 "仅安卓"; 缺能力的 PR 被 CI 拦下 |
+
+### 10.1 W2 / W4 实现与设计的差异
+
+连接与缓存:
+
+- 一个浏览器一条 WebSocket: 优先 SharedWorker (`core/link-worker.ts`); 不支持时 `BroadcastChannel` + `navigator.locks` 选主标签持有, 主标签关掉后下一个标签接手 (此时重连一次); 两者都没有才每页一条。三种方式共用 `core/link-hub.ts`, 页面侧 `link` 的 API 不变。
+- 标签关闭用 "每个标签持有一把锁, 持有方排队等这把锁" 发现, 不靠心跳; 新标签加入时补发最后一份 `welcome` `probes` `hosts` `agents` `online` 与各群 `presence`, 不重放消息。各标签的 `watch` 取并集后发, 空集合且没发过时不发。
+- 令牌: 持有方握手时向一个可见标签要访问令牌, 快到期就重要; 刷新令牌跨标签用锁串行 (刷新令牌会轮换, 并发刷新会互相作废)。任一标签退出登录, 其他标签经 `storage` 事件一起退出。
+- 版本偏移: SharedWorker 脚本带哈希, 部署后新旧页面各连一条, 旧页面刷新后恢复一条。
+- IndexedDB 只有一张键值表 (库 `aioa`, 键带账号 id): 会话列表 + ETag + 每群最后一条, 每群最近 100 条消息。应用外壳的 Cache Storage 归 W3 的 Service Worker, 这里没做。打开会话时拉最新一页, 满页时丢掉缓存里更早的 (避免中间有缺口), 往上翻再按页补。
+- 未读条数按本地缓存的消息数 (最多 100 条, 超过显示 99+), 没缓存只显示圆点; 已读用 `PATCH /chats/{群} { read }`, 1.5 秒内合并。输入草稿存 `localStorage`。
+- 发送失败 (没连上或 10 秒没回 `sent`) 留在列表底部, 可重试 (换新 cid) 或放弃。
+
+界面:
+
+- 路由仍是手写 hash 路由, 没有由 `pages.json` 生成, 页面 id 与安卓深链的对应还没做。
+- 没做: 超过 200 行的虚拟滚动, 分栏拖宽, 拖放上传, `Ctrl+Enter` 发送选项, 右键菜单 (用行尾 "⋯", 触屏常显), 输入框的 @ 选择器 (只做了显示高亮与 "@ 到我" 描边), 合并转发详情 (只显示摘要卡片)。
+- 群资料: 宽屏 320px 右栏 (开关记在本地), 中屏右抽屉, 手机底部抽屉; 成员分页, 打开时请求一次 `presence`。
+- PWA 图标由安卓 `ic_app.png` (192px) 放大到 512, 清晰度一般, 以后换矢量源; `maskable` 图标加了安全边距。
+- `index.css` 排除了 HX-UI 不用的目录 (`effects` `text` `backgrounds` `stage` 等) 的类名扫描, 首屏 CSS gzip 30.7 KB 降到 27.3 KB。首屏 JS gzip 146.4 KB; 总览, 资源 (含图表层), 设置, 命令面板, 群资料都是懒加载块。
+
+图表与资源页:
+
+- 时序图增量绘制 = 绘图区按整数像素左移 (经暂存画布) 再补画右侧一条; 缩放, 改尺寸, 换主题, 量程变了才整张重画。数据缓冲是对齐的数组, 超过上限 1.25 倍时一次丢掉前段 (摊还 O(1)), 不是严格的环形缓冲。入场动画没做。
+- 柱状 / 组合图没做, 所以 GitHub 走势 (`/github/trend`) 还没画; 热力格做了 (每级一条 path)。CF 额度是额度条 + 按 worker 堆叠条, 没有按 worker 的时序堆叠图; `CfUsage` 类型协议包里没有, Web 端按 `server/src/api-cf.ts` 本地定义。
+- 资源页是主机列表 + 详情 (字段按单位分组成几张时序图, 不共享十字线), 不是 `AutoGrid` 卡片网格。调色板对比度算法已移植, 但还没和安卓用同一组测试数据核对。
+- 总览进页时发一次 `overview` 帧, 不随 `ev` 增量更新。
