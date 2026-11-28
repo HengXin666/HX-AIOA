@@ -24,7 +24,9 @@
         {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "看板 (状态列) / 分区 / 截止 / 日期 / 仓库 · 筛选 (#152)", "rt": "live"}
       ]},
       {"id": "ov-drive", "t": "block", "label": "网盘", "sub": "内置空间, 默认不置顶, 在更多空间与侧栏 (#154): 目录 / 搜索 / 上传 / 预览", "rt": "near", "kids": [
-        {"id": "ov-drive-act", "t": "sheet", "label": "文件操作", "sub": "预览 · 分享 · 发到群 · 改名 · 移动 · 删除", "rt": "static"},
+        {"id": "ov-drive-act", "t": "sheet", "label": "文件操作", "sub": "预览 · 保存到手机 · 分享 · 发到群 · 改名 · 移动 · 删除", "rt": "static"},
+        {"id": "ov-drive-view", "t": "page", "label": "预览", "sub": "图片 / 文本 / PDF / 音视频 / 信息卡 · 保存到手机 · 分享 · 发到群 (#158)", "rt": "static"},
+        {"id": "ov-drive-xfer", "t": "page", "label": "传输", "sub": "上传与保存 · 速度 · 暂停 / 继续 / 取消 (#158)", "rt": "static"},
         {"id": "ov-drive-trash", "t": "page", "label": "回收站", "sub": "恢复 · 彻底删除 · 清空", "rt": "static"},
         {"id": "ov-drive-shares", "t": "page", "label": "我的分享", "sub": "复制 · 撤销", "rt": "static"}
       ]},
