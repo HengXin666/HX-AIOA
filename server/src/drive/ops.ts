@@ -2,7 +2,7 @@ import { DRIVE_LINK_TTL_SEC, type DriveNode, type DriveShare, isDriveId, isDrive
 import { sha256 } from "../auth";
 import { etagged, json, readJson } from "../http";
 import type { DriveFs } from "./client";
-import { DriveFail, guardId, guardPath, relay, toRel } from "./relay";
+import { DriveFail, relay, toRel } from "./relay";
 
 type Body = Record<string, unknown>;
 export type Op = (fs: DriveFs, req: Request, url: URL) => Promise<Response>;
@@ -55,7 +55,6 @@ const search: Op = async (fs, _req, url) => {
 const mkdir: Op = async (fs, req) => {
   const path = pathArg((await body(req)).path);
   if (path === "/") bad("路径不合法");
-  guardPath(fs, path);
   return relay(await fs.json("POST", "/fs/mkdir", { path }));
 };
 
@@ -65,8 +64,6 @@ const move: Op = async (fs, req) => {
   const toPath = b.toPath === undefined ? undefined : pathArg(b.toPath);
   const name = b.name === undefined ? undefined : nameArg(b.name);
   if (!toPath && !name) bad("要给目标文件夹或新名字");
-  await guardId(fs, id);
-  if (toPath) guardPath(fs, toPath);
   return relay(await fs.json("POST", "/fs/move", { id, toPath, name }));
 };
 
@@ -75,13 +72,11 @@ const copy: Op = async (fs, req) => {
   const id = idArg(b.id);
   const toPath = pathArg(b.toPath);
   const name = b.name === undefined ? undefined : nameArg(b.name);
-  guardPath(fs, toPath);
   return relay(await fs.json("POST", "/fs/copy", { id, toPath, name }));
 };
 
 const remove: Op = async (fs, req) => {
   const id = idArg((await body(req)).id);
-  await guardId(fs, id);
   return relay(await fs.json("POST", "/fs/delete", { id }));
 };
 
@@ -101,7 +96,6 @@ const uploads: Op = async (fs, req) => {
   const size = typeof b.size === "number" && Number.isSafeInteger(b.size) && b.size >= 0 ? b.size : bad("大小不合法");
   const mime = typeof b.mime === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(b.mime) ? b.mime : undefined;
   const sha = typeof b.sha256 === "string" && /^[0-9a-f]{64}$/i.test(b.sha256) ? b.sha256.toLowerCase() : undefined;
-  guardPath(fs, path);
   // Drive v0.4 起给公网分片地址 chunkUrl: 改名成 direct 交给 App 直传; 旧版没有, App 退回 /drive/chunk 转发 (#157)
   return relay<Record<string, unknown>>(await fs.json("POST", "/uploads", { path, name, size, mime, sha256: sha }), ({ chunkUrl, ...r }) =>
     typeof chunkUrl === "string" && HTTP_URL.test(chunkUrl) ? { ...r, direct: chunkUrl } : r,

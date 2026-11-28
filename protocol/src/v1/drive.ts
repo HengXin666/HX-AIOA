@@ -16,11 +16,12 @@ export const DRIVE_PASS_TTL_MS = 3600_000;
 export const DRIVE_LINK_TTL_SEC = 6 * 3600;
 export const DRIVE_PATH_MAX = 1024;
 export const DRIVE_NAME_MAX = 255;
-// "存到网盘" 不给 path 时存到这里
+// 网盘的独立根目录 (相对 Drive 令牌根, #158): 令牌根 /aioa 时是 /aioa/drive, 根 / 时是 /drive; 客户端只看到它下面的相对路径
+export const DRIVE_ROOT_DIR = "/drive";
+// "存到网盘" 不给 path 时存到这里 (网盘内路径)
 export const DRIVE_SAVE_DIR = "/聊天文件";
 // 409 的 code: 服务端复制不了, 客户端改为自己上传
 export const DRIVE_NEED_UPLOAD = "need_upload";
-export const DRIVE_READONLY = "drive_readonly";
 // Drive 的分段大小: 超过这么多片的上传按组 fold 再 commit (#157)
 export const DRIVE_PART_SIZE = 256;
 
@@ -38,7 +39,8 @@ export type DriveNode = {
 export type DriveList = { path: string; items: DriveNode[] };
 export type DriveSearchItem = DriveNode & { path: string };
 export type DriveTrashItem = DriveNode & { deletedAt: number };
-export type DrivePass = { pass: string; expires: number; root: string; whole: boolean };
+// root: 网盘根在 Drive 里的绝对路径; migrated: 这次从旧位置迁进网盘根的条目数 (#158)
+export type DrivePass = { pass: string; expires: number; root: string; whole: boolean; migrated?: number };
 export type DriveShare = { id: string; nodeId: string; name: string; url: string; expiresAt: number | null; createdAt: number; hasPassword: boolean };
 export type DriveUploadInit =
   | { done: true; node: DriveNode }
@@ -70,12 +72,5 @@ export function isDriveId(raw: unknown): raw is string {
   return typeof raw === "string" && ID_RE.test(raw);
 }
 
-/** 附件月目录 (YYYY-MM) 的正则, 整盘令牌下在 /aioa 之下。 */
-const MONTH = "\\d{4}-\\d{2}";
+// 聊天附件所在 (Drive 绝对路径), 月目录 YYYY-MM 在它下面
 export const DRIVE_AIOA_DIR = "/aioa";
-
-/** 聊天附件所在, 网盘里只读的位置; whole 为整盘令牌 (根目录 /), 否则令牌根就是 /aioa。 */
-export function isDriveReadonly(path: string, whole: boolean): boolean {
-  if (whole) return path === DRIVE_AIOA_DIR || new RegExp(`^${DRIVE_AIOA_DIR}/${MONTH}(/|$)`).test(path);
-  return new RegExp(`^/${MONTH}(/|$)`).test(path);
-}

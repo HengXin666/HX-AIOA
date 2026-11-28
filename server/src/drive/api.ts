@@ -1,4 +1,4 @@
-import { DRIVE_NEED_UPLOAD, DRIVE_SAVE_DIR, type DriveNode, PATH_DRIVE_ATTACH, PATH_DRIVE_PASS, PATH_DRIVE_SAVE, isDriveId, normalizeDrivePath } from "@hx-aioa/protocol";
+import { DRIVE_NEED_UPLOAD, DRIVE_ROOT_DIR, DRIVE_SAVE_DIR, type DriveNode, PATH_DRIVE_ATTACH, PATH_DRIVE_PASS, PATH_DRIVE_SAVE, isDriveId, normalizeDrivePath } from "@hx-aioa/protocol";
 import { HEADER_INTERNAL_USER } from "../accounts/constants";
 import { CODE_FORBIDDEN, CODE_NOT_FOUND, ERR_FORBIDDEN, MEMO_GROUP, POST } from "../constants";
 import { OWNER, type ReqCtx, type Route, route } from "../core";
@@ -7,7 +7,8 @@ import { fail, json, readJson } from "../http";
 import { authorOf } from "../room-access";
 import { DriveFs } from "./client";
 import { signPass } from "./pass";
-import { DriveFail, failOf, guardPath, relayError } from "./relay";
+import { migrateOld, withStamp } from "./migrate";
+import { DriveFail, failOf, relayError } from "./relay";
 
 const CODE_UNAVAILABLE = "drive_unavailable";
 const FALLBACK_MIME = "application/octet-stream";
@@ -32,9 +33,15 @@ async function guarded(c: ReqCtx, run: (fs: DriveFs, b: Record<string, unknown>)
   }
 }
 
-/** 换网盘通行证 (1 小时), 之后的网盘请求由 Worker 验它, 不再进 DO。 */
+/** 换网盘通行证 (1 小时), 之后的网盘请求由 Worker 验它, 不再进 DO; 顺带把旧位置的东西迁进网盘根 (#158)。 */
 const pass = (c: ReqCtx) =>
-  guarded(c, async (fs) => json({ ...(await signPass(c.core.env, (c.who.owner && c.who.user?.id) || "owner")), root: fs.root, whole: fs.whole }));
+  guarded(c, async (fs) => {
+    const migrated = await migrateOld(fs.unscoped()).catch((e: unknown) => (console.error("网盘迁移失败:", e), 0));
+    return json({ ...(await signPass(c.core.env, (c.who.owner && c.who.user?.id) || "owner")), root: fs.root, whole: fs.whole, migrated });
+  });
+
+/** 网盘内路径换成令牌根下的路径 (给令牌根视角的客户端用)。 */
+const tokenPath = (rel: string): string => (rel === "/" ? DRIVE_ROOT_DIR : `${DRIVE_ROOT_DIR}${rel}`);
 
 /** 在 dir 下按 name 复制节点; 重名时换成 "名字 (时间)" 再试一次。复制不了返回 null。 */
 async function copyInto(fs: DriveFs, id: string, dir: string, name: string): Promise<DriveNode | null> {
@@ -47,12 +54,6 @@ async function copyInto(fs: DriveFs, id: string, dir: string, name: string): Pro
     if (res.status !== 409) throw await failOf(res);
   }
   throw new DriveFail(409, "目标文件夹里已有同名文件");
-}
-
-function withStamp(name: string): string {
-  const dot = name.lastIndexOf(".");
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
-  return dot > 0 ? `${name.slice(0, dot)} (${stamp})${name.slice(dot)}` : `${name} (${stamp})`;
 }
 
 /** R2 上的聊天文件 (95 MB 以内) 由服务端直接转给 Drive, 手机不用先下载再上传 (#157); R2 里没有返回 null。 */
@@ -79,12 +80,12 @@ const save = (c: ReqCtx) =>
     if (!row?.done) return fail(404, "文件不存在或还没传完", CODE_NOT_FOUND);
     const dir = normalizeDrivePath(b.path ?? DRIVE_SAVE_DIR);
     if (!dir) return fail(400, "路径不合法");
-    guardPath(fs, dir);
     if (row.store !== "cfd" || !row.ext) {
       const node = row.store === "r2" ? await fromR2(c.core.files, fs, row, dir) : null;
       return node ? json({ node, path: dir }) : needUpload("文件不在服务端存储里, 需要从手机上传");
     }
-    const node = await copyInto(fs, row.ext, dir, row.name);
+    // 附件节点在网盘根外, 要用令牌根视角复制, 目标换算成令牌根下的网盘路径
+    const node = await copyInto(fs.unscoped(), row.ext, tokenPath(dir), row.name);
     return node ? json({ node, path: dir }) : needUpload("网盘令牌看不到这个文件, 需要从手机上传");
   });
 
@@ -98,10 +99,11 @@ const attach = (c: ReqCtx) =>
     const node = (await st.json<{ node: DriveNode }>()).node;
     if (node.kind !== "file") return fail(400, "只能发文件");
     const grp = typeof b.channel === "string" && b.channel ? b.channel : MEMO_GROUP;
-    const dir = fs.attachDir();
+    const root = fs.unscoped();
+    const dir = root.attachDir();
     if (!dir) return needUpload("附件目录不在网盘令牌范围内, 需要从手机上传");
     const ref = c.core.files.create(grp, node.name, node.size, node.mime || FALLBACK_MIME, authorOf(c.core, c.who) ?? "owner", "cfd");
-    const copied = await copyInto(fs, node.id, dir, driveName(ref.id, node.name));
+    const copied = await copyInto(root, node.id, dir, driveName(ref.id, node.name));
     // 没登记完的行由每天的清理删掉
     if (!copied) return needUpload("附件目录不在网盘令牌范围内, 需要从手机上传");
     c.core.files.done(ref.id, node.size, copied.id);
