@@ -5,6 +5,7 @@ import { FileStore } from "./files/store";
 import { mailIn } from "./mail/ingest";
 import { MailStore } from "./mail/store";
 import { Market } from "./plugins/market";
+import { attClient, clientOfAtt, spaceFor } from "./plugins/client";
 import { TodoStore } from "./plugins/todos";
 import { TranslateStore } from "./translate/store";
 import { GhService } from "./gh/service";
@@ -79,7 +80,7 @@ import { MetricRouter, isProbe } from "./metrics";
 import { Pipeline } from "./pipeline";
 import { Registry } from "./registry";
 import { SenderStore } from "./senders";
-import { type Attachment, Sockets, attOf, sendFrame } from "./sockets";
+import { type Attachment, Sockets, attOf, foregroundOn, sendFrame } from "./sockets";
 import { EventStore, groupOf } from "./store";
 import { RoomStore } from "./rooms";
 import { joinRoom, profileChanged } from "./api-rooms";
@@ -90,6 +91,8 @@ import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
 import { Timers } from "./timers";
+import { WebPush } from "./webpush/service";
+import { WebPushStore } from "./webpush/store";
 const TERM_SOURCE = "终端";
 
 // 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
@@ -134,7 +137,10 @@ export class Hub extends DurableObject<Env> {
     const chats = new ChatStore(sql);
     const presence = new Presence(sockets, chats, rooms);
     const parts = pluginParts(sql, () => users.ownerId());
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), remind: newRemind(() => this.core, parts.pdata, this.timers, ctx.storage), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    // Web Push 只发给没有前台长连接的浏览器设备
+    const webpush = new WebPush(env, new WebPushStore(sql), (d) => foregroundOn(every(), d), () => users.ownerId());
+    pipeline.webpush = webpush;
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, webpush, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), remind: newRemind(() => this.core, parts.pdata, this.timers, ctx.storage), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -189,6 +195,7 @@ export class Hub extends DurableObject<Env> {
       this.accounts.onDelete = (uid) => {
         this.core.rooms.forget(uid);
         this.core.chats.reads.forget(uid);
+        this.core.webpush.store.forget(uid);
       };
       this.accounts.onProfile = (uid) => profileChanged(this.core, uid);
       this.accounts.onRetire = (uid) => retireDev(this.core, uid);
@@ -281,6 +288,7 @@ export class Hub extends DurableObject<Env> {
     if (uid) att.uid = uid;
     if (!who.owner && who.member) att.member = true;
     if (device.startsWith(BG_DEVICE_PREFIX)) att.bg = true;
+    Object.assign(att, attClient(url));
     server.serializeAttachment(att);
     this.core.sockets.reset();
 
@@ -318,7 +326,9 @@ export class Hub extends DurableObject<Env> {
     // 装过的主机 (含离线) 一连上就给, 总览不必等到有在线探针才看得到它们
     sendFrame(server, this.core.metrics.hostsFrame());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
-    if (v1) for (const space of await this.core.spaces.list()) sendFrame(server, { t: "space_update", id: space.id, space });
+    // 插件工作台按端给 (#156): 不支持的端不给, 组件级 clients 按端裁剪
+    const spaces = v1 ? (await this.core.spaces.list()).map((sp) => spaceFor(this.core, sp, clientOfAtt(att))) : [];
+    for (const space of spaces) if (space) sendFrame(server, { t: "space_update", id: space.id, space });
     if (Number.isFinite(since)) {
       const evs = (resync ? this.core.store.recent(HISTORY_MAX_LIMIT) : this.core.store.since(since, HISTORY_MAX_LIMIT)).filter((ev) => ownerSees(this.core, groupOf(ev) ?? ""));
       for (const ev of evs) sendFrame(server, v1 ? { t: "ev", ev } : toMsgFrame(ev));

@@ -1,4 +1,4 @@
-import { type Envelope, type HostCard, type StreamRole, globMatch } from "@hx-aioa/protocol";
+import { type ClientKind, type Envelope, type HostCard, type StreamRole, globMatch } from "@hx-aioa/protocol";
 import { groupOf } from "./store";
 import { PROTO_LEGACY, PROTO_V1 } from "./constants";
 import { toMsgFrame } from "./legacy";
@@ -24,6 +24,9 @@ export type Attachment = {
   // role=chat (CLI 长连): 能读的群 (通配) 与显示名
   reads?: string[];
   name?: string;
+  // 握手时带的端与构建号 (#156), 插件界面按它过滤; 老客户端不带
+  client?: ClientKind;
+  cb?: number;
 };
 
 export function trySend(ws: WebSocket, text: string): boolean {
@@ -44,6 +47,14 @@ const OWNER_KEY = "";
 type Index = { owner: Conn[]; byUid: Map<string, Conn[]> };
 
 // 连接分组与广播: 全部状态在 attachment 里, 休眠唤醒后照样可用
+// 该设备有前台长连接 (页面开着); 安卓后台连接不算
+export function foregroundOn(list: WebSocket[], device: string): boolean {
+  return list.some((ws) => {
+    const a = attOf(ws);
+    return a.device === device && a.role === "client" && !a.bg;
+  });
+}
+
 export class Sockets {
   private index: Index | null = null;
 
@@ -159,6 +170,21 @@ export class Sockets {
   toV1Clients(frame: unknown): void {
     const text = JSON.stringify(frame);
     for (const { ws, a } of this.idx().owner) if (a.proto === PROTO_V1) trySend(ws, text);
+  }
+
+  /** 同 toV1Clients, 但按连接出帧 (如按端裁剪工作台); 同一端同一构建号只算一次, 返回 null 的不发。 */
+  toV1ClientsBy(frameOf: (a: Attachment) => unknown): void {
+    const memo = new Map<string, string | null>();
+    for (const { ws, a } of this.idx().owner) {
+      if (a.proto !== PROTO_V1) continue;
+      const key = `${a.client ?? ""}:${a.cb ?? ""}`;
+      if (!memo.has(key)) {
+        const f = frameOf(a);
+        memo.set(key, f === null ? null : JSON.stringify(f));
+      }
+      const text = memo.get(key);
+      if (text) trySend(ws, text);
+    }
   }
 
   // 群资料变化之类所有人都该知道的轻量通知

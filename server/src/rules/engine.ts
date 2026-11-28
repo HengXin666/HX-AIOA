@@ -3,7 +3,7 @@ import { BUILTIN_RULES } from "./builtin";
 import { inWindow } from "./window";
 
 export const DEFAULT_AGGREGATE_SEC = 300;
-export const PUSH_CHANNELS: DeliveryChannel[] = ["ws", "mipush", "wxpusher"];
+export const PUSH_CHANNELS: DeliveryChannel[] = ["ws", "mipush", "wxpusher", "webpush"];
 const QUIET_CHANNELS: DeliveryChannel[] = ["ws"];
 const RINGING: RuleAction[] = ["alert", "push"];
 

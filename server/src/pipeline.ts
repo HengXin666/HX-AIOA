@@ -34,11 +34,12 @@ import type { SenderStore } from "./senders";
 import type { Sockets } from "./sockets";
 import { EventStore } from "./store";
 import type { Timers } from "./timers";
+import type { WebPush } from "./webpush/service";
 
 type Bucket = { count: number; title: string; rule?: string; subject?: string; channels: DeliveryChannel[] };
 type Origin = { source: SourceRef; sourceInfo?: SourceInfo | null; cid?: string; by?: string };
 
-const FALLBACK: DeliveryChannel[] = ["mipush", "wxpusher"];
+const FALLBACK: DeliveryChannel[] = ["mipush", "wxpusher", "webpush"];
 const ringing = (r: RouteInfo | undefined) => r !== undefined && (r.action === "alert" || r.action === "push");
 
 // 事件处理层: 补全信封 -> 去重覆盖 -> 根因与同类 -> 规则 -> 入库 -> 分发
@@ -54,6 +55,13 @@ export class Pipeline {
     private readonly files?: FileStore,
     readonly senders?: SenderStore,
   ) {}
+
+  // Hub 建好后挂上; 测试里不挂就没有 Web Push
+  webpush?: WebPush;
+
+  private fallbackOn(): boolean {
+    return hasFallback(this.env) || Boolean(this.webpush?.ready());
+  }
 
   // 外部写入: EventInput + 来源 -> 信封
   async fromInput(input: EventInput, origin: Origin, fixed?: RouteInfo): Promise<Envelope> {
@@ -133,7 +141,7 @@ export class Pipeline {
   }
 
   private async armFallback(seq: number): Promise<void> {
-    if (!hasFallback(this.env)) return;
+    if (!this.fallbackOn()) return;
     this.waiting = true;
     if (this.ackedMem) await this.storage.put(KEY_ACKED_SEQ, this.ackedMem);
     await this.storage.put(KEY_PENDING_SEQ, seq);
@@ -157,6 +165,9 @@ export class Pipeline {
       pushToken: await this.storage.get<string>(KEY_PUSH_TOKEN),
       channels,
       wxUid: (await this.config.settings()).wxpusherUid,
+      last,
+      urgent: missed.some((e) => e.route?.action === "alert"),
+      web: this.webpush,
     });
   }
 

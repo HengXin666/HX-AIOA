@@ -1,6 +1,7 @@
-import type { DeliveryChannel } from "@hx-aioa/protocol";
+import type { DeliveryChannel, Envelope } from "@hx-aioa/protocol";
 import { MIPUSH_ENDPOINT, PUSH_TITLE, WXPUSHER_ENDPOINT } from "./constants";
 import type { Env } from "./env";
+import type { WebPush } from "./webpush/service";
 
 export type FallbackJob = {
   preview: string;
@@ -8,6 +9,10 @@ export type FallbackJob = {
   pushToken: string | undefined;
   channels: Set<DeliveryChannel>;
   wxUid: string | undefined;
+  // Web Push 要最后一条的群与 seq; 有 alert 时用 high 紧急度
+  last: Envelope;
+  urgent: boolean;
+  web?: WebPush | undefined;
 };
 
 export function hasFallback(env: Env): boolean {
@@ -23,6 +28,9 @@ export async function sendFallback(env: Env, job: FallbackJob): Promise<void> {
   const uid = job.wxUid || env.WXPUSHER_UID;
   if (job.channels.has("wxpusher") && env.WXPUSHER_APP_TOKEN && uid) {
     tasks.push(wxPusher(env.WXPUSHER_APP_TOKEN, uid, text));
+  }
+  if (job.channels.has("webpush") && job.web?.ready()) {
+    tasks.push(job.web.send(job.last, job.count, job.urgent).then((r) => void (r.dropped && console.log("Web Push 订阅失效已删:", r.dropped))));
   }
   const results = await Promise.allSettled(tasks);
   for (const r of results) {

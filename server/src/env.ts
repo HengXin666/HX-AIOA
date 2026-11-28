@@ -9,6 +9,10 @@ export interface Env {
   MIPUSH_PACKAGE?: string;
   WXPUSHER_APP_TOKEN?: string;
   WXPUSHER_UID?: string;
+  // 可选, Web Push (VAPID): 公钥 (未压缩点 base64url), 私钥 (base64url 的 d 或 JWK), 主体 (mailto: 或 https:); 三项缺一就不提供
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
   GITHUB_TOKEN?: string;
   // 所有变量的说明, 级别与归属见 docs/deploy/env.md, 改这里要同步改那张表
   // GitHub 授权插件的设备码流程: id 和 secret 一起配, secret 用于 8 小时到期后续期

@@ -49,6 +49,9 @@
 | `MIPUSH_PACKAGE` | 手动 | 可选 | 安卓包名 |
 | `WXPUSHER_APP_TOKEN` | 手动 | 可选 | WxPusher 应用 token, 和 `WXPUSHER_UID` 一起配 |
 | `WXPUSHER_UID` | 手动 | 可选 | WxPusher 用户 UID |
+| `VAPID_PUBLIC_KEY` | `VAPID_PUBLIC_KEY` (variable) | 可选 | Web Push 公钥 (未压缩 P-256 点, base64url), 用 `node tools/gen-vapid.mjs` 生成, 三项一起配, 见 [web/push.md](web/push.md)。缺任一项 Web 端没有浏览器推送, `GET /api/v1/webpush/key` 返回 null |
+| `VAPID_PRIVATE_KEY` | `VAPID_PRIVATE_KEY` (secret) | 可选 | Web Push 私钥: base64url 的 `d`, 或整个 JWK。换了它所有浏览器订阅作废 |
+| `VAPID_SUBJECT` | `VAPID_SUBJECT` (variable) | 可选 | VAPID 联系方式, `mailto:` 或 `https:` 地址, 推送服务出问题时联系你 |
 
 ## 插件携带
 

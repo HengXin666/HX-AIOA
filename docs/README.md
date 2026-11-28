@@ -47,6 +47,7 @@
 | [cloudflare.md](deploy/cloudflare.md) | 服务端部署 (Workers, 密钥, CI) |
 | [cf-usage.md](deploy/cf-usage.md) | CF 额度页与免费额度 |
 | [android/signing.md](deploy/android/signing.md) | 安卓签名与自动发布 |
+| [web/push.md](deploy/web/push.md) | Web Push: 生成 VAPID 密钥, 配置, 何时发, 限制 (浏览器没运行收不到, Chrome 走 FCM, iOS 要添加到主屏幕) |
 | [android/update-proxy.md](deploy/android/update-proxy.md) | 安卓自动更新与订阅代理 |
 
 ## 客户端开发 `client/`

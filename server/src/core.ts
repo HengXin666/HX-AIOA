@@ -25,6 +25,7 @@ import type { Spaces } from "./spaces";
 import type { Terminals } from "./terminal";
 import type { RoomStore } from "./rooms";
 import type { EventStore } from "./store";
+import type { WebPush } from "./webpush/service";
 
 // AUTH_TOKEN 视为母号的全权限凭证; 接入 key 只写不读, 按 scope 授权
 // 账号登录的设备在自己的 DO 里同样视为 owner, user / session 用于审计与踢下线
@@ -47,6 +48,8 @@ export type Core = {
   // 谁在监听 / 输入, 只在内存
   presence: Presence;
   rooms: RoomStore;
+  // 浏览器订阅与 Web Push 发送 (W3)
+  webpush: WebPush;
   files: FileStore;
   migrator: Migrator;
   plugins: PluginStore;

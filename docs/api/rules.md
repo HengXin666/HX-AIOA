@@ -31,7 +31,7 @@
 | `aggregate` | 聚合后推送: 窗口 (`aggregateSec`, 默认 300) 内的同类事件静默入库, 窗口结束推一条 "N 条 xxx" | 是 (不提醒) | 窗口结束时 | 是 |
 | `drop` | 不推但保留 (可在时间线 "已过滤" 中查到) | 否 | 否 | 否 |
 
-- `channels` (投递渠道): `ws` (长连接), `mipush`, `wxpusher`, `next_open` (不实时推, 下次打开 / 重连时补拉看到)。不写时 `alert`/`push` 为 `["ws","mipush","wxpusher"]`。兜底推送仅在安卓设备 1.5 秒内未 ack 时发出。
+- `channels` (投递渠道): `ws` (长连接), `mipush`, `wxpusher`, `webpush` (浏览器推送, 见 [deploy/web/push.md](../deploy/web/push.md)), `next_open` (不实时推, 下次打开 / 重连时补拉看到)。不写时 `alert`/`push` 为 `["ws","mipush","wxpusher","webpush"]`; 自己写了 `channels` 的规则要 Web Push 需手动加 `webpush`。兜底推送仅在安卓设备 1.5 秒内未 ack 时发出。
 - 降噪, 只作用于 `alert`/`push`, 降级后动作为 `silent` 且 `route.reason` 写明原因:
   1. 免打扰: 设置里的 `quiet` (同 `window` 格式) 时段内降级, 除非规则 `bypassQuiet: true`。
   2. 关联事件只推根因: 同 `groupKey` 已有未闭环的根因 (6 小时内) 时降级, `route.merged` 为组内已有条数。

@@ -13,7 +13,7 @@ test("内置规则: need_me 强提醒, worth_reading 只进摘要, 其余普通�
   assert.equal(decide(ev({ priority: "worth_reading" }), none, ctx).action, "digest");
   const r = decide(ev(), none, ctx);
   assert.equal(r.action, "push");
-  assert.deepEqual(r.channels, ["ws", "mipush", "wxpusher"]);
+  assert.deepEqual(r.channels, ["ws", "mipush", "wxpusher", "webpush"]);
   assert.equal(r.rule, "builtin:default");
 });
 

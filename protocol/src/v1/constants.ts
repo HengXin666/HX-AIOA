@@ -33,7 +33,7 @@ export type Scope = (typeof SCOPES)[number];
 export const RULE_ACTIONS = ["alert", "push", "silent", "digest", "aggregate", "drop"] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
 
-export const DELIVERY_CHANNELS = ["ws", "mipush", "wxpusher", "next_open"] as const;
+export const DELIVERY_CHANNELS = ["ws", "mipush", "wxpusher", "webpush", "next_open"] as const;
 export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
 
 export const USER_ACTION_KINDS = ["reply", "approve", "reject", "cancel", "ask"] as const;

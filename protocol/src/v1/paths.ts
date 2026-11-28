@@ -84,3 +84,6 @@ export const PATH_SHELL_TICKET = `${API_V1}/shell/ticket`;
 export const PATH_CF_USAGE = `${API_V1}/cf/usage`;
 export const PATH_CF_ZONES = `${API_V1}/cf/zones`;
 export const PATH_CF_STORAGE = `${API_V1}/cf/storage`;
+// Web Push (W3): 取 VAPID 公钥; 每个 Web 设备 PUT 订阅 / DELETE 取消
+export const PATH_WEBPUSH_KEY = `${API_V1}/webpush/key`;
+export const PATH_DEVICE_WEBPUSH = `${API_V1}/devices/{device}/webpush`;

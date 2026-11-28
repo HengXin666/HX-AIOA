@@ -186,6 +186,25 @@ jobs:
           printf '%s' "$AIOA_TR_KEY" | npx wrangler secret put AZURE_TRANSLATOR_KEY
           if [ -n "$AIOA_TR_REGION" ]; then printf '%s' "$AIOA_TR_REGION" | npx wrangler secret put AZURE_TRANSLATOR_REGION; fi
 
+      # 可选: Web Push 的 VAPID 三项 (变量 VAPID_PUBLIC_KEY / VAPID_SUBJECT, secret VAPID_PRIVATE_KEY) 一起配才同步, 见 docs/deploy/web/push.md
+      - name: 同步 Web Push 密钥
+        env:
+          AIOA_VAPID_PUBLIC: ${{ vars.VAPID_PUBLIC_KEY }}
+          AIOA_VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          AIOA_VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AIOA_VAPID_PUBLIC" ] && [ -z "$AIOA_VAPID_SUBJECT" ] && [ -z "$AIOA_VAPID_PRIVATE" ]; then
+            echo "未配置 VAPID, 跳过, Web 端没有浏览器推送, 只靠 WebSocket"
+            exit 0
+          fi
+          if [ -z "$AIOA_VAPID_PUBLIC" ] || [ -z "$AIOA_VAPID_SUBJECT" ] || [ -z "$AIOA_VAPID_PRIVATE" ]; then
+            echo "::error::VAPID_PUBLIC_KEY, VAPID_SUBJECT (variable) 和 VAPID_PRIVATE_KEY (secret) 必须一起配。见 docs/deploy/web/push.md"
+            exit 1
+          fi
+          printf %s "$AIOA_VAPID_PUBLIC" | npx wrangler secret put VAPID_PUBLIC_KEY
+          printf %s "$AIOA_VAPID_SUBJECT" | npx wrangler secret put VAPID_SUBJECT
+          printf %s "$AIOA_VAPID_PRIVATE" | npx wrangler secret put VAPID_PRIVATE_KEY
+
       # 可选: 配置了 SETUP_CODE secret 时同步到 Worker, 首次 POST /api/v1/setup 建母号要用
       - name: 同步母号初始化口令
         env:
