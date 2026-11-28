@@ -11,7 +11,10 @@
 ## 1. 三道门
 
 - key 带 `probe:agent` (protocol `SCOPES` 新增; 添加主机时可勾 "Agent")。
-- 探针本地 `AIOA_AGENT=1` 才加载 `tools/probe-agent.mjs`, 并在 host info 里声明 `agent: { port, v: 1 }`。
+- 探针本地 `AIOA_AGENT=1` 才加载 `tools/probe-agent.mjs`, 并在 host info 里声明 `agent: { port, v: 1, routes }`。
+- 本地开了但 key 缺 `probe:agent`: Hub 不静默删掉, host info (含离线快照) 与 `ag_hosts` 里留 `agent: { port, v, routes: [], denied: "scope" }` / `{ subject, online, routes: [], sessions: [], denied: "scope" }`; `denied` 只由 Hub 写, 有 scope 的探针自报 denied 当没声明。protocol `parseAgHostInfo` 放行 `{ denied: "scope" }` (port / v 缺省 0)。
+- 补开: `POST /api/v1/probes/{id}/scope` (`PATH_PROBE_SCOPE`, 仅主账号), `{id}` = 主机名 (subject) 或 key id; 请求 `{ "add": ["probe:agent"] }` (目前只认这一项, 别的 400); 没有这台主机的 probe key 404; 回 `{ "ok": true }`。scope 存在服务端 key 记录里, key 不变, 所以不重签发, 也不回 `key` / `command` (类型里 `key?` 留作以后需要重签发时用, Web 有 key 才给重装命令); 原安装命令继续可用。改完 Hub 以 close code 4010 断开用这把 key 连着的探针, 探针 1 秒后自动重连并带上新 scope, `denied` 随之消失。
+- 安装: `install.sh --agent-listen <地址:端口>` 写入 `AIOA_AGENT_LISTEN` (隐含 `--agent`), 如 `--agent-listen 0.0.0.0:7841` 开局域网。
 - 只有主账号能配对, 配对要密码 (与终端票据共用 5 次错锁 5 分钟)。
 
 ## 2. 直连 (浏览器 <-> 探针)
@@ -31,6 +34,7 @@ WS: `GET /ws` (升级)。探针用 Node 内置模块自己实现 RFC 6455 服务
 -> { "t": "ready", "device": "d1", "host": "pc", "sessions": [SessionInfo...], "instances": [Instance...], "settings": Settings }
    签名错: { "t": "error", "code": "auth", "msg": "..." } 后关闭
 ```
+Web 连接状态 (仅 Web 内部, 不上线): `noroute` = 主机没有路线或全被过滤 (非本机设备过滤 127.0.0.1, https 页面下 http/ws 局域网路线不可用), 显示 "此设备只能用审批模式"; `unreachable` = 可试的路线连续 3 轮都不通, 转慢速重试并引导到收件箱 (审批模式)。
 设备密钥: Web 用 WebCrypto 生成 ECDSA P-256 不可导出私钥, 存 IndexedDB; 设备 id = 公钥 JWK 的 SHA-256 前 16 位 hex。签名用 WebCrypto 原生格式 (IEEE P1363, r||s 64 字节), 探针用 `crypto.verify("sha256", nonce, { key, format: "jwk", dsaEncoding: "ieee-p1363" }, sig)` 验证。
 
 帧 (客户端 -> 探针):
@@ -53,6 +57,10 @@ WS: `GET /ws` (升级)。探针用 Node 内置模块自己实现 RFC 6455 服务
 { "t": "session", "info": SessionInfo }                              // 会话状态变化 (建, 运行, 等你, 完成, 出错, 关闭)
 { "t": "stats", "sid": "s1", "ctx": [53000, 200000], "tps": 61, "est": true, "hit": 0.82, "cost": 0.045, "in": 0, "out": 0, "cr": 0, "cw": 0, "ms": 0 }   // 每秒最多一帧, 只发给附着者
 { "t": "hx_res", "id": 8, "ok": true, "r": {...} } / { "t": "hx_res", "id": 8, "ok": false, "err": "..." }
+{ "t": "error", "code": "auth_required", "msg": "Authentication required", "methods": [AuthMethod...], "instance": "claude", "sid"?: "s1", "id": 8 }
+    // session/create 或 session/resume 时 Agent 要求先登录 (ACP 错误码 -32000 或错误文本像 auth required, 且 initialize 回了非空 authMethods):
+    // methods 是 initialize 的 authMethods 原样 (ACP AuthMethod: { id, name, description?, ... }); instance 总带; 恢复已有会话时带 sid (新建时没有);
+    // id 是触发它的 hx 请求 id; 紧接着该 hx 请求回 ok:false。探针把那个 Agent 进程留 10 分钟等 agent/authenticate (同一实例只留最新一个)
 ```
 
 `hx` 方法:
@@ -73,6 +81,7 @@ WS: `GET /ws` (升级)。探针用 Node 内置模块自己实现 RFC 6455 服务
 | `fs/read` | `{ sid, path }` | `{ text, truncated }` (最多 256 KB) |
 | `tool/output` | `{ sid, toolCallId }` | `{ content }` (工具完整原始输出, 时间线展开才取) |
 | `dirs/recent` | `{}` | `{ dirs: string[] }` |
+| `agent/authenticate` | `{ instance, methodId, sid? }` | 有等登录的进程: 在它上面调 ACP `authenticate { methodId }` (最长 5 分钟), 成功后重试原来的 session/new (或恢复), 回 `SessionInfo` (新建的会话此时才进列表并广播 `session`); 重试又要求登录则再发 `auth_required`。没有等登录的进程: 起临时进程 initialize + authenticate 后退出, 回 `{ authenticated: true }`, 客户端再 `session/create`。methodId 不在 authMethods 里报错 (进程仍留着可换方式) |
 
 类型:
 ```ts
@@ -107,17 +116,26 @@ type Card = {
 
 ```
 // 探针 -> Hub
-{ "t": "ag_index", "sessions": [ { id, agent, title, state, ctx, pending, updated } ] }   // 状态变化时, 5 秒合并; Hub 只放内存 (attachment / 内存表), 重连重报
+{ "t": "ag_index", "sessions": [ { id, agent, title, state, ctx, pending, updated } ] }
+    // 只在 会话增删 / state / pending / title / ctx 跨档 变化时上报 (比较时不看 updated 与顺序; git/status 的 adds/dels, mode/config 回包, usage_update 不触发);
+    // ctx 只报分档下限: <50% 报 0, 其余 0.5 / 0.8 / 0.95; trailing 合并: 每次变化推后 5 秒, 离第一次变化最迟 20 秒; 变了又变回去不发;
+    // Hub 只放内存, 重连 / 收到 ag_reindex 立刻全量重报; Hub 收到只有 updated 不同的索引不广播 ag_hosts
 { "t": "ag_req", "card": Card }                       // 每个权限请求都发; card.quiet 为真 = 有前台客户端附着该会话
-{ "t": "ag_unreq", "sid", "rid", "by": "desktop|agent" }   // 直连端答了或 Agent 取消了
+{ "t": "ag_unreq", "sid", "rid", "by": "desktop|agent" }   // 直连端答了或 Agent 取消了; 只对发过 ag_req 的请求发 ("不推" 下没发过的不发)
+    // 以探针为准: Hub 即使已按别的端收掉, 也改正 by 并重新广播 ag_unreq
+{ "t": "ag_ack", "aid", "sid", "rid", "by": "hub|desktop|agent" }   // 对每个 ag_answer 的确认; hub = 这次答复生效, 否则实际由 by 答复 / 撤回
 { "t": "ag_paired", "pid": "<配对请求 id>", "ok": true, "device": Device, "pub": JWK, "routes": [Route] } / { ..., "ok": false, "err": "..." }
 // Hub -> 探针
 { "t": "ag_pair", "pid": "...", "device": { id, name, pub } }
 { "t": "ag_answer", "aid": "a_x", "sid", "rid", "option": "..." | null, "text": "" }
+{ "t": "ag_reindex" }   // DO 休眠醒来: 首次有客户端 welcome 时, 对内存里还没有索引的在线 Agent 探针各发一次 (每次 DO 生命周期每台一次); 探针立刻回 ag_index
 // Hub -> 客户端 (只发给主账号的客户端连接)
 { "t": "ag_hosts", "hosts": [ { subject, online, routes, sessions } ] }   // 客户端连上时, 以及索引变化时
 { "t": "ag_req", "card": Card }
-{ "t": "ag_unreq", "host", "sid", "rid", "by": "desktop|phone|web|agent" }
+{ "t": "ag_unreq", "host", "sid", "rid", "by": "desktop|phone|web|agent" }   // 同一 rid 可能来第二次 (by 被探针改正), 以最后一次为准
+{ "t": "ag_answered", "aid", "host", "sid", "rid", "ok": true|false, "by": "desktop|phone|web|agent" }
+    // 只发给答题的那一端 (按设备): 探针 ag_ack 后回告; ok=false = 答晚了, 实际由 by 答复 / 撤回, 这端的选择没生效;
+    // Hub 等 ack 只在内存 (30 秒), DO 休眠丢了就只有 ag_unreq 广播改正
 // 客户端 -> Hub
 { "t": "ag_answer", "aid": "<客户端生成, 幂等>", "host", "sid", "rid", "option": "..." | null, "text": "" }
 ```
@@ -127,7 +145,7 @@ HTTP:
 - `POST /api/agent-gui/pair` `{ subject, password, device: { id, name, pub } }` (主账号) -> Hub 校验密码 (复用 shellTicket 的错锁) -> 发 `ag_pair` 给该主机探针 -> 等 `ag_paired` (10 秒超时) -> `{ host, pub, routes, device }`。
 - `GET /api/agent-gui/inbox` -> `{ cards: Card[] (未答, 按 at 升序), hosts: [...] }`, 离线回来补拉用。
 
-Hub 存储: SQL 表 `agent_gui_req (host, rid, sid, card TEXT, state 'open'|'done', by, at, done_at)`, 主键 (host, rid); 答复或撤回置 done 并广播 `ag_unreq`; 先答先得 (第二个答复返回 `ag_unreq` 给它); 24 小时后清理 done 行, 7 天清理 open 行。推送: 复用现有 webpush, `quiet` 为真时发静默通知 (silent), 60 秒后探针会以 `quiet: false` 重发同一 rid (Hub 视为更新, 补一次正常推送); 已 done 的 rid 不再推。通知点进来到 `#/agent/gui/<host>/<sid>`。
+Hub 存储: SQL 表 `agent_gui_req (host, rid, sid, card TEXT, state 'open'|'done', by, at, done_at)`, 主键 (host, rid); 答复或撤回置 done 并广播 `ag_unreq`; 先答先得 (第二个答复返回 `ag_unreq` 给它), 但最终以探针为准 (`ag_ack` / 探针 `ag_unreq` 可改正 by, 见上); 24 小时后清理 done 行, 7 天清理 open 行。推送: 复用现有 webpush, `quiet` 为真时发静默通知 (silent), 60 秒后探针会以 `quiet: false` 重发同一 rid (Hub 视为更新, 补一次正常推送; 卡片与 loud 标记同一次写); 已 done 的 rid 不再推。通知点进来到 `#/agent/gui/<host>/<sid>`。
 
 ## 4. Web
 

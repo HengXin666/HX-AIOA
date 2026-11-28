@@ -12,6 +12,7 @@ import type { PluginKernel } from "./plugins/kernel";
 import type { PDataStore } from "./plugins/pdata";
 import type { KeyInfo, Scope, UserPublic } from "@hx-aioa/protocol";
 import type { AgentService } from "./agents";
+import type { AgentGui } from "./agent-gui";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
 import type { Env } from "./env";
@@ -68,6 +69,8 @@ export type Core = {
   market: Market;
   users: Users;
   terms: Terminals;
+  // Agent GUI (#126): 会话索引, 待审批卡片, 配对转发
+  agentGui: AgentGui;
   // 账号密码复核 (终端票据用), 只有主 Hub 有账号目录
   checkPassword: (userId: string, password: string) => Promise<boolean>;
   // 本 DO 数据库当前大小 (字节)

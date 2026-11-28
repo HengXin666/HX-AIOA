@@ -10,6 +10,7 @@ curl -fsSL -A hx-aioa-agent/1 https://你的域名/install.sh | sh -s -- --serve
 
 - `install.sh`, `probe.mjs`, `probe-term.mjs` 由 Worker 静态资源提供 (`server/public/`, 部署时从 `tools/` 复制), 不进 Worker, 不计请求额度。
 - 需要 Node 22+; 终端还需要 python3。
+- `--agent` 开启 Agent GUI, 已装主机只给 `--agent` 重跑即可沿用原配置, 见 [agent-gui.md](agent-gui.md)。
 - root 安装到 `/opt/hx-aioa-probe` + 系统 systemd 服务; 普通用户安装到 `~/.local/share/hx-aioa-probe` + 用户级服务 (退出登录后继续跑需要 `loginctl enable-linger`)。没有 systemd 时后台运行。
 - 配置文件 `env` 权限 600。卸载: 同一条命令把参数换成 `--uninstall`, 再在 App 里删掉 key。
 - 自定义 UA `hx-aioa-agent/1` 是为了不被 CF 的机器人防护拦下。

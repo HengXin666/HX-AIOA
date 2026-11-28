@@ -61,10 +61,14 @@ export class WebPush {
   }
 
   async send(last: Envelope, count: number, urgent: boolean): Promise<WebPushResult> {
+    return this.notify(payloadOf(last, count), urgent);
+  }
+
+  /** 发任意通知 (如 Agent GUI 审批); 同样跳过开着页面的设备。 */
+  async notify(payload: WebPushPayload, urgent: boolean): Promise<WebPushResult> {
     const r: WebPushResult = { sent: 0, dropped: 0, skipped: 0, failed: 0 };
     if (!WebPush.configured(this.env)) return r;
     this.signer ??= new VapidSigner(this.env.VAPID_PUBLIC_KEY!, this.env.VAPID_PRIVATE_KEY!, this.env.VAPID_SUBJECT!);
-    const payload = payloadOf(last, count);
     const plain = enc.encode(JSON.stringify(payload));
     const topic = await topicOf(payload.tag);
     const rows = this.store.list(this.ownerId()).filter((row) => {

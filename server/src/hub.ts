@@ -38,7 +38,6 @@ import { handleAccounts } from "./accounts/api";
 import { HEADER_INTERNAL_USER, KICK_CODE, KICK_REASON, SESSION_TAG_PREFIX } from "./accounts/constants";
 import { Accounts, type Session } from "./accounts/service";
 import { verifyPassword } from "./accounts/crypto";
-import { messageInput } from "./api-events";
 import { credentialOf } from "./auth";
 import { AgentService } from "./agents";
 import { handleHttp, principalOf } from "./api";
@@ -90,10 +89,11 @@ import { memberKey } from "./member";
 import { Spaces } from "./spaces";
 import { TaskStore } from "./taskstore";
 import { Terminals } from "./terminal";
+import { termAudit } from "./term-audit";
+import { agentGuiOf, isAgFrame } from "./agent-gui";
 import { Timers } from "./timers";
 import { WebPush } from "./webpush/service";
 import { WebPushStore } from "./webpush/store";
-const TERM_SOURCE = "终端";
 
 // 单实例消息中枢 (多账号落地后即每用户一个), 只用休眠 API, 空闲时不计运行时长
 export class Hub extends DurableObject<Env> {
@@ -126,7 +126,7 @@ export class Hub extends DurableObject<Env> {
     const agents = new AgentService(new TaskStore(sql), sockets, pipeline, this.timers, spaces);
     const registry = new Registry(sql);
     const github = new GithubService(env, sql, ctx.storage, registry);
-    const terms = new Terminals(all, () => env.TOKEN_SECRET || env.AUTH_TOKEN, (text, loud) => this.termAudit(text, loud));
+    const terms = new Terminals(all, () => env.TOKEN_SECRET || env.AUTH_TOKEN, (text, loud) => termAudit(this.core, text, loud));
     const checkPassword = async (id: string, pw: string) => verifyPassword(pw, this.acct().dir.passOf(id) ?? "");
     const users = {
       get: (id: string) => this.acct().dir.user(id),
@@ -140,7 +140,8 @@ export class Hub extends DurableObject<Env> {
     // Web Push 只发给没有前台长连接的浏览器设备
     const webpush = new WebPush(env, new WebPushStore(sql), (d) => foregroundOn(every(), d), () => users.ownerId());
     pipeline.webpush = webpush;
-    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, webpush, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), remind: newRemind(() => this.core, parts.pdata, this.timers, ctx.storage), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, checkPassword, dbSize: () => sql.databaseSize };
+    const agentGui = agentGuiOf(sql, all, (f) => sockets.toV1Clients(f), webpush, metrics);
+    this.core = { env, store, presence, registry, config, pipeline, agents, metrics, sockets, spaces, github, chats, rooms, webpush, files, migrator: new Migrator(ctx.storage, files, this.timers), ...parts, mail: new MailStore(sql), todos: new TodoStore(sql, parts.pdata, () => users.ownerId(), (fn) => ctx.storage.transactionSync(fn)), remind: newRemind(() => this.core, parts.pdata, this.timers, ctx.storage), tr: new TranslateStore(sql), gh: new GhService(env, sql), hxoa: new HxoaService(env, sql), market: new Market(env.PLUGIN_MARKET, sql, () => this.core.gh.token()), users, terms, agentGui, checkPassword, dbSize: () => sql.databaseSize };
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING_TEXT, PONG_TEXT));
   }
 
@@ -177,14 +178,6 @@ export class Hub extends DurableObject<Env> {
   async mailPrune(): Promise<number> {
     await heatmapDaily(this.core).catch((e) => console.error("提交热力图累计失败:", e));
     return majorRemind(this.core).catch((e) => console.error("大更新提醒失败:", e)).then(() => this.core.mail.prune());
-  }
-
-  // 终端开关记一条消息到 "终端" 群: 打开时按规则提醒, 关闭时静默
-  private async termAudit(text: string, loud: boolean): Promise<void> {
-    const input = messageInput({ text });
-    if (typeof input === "string") return;
-    const origin = { source: { id: TERM_SOURCE, name: TERM_SOURCE }, sourceInfo: null };
-    await this.core.pipeline.fromInput(input, origin, loud ? undefined : { action: "silent", channels: ["ws"], reason: "终端关闭" });
   }
 
   // 主 Hub 才有账号目录; 子号 DO 只收主 Hub 转发来的请求
@@ -284,6 +277,7 @@ export class Hub extends DurableObject<Env> {
     const att: Attachment = { device, proto: v1 ? PROTO_V1 : PROTO_LEGACY, role };
     if (!who.owner) att.keyId = who.key.id;
     if (role === "probe") att.shell = allowed(who, "probe:shell");
+    if (role === "probe" && allowed(who, "probe:agent")) att.agent = true;
     const uid = role === "client" ? authorOf(this.core, who) : undefined;
     if (uid) att.uid = uid;
     if (!who.owner && who.member) att.member = true;
@@ -326,6 +320,7 @@ export class Hub extends DurableObject<Env> {
     // 装过的主机 (含离线) 一连上就给, 总览不必等到有在线探针才看得到它们
     sendFrame(server, this.core.metrics.hostsFrame());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
+    if (v1) sendFrame(server, this.core.agentGui.welcomeFrame());
     // 插件工作台按端给 (#156): 不支持的端不给, 组件级 clients 按端裁剪
     const spaces = v1 ? (await this.core.spaces.list()).map((sp) => spaceFor(this.core, sp, clientOfAtt(att))) : [];
     for (const space of spaces) if (space) sendFrame(server, { t: "space_update", id: space.id, space });
@@ -417,6 +412,7 @@ export class Hub extends DurableObject<Env> {
     const metrics = this.core.metrics;
     if (att.member && frame.t !== "send" && frame.t !== "typing") return;
     if (att.role === "chat" && frame.t !== "typing") return;
+    if (isAgFrame(frame)) return this.core.agentGui.handle(ws, att, frame);
     switch (frame.t) {
       case "watch":
         ws.serializeAttachment({ ...att, watch: frame.subjects } satisfies Attachment);
@@ -433,7 +429,7 @@ export class Hub extends DurableObject<Env> {
         if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.relay(frame, false);
         return;
       case "host":
-        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) metrics.host(ws, att, frame);
+        if (isProbe(att) && (att.offer ?? []).includes(frame.subject)) this.core.agentGui.watchHost(ws, () => metrics.host(ws, att, frame));
         return;
       case "term_open":
       case "term_ready":
@@ -479,6 +475,7 @@ export class Hub extends DurableObject<Env> {
     if (att.host) this.core.metrics.offline(att.host);
     this.core.metrics.rebalance();
     if (att.host) this.core.metrics.broadcastHosts();
+    this.core.agentGui.probeGone(att);
     if (att.role === "agent") this.core.agents.broadcastAgents();
     if (att.role === "chat") this.core.presence.listenerChanged(att.reads ?? [], ws);
   }

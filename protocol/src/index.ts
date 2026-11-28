@@ -45,7 +45,9 @@ export * from "./v1/trigger";
 export * from "./v1/agent-plan";
 export * from "./v1/compat";
 export * from "./v1/webpush";
+export * from "./v1/agent-gui";
 import { parseTermFrame, type TermFrame } from "./v1/term";
+import { parseAgFrame, parseAgHostInfo, type AgHostInfo, type AgInFrame, type AgOutFrame } from "./v1/agent-gui";
 import { parseTyping, type TypingFrame } from "./v1/presence";
 import { parseBundle, parseMentions, type BundleRequest } from "./v1/chat-ext";
 
@@ -74,6 +76,7 @@ export const MAX_METRIC_POINTS = 1440;
 // 主机卡片快照间隔: 探针连上时发一次, 之后每 10 分钟一次
 export const HOST_SNAPSHOT_MS = 600_000;
 const MAX_HOST_TEXT = 128;
+const AG_FRAME_PREFIX = "ag_";
 
 export type TextBody = { kind: "text"; text: string };
 export type Body = TextBody;
@@ -89,14 +92,14 @@ export type OfferFrame = { t: "offer"; subjects: string[] };
 export type MetricPoint = { ts: number; values: Record<string, number> };
 export type MetricFrame = { t: "metric"; subject: string; points: MetricPoint[]; history?: boolean };
 // 主机卡片: 服务端只放在探针那条连接的 attachment 里 (休眠也在), 不落库; 断开时记一行离线快照
-export type HostInfo = { hostname?: string; ip?: string; os?: string; arch?: string; cores?: number; memTotal?: number; diskTotal?: number; bootAt?: number; shell?: boolean };
+export type HostInfo = { hostname?: string; ip?: string; os?: string; arch?: string; cores?: number; memTotal?: number; diskTotal?: number; bootAt?: number; shell?: boolean; agent?: AgHostInfo };
 // beats: 心跳条, 从旧到新每格一个字符 (g 正常, y 延迟大, r 失联, n 无数据), 最后一格截至 beatsAt
 export type HostFrame = { t: "host"; subject: string; info: HostInfo; last?: MetricPoint; avail?: number; beats?: string; beatsAt?: number };
 export type HostCard = { subject: string; online: boolean; seen: number; info: HostInfo; last?: MetricPoint; avail?: number; beats?: string; beatsAt?: number };
 export const BEAT_SLOTS = 60;
 export const BEAT_SLOT_MS = 24 * 60_000;
 const BEATS_RE = /^[gyrn]{1,96}$/;
-export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame | HostFrame | TermFrame | TypingFrame;
+export type ClientFrame = SendFrame | AckFrame | RegFrame | WatchFrame | OfferFrame | MetricFrame | HostFrame | TermFrame | TypingFrame | AgInFrame;
 
 export type WelcomeFrame = { t: "welcome"; head: number };
 export type MsgFrame = {
@@ -112,7 +115,7 @@ export type ErrFrame = { t: "err"; code: string; text: string; aid?: string };
 export type ProbesFrame = { t: "probes"; subjects: string[] };
 export type DemandFrame = { t: "demand"; subjects: string[]; intervalMs: number };
 export type HostsFrame = { t: "hosts"; hosts: HostCard[] };
-export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame | ProbesFrame | HostsFrame;
+export type ServerFrame = WelcomeFrame | MsgFrame | SentFrame | ErrFrame | DemandFrame | MetricFrame | ProbesFrame | HostsFrame | AgOutFrame;
 
 export type SendRequest = { src?: string; body: Body };
 export type SendResult = { seq: number; ts: number };
@@ -165,7 +168,7 @@ export function parseClientFrame(raw: string): ClientFrame | null {
     case "typing":
       return parseTyping(f);
     default:
-      return parseTermFrame(f);
+      return typeof f.t === "string" && f.t.startsWith(AG_FRAME_PREFIX) ? parseAgFrame(f) : parseTermFrame(f);
   }
 }
 
@@ -180,6 +183,8 @@ function parseHost(f: Record<string, unknown>): HostFrame | null {
   for (const k of HOST_TEXT_KEYS) if (typeof raw[k] === "string") info[k] = (raw[k] as string).slice(0, MAX_HOST_TEXT);
   for (const k of HOST_NUM_KEYS) if (typeof raw[k] === "number" && Number.isFinite(raw[k])) info[k] = raw[k] as number;
   if (raw.shell === true) info.shell = true;
+  const agent = raw.agent === undefined ? null : parseAgHostInfo(raw.agent);
+  if (agent) info.agent = agent;
   const out: HostFrame = { t: "host", subject: f.subject, info };
   if (f.last !== undefined && isPoints([f.last])) out.last = f.last as MetricPoint;
   if (typeof f.avail === "number" && f.avail >= 0 && f.avail <= 100) out.avail = f.avail;

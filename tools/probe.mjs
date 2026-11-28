@@ -4,6 +4,7 @@
 // 告警阈值: AIOA_ALERT_CPU / AIOA_ALERT_MEM (百分比, 默认 90), AIOA_ALERT_TEMP (摄氏度, 默认 85), 设为 0 关闭
 // 主机卡片: AIOA_SNAPSHOT_MIN 分钟发一次快照 (默认 10), AIOA_IP 覆盖显示的 IP
 // 终端: AIOA_SHELL=1 才开启 (还要 key 带 probe:shell 权限, App 端每次输入密码), 需要 python3
+// Agent GUI: AIOA_AGENT=1 才加载 probe-agent.mjs (还要 key 带 probe:agent), 直连监听 AIOA_AGENT_LISTEN
 import os from "node:os";
 import { readFileSync, statfsSync } from "node:fs";
 
@@ -25,6 +26,7 @@ const SEND_PATH = "/api/send";
 // 带上自定义 UA, 避免被 CF 的机器人防护拦下
 const AGENT_UA = "hx-aioa-agent/1";
 const SHELL_ON = process.env.AIOA_SHELL === "1";
+const AGENT_ON = process.env.AIOA_AGENT === "1";
 const ALERTS = [
   { key: "cpu", name: "CPU", unit: "%", limit: envNumber("AIOA_ALERT_CPU", 90) },
   { key: "mem", name: "内存", unit: "%", limit: envNumber("AIOA_ALERT_MEM", 90) },
@@ -151,6 +153,7 @@ function hostInfo() {
   const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4");
   const info = { hostname: os.hostname(), os: osName(), arch: os.arch(), cores: os.cpus().length, memTotal: os.totalmem(), bootAt: Date.now() - os.uptime() * 1000 };
   if (SHELL_ON) info.shell = true;
+  if (agent) info.agent = agent.info();
   const ip = process.env.AIOA_IP || lan?.address;
   if (ip) info.ip = ip;
   try {
@@ -268,6 +271,7 @@ function connect() {
     console.log(`已连接, 提供主体 ${subject}`);
     send({ t: "offer", subjects: [subject] });
     sendHost();
+    agent?.onConnect();
     sendPing();
     ping = setInterval(sendPing, PING_MS);
   };
@@ -280,6 +284,7 @@ function connect() {
     const frame = JSON.parse(e.data);
     if (frame.t === "demand") onDemand(frame);
     else if (frame.t?.startsWith("term")) term?.handle(frame);
+    else if (frame.t?.startsWith("ag_")) agent?.handle(frame);
   };
   ws.onclose = () => {
     term?.closeAll();
@@ -306,6 +311,9 @@ function tick() {
 
 const term = SHELL_ON ? (await import("./probe-term.mjs")).createTerminals(send) : null;
 if (SHELL_ON) console.log("终端已开启 (AIOA_SHELL=1)");
+const agent = AGENT_ON ? await (await import("./probe-agent.mjs")).createAgent({ send, subject }) : null;
+// Agent 子进程是独立进程组, 探针退出时一并结束
+if (agent) for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => (agent.close(), process.exit(0)));
 remember(sample());
 setInterval(tick, IDLE_SAMPLE_MS);
 setInterval(sendHost, SNAPSHOT_MS);
