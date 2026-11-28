@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "@hx/ui/tailwind.css";
+/* Agent GUI 工作台用 HX-UI 的 Agent 界面拓展包 (会话, 工具视图, 输入框) */
+@import "@hx/ui/agent.css";
 /* 字体: 拉丁与数字用 Geist (HX-UI 令牌首选), 中文用思源黑体可变字重; 两者都按 unicode-range 分片, 只下载页面用到的字 */
 @import "@hx/ui/fonts.css";
 @import "@fontsource-variable/noto-sans-sc/wght.css";

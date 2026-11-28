@@ -1,4 +1,3 @@
-import { Button } from "@hx/ui/ui/button";
 import { Input } from "@hx/ui/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@hx/ui/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@hx/ui/ui/toggle-group";
@@ -11,6 +10,10 @@ import type { View } from "../../../agentgui/reduce";
 import type { SessionInfo } from "../../../agentgui/types";
 import { useGui } from "./ctx";
 import { guiLink } from "./parts";
+
+// 与 HX-UI 输入框里那排小控件同样子 (agent/composer 的 COMPOSER_CHIP, 包里没导出)
+const COMPOSER_CHIP =
+  "inline-flex h-7 min-w-0 shrink-0 items-center gap-1 rounded-full px-2 text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:bg-accent data-[state=open]:text-foreground [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5";
 
 export const STORAGE_NEW_INSTANCE = "aioa.ag.newInstance";
 
@@ -32,10 +35,10 @@ export function ModelPanel({ view, info, open, setOpen }: { view: View; info?: S
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" title="模型">
+        <button type="button" className={COMPOSER_CHIP} title="模型 (mod+shift+m)">
           <Cpu />
-          {label}
-        </Button>
+          <span className="truncate">{label}</span>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-3">
         <p className="mb-2 text-xs font-medium text-muted-foreground">Agent 实例</p>

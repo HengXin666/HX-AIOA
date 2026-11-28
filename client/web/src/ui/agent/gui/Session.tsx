@@ -1,5 +1,5 @@
 import { Button } from "@hx/ui/ui/button";
-import { PanelRight } from "lucide-react";
+import { ChevronRight, Folder, GitBranch, PanelRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TXT_AUTH_FAIL, TXT_NO_ROUTE, TXT_SEND_FAIL, TXT_UNPAIRED } from "../../../agentgui/constants";
@@ -12,14 +12,15 @@ import { WorkPermCard } from "./Approve";
 import { Composer } from "./Composer";
 import { useGui } from "./ctx";
 import { LoginCard } from "./Login";
-import { ApproveOnly, guiLink, INBOX, ModeToggle, ReconnectBar, RouteBadge } from "./parts";
+import { AddDel } from "./Diff";
+import { AgentGlyph, ApproveOnly, basename, guiLink, INBOX, ModeToggle, ReconnectBar, RouteBadge } from "./parts";
 import { StatsBar } from "./StatsBar";
 import { SidebarButton } from "./layout";
 import { Timeline } from "./Timeline";
 
 // 会话页 (工作模式): 顶栏, 时间线, 贴在输入框上方的审批卡, 输入框, 统计条
 export function SessionView({ right, toggleRight, draft }: { right: boolean; toggleRight: () => void; draft: React.MutableRefObject<((t: string) => void) | null> }) {
-  const { host, sid, cmd } = useGui();
+  const { host, sid, cmd, openRight } = useGui();
   const c = useConn(host);
   const s = useSession(host, sid);
   const hub = useAgHub();
@@ -78,16 +79,68 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
   const login = c.login && (c.login.sid === sid || (!c.login.sid && (!c.login.instance || c.login.instance === info?.instance))) ? c.login : null;
   const inst = c.instances.find((i) => i.id === (login?.instance || info?.instance));
 
+  const footer = (
+    <div className={`mx-auto flex w-full max-w-[768px] flex-col gap-2 px-4 pb-2 ${c.stale ? "opacity-80" : ""}`}>
+      {login && <LoginCard conn={c.c} login={login} instance={inst} onDone={retry} />}
+      {perm && <WorkPermCard card={perm} more={perms.length - 1} busy={Boolean(s.answering[perm.rid] || hub.answering[`${host}/${perm.rid}`])} onAnswer={(o) => answer(perm, o)} />}
+      <Composer
+        view={s.view}
+        info={info}
+        stats={s.stats}
+        running={running}
+        rejecting={Boolean(perm)}
+        disabled={ready ? undefined : blocked || "未连上主机, 连上后可以继续"}
+        modelOpen={modelOpen}
+        setModelOpen={setModelOpen}
+        onSend={send}
+        onStop={() => c.c.acpNotify(sid, "session/cancel", {}) || toast.error(TXT_SEND_FAIL)}
+        onRejectSay={(t) => perm && answer(perm, null, t)}
+        draftRef={draft}
+      />
+      <StatsBar stats={s.stats} usage={s.view.usage} last={[...s.view.turns].reverse().find((t) => !t.running)} />
+    </div>
+  );
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
         <SidebarButton />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-foreground">{title}</h2>
-          <p className="truncate text-xs text-muted-foreground">{[info?.agent, model, info?.branch ? `分支 ${info.branch}` : "", info?.cwd].filter(Boolean).join(" · ")}</p>
+        <nav aria-label="位置" className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+          {info?.cwd && (
+            <>
+              <span className="flex min-w-0 shrink items-center gap-1.5 text-muted-foreground" title={info.cwd}>
+                <Folder className="size-3.5 shrink-0" />
+                <span className="truncate">{basename(info.cwd)}</span>
+              </span>
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+            </>
+          )}
+          <h2 className="min-w-0 truncate font-medium text-foreground">{title}</h2>
+          {running && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-info" aria-label="运行中" />}
+        </nav>
+        <div className="hidden min-w-0 items-center gap-1 text-xs text-muted-foreground lg:flex">
+          {info?.agent && (
+            <span className="flex items-center gap-1 rounded-full px-2 py-1">
+              <AgentGlyph name={info.agent} />
+              {[info.agent, model].filter(Boolean).join(" · ")}
+            </span>
+          )}
+          {info?.branch && (
+            <span className="flex items-center gap-1 rounded-full px-2 py-1">
+              <GitBranch className="size-3.5" />
+              {info.branch}
+            </span>
+          )}
         </div>
-        <RouteBadge route={c.route} state={c.state} />
-        <ModeToggle mode="work" />
+        {(info?.adds || info?.dels) ? (
+          <Button size="sm" variant="ghost" className="hidden font-mono text-xs sm:inline-flex" onClick={() => openRight("changes")} title="打开改动 (mod+d)">
+            <AddDel add={info.adds ?? 0} del={info.dels ?? 0} />
+          </Button>
+        ) : null}
+        <span className="hidden sm:contents">
+          <RouteBadge route={c.route} state={c.state} />
+          <ModeToggle mode="work" />
+        </span>
         <Button size="icon-sm" variant={right ? "secondary" : "ghost"} aria-label="右栏" aria-pressed={right} onClick={toggleRight}>
           <PanelRight />
         </Button>
@@ -102,27 +155,12 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
             </Button>
           )}
         </div>
+      ) : null}
+      {blocked && s.view.turns.length === 0 ? (
+        <div className="shrink-0 px-4">{footer}</div>
       ) : (
-        <Timeline snap={s} onRetry={retry} onModel={() => setModelOpen(true)} />
+        <Timeline snap={s} info={info} onRetry={retry} footer={footer} />
       )}
-      <div className={`shrink-0 px-4 pb-2 ${c.stale ? "opacity-80" : ""}`}>
-        {login && <LoginCard conn={c.c} login={login} instance={inst} onDone={retry} />}
-        {perm && <WorkPermCard card={perm} more={perms.length - 1} busy={Boolean(s.answering[perm.rid] || hub.answering[`${host}/${perm.rid}`])} onAnswer={(o) => answer(perm, o)} />}
-        <Composer
-          view={s.view}
-          info={info}
-          running={running}
-          rejecting={Boolean(perm)}
-          disabled={ready ? undefined : blocked || "未连上主机, 连上后可以继续"}
-          modelOpen={modelOpen}
-          setModelOpen={setModelOpen}
-          onSend={send}
-          onStop={() => c.c.acpNotify(sid, "session/cancel", {}) || toast.error(TXT_SEND_FAIL)}
-          onRejectSay={(t) => perm && answer(perm, null, t)}
-          draftRef={draft}
-        />
-        <StatsBar stats={s.stats} usage={s.view.usage} last={[...s.view.turns].reverse().find((t) => !t.running)} />
-      </div>
     </div>
   );
 }

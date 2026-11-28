@@ -22,6 +22,10 @@
 | 快捷键一览 | `mod+/` | `Keys.tsx` |
 | 会话结束的桌面通知 | 页面不在前台时: 跑完 / 等你 / 出错, 默认关, 设置里开 | `agentgui/notify.ts` |
 
+## 1.1 界面: 换成 HX-UI 的 Agent 拓展包
+
+时间线, 输入框, 工具视图, diff 都不再手写, 改用 `@hx/ui/agent` (样式在 `index.css` 引 `@hx/ui/agent.css`): `Conversation` 贴底跟随与 "回到最新", `MessageList` 的用户气泡, 活动分组 ("已处理 12 秒 · 读了 2 个文件"), 思考, 内置工具视图 (终端, 读, 编辑 diff, 搜索, 计划卡), `PromptInput` (/ 命令, @ 文件, 附件, 停止), `ComposerSelect` 权限模式, `ContextMeter`, 右栏 `DiffView`; 左栏用 `Item` / `ItemGroup` 滑动高亮。ACP 时间线到 HX-UI 消息模型的映射在 `agentgui/toAgent.ts` (按轮缓存, 没变的消息引用不变); 命令的完整输出仍是展开才向探针要 `tool/output`。
+
 ## 2. 遥测与上报: 全部去掉, 换成本地诊断
 
 t3code Web 端有三条上报: `observability/clientTracing.ts` (OTLP 链路追踪, 每秒导出到服务端), `lib/backgroundActivityReporter.ts` (每 25 秒上报客户端活动租约), `lib/resourceTelemetryState.ts` 与设置里的遥测导出。本端一条都不搬:
