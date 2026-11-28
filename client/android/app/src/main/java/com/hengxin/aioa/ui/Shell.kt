@@ -67,7 +67,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
         if (chat.spaces.board != savedBoard) chat.spaces.board = savedBoard
         androidx.compose.runtime.snapshotFlow { chat.spaces.board }.collect { savedBoard = it }
     }
-    // 从侧栏进 "收藏" 或 "最近会话" (#139, android-navigation.md): 退出那一页就直接回来源栏, 不用再按一次
+    // 从侧栏进 "收藏" 或 "最近会话" (#139, docs/client/android/navigation.md): 退出那一页就直接回来源栏, 不用再按一次
     var sideReturn by rememberSaveable { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(sideReturn, tab) {
         if (!sideReturn) return@LaunchedEffect

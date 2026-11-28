@@ -47,7 +47,7 @@ node tools/bench.mjs --url https://你的域名 --token xxx --count 50
 
 接入 GitHub 等数据源: 见 [docs/features/sources.md](docs/features/sources.md) (App 内 "我的" → "添加数据源" 按步骤操作)。
 
-安卓端: 每次推送自动编译签名 APK 并发布到 Releases, 见 `docs/deploy/android-signing.md`。首次打开 app 时填写服务端地址与令牌。
+安卓端: 每次推送自动编译签名 APK 并发布到 Releases, 见 `docs/deploy/android/signing.md`。首次打开 app 时填写服务端地址与令牌。
 
 ## 注意
 

@@ -38,24 +38,29 @@
 
 ## 部署与运维 `deploy/`
 
+服务端与通用的在根目录, 某一端专属的放 `deploy/<端>/`。
+
 | 文档 | 内容 |
 |---|---|
 | [env.md](deploy/env.md) | 环境变量与密钥总表 (必填, 可选, 插件携带), 改变量必须同步 |
 | [cloudflare.md](deploy/cloudflare.md) | 服务端部署 (Workers, 密钥, CI) |
 | [cf-usage.md](deploy/cf-usage.md) | CF 额度页与免费额度 |
-| [android-signing.md](deploy/android-signing.md) | 安卓签名与自动发布 |
-| [android-update-proxy.md](deploy/android-update-proxy.md) | 安卓自动更新与订阅代理 |
+| [android/signing.md](deploy/android/signing.md) | 安卓签名与自动发布 |
+| [android/update-proxy.md](deploy/android/update-proxy.md) | 安卓自动更新与订阅代理 |
 
 ## 客户端开发 `client/`
 
+按端分目录, 与代码目录 `client/<端>/` 和 issue 标签 (`安卓` / `Web`) 一一对应; Web 端文档在 #155 的 W1 开工时放进 `client/web/`。`cli.md` 是群 Agent 命令行, 不属于某一端。
+
 | 文档 | 内容 |
 |---|---|
-| [ui-gallery.md](client/ui-gallery.md) | 组件库与电脑端预览画廊 |
-| [settings-map.md](client/settings-map.md) | 安卓 "我的" 与设置页结构 |
-| [android-battery.md](client/android-battery.md) | 后台耗电测量方法与记录 |
-| [testing.md](client/testing.md) | 客户端测试: 单测, 布局静态检查, 截图测试计划 |
-| [browser.md](client/browser.md) | 安卓内置浏览器: 链接入口, 登录态, 走订阅代理, 广告拦截 |
-| [android-permissions.md](client/android-permissions.md) | 安卓权限清单: 现有, 规划, 申请时机 (#121) |
+| [android/ui-gallery.md](client/android/ui-gallery.md) | 组件库与电脑端预览画廊 |
+| [android/settings-map.md](client/android/settings-map.md) | 安卓 "我的" 与设置页结构 |
+| [android/battery.md](client/android/battery.md) | 后台耗电测量方法与记录 |
+| [android/testing.md](client/android/testing.md) | 客户端测试: 单测, 布局静态检查, 截图测试计划 |
+| [android/browser.md](client/android/browser.md) | 安卓内置浏览器: 链接入口, 登录态, 走订阅代理, 广告拦截 |
+| [android/permissions.md](client/android/permissions.md) | 安卓权限清单: 现有, 规划, 申请时机 (#121) |
+| [android/navigation.md](client/android/navigation.md) | 安卓返回键与页面跳转规则, 入口清单 |
 
 ## 设计与调研 `design/`
 
@@ -78,6 +83,7 @@
 | [agent-gui-ui.md](design/agent-gui-ui.md) | Agent GUI 界面方案: 桌面工作台, 手机工作 / 审批模式, 原型图 3-desktop.svg 4-mobile.svg (#126) |
 | [ui-spec/message-pages.md](design/ui-spec/message-pages.md) | 消息页: 人 / 群 / 域 / Agent 概念, 群会话与群资料页, 每个元素的请求数, 省 CF 额度的改法, 兼容性 (#121) |
 | [ui-spec/android-rebuild.md](design/ui-spec/android-rebuild.md) | 安卓前端全量重构: 分期, 接口对账 (够不够用), 对接是否合理与要改的地方 (#121) |
+| [web-arch.md](design/web-arch.md) | Web 端架构: 同源 CF 静态资源部署, HX-UI 2 电脑三栏布局, 额度规则, Web Push, 图表重做, 插件按端兼容声明与 CI 校验; 桌面客户端候选 (#155) |
 | [plugin-arch.md](design/plugin-arch.md) | 插件体系定稿 v1 (D 方案): 结论, 清单 v2, 运行时, 数据, 权限, 请求预算, 实施顺序 (#99) |
 | [weekly-report/prototype.html](design/weekly-report/prototype.html) | 周报原型: 单文件无外链, 平台使用 (前台时长, 打开次数, 活跃时段), 消息, 人际, 配置计数, 本机记录 (传输, 终端, 请求, 电量, 通知), GitHub 一角; 模拟数据 (#140) |
 

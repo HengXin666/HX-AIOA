@@ -16,7 +16,7 @@
 | --- | --- | --- | --- |
 | — | `CLOUDFLARE_API_TOKEN` (secret) | 必填 | 部署用的 CF API Token, 权限见 [cloudflare.md](cloudflare.md)。缺了部署直接失败 |
 | — | `CLOUDFLARE_ACCOUNT_ID` (secret) | 必填 | CF 账号 id。缺了部署直接失败 |
-| — | `ANDROID_KEYSTORE_BASE64` (secret) | 可选 | 安卓正式签名的 keystore, 见 [android-signing.md](android-signing.md)。缺了出 debug 签名包 |
+| — | `ANDROID_KEYSTORE_BASE64` (secret) | 可选 | 安卓正式签名的 keystore, 见 [android/signing.md](android/signing.md)。缺了出 debug 签名包 |
 | — | `ANDROID_KEYSTORE_PASSWORD` (secret) | 可选 | 上面 keystore 的密码 |
 
 ## 核心

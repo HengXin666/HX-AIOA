@@ -61,7 +61,7 @@
 
 | 新功能 | 原功能 | 结论 |
 | --- | --- | --- |
-| 消息改为顶部标签 | 底部五栏里的 "消息" | 底栏去掉; `pages.json` 改入口后跑 `gen.py` 同步入口表与 `TabNavTest`; 返回规则见 `docs/client/android-navigation.md` |
+| 消息改为顶部标签 | 底部五栏里的 "消息" | 底栏去掉; `pages.json` 改入口后跑 `gen.py` 同步入口表与 `TabNavTest`; 返回规则见 `docs/client/android/navigation.md` |
 | 域 | 组 `chatFolders` | 同一份数据, 只改名; 老版本看到的仍是组 |
 | 单聊 | 多人群, 邀请, 角色 | 复用; `dm:` 群不允许邀请第三人, 不允许接 Agent, 没有群主 / 管理员 |
 | 单聊的可见性 | 母号能读全部群 | 母号就是服务端, 能看到所有私聊; 设置页与单聊顶栏需写明 |

@@ -60,7 +60,7 @@
 
 ## 4. 导航与返回
 
-沿用 `docs/client/android-navigation.md` 的三层规则 (叠层 → 栏内子页 → 栏), 补充:
+沿用 `docs/client/android/navigation.md` 的三层规则 (叠层 → 栏内子页 → 栏), 补充:
 
 - 再点当前栏: 回栏根页并滚到顶。
 - 每个页面有深链 `hxaioa://<pages.json 里的 id>`; 通知, 新消息横幅, 分享进来都走同一个入口, 返回链路与手点一样 (由 `pages.json` 的父子关系重建)。
@@ -83,9 +83,9 @@
 ## 7. 改页面的流程
 
 1. 改 `pages.json` (加节点, 类型, 实时级别), 运行 `gen.py`。
-2. 改 `docs/client/android-navigation.md` 的入口表与 `TabNav` 用例 (原有要求不变)。
+2. 改 `docs/client/android/navigation.md` 的入口表与 `TabNav` 用例 (原有要求不变)。
 3. 只用组件库实现; 画廊里加这一页的截图。
-4. 权限有变化同步 `docs/client/android-permissions.md`。
+4. 权限有变化同步 `docs/client/android/permissions.md`。
 
 ## 8. 术语
 

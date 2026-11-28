@@ -17,10 +17,12 @@ HX-AIOA (All In One App) 是一个个人用的随处可用对话入口: 把各�
 | --- | --- | --- |
 | `protocol/` | 客户端与服务端共用的消息协议, 唯一真源 | TypeScript |
 | `server/` | 部署在 Cloudflare 的服务端 | Workers + Durable Objects (SQLite, 休眠 WebSocket) |
-| `client/web/` | Web 端 (也适配平板浏览器) | Vite + TypeScript |
+| `client/web/` | Web 端 (电脑优先, 随 Worker 静态资源部署), 架构见 `docs/design/web-arch.md` | Vite + TypeScript (将换 React + HX-UI 2, #155) |
 | `client/android/` | 原生安卓端 | Kotlin + Jetpack Compose + OkHttp |
 | `tools/` | 延迟压测等辅助脚本 | Node.js |
 | `docs/aegis/` | Aegis 工作区记录 (计划, 证据, ADR) | Markdown |
+
+issue 按端打标签: `安卓` (`client/android`), `Web` (`client/web`), `后端` (`server` `protocol`), 另有 `插件` `Agent`; 跨端的同时打多个。某一端专属的文档放 `docs/client/<端>/` 与 `docs/deploy/<端>/`, 与代码目录对应。
 
 协议改动必须先改 `protocol/`, 再同步 `server/`, `client/web/`, `client/android/` 中的对应实现 (安卓端在 `proto/Frames.kt`)。
 
@@ -51,7 +53,7 @@ npm run typecheck          # protocol + server + web
 npm run build -w client/web
 ```
 
-安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/deploy/android-signing.md`, 更新与代理见 `docs/deploy/android-update-proxy.md`。加页面或页面间跳转时按 `docs/client/android-navigation.md` 处理返回键, 并更新其中的入口清单与 `TabNavTest`; 界面只用组件库 (`client/android/ui`) 的容器与组件, 遵循 `docs/design/ui-spec/README.md`, 页面关系改 `docs/design/ui-spec/pages.json` 后运行同目录 `gen.py`。
+安卓端: 用 Android Studio 打开 `client/android/` 构建; CI 见 `.github/workflows/android.yml`, `docs/deploy/android/signing.md`, 更新与代理见 `docs/deploy/android/update-proxy.md`。加页面或页面间跳转时按 `docs/client/android/navigation.md` 处理返回键, 并更新其中的入口清单与 `TabNavTest`; 界面只用组件库 (`client/android/ui`) 的容器与组件, 遵循 `docs/design/ui-spec/README.md`, 页面关系改 `docs/design/ui-spec/pages.json` 后运行同目录 `gen.py`。
 
 - 密钥, 令牌, 服务端地址不得写进 APK 或仓库, 仓库是公开的。
 

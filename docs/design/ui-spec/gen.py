@@ -180,7 +180,7 @@ def build_svg():
         n = dict(b, _x=bx, _y=TOP + 23 + i * ROW_H, _d=5)
         out.append(node_svg(n))
     out.append(f'<text x="32" y="{height - 26}" font-size="11" fill="{C["mutedFg"]}">规范与 issue: docs/design/ui-spec/README.md · '
-               f'返回规则: docs/client/android-navigation.md · 权限: docs/client/android-permissions.md</text>')
+               f'返回规则: docs/client/android/navigation.md · 权限: docs/client/android/permissions.md</text>')
     out.append("</svg>")
     return "\n".join(out)
 
