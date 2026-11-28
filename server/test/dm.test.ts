@@ -26,6 +26,15 @@ test("单聊: channel 按 uid 字典序, 两人都是普通成员, peer 按看�
   assert.equal(t.chats.rev(), rev);
 });
 
+test("单聊头像: 没设群头像时用对方账号头像, 各看各的对方 (#147)", async () => {
+  const t = chatCore(["u_z"]);
+  t.people.set("u_z", { ...t.people.get("u_z")!, avatar: "a".repeat(16) });
+  const mine = await call(t.core, ROUTES, ownerWho, "POST", "/api/v1/dms", { peer: "u_z" });
+  assert.equal((mine.body.chat as ChatMeta).avatar, "a".repeat(16));
+  const theirs = await call(t.core, ROUTES, memberWho("u_z"), "POST", "/api/v1/dms", { peer: OWNER_UID });
+  assert.equal((theirs.body.chat as ChatMeta).avatar, undefined);
+});
+
 test("单聊不能接 Agent, 邀请, 加人, 改群资料; 对方必须是已有账号 (#133)", async () => {
   const t = chatCore(["u_z", "u_y"]);
   const ch = dmChannel(OWNER_UID, "u_z");

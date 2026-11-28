@@ -26,13 +26,15 @@ export function authorOf(core: Core, who: Principal): string | undefined {
   return who.member?.user.id;
 }
 
-// 单聊: 两人都是普通成员, peer 是对方, 没起名时用对方昵称当标题
+// 单聊: 两人都是普通成员, peer 是对方, 没起名时用对方昵称当标题, 没设头像时用对方账号头像 (#147)
 function dmView(core: Core, view: ChatMeta, uid: string): ChatMeta {
   const pair = dmPeers(view.channel);
   if (!pair) return view;
   const peer = pair[0] === uid ? pair[1] : pair[0];
   const u = core.users.get(peer);
-  return { ...view, kind: "dm", peer, role: "member", members: 2, ...(!view.title && u ? { title: u.display || u.name } : {}) };
+  const title = !view.title && u ? { title: u.display || u.name } : {};
+  const avatar = !view.avatar && u?.avatar ? { avatar: u.avatar } : {};
+  return { ...view, kind: "dm", peer, role: "member", members: 2, ...title, ...avatar };
 }
 
 /** 主人能不能看到这个群: 别人之间的单聊不给主人看。 */
