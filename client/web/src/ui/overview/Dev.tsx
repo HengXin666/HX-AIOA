@@ -17,7 +17,7 @@ import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
 import { Skeleton } from "@hx/ui/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@hx/ui/ui/toggle-group";
-import { ChevronRight, GitBranch, GitPullRequest, FolderGit2, LineChart, Flame } from "lucide-react";
+import { Box, ChevronRight, GitBranch, GitPullRequest, FolderGit2, LineChart, Flame } from "lucide-react";
 import { useState } from "react";
 import { href } from "../../app/router";
 import { api } from "../../core/auth";
@@ -25,6 +25,7 @@ import { EXTERNAL } from "../../core/constants";
 import { localTimeZone } from "@hx-aioa/protocol";
 import { shortTime } from "../ChatList";
 import { useOnce } from "../resources/useOnce";
+import { Bar3DLazy } from "./Bar3DLazy";
 import { Fact, Panel, Quiet, TONE } from "./parts";
 
 const DAY_MS = 86_400_000;
@@ -103,7 +104,8 @@ export function DevBoard() {
           )}
         </div>
       </Panel>
-      <Trend data={trend.data} className="lg:col-span-12" />
+      <Weeks days={heat.data?.days} className="lg:col-span-5" />
+      <Trend data={trend.data} className="lg:col-span-7" />
       <Branches data={branches.data} error={branches.error} className="lg:col-span-12" />
     </div>
   );
@@ -187,6 +189,29 @@ function Branches({ data, error, className }: { data: GithubBranchesResult | nul
           </div>
         </>
       )}
+    </Panel>
+  );
+}
+
+const WEEKS = 12;
+const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const H3D = 300;
+
+// 最近 12 周的提交: 横轴星期, 纵深是第几周, 3D 柱子可旋转 (懒加载, 慢网不加载)
+function Weeks({ days, className }: { days?: { date: string; commits: number }[]; className?: string }) {
+  const grid = (days ?? []).slice(-WEEKS * 7);
+  const values = Array.from({ length: WEEKS }, () => new Array<number>(7).fill(0));
+  const first = grid[0] ? new Date(`${grid[0].date}T00:00:00`) : null;
+  const lead = first ? (first.getDay() + 6) % 7 : 0;
+  grid.forEach((d, i) => {
+    const k = i + lead;
+    const w = Math.floor(k / 7);
+    if (w < WEEKS) values[w]![k % 7] = d.commits;
+  });
+  const y = values.map((_, w) => `${WEEKS - w} 周前`);
+  return (
+    <Panel title="提交节奏" icon={<Box />} tone="accent" hint={`最近 ${WEEKS} 周, 每天的提交数`} className={className}>
+      {!days ? <Skeleton className="w-full rounded-lg" style={{ height: H3D }} /> : <Bar3DLazy values={values} x={WEEKDAYS} y={y} unit="次提交" label="提交节奏" height={H3D} />}
     </Panel>
   );
 }
