@@ -1,5 +1,8 @@
+import { LiveDot } from "@hx/ui/effects/live-dot";
+import { Stagger, StaggerItem } from "@hx/ui/motion";
 import { Button } from "@hx/ui/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@hx/ui/ui/tabs";
+import { Chip, ChipGroup } from "@hx/ui/ui/chip-group";
+import { AnimatePresence, m } from "motion/react";
 import { Activity, BellRing, Bot, HardDrive, MessageSquare, Server } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAttention, useChats, useFeed, useLinkState, useResources, useUser } from "../../app/hooks";
@@ -20,16 +23,18 @@ const BOARDS = [
 ] as const;
 type Board = (typeof BOARDS)[number]["id"];
 const BOARD_KEY = "aioa.overview.board";
+const readBoard = (): Board => (BOARDS.some((b) => b.id === localStorage.getItem(BOARD_KEY)) ? (localStorage.getItem(BOARD_KEY) as Board) : "daily");
 
-// 总览 (对照安卓 OverviewV2): 顶部一条事实带, 每格都是能点进去核对的真实计数
+// 总览 (对照安卓 OverviewPage + OverviewV2, #121 #138): 概况, 你和 Agent 一起, 需要我, 群 Agent, 资源, 正在发生, 值得一看。
+// 只放所有人都有的内置内容; 插件 (待办, GitHub 等) 的东西走插件自己的空间, 不进这里。
 export default function Overview() {
   const snap = useFeed();
-  const att = useAttention();
   const state = useLinkState();
   const owner = useUser()?.role === "owner";
+  const att = useAttention();
   const { hosts, probes } = useResources();
   useChats();
-  const [board, setBoard] = useState<Board>(() => BOARDS.some((b) => b.id === localStorage.getItem(BOARD_KEY)) ? (localStorage.getItem(BOARD_KEY) as Board) : "daily");
+  const [board, setBoard] = useState<Board>(readBoard);
   const pick = (b: string) => {
     setBoard(b as Board);
     localStorage.setItem(BOARD_KEY, b);
@@ -44,26 +49,29 @@ export default function Overview() {
   const headline = !snap.loaded ? "正在同步" : att.total > 0 ? `${att.total} 件事要你处理` : "没有要你处理的事";
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <Tabs value={board} onValueChange={pick} className="mx-auto w-full max-w-7xl gap-3 px-4 pt-4 pb-8">
-        <header className="flex w-full flex-wrap items-end gap-x-4 gap-y-2">
-          <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-0.5">
-            <span className="text-xs text-muted-foreground">
-              {new Date().toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" })}
-              {!online && <span className="ml-2 text-destructive">未连接, 数据可能不是最新</span>}
+    <div className="relative h-full w-full overflow-y-auto">
+      <div className="relative mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 pt-5 pb-10 sm:px-6">
+        <header className="flex flex-wrap items-end gap-x-6 gap-y-4">
+          <m.div className="flex min-w-[min(100%,18rem)] flex-1 flex-col gap-1.5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
+            <span className="text-sm text-muted-foreground">{new Date().toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" })}</span>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{headline}</h1>
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <LiveDot tone={online ? "success" : "destructive"} live={online} />
+              {online ? "已连接, 数据实时" : "未连接, 正在重连, 下面是上次同步的数据"}
             </span>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">{headline}</h1>
-          </div>
+          </m.div>
           <div className="flex flex-wrap items-center gap-2">
-            <TabsList>
-              {BOARDS.map((b) => (
-                <TabsTrigger key={b.id} value={b.id}>
-                  {b.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
             {owner && (
-              <Button asChild size="sm" variant="outline">
+              <ChipGroup type="single" variant="soft" value={board} onValueChange={(v) => v && pick(v)}>
+                {BOARDS.map((b) => (
+                  <Chip key={b.id} value={b.id}>
+                    {b.label}
+                  </Chip>
+                ))}
+              </ChipGroup>
+            )}
+            {owner && (
+              <Button asChild size="sm" variant="outline" className="bg-background/60 backdrop-blur">
                 <a href={link("overview", "drive")}>
                   <HardDrive />
                   网盘
@@ -74,21 +82,42 @@ export default function Overview() {
         </header>
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
           <Stat icon={<BellRing />} tone={att.total ? TONE.danger : TONE.muted} value={att.total} label="需要我" onClick={() => document.getElementById("need-me")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
-          <Stat icon={<Activity />} tone={TONE.info} value={running} label="任务在跑" to={link("agent")} />
-          <Stat icon={<MessageSquare />} tone={TONE.success} value={unread} label="条未读" to={link("chat")} />
-          <Stat icon={<Server />} tone={TONE.warning} value={hosts.length ? `${up}/${hosts.length}` : "0"} label="主机在线" to={link("res")} />
-          <Stat icon={<Bot />} tone={TONE.accent} value={agents} label={CLOUD_AGENT_LABEL} to={link("chat")} />
+          <Stat icon={<Activity />} tone={TONE.info} value={running} label="个任务在跑" to={link("agent")} />
+          <Stat icon={<MessageSquare />} tone={TONE.success} value={unread} label="条未读消息" to={link("chat")} />
+          <Stat icon={<Server />} tone={TONE.warning} value={hosts.length ? `${up}/${hosts.length}` : "0"} label="台主机在线" to={link("res")} />
+          <Stat icon={<Bot />} tone={TONE.accent} value={agents} label={`个${CLOUD_AGENT_LABEL}`} to={link("chat")} />
         </div>
-        <TabsContent value="daily" className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-          <NeedMe snap={snap} items={att.items} waiting={att.waiting} className="lg:col-span-5" />
-          <Pulse />
-          <Agents />
-          <Hosts className="lg:col-span-12" />
-          <Layer snap={snap} priority="happening" className="lg:col-span-6" />
-          <Layer snap={snap} priority="worth_reading" className="lg:col-span-6" />
-        </TabsContent>
-        <TabsContent value="server">{board === "server" && (owner ? <ServerBoard /> : <p className="text-sm text-muted-foreground">服务器看板只有主人能看</p>)}</TabsContent>
-      </Tabs>
+        <AnimatePresence mode="wait" initial={false}>
+          {board === "server" && owner ? (
+            <m.div key="server" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <ServerBoard />
+            </m.div>
+          ) : (
+            <m.div key="daily" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <Stagger className="grid grid-cols-1 gap-4 lg:grid-cols-12" gap={0.07}>
+                <StaggerItem className="lg:col-span-8">
+                  <Pulse />
+                </StaggerItem>
+                <StaggerItem className="lg:col-span-4" id="need-me">
+                  <NeedMe waiting={att.waiting} />
+                </StaggerItem>
+                <StaggerItem className="lg:col-span-12">
+                  <Agents />
+                </StaggerItem>
+                <StaggerItem className="lg:col-span-12">
+                  <Hosts />
+                </StaggerItem>
+                <StaggerItem className="lg:col-span-6">
+                  <Layer priority="happening" />
+                </StaggerItem>
+                <StaggerItem className="lg:col-span-6">
+                  <Layer priority="worth_reading" />
+                </StaggerItem>
+              </Stagger>
+            </m.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

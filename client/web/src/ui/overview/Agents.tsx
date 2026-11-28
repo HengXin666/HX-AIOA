@@ -24,7 +24,7 @@ export function Agents() {
     <Panel
       title={CLOUD_AGENT_LABEL}
       icon={<Bot />}
-      tone={TONE.accent}
+      tone="accent"
       count={list.length}
       hint={late ? `${late} 个超时未运行` : undefined}
       className="lg:col-span-12"

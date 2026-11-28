@@ -19,7 +19,7 @@ Agent / 探针 / Webhook 侧的接口 (`PATH_AGENT_NEXT`, `PATH_AGENT_DONE`, `PA
 | 存储与迁移 | `PATH_FILES` `PATH_FILES_MIGRATE` | 已做 (fca1a40) |
 | hxoa 远程管理 | `PATH_HXOA*` | 已做 (336ab68); 新建文件夹 `PATH_HXOA_MKDIR` 未做 |
 | 待办 | `PATH_PDATA_COLL` `PATH_PDATA_ITEM` (待办集合) | 看板, 编辑, 总览重点待办已做; 外部接入密钥 `PATH_TODO_EXT*`, 群里的待办页, 周期与提醒编辑未做 |
-| 总览 (日常 / 开发 / 服务器看板) | overview 帧, `PATH_EVENTS`, `PATH_GITHUB_REPOS` `_DAILY` `_HEATMAP` `_TREND` `_ACTIVITY` `_BRANCHES`, `PATH_CF_USAGE` `PATH_CF_STORAGE` `PATH_CF_ZONES`, 待办 pdata, hosts / metric 帧 | 已做: 你和群 Agent 一起 (ComboChart), 需要我 (任务直接批准), 群 Agent 环 (Gauge), 重点待办, 资源 (Sparkline), 正在发生, 值得一看; 开发看板 (HeatCalendar, Donut, ComboChart, 分支新鲜度); 服务器看板 (心跳条, Bullet 额度, Donut 存储, AreaTrend 站点流量)。周报, 插件空间看板未做 |
+| 总览 (日常 / 开发 / 服务器看板) | overview 帧, `PATH_EVENTS`, `PATH_GITHUB_REPOS` `_DAILY` `_HEATMAP` `_TREND` `_ACTIVITY` `_BRANCHES`, `PATH_CF_USAGE` `PATH_CF_STORAGE` `PATH_CF_ZONES`, 待办 pdata, hosts / metric 帧 | 已做 (HX-UI 2.7 全量重构): 你和群 Agent 一起 (ComboChart, NumberRoll), 需要我 (任务直接批准, 划掉 / 全部已读, 验证码复制), 群 Agent 进度环 (motion), 资源 (分段负载条, Sparkline), 正在发生, 值得一看, 事件详情抽屉 (去群里定位); 内置总览不放待办与 GitHub (插件); 开发看板 (HeatCalendar, Donut, ComboChart, 分支新鲜度); 服务器看板 (心跳条, Bullet 额度, Donut 存储, AreaTrend 站点流量)。周报, 插件空间看板未做 |
 | 空间 / 看板 / 工作台组件 | `PATH_SPACES` `PATH_SPACE*` `PATH_PDATA_*` | 未做 |
 | 网盘 | `PATH_DRIVE*` | 浏览, 排序, 搜索, 新建, 上传 (直传优先, 失败转发, 大文件 fold), 预览 / 下载 (新标签页), 改名, 移动, 删除, 回收站, 分享, 发到群已做; 聊天文件 "存到网盘" 已做; 断点续传未做 |
 | GitHub 卡, 走势, 分支, Issue | `PATH_GITHUB_*` `PATH_GH_*` | 总览开发看板与资源栏仓库列表已做; `PATH_GITHUB_TRACKED` `_AVAILABLE` `_SYNC` (选关注仓库), `PATH_GH_*` (Issue 与评论) 未做 |
