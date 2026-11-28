@@ -2,7 +2,9 @@ import type { PromptOption, TaskSnapshot } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
-import { useState } from "react";
+import { Code } from "lucide-react";
+import { lazy, Suspense, useState } from "react";
+import { useAgHub } from "../../agentgui/hooks";
 import { useFeed, useLinkState, useUser } from "../../app/hooks";
 import { TXT_LOADING } from "../../core/constants";
 import { feed } from "../../core/feed";
@@ -15,8 +17,36 @@ const ACTIVE = new Set(["waiting", "running"]);
 const rank = (t: TaskSnapshot) => (t.state === "waiting" ? 0 : t.state === "running" ? 1 : 2);
 type Ask = { task: TaskSnapshot; option: PromptOption };
 
+// 编程工作台 (#126) 单独一个包, 进 #/agent/gui 才加载
+const AgentGui = lazy(() => import("./gui"));
+
+export default function AgentArea(props: AreaProps) {
+  if (props.loc.path[0] === "gui")
+    return (
+      <Suspense fallback={null}>
+        <AgentGui {...props} />
+      </Suspense>
+    );
+  return <AgentHome />;
+}
+
+function GuiEntry() {
+  const hub = useAgHub();
+  const n = hub.cards.length;
+  return (
+    <a href="#/agent/gui" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 hover:bg-muted [&_svg]:size-5">
+      <Code className="text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">编程 (Agent GUI)</span>
+        <span className="block text-xs text-muted-foreground">在电脑上驱动编程 Agent: 工作台与审批</span>
+      </span>
+      {n > 0 && <Badge variant="destructive">等你 {n}</Badge>}
+    </a>
+  );
+}
+
 // Agent 栏 (对照安卓 AgentPage.kt): 接入的电脑在顶部; 等待确认, 运行中, 已结束依次排; 卡片上直接批准 / 拒绝
-export default function AgentArea(_: AreaProps) {
+function AgentHome() {
   const snap = useFeed();
   const state = useLinkState();
   const owner = useUser()?.role === "owner";
@@ -36,6 +66,7 @@ export default function AgentArea(_: AreaProps) {
       <PageHeader title="Agent" sub={stale ? "未连接, 显示的是上次的状态" : undefined} />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-3 pb-6">
+          {owner && <GuiEntry />}
           {snap.notice && (
             <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm text-warning">
               <span className="min-w-0 flex-1">{snap.notice}</span>

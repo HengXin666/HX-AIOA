@@ -21,11 +21,14 @@ async function onPush(event) {
   const p = readPayload(event);
   // 页面在前台可见: 页面自己会显示, 不再弹系统通知
   if ((await windows()).some((c) => c.visibilityState === "visible")) return;
-  const url = p.channel ? CHAT_HASH + encodeURIComponent(p.channel) : HOME;
+  // Agent GUI 审批 (#126) 直接带 url ("/#/agent/gui/<主机>/<会话>"); 同 tag 的旧通知被替换, 静默推送不出声
+  const url = typeof p.url === "string" && p.url.startsWith(HOME) ? p.url : p.channel ? CHAT_HASH + encodeURIComponent(p.channel) : HOME;
+  const silent = p.silent === true;
   await self.registration.showNotification(p.title || DEFAULT_TITLE, {
     body: p.body || "",
     tag: p.tag || DEFAULT_TITLE,
-    renotify: Boolean(p.tag),
+    renotify: Boolean(p.tag) && !silent,
+    silent,
     data: { url, seq: p.seq },
   });
 }

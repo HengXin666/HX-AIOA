@@ -4,7 +4,7 @@ import type { Frame, FromHub, LinkState, Token, ToHub } from "./link-proto";
 
 type Client = { id: string; post: (m: FromHub) => void; visible: boolean; watch: string[] };
 // 新标签加入时补给它的帧: 只有最后一份有意义, 其余帧不缓存
-const STICKY = new Set(["welcome", "probes", "hosts", "agents", "online"]);
+const STICKY = new Set(["welcome", "probes", "hosts", "agents", "online", "ag_hosts"]);
 
 /**
  * 一个浏览器里唯一的那条 WebSocket。SharedWorker, 选出来的主标签, 或单页兜底都用它;

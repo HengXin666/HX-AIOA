@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { hasRefresh, refresh } from "../core/auth";
 import { chats } from "../core/chats";
 import { feed } from "../core/feed";
+import { agHub } from "../agentgui/hub";
 import { todos } from "../core/todos";
 import { faces } from "../core/faces";
 import { link } from "../core/link";
@@ -32,7 +33,7 @@ export function App() {
 
   useEffect(() => {
     if (!user) return;
-    const offs = [chats.attach(), presence.attach(), resources.attach(), feed.attach(), faces.attach(), todos.attach()];
+    const offs = [chats.attach(), presence.attach(), resources.attach(), feed.attach(), faces.attach(), todos.attach(), agHub.attach(user.role === "owner")];
     // 列表先读本地缓存, 再走 HTTP (带 ETag) 校验, 不等长连接; 连上后 welcome 再校验一次
     void chats.loadChats().catch(() => undefined);
     link.start();

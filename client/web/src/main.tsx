@@ -1,6 +1,6 @@
 import { MotionProvider } from "@hx/ui/motion";
 import { ThemeProvider } from "@hx/ui/theme";
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 import { watchVersion } from "./core/version";
@@ -14,6 +14,8 @@ void push["./core/push.ts"]?.().then(async (m) => {
   await m.registerSW?.();
   await m.syncPush?.().catch(() => undefined);
 });
+// dev 下 ?agmock: 不登录直接看 Agent GUI 工作台 (内存模拟主机), 生产包里这段被剔除
+const DevHarness = import.meta.env.DEV && location.search.includes("agmock") ? lazy(() => import("./agentgui/dev-harness")) : null;
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
@@ -21,7 +23,13 @@ if (root) {
       <ThemeProvider defaultMode="system">
         {/* HX-UI 的动效组件 (图表, 骨架, 弹层) 一律用 m.*, 要根部的 MotionProvider 加载特性, 否则停在初始态 */}
         <MotionProvider>
-          <App />
+          {DevHarness ? (
+            <Suspense fallback={null}>
+              <DevHarness />
+            </Suspense>
+          ) : (
+            <App />
+          )}
         </MotionProvider>
       </ThemeProvider>
     </StrictMode>,
