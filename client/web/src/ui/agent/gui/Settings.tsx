@@ -5,7 +5,7 @@ import { Input } from "@hx/ui/ui/input";
 import { RadioGroup, RadioGroupCard } from "@hx/ui/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@hx/ui/ui/select";
 import { Textarea } from "@hx/ui/ui/textarea";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useResources } from "../../../app/hooks";
 import { STORAGE_AG_MOCK as STORAGE_MOCK } from "../../../agentgui/constants";
@@ -13,7 +13,8 @@ import { useAgHub, useConn, usePairs } from "../../../agentgui/hooks";
 import { allPairs, pairHost, removePair, routeBlock } from "../../../agentgui/pairs";
 import type { Device, Instance, Settings, WatchPush } from "../../../agentgui/types";
 import { conn } from "../../../agentgui/conns";
-import { ago, GUIDE, guiLink } from "./parts";
+import { Diagnostics, NotifySection } from "./Diagnostics";
+import { ago, DIAG, GUIDE, guiLink } from "./parts";
 
 // 预设: 首次启动探针也会写入, 这里方便再加一个同类实例
 const PRESETS: Omit<Instance, "id">[] = [
@@ -27,7 +28,7 @@ const WATCH: { value: WatchPush; title: string; desc: string }[] = [
   { value: "normal", title: "正常推送", desc: "照常有声推送" },
 ];
 
-function Section({ title, children, sub }: { title: string; sub?: string; children: ReactNode }) {
+export function Section({ title, children, sub }: { title: string; sub?: string; children: ReactNode }) {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div>
@@ -40,9 +41,13 @@ function Section({ title, children, sub }: { title: string; sub?: string; childr
 }
 
 // 设置: 配对, Agent 实例, 已配对设备, 电脑前看着时手机; 除配对外都存在探针本地, 经直连读写
-export function SettingsPage({ host }: { host: string }) {
+export function SettingsPage({ host, focus }: { host: string; focus?: string }) {
   const c = useConn(host);
   const ready = c.state === "ready";
+  const diagRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus === DIAG) diagRef.current?.scrollIntoView({ block: "start" });
+  }, [focus]);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
@@ -62,6 +67,10 @@ export function SettingsPage({ host }: { host: string }) {
             <Devices host={host} />
           </>
         )}
+        <NotifySection />
+        <div ref={diagRef}>
+          <Diagnostics />
+        </div>
         {import.meta.env.DEV && <DevMock />}
       </div>
     </div>

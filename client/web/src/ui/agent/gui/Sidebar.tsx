@@ -4,12 +4,14 @@ import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@hx/ui/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Input } from "@hx/ui/ui/input";
-import { BookOpen, ChevronDown, Ellipsis, Plus, Search, Settings } from "lucide-react";
+import { Archive, BookOpen, ChevronDown, ChevronRight, Ellipsis, Pin, PinOff, Plus, Search, Settings } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TXT_NEW_SESSION } from "../../../agentgui/constants";
 import { useAgHub, useConn, usePairs } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
+import { agDrafts, agPrefs, key, useAgPrefs } from "../../../agentgui/prefs";
+import { KeyOf } from "./Keys";
 import type { SessionInfo } from "../../../agentgui/types";
 import { agentDenied, ScopeFix, useAgentDenied } from "../../resources/ProbeDialogs";
 import { useResources } from "../../../app/hooks";
@@ -17,6 +19,7 @@ import { AddDel } from "./Diff";
 import { STORAGE_NEW_CWD } from "./NewSession";
 import { ago, AgentGlyph, basename, GUIDE, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
 
+export const SEARCH_ID = "ag-session-search";
 type Row = Pick<SessionInfo, "id" | "title" | "agent" | "state" | "updated" | "pending"> & Partial<SessionInfo>;
 
 // 左栏: 主机切换 (路线), 搜索, 新会话, 需要你, 项目 > 会话, 设置
@@ -24,15 +27,23 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
   usePairs();
   const hub = useAgHub();
   const c = useConn(host);
+  const prefs = useAgPrefs();
   const [q, setQ] = useState("");
   const hubHost = hub.hosts.find((h) => h.subject === host);
   const direct = c.state === "ready" || c.sessions.length > 0;
-  const rows: Row[] = direct ? c.sessions : (hubHost?.sessions ?? []);
-  const shown = rows.filter((r) => !q || r.title.toLowerCase().includes(q.toLowerCase()));
+  const rows: Row[] = [...(direct ? c.sessions : (hubHost?.sessions ?? []))].sort((a, b) => b.updated - a.updated);
+  const ql = q.toLowerCase();
+  const hit = (r: Row) => !q || `${r.title} ${r.agent} ${r.cwd ?? ""}`.toLowerCase().includes(ql);
+  // 与 t3code 一样: 置顶单列在最上, 归档默认收起 (搜索时也搜归档)
+  const isSettled = (r: Row) => prefs.settled.includes(key(host, r.id));
+  const shown = rows.filter((r) => hit(r) && (q !== "" || prefs.showSettled || !isSettled(r)));
+  const settledN = rows.filter(isSettled).length;
   const cardSids = new Set(hub.cards.filter((x) => x.host === host).map((x) => x.sid));
   const need = shown.filter((r) => r.state === "waiting" || r.pending > 0 || cardSids.has(r.id));
+  const pinned = shown.filter((r) => prefs.pinned.includes(key(host, r.id)));
   const groups = new Map<string, Row[]>();
   for (const r of shown) {
+    if (pinned.includes(r)) continue;
     const k = r.cwd ?? "";
     groups.set(k, [...(groups.get(k) ?? []), r]);
   }
@@ -82,7 +93,7 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
       </div>
       <div className="flex flex-col gap-2 p-2">
         {scope.denied && <ScopeFix subject={host} shell={scope.shell} compact />}
-        <Input size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" leading={<Search className="size-4" />} />
+        <Input id={SEARCH_ID} size="sm" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && (setQ(""), e.currentTarget.blur())} placeholder="搜索会话" leading={<Search className="size-4" />} trailing={<KeyOf command="chat.find" className="opacity-60" />} />
         <Button
           variant="outline"
           className="w-full"
@@ -94,6 +105,7 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
         >
           <Plus />
           {TXT_NEW_SESSION}
+          <KeyOf command="chat.new" className="ml-auto opacity-60" />
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
@@ -108,16 +120,37 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
             ))}
           </section>
         )}
-        {[...groups.entries()].map(([cwd, list]) => (
-          <section key={cwd} className="mb-3">
-            <h3 className="truncate px-2 py-1 text-xs font-medium text-muted-foreground" title={cwd}>
-              {cwd ? basename(cwd) : "会话"}
+        {pinned.length > 0 && (
+          <section className="mb-3">
+            <h3 className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
+              <Pin className="size-3" />
+              置顶
             </h3>
-            {list.map((r) => (
-              <SessionRow key={r.id} host={host} row={r} active={r.id === sid} direct={direct} />
+            {pinned.map((r) => (
+              <SessionRow key={`p${r.id}`} host={host} row={r} active={r.id === sid} direct={direct} />
             ))}
           </section>
-        ))}
+        )}
+        {[...groups.entries()].map(([cwd, list]) => {
+          const g = `${host}|${cwd}`;
+          const folded = prefs.folded.includes(g) && !q;
+          return (
+            <section key={cwd} className="mb-3">
+              <button type="button" onClick={() => agPrefs.toggleFold(g)} aria-expanded={!folded} className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground" title={cwd}>
+                <ChevronRight className={`size-3 shrink-0 transition-transform ${folded ? "" : "rotate-90"}`} />
+                <span className="min-w-0 flex-1 truncate">{cwd ? basename(cwd) : "会话"}</span>
+                <span className="tabular-nums">{list.length}</span>
+              </button>
+              {!folded && list.map((r) => <SessionRow key={r.id} host={host} row={r} active={r.id === sid} direct={direct} />)}
+            </section>
+          );
+        })}
+        {settledN > 0 && !q && (
+          <Button variant="ghost" size="xs" className="mx-2 text-muted-foreground" onClick={agPrefs.toggleShowSettled}>
+            <Archive />
+            {prefs.showSettled ? "收起归档" : `显示归档 (${settledN})`}
+          </Button>
+        )}
         {host && rows.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">{c.state === "ready" ? "还没有会话" : "连上主机后显示会话"}</p>}
       </div>
       <div className="flex flex-col border-t border-border py-1">
@@ -136,6 +169,11 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
 
 function SessionRow({ host, row, active, direct }: { host: string; row: Row; active: boolean; direct: boolean }) {
   const c = useConn(host);
+  const prefs = useAgPrefs();
+  const k = key(host, row.id);
+  const pinned = prefs.pinned.includes(k);
+  const settled = prefs.settled.includes(k);
+  const unread = !active && agPrefs.unread(k, row.updated) && (row.state === "idle" || row.state === "error");
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const act = (m: string, p: object, after?: () => void) =>
@@ -148,11 +186,15 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
       <a href={sessionLink(host, row.id)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5">
         <StateDot state={row.state} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm text-foreground">{row.title || "未命名"}</span>
+          <span className={`flex items-center gap-1 truncate text-sm ${unread ? "font-semibold text-foreground" : settled ? "text-muted-foreground" : "text-foreground"}`}>
+            <span className="truncate">{row.title || "未命名"}</span>
+            {unread && <span role="img" aria-label="有新结果" className="size-1.5 shrink-0 rounded-full bg-info" />}
+          </span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <AgentGlyph name={row.agent} />
             <span className="truncate">{row.agent}</span>
             <span className="shrink-0">· {ago(row.updated)}前</span>
+            {agDrafts.has(k) && <span className="shrink-0 text-warning">· 草稿</span>}
           </span>
         </span>
         <AddDel add={row.adds ?? 0} del={row.dels ?? 0} />
@@ -165,6 +207,16 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => agPrefs.togglePin(k)}>
+              {pinned ? <PinOff /> : <Pin />}
+              {pinned ? "取消置顶" : "置顶"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => agPrefs.toggleSettle(k)}>
+              <Archive />
+              {settled ? "取消归档" : "归档"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void navigator.clipboard.writeText(location.origin + location.pathname + sessionLink(host, row.id)).then(() => toast.success("已复制会话链接"))}>复制链接</DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setRenaming(true)}>重命名</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => act("session/resume", { sid: row.id }, undefined)}>恢复 (重新载入)</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => act("session/close", { sid: row.id })}>结束 (留档)</DropdownMenuItem>
@@ -182,7 +234,12 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
         description={`"${row.title || "未命名"}" 的记录会从主机上删掉, 不能恢复。`}
         confirmLabel="删除"
         tone="destructive"
-        onConfirm={() => c.c.hx("session/delete", { sid: row.id }).then(() => c.c.dropSession(row.id))}
+        onConfirm={() =>
+          c.c.hx("session/delete", { sid: row.id }).then(() => {
+            c.c.dropSession(row.id);
+            agPrefs.forget(k);
+          })
+        }
       />
     </div>
   );

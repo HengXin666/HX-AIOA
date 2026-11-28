@@ -1,7 +1,7 @@
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@hx/ui/ui/alert";
 import { Button } from "@hx/ui/ui/button";
 import { Spin } from "@hx/ui/ui/spin";
-import { Brain, ChevronRight, CircleCheck, Circle, CircleDot } from "lucide-react";
+import { ArrowDown, Brain, ChevronRight, CircleCheck, Circle, CircleDot, Copy, Pencil } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PAGE_TURNS } from "../../../agentgui/constants";
@@ -20,6 +20,7 @@ export function Timeline({ snap, onRetry, onModel }: { snap: SessionSnap; onRetr
   const [shown, setShown] = useState(PAGE_TURNS);
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [away, setAway] = useState(false);
   const prevHeight = useRef(0);
   const start = Math.max(0, turns.length - shown);
   const canOlder = start > 0 || snap.more;
@@ -52,13 +53,22 @@ export function Timeline({ snap, onRetry, onModel }: { snap: SessionSnap; onRetr
     return () => io.disconnect();
   });
 
+  const toBottom = () => {
+    const el = box.current;
+    if (!el) return;
+    stick.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
   return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
     <div
       ref={box}
       className="min-h-0 flex-1 overflow-y-auto"
       onScroll={(e) => {
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+        if (away === stick.current) setAway(!stick.current);
       }}
     >
       <div className="mx-auto flex w-full max-w-[768px] flex-col gap-6 px-4 py-6">
@@ -75,16 +85,61 @@ export function Timeline({ snap, onRetry, onModel }: { snap: SessionSnap; onRetr
         ))}
       </div>
     </div>
+      {away && (
+        <Button size="sm" variant="secondary" className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-md" onClick={toBottom}>
+          <ArrowDown />
+          回到最新
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const copy = (t: string) => void navigator.clipboard.writeText(t).then(() => toast.success("已复制"));
+
+// 消息悬停时的小操作 (t3code 的复制 / 编辑重发)
+function MsgActions({ text, onEdit, end }: { text: string; onEdit?: () => void; end?: boolean }) {
+  if (!text) return null;
+  return (
+    <div className={`flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 ${end ? "self-end" : ""}`}>
+      <Button size="icon-xs" variant="ghost" aria-label="复制" onClick={() => copy(text)}>
+        <Copy />
+      </Button>
+      {onEdit && (
+        <Button size="icon-xs" variant="ghost" aria-label="放回输入框改了再发" onClick={onEdit}>
+          <Pencil />
+        </Button>
+      )}
+    </div>
   );
 }
 
 const TurnView = memo(function TurnView({ turn, last, onRetry, onModel }: { turn: Turn; last: boolean; onRetry: () => void; onModel: () => void }) {
-  const userText = (turn.user ?? []).map((b) => b.text ?? (b.uri ? `[${b.name ?? b.uri}]` : "")).join("\n");
+  const { insert } = useGui();
+  const blocks = turn.user ?? [];
+  const userText = blocks
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("\n");
+  const links = blocks.filter((b) => b.type === "resource_link" || b.type === "resource");
+  const imgs = blocks.filter((b) => b.type === "image" && b.data);
+  const reply = turn.items.flatMap((i) => (i.t === "msg" ? [i.text] : [])).join("\n\n");
   const segs = segments(turn.items);
   return (
     <section className="flex flex-col gap-3" aria-label="一轮对话">
       {turn.user && (
-        <div className={`self-end rounded-2xl bg-muted px-4 py-2 text-[15px] leading-7 whitespace-pre-wrap text-foreground max-w-[85%] ${turn.local ? "opacity-70" : ""}`}>{userText}</div>
+        <div className="group flex flex-col gap-1">
+          {imgs.length > 0 && (
+            <div className="flex flex-wrap justify-end gap-2">
+              {imgs.map((b, i) => (
+                <img key={i} src={`data:${b.mimeType};base64,${b.data}`} alt={b.name ?? "图片"} className="max-h-40 rounded-xl border border-border" />
+              ))}
+            </div>
+          )}
+          {userText && <div className={`max-w-[85%] self-end rounded-2xl bg-muted px-4 py-2 text-[15px] leading-7 whitespace-pre-wrap text-foreground ${turn.local ? "opacity-70" : ""}`}>{userText}</div>}
+          {links.length > 0 && <p className="self-end text-xs text-muted-foreground">引用 {links.map((b) => b.name ?? b.uri ?? b.resource?.uri).join(", ")}</p>}
+          <MsgActions text={userText} end onEdit={() => insert(userText)} />
+        </div>
       )}
       {segs.map((s, i) =>
         s.t === "group" ? (
@@ -94,7 +149,10 @@ const TurnView = memo(function TurnView({ turn, last, onRetry, onModel }: { turn
         ),
       )}
       {turn.running && segs.length === 0 && <Spin size="sm" />}
-      <TurnFoot turn={turn} />
+      <div className="group flex items-center gap-2">
+        <TurnFoot turn={turn} />
+        {!turn.running && <MsgActions text={reply} />}
+      </div>
     </section>
   );
 });

@@ -6,25 +6,27 @@ import { TXT_AUTH_FAIL, TXT_NO_ROUTE, TXT_SEND_FAIL, TXT_UNPAIRED } from "../../
 import { useAgHub, useAttach, useConn, useSession } from "../../../agentgui/hooks";
 import { agHub } from "../../../agentgui/hub";
 import { modelPicker, nameOf } from "../../../agentgui/options";
-import type { Card } from "../../../agentgui/types";
+import { agPrefs, key } from "../../../agentgui/prefs";
+import type { Card, ContentBlock } from "../../../agentgui/types";
 import { WorkPermCard } from "./Approve";
 import { Composer } from "./Composer";
 import { useGui } from "./ctx";
 import { LoginCard } from "./Login";
 import { ApproveOnly, guiLink, INBOX, ModeToggle, ReconnectBar, RouteBadge } from "./parts";
 import { StatsBar } from "./StatsBar";
+import { SidebarButton } from "./layout";
 import { Timeline } from "./Timeline";
 
 // 会话页 (工作模式): 顶栏, 时间线, 贴在输入框上方的审批卡, 输入框, 统计条
 export function SessionView({ right, toggleRight, draft }: { right: boolean; toggleRight: () => void; draft: React.MutableRefObject<((t: string) => void) | null> }) {
-  const { host, sid } = useGui();
+  const { host, sid, cmd } = useGui();
   const c = useConn(host);
   const s = useSession(host, sid);
   const hub = useAgHub();
   useAttach(host, sid);
   const info = c.sessions.find((x) => x.id === sid);
   const [modelOpen, setModelOpen] = useState(false);
-  const queue = useRef<string[]>([]);
+  const queue = useRef<ContentBlock[][]>([]);
 
   const perms = useMemo(() => {
     const seen = new Set(s.perms.map((p) => p.rid));
@@ -37,20 +39,26 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
   const running = last ? last.running : info?.state === "running" || info?.state === "starting";
   const ready = c.state === "ready";
 
-  const send = (text: string) => {
+  const send = (prompt: ContentBlock[]) => {
     if (running) {
-      queue.current.push(text);
+      queue.current.push(prompt);
       toast.info("已排队, 这一轮结束后发出");
       return;
     }
-    c.c.acpRequest(sid, "session/prompt", { prompt: [{ type: "text", text }] }).catch((e: Error) => toast.error(e.message));
+    c.c.acpRequest(sid, "session/prompt", { prompt }).catch((e: Error) => toast.error(e.message));
   };
+
+  // 打开着就算看过; mod+shift+m 开模型面板
+  useEffect(() => {
+    if (info?.updated) agPrefs.markSeen(key(host, sid), info.updated);
+  }, [host, sid, info?.updated]);
+  useEffect(() => cmd.on((k) => k === "modelPicker.toggle" && setModelOpen((v) => !v)), [cmd]);
 
   // 排队的话在这一轮结束后逐条发
   useEffect(() => {
     if (running || queue.current.length === 0 || !ready) return;
-    const next = queue.current.shift() as string;
-    c.c.acpRequest(sid, "session/prompt", { prompt: [{ type: "text", text: next }] }).catch((e: Error) => toast.error(e.message));
+    const next = queue.current.shift() as ContentBlock[];
+    c.c.acpRequest(sid, "session/prompt", { prompt: next }).catch((e: Error) => toast.error(e.message));
   }, [running, ready, c.c, sid]);
 
   const answer = (card: Card, option: string | null, text = "") => {
@@ -60,8 +68,7 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
 
   const retry = () => {
     const prev = [...s.view.turns].reverse().find((t) => t.user);
-    const text = prev?.user?.map((b) => b.text ?? "").join("\n");
-    if (text) send(text);
+    if (prev?.user?.length) send(prev.user);
   };
 
   const model = nameOf(modelPicker(s.view, info));
@@ -74,6 +81,7 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3">
+        <SidebarButton />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-foreground">{title}</h2>
           <p className="truncate text-xs text-muted-foreground">{[info?.agent, model, info?.branch ? `分支 ${info.branch}` : "", info?.cwd].filter(Boolean).join(" · ")}</p>

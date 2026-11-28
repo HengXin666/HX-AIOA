@@ -90,3 +90,5 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/impact-statement-draft.json | 安卓 GitHub 页面 impact statement draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/todo-checkpoint-draft.json | 安卓 GitHub 页面 todo checkpoint draft |
 | 2026-11-22 | artifact | docs/aegis/work/2026-11-22-android-github/drift-check-draft.json | 安卓 GitHub 页面 drift check draft |
+| 2026-11-29 | work | docs/aegis/work/2026-11-29-126-t3code/10-intent.md | Agent GUI 对齐 t3code intent |
+| 2026-11-29 | work | docs/aegis/work/2026-11-29-126-t3code/90-evidence.md | Agent GUI 对齐 t3code evidence |

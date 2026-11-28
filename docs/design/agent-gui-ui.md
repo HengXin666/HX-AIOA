@@ -77,7 +77,7 @@
 
 ### 2.7 快捷键
 
-`Ctrl+K` 命令面板, `Ctrl+N` 新会话, `Ctrl+.` 停止, `Ctrl+J` 终端, `Ctrl+Shift+A` 权限模式, `Alt+S` 互换, `Ctrl+[` `Ctrl+]` 上下一个会话, `Ctrl+Shift+Y` 只看等你的会话。
+照搬 t3code 的键位与 "按键 -> 命令 + when" 模型 (mac 上 mod = Cmd): `mod+K` 命令面板, `mod+N` 新会话, `mod+B` 左栏, `mod+Alt+B` 右栏, `mod+D` 改动, `mod+P` 文件, `mod+F` 搜会话, `mod+Shift+[` `mod+Shift+]` 上下一个会话, `mod+1..9` 第 n 个, `mod+Shift+P` 置顶, `mod+Shift+S` 归档, `mod+Shift+C` 复制链接, `mod+Shift+M` 模型, `mod+Shift+A` 权限模式, `mod+S` 暂存草稿, `mod+.` 停止, `mod+/` 一览。终端 `mod+J` 等需要探针的见 [agent-gui-t3code.md](agent-gui-t3code.md) 第 3 节。
 
 ## 3. 手机
 
