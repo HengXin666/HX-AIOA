@@ -104,10 +104,10 @@ function advanceBack(state: TrendState, page: TrendPage, now: number): void {
 /** 历史是否补完: 评论与我开的 Issue / PR 都翻到底。 */
 export const trendDone = (st: TrendState | undefined): boolean => Boolean(st?.cmtDone && st.iDone && st.pDone);
 
-const FIELDS = ["commits", "prOpened", "prMerged", "prClosed", "issueOpened", "issueClosed", "prComments", "issueComments", "reviews"] as const;
+const FIELDS = ["commits", "prOpened", "prMerged", "prClosed", "issueOpened", "issueClosed", "issueDropped", "prComments", "issueComments", "reviews"] as const;
 type Field = (typeof FIELDS)[number];
 
-const zero = (label: string): GithubTrendPoint => ({ label, commits: 0, prOpened: 0, prMerged: 0, prClosed: 0, issueOpened: 0, issueClosed: 0, prComments: 0, issueComments: 0, reviews: 0 });
+const zero = (label: string): GithubTrendPoint => ({ label, commits: 0, prOpened: 0, prMerged: 0, prClosed: 0, issueOpened: 0, issueClosed: 0, issueDropped: 0, prComments: 0, issueComments: 0, reviews: 0 });
 
 /** 一行拆成 (日期, 字段, 数): 提交直接用 GitHub 给的日期, 其余按 labelOf 换成本地日期。 */
 export function eventsOf(r: TrendRow, labelOf: (ts: number) => string): [string, Field, number][] {
@@ -121,7 +121,7 @@ export function eventsOf(r: TrendRow, labelOf: (ts: number) => string): [string,
       break;
     case "issue":
       add(t(b.c), "issueOpened");
-      add(t(b.x), "issueClosed");
+      add(t(b.x), b.no ? "issueDropped" : "issueClosed");
       break;
     case "pr":
       add(t(b.c), "prOpened");

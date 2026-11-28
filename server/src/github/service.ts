@@ -158,7 +158,7 @@ export class GithubService {
     s.points.forEach((p, i) => {
       const d = list[i];
       if (!d) return;
-      Object.assign(d, { commits: p.commits, prOpened: p.prOpened, prMerged: p.prMerged, prClosed: p.prClosed, issueOpened: p.issueOpened, issueClosed: p.issueClosed, reviews: p.reviews, comments: p.prComments + p.issueComments });
+      Object.assign(d, { commits: p.commits, prOpened: p.prOpened, prMerged: p.prMerged, prClosed: p.prClosed, issueOpened: p.issueOpened, issueClosed: p.issueClosed + p.issueDropped, reviews: p.reviews, comments: p.prComments + p.issueComments });
     });
   }
 

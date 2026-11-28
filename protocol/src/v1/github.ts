@@ -115,6 +115,7 @@ export const GITHUB_HISTORY_PAGE = 30;
 
 // 走势 (#142): 一个接口给 GitHub 页全部折线 / 混合图; 按天 14 格与按周 (周一起) 12 格一起给, 切范围不再请求
 // label: 那一格第一天 YYYY-MM-DD (设备时区); *Comments 是我发的评论; received 是范围内我新开的 Issue / PR 收到的评论总数
+// issueClosed: 关闭完成 (含没写原因的); issueDropped (#145): 未完成就关 (不计划做, 重复)
 export type GithubTrendPoint = {
   label: string;
   commits: number;
@@ -123,6 +124,7 @@ export type GithubTrendPoint = {
   prClosed: number;
   issueOpened: number;
   issueClosed: number;
+  issueDropped: number;
   prComments: number;
   issueComments: number;
   reviews: number;

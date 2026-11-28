@@ -73,6 +73,7 @@ GithubTrendPoint = { label: "YYYY-MM-DD" (那一格第一天), commits, prOpened
 
 - `tz`: IANA 时区名, 按它分天; 不传或不认识时用主人设置的时区。提交数例外: 用 GitHub 贡献日历的日期 (提交者本地日期), 与热力格一致。
 - `prOpened` / `issueOpened`: 我开的; `prMerged`: 我开的 PR 被合入 (按合入时间); `prClosed`: 没合入就关了; `issueClosed`: 我开的 Issue 被关 (按关闭时间, 很早开的 Issue 最近才关也算在关的那天)。
+- `issueClosed` / `issueDropped` (#145): Issue 关闭完成 (含没写原因的) / 未完成就关 (`stateReason` 为 NOT_PLANNED 或 DUPLICATE); `/github/daily` 的 `issueClosed` 仍是两者之和。
 - `prComments` / `issueComments`: 我在 PR / Issue 下发的评论; `received`: 范围内我新开的 Issue / PR 当前收到的评论总数; `reviews`: 我提交的 PR 评审。
 - `backfill.done`: Issue / PR 与评论都已补到 12 周前; 为 false 时较早的格子可能偏少。
 

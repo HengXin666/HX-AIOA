@@ -13,6 +13,9 @@ export const FOOTPRINT_LIMIT = 20;
 export const TREND_RECENT = 50;
 
 const ITEM = `id number url createdAt updatedAt closedAt repository { nameWithOwner } comments { totalCount }`;
+// Issue 多要关闭原因 (#145): 不计划做 / 重复算 "未完成就关"
+const ISSUE = `${ITEM} stateReason`;
+const DROPPED = new Set(["NOT_PLANNED", "DUPLICATE"]);
 // 平时靠 viewer 的最近更新列表 (新开, 关闭, 合入都会更新它); 历史只回补一次, 从贡献集合按开的时间往前翻
 const MINE = `issueContributions(first: ${TREND_PAGE}, after: $ia, orderBy: { direction: DESC }) @include(if: $bi) { ...Ic }
       pullRequestContributions(first: ${TREND_PAGE}, after: $pa, orderBy: { direction: DESC }) @include(if: $bp) { ...Pc }`;
@@ -27,14 +30,14 @@ export const TREND_QUERY = `query($from: DateTime!, $to: DateTime!, $full: Boole
     }
     created: repositories(first: ${FOOTPRINT_LIMIT}, ownerAffiliations: [OWNER], orderBy: { field: CREATED_AT, direction: DESC }) @include(if: $full) { nodes { nameWithOwner url description isPrivate isFork createdAt parent { nameWithOwner } } }
     starredRepositories(first: 50, orderBy: { field: STARRED_AT, direction: DESC }) @include(if: $full) { edges { starredAt node { nameWithOwner url description stargazerCount } } }
-    myIssues: issues(first: ${TREND_RECENT}, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $full) { nodes { ${ITEM} } }
+    myIssues: issues(first: ${TREND_RECENT}, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $full) { nodes { ${ISSUE} } }
     myPrs: pullRequests(first: ${TREND_RECENT}, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $full) { nodes { ${ITEM} mergedAt } }
     recent: issueComments(last: 100) @include(if: $full) { ...Cmt }
     older: issueComments(last: 100, before: $before) @include(if: $older) { ...Cmt }
   }
 }
 fragment Cmt on IssueCommentConnection { pageInfo { startCursor hasPreviousPage } nodes { id createdAt url pullRequest { number } repository { nameWithOwner } } }
-fragment Ic on CreatedIssueContributionConnection { pageInfo { endCursor hasNextPage } nodes { occurredAt issue { ${ITEM} } } }
+fragment Ic on CreatedIssueContributionConnection { pageInfo { endCursor hasNextPage } nodes { occurredAt issue { ${ISSUE} } } }
 fragment Pc on CreatedPullRequestContributionConnection { pageInfo { endCursor hasNextPage } nodes { occurredAt pullRequest { ${ITEM} mergedAt } } }`;
 
 export type TrendKind = "issue" | "pr" | "cmt" | "commit" | "review" | "repo" | "star";
@@ -70,6 +73,7 @@ function itemRow(n: Obj): TrendRow | null {
   const m = ms(n.mergedAt);
   const body: Obj = { repo, n: num(n.number) ?? 0, url: s(n.url), c, cm: num(obj(n.comments).totalCount) ?? 0 };
   if (x) body.x = x;
+  if (x && DROPPED.has(s(n.stateReason))) body.no = true;
   if (m) body.m = m;
   // ts 取最后一次动静: 很早开的 Issue 最近才关, 也要留在窗口里
   return { k: id, kind: pr ? "pr" : "issue", ts: Math.max(c, x, m), body };

@@ -176,3 +176,12 @@ test("走势同步: 超出保留期的旧提交不写, 数据没变时第二次�
   const second = await trendStep(store, "t", st, NOW + 30 * 60_000, 1, fake);
   assert.equal(second, 0);
 });
+
+test("走势: Issue 不计划做 / 重复关闭算未完成, 其余关闭算完成 (#145)", () => {
+  const closed = (id: string, reason: string | null) => item(id, "2026-11-26T01:00:00Z", "2026-11-27T01:00:00Z", { closedAt: "2026-11-27T01:00:00Z", stateReason: reason });
+  const data = { viewer: { myIssues: { nodes: [closed("I_a", "COMPLETED"), closed("I_b", "NOT_PLANNED"), closed("I_c", "DUPLICATE"), closed("I_d", null)] } } };
+  const { days } = trendOf(parseTrend(data, true).rows, label(NOW), label);
+  const p = days.points.find((x) => x.label === "2026-11-27")!;
+  assert.equal(p.issueClosed, 2);
+  assert.equal(p.issueDropped, 2);
+});
