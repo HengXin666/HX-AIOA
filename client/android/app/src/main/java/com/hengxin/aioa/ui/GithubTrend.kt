@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 // GitHub 走势 (#142): 服务端 GET /github/trend 一次给全, 14 天与 12 周都在里面, 切范围不再请求
 
-/** 一格 (一天或一周): 提交, PR 新开 / 合入 / 未合入关闭, Issue 新开 / 关闭, 我发的 PR / Issue 评论, 评审。 */
+/** 一格 (一天或一周): 提交, PR 新开 / 合入 / 未合入关闭, Issue 新开 / 关闭完成 / 未完成就关, 我发的 PR / Issue 评论, 评审。 */
 data class GhTrendPoint(
     val label: String,
     val commits: Int = 0,
@@ -17,12 +17,14 @@ data class GhTrendPoint(
     val prComments: Int = 0,
     val issueComments: Int = 0,
     val reviews: Int = 0,
+    val issueDropped: Int = 0,
 ) {
     val comments get() = prComments + issueComments
 
     operator fun plus(o: GhTrendPoint) = GhTrendPoint(
         label, commits + o.commits, prOpened + o.prOpened, prMerged + o.prMerged, prClosed + o.prClosed,
         issueOpened + o.issueOpened, issueClosed + o.issueClosed, prComments + o.prComments, issueComments + o.issueComments, reviews + o.reviews,
+        issueDropped + o.issueDropped,
     )
 }
 
@@ -54,6 +56,7 @@ private fun seriesOf(o: JSONObject?): GhTrendSeries = GhTrendSeries(
         GhTrendPoint(
             it.optString("label"), it.optInt("commits"), it.optInt("prOpened"), it.optInt("prMerged"), it.optInt("prClosed"),
             it.optInt("issueOpened"), it.optInt("issueClosed"), it.optInt("prComments"), it.optInt("issueComments"), it.optInt("reviews"),
+            it.optInt("issueDropped"),
         )
     },
     o?.optInt("received") ?: 0,
@@ -86,7 +89,7 @@ fun trendLine(p: GhTrendPoint, weekly: Boolean): String {
     val parts = buildList {
         if (p.commits > 0) add("提交 ${p.commits}")
         if (p.prOpened + p.prMerged + p.prClosed > 0) add("PR 新开 ${p.prOpened} 合入 ${p.prMerged}" + if (p.prClosed > 0) " 关闭 ${p.prClosed}" else "")
-        if (p.issueOpened + p.issueClosed > 0) add("Issue 新开 ${p.issueOpened} 关闭 ${p.issueClosed}")
+        if (p.issueOpened + p.issueClosed + p.issueDropped > 0) add("Issue 新开 ${p.issueOpened} 关闭 ${p.issueClosed}" + if (p.issueDropped > 0) " 未完成关 ${p.issueDropped}" else "")
         if (p.comments > 0) add("评论 ${p.comments}")
         if (p.reviews > 0) add("评审 ${p.reviews}")
     }

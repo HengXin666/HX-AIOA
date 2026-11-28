@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,9 +34,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +56,10 @@ private const val BAR_SHARE = 0.62f
 private const val AREA_TOP_ALPHA = 0.28f
 private const val DRAW_MS = 700
 private const val X_TICKS = 4
+private const val HIDDEN_ALPHA = 0.35f
+// 双轴时提示框里每个系列后面写它对应哪根轴 (#145)
+const val AXIS_LEFT = "左轴"
+const val AXIS_RIGHT = "右轴"
 
 /** y 轴上限取 "好看" 的数: (1, 2, 4, 6, 8, 10) × 10^k, 至少 2, 中线也是整数。 */
 fun mixCeil(v: Float): Float {
@@ -65,7 +73,8 @@ private val NICE = listOf(1f, 2f, 4f, 6f, 8f, 10f)
 
 /**
  * 混合图: 左侧刻度, 底部日期; 点按或横向拖动选中一格 (onSelect), 选中格画竖线。
- * labels 与每个系列的 values 一样长。
+ * labels 与每个系列的 values 一样长。tip 不为空时在选中格旁画提示框, 标题为 tip, 列出每个系列这一格的数;
+ * onTap 给了时点按走它 (比如再点同一格收起), 拖动仍走 onSelect。横向拖过手势阈值才接管, 纵向滑动留给页面滚动。
  */
 @Composable
 fun MixChart(
@@ -76,8 +85,10 @@ fun MixChart(
     selected: Int = -1,
     grid: Color = Aioa.colors.border,
     axis: Color = Aioa.colors.textSecondary,
+    tip: String? = null,
+    onTap: ((Int) -> Unit)? = null,
     onSelect: (Int) -> Unit = {},
-) = MixCanvas(series, emptyList(), labels, modifier, height, selected, grid, axis, onSelect)
+) = MixCanvas(series, emptyList(), labels, modifier, height, selected, grid, axis, tip, onTap, onSelect)
 
 /**
  * 双轴混合图 (#144): left 的系列共用左轴, right 的系列用独立的右轴 (量级差很多时不再被压扁),
@@ -93,8 +104,10 @@ fun DualMixChart(
     selected: Int = -1,
     grid: Color = Aioa.colors.border,
     axis: Color = Aioa.colors.textSecondary,
+    tip: String? = null,
+    onTap: ((Int) -> Unit)? = null,
     onSelect: (Int) -> Unit = {},
-) = MixCanvas(left, right, labels, modifier, height, selected, grid, axis, onSelect)
+) = MixCanvas(left, right, labels, modifier, height, selected, grid, axis, tip, onTap, onSelect)
 
 /** 系列里的最大值取好看的上限; 空的按 0。 */
 private fun topOf(series: List<MixSeries>): Float = mixCeil(series.maxOfOrNull { s -> s.values.maxOrNull() ?: 0f } ?: 0f)
@@ -109,11 +122,14 @@ private fun MixCanvas(
     selected: Int,
     grid: Color,
     axis: Color,
+    tip: String?,
+    onTap: ((Int) -> Unit)?,
     onSelect: (Int) -> Unit,
 ) {
     val n = labels.size
     val series = left + right
     if (n == 0 || series.isEmpty()) return
+    val colors = Aioa.colors
     val measurer = rememberTextMeasurer()
     val reveal = remember(series.map { it.label }, n) { Animatable(0f) }
     LaunchedEffect(reveal) { reveal.animateTo(1f, tween(DRAW_MS, easing = FastOutSlowInEasing)) }
@@ -123,10 +139,12 @@ private fun MixCanvas(
     // 画的时候记下格宽与左边距, 手势按它换算格子; 回调取最新的
     val geo = remember { FloatArray(2) { 1f } }
     val select by rememberUpdatedState(onSelect)
-    fun pick(x: Float) = select(((x - geo[1]) / geo[0]).toInt().coerceIn(0, n - 1))
+    val tap by rememberUpdatedState(onTap ?: onSelect)
+    fun slotAt(x: Float) = ((x - geo[1]) / geo[0]).toInt().coerceIn(0, n - 1)
+    fun pick(x: Float) = select(slotAt(x))
     Canvas(
         modifier.fillMaxWidth().height(height)
-            .pointerInput(n) { detectTapGestures { pick(it.x) } }
+            .pointerInput(n) { detectTapGestures { tap(slotAt(it.x)) } }
             .pointerInput(n) { detectHorizontalDragGestures { ch, _ -> pick(ch.position.x) } },
     ) {
         val topL = topOf(left)
@@ -195,6 +213,29 @@ private fun MixCanvas(
         if (selected in 0 until n && p >= 1f) for ((s, ys) in drawn) if (s.style == MixStyle.LINE || s.style == MixStyle.AREA || s.style == MixStyle.DASHED) {
             s.values.getOrNull(selected)?.let { dot(s.color, bg, Offset(x(selected), ys(it)), 3.5.dp.toPx()) }
         }
+        if (tip != null && selected in 0 until n) {
+            val dual = left.isNotEmpty() && right.isNotEmpty()
+            val text = buildAnnotatedString {
+                append(tip)
+                series.forEachIndexed { k, s ->
+                    append("\n")
+                    withStyle(SpanStyle(color = s.color)) { append("● ") }
+                    append("${s.label} ${s.values.getOrNull(selected)?.let { fmt(it) } ?: "-"}")
+                    if (dual) withStyle(SpanStyle(color = axis)) { append("  " + if (k < left.size) AXIS_LEFT else AXIS_RIGHT) }
+                }
+            }
+            val t = measurer.measure(text, TextStyle(color = colors.text, fontSize = 11.sp))
+            val pad = 6.dp.toPx()
+            val bw = t.size.width + pad * 2
+            val bh = t.size.height + pad * 2
+            val gap = 8.dp.toPx()
+            // 放在竖线右边, 放不下放左边; 太高时贴顶
+            val bx = if (x(selected) + gap + bw <= size.width) x(selected) + gap else (x(selected) - gap - bw).coerceAtLeast(0f)
+            val r = CornerRadius(8.dp.toPx())
+            drawRoundRect(colors.popover, Offset(bx, plotTop), Size(bw, bh), r)
+            drawRoundRect(colors.border, Offset(bx, plotTop), Size(bw, bh), r, style = Stroke(1.dp.toPx()))
+            drawText(t, topLeft = Offset(bx + pad, plotTop + pad))
+        }
     }
 }
 
@@ -207,16 +248,27 @@ private fun DrawScope.dot(color: Color, ring: Color, at: Offset, r: Float) {
     drawCircle(color, r, at)
 }
 
-/** 图例: 每个系列一个样式小样 + 名字 + 可选的数。 */
+/**
+ * 图例: 每个系列一个样式小样 + 名字 + 可选的数。onToggle 给了时每项可点, 点一下显示 / 隐藏该系列 (#145),
+ * hidden 里的项变淡。
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MixLegend(series: List<MixSeries>, values: List<String> = emptyList(), modifier: Modifier = Modifier) {
+fun MixLegend(
+    series: List<MixSeries>,
+    values: List<String> = emptyList(),
+    modifier: Modifier = Modifier,
+    hidden: Set<String> = emptySet(),
+    onToggle: ((String) -> Unit)? = null,
+) {
     val c = Aioa.colors
     FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         series.forEachIndexed { i, s ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Canvas(Modifier.size(16.dp, 10.dp)) { swatch(s, c.surface) }
-                Text(s.label + (values.getOrNull(i)?.let { " $it" } ?: ""), c.textSecondary, 12)
+            val off = s.label in hidden
+            val tap = onToggle?.let { f -> Modifier.clickable { f(s.label) } } ?: Modifier
+            Row(tap, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Canvas(Modifier.size(16.dp, 10.dp)) { swatch(if (off) s.copy(color = s.color.copy(alpha = HIDDEN_ALPHA)) else s, c.surface) }
+                Text(s.label + (values.getOrNull(i)?.let { " $it" } ?: ""), if (off) c.textSecondary.copy(alpha = HIDDEN_ALPHA) else c.textSecondary, 12)
             }
         }
     }
