@@ -1,6 +1,5 @@
 import { CLOUD_AGENT_LABEL } from "../../core/constants";
 import { ComboChart } from "@hx/ui/data";
-import { Badge } from "@hx/ui/ui/badge";
 import { Skeleton } from "@hx/ui/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@hx/ui/ui/toggle-group";
 import { Activity } from "lucide-react";
@@ -9,12 +8,12 @@ import { useChats, useUser } from "../../app/hooks";
 import { chats } from "../../core/chats";
 import { buildPulse, lifetime, recentEvents, streakOf, type PulseSpan } from "../../core/pulse";
 import type { Envelope } from "@hx-aioa/protocol";
-import { Feat, Panel, Quiet, TONE } from "./parts";
+import { Fact, Panel, Quiet, TONE } from "./parts";
 
 const HUNDRED = 100;
 
 // 你和 Agent 一起 (对照安卓 OverviewPulse, #140 #142): 线是我和 Agent 发的, 柱是完成的待办; 下面一排是事实数据
-export function Pulse({ needMe }: { needMe: number }) {
+export function Pulse() {
   const { version } = useChats();
   const me = useUser();
   const [span, setSpan] = useState<PulseSpan>("day");
@@ -37,28 +36,20 @@ export function Pulse({ needMe }: { needMe: number }) {
     <Panel
       title={`你和 ${CLOUD_AGENT_LABEL} 一起`}
       icon={<Activity />}
-      className="lg:col-span-8"
+      tone={TONE.accent}
+      className="lg:col-span-7"
       action={
         <ToggleGroup type="single" size="sm" variant="outline" value={span} onValueChange={(v) => v && setSpan(v as PulseSpan)}>
           <ToggleGroupItem value="day">今天</ToggleGroupItem>
           <ToggleGroupItem value="week">本周</ToggleGroupItem>
         </ToggleGroup>
       }
-      hint={
-        data?.peak ? (
-          <span className="flex items-center gap-2">
-            <Badge variant="outline" dot="success" live>
-              实时
-            </Badge>
-            峰值 {data.peak.label} · {data.peak.count} 条
-          </span>
-        ) : undefined
-      }
+      hint={data?.peak ? `峰值 ${data.peak.label} · ${data.peak.count} 条` : undefined}
     >
       {!data ? (
         <Skeleton className="h-52 w-full" />
       ) : data.mine + data.agent + data.done === 0 ? (
-        <Quiet icon={<Activity />}>{span === "day" ? "今天还没有动静" : "这周还没有动静"}</Quiet>
+        <Quiet>{span === "day" ? "今天还没有动静" : "这周还没有动静"}</Quiet>
       ) : (
         <ComboChart
           data={data.rows}
@@ -72,11 +63,10 @@ export function Pulse({ needMe }: { needMe: number }) {
           height={210}
         />
       )}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Feat value={life ? streakOf(life.perDay) : "-"} label="天连续活跃" color={TONE.warning} />
-        <Feat value={life ? busiest : "-"} label="条最忙一天" color={TONE.primary} />
-        <Feat value={life && life.total ? Math.round((life.agent * HUNDRED) / life.total) : 0} label={`% 是 ${CLOUD_AGENT_LABEL}`} color={TONE.accent} />
-        <Feat value={needMe} label="条等你" color={needMe > 0 ? TONE.danger : TONE.muted} />
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/70 px-2 pt-2">
+        <Fact value={life ? streakOf(life.perDay) : "-"} label="天连续活跃" />
+        <Fact value={life ? busiest : "-"} label="条最忙的一天" />
+        <Fact value={life && life.total ? `${Math.round((life.agent * HUNDRED) / life.total)}%` : "-"} label={`由 ${CLOUD_AGENT_LABEL} 发出`} color={TONE.accent} />
       </div>
     </Panel>
   );

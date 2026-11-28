@@ -1,3 +1,4 @@
+import { attentionOf, seen } from "../core/attention";
 import { faces } from "../core/faces";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authChanged, currentUser } from "../core/auth";
@@ -14,6 +15,13 @@ export const useLinkState = () => useSyncExternalStore((fn) => link.states.on(fn
 export const useUser = () => useSyncExternalStore((fn) => authChanged.on(fn), currentUser);
 export const usePresence = (channel: string) => useSyncExternalStore((fn) => presence.changed.on(fn), () => presence.get(channel));
 export const useFeed = () => useSyncExternalStore((fn) => feed.changed.on(fn), feed.snapshot);
+// 需要我: 依赖总览快照, 群已读位置和本机划掉记录, 三者任一变化都重算
+export function useAttention() {
+  const snap = useFeed();
+  useChats();
+  useSyncExternalStore((fn) => seen.changed.on(fn), () => seen.version);
+  return attentionOf(snap);
+}
 export const useResources = () => useSyncExternalStore((fn) => resources.changed.on(fn), resources.snapshot);
 
 export type Layout = "wide" | "mid" | "narrow";

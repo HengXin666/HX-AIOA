@@ -1,11 +1,10 @@
 import { Button } from "@hx/ui/ui/button";
 import { Spin } from "@hx/ui/ui/spin";
-import { Bot, LayoutDashboard, MessageSquare, Server, UserRound } from "lucide-react";
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { useLayout, useLinkState, useMyFace, useUser, type Layout } from "../app/hooks";
-import { link, useLoc, type AreaId, type Loc } from "../app/router";
+import { useLayout, type Layout } from "../app/hooks";
+import { useLoc, type AreaId, type Loc } from "../app/router";
 import { newVersion, reloadFresh } from "../core/version";
-import { UserAvatar } from "./UserAvatar";
+import { BottomNav, Rail } from "./shell/Sidebar";
 
 export type AreaProps = { loc: Loc; layout: Layout };
 
@@ -18,14 +17,6 @@ const PAGES: Record<AreaId, ComponentType<AreaProps>> = {
   me: lazy(() => import("./me")),
 };
 const CommandPalette = lazy(() => import("./CommandPalette"));
-
-const NAV: { area: AreaId; label: string; icon: ReactNode }[] = [
-  { area: "overview", label: "总览", icon: <LayoutDashboard /> },
-  { area: "chat", label: "消息", icon: <MessageSquare /> },
-  { area: "agent", label: "Agent", icon: <Bot /> },
-  { area: "res", label: "资源", icon: <Server /> },
-  { area: "me", label: "我的", icon: <UserRound /> },
-];
 
 // 电脑: 左侧栏 + 栏内容; 手机: 栏内容 + 底栏 (进子页时底栏隐藏, 与安卓一致)
 export function Shell() {
@@ -43,7 +34,7 @@ export function Shell() {
 
   if (layout === "narrow") {
     return (
-      <div className="flex h-full flex-col bg-background">
+      <div className="app-canvas flex h-full flex-col">
         <UpdateBar />
         <div className="min-h-0 flex-1">{body}</div>
         {loc.path.length === 0 && <BottomNav area={loc.area} />}
@@ -52,8 +43,8 @@ export function Shell() {
     );
   }
   return (
-    <div className="flex h-full bg-background">
-      <Rail layout={layout} area={loc.area} />
+    <div className="app-canvas flex h-full">
+      <Rail layout={layout} area={loc.area} onSearch={() => setPalette(true)} />
       <main className="flex min-w-0 flex-1 flex-col">
         <UpdateBar />
         <div className="flex min-h-0 flex-1">{body}</div>
@@ -87,47 +78,6 @@ function Lazy({ children }: { children: ReactNode }) {
     >
       {children}
     </Suspense>
-  );
-}
-
-function Rail({ layout, area }: { layout: Layout; area: AreaId }) {
-  const user = useUser();
-  const face = useMyFace();
-  const state = useLinkState();
-  const wide = layout === "wide";
-  return (
-    <nav className={`flex shrink-0 flex-col gap-1 border-r border-border bg-sidebar p-2 ${wide ? "w-[200px]" : "w-16 items-center"}`}>
-      <a href={link("me")} className={`mb-2 flex items-center gap-2 p-2 ${wide ? "" : "justify-center"}`}>
-        <UserAvatar id={face} name={user?.display ?? ""} online={state === "online"} />
-        {wide && <span className="truncate text-sm font-medium text-foreground">{user?.display}</span>}
-      </a>
-      {NAV.map((n) => (
-        <Button key={n.area} asChild variant={n.area === area ? "secondary" : "ghost"} size={wide ? "default" : "icon"} className={wide ? "justify-start" : ""}>
-          <a href={link(n.area)} aria-label={n.label} title={wide ? undefined : n.label}>
-            {n.icon}
-            {wide && n.label}
-          </a>
-        </Button>
-      ))}
-      {wide && <p className="mt-auto px-2 text-xs text-muted-foreground">Ctrl+K 搜索</p>}
-    </nav>
-  );
-}
-
-function BottomNav({ area }: { area: AreaId }) {
-  return (
-    <nav className="safe-bottom flex border-t border-border bg-sidebar">
-      {NAV.map((n) => (
-        <a
-          key={n.area}
-          href={link(n.area)}
-          className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-xs [&_svg]:size-5 ${n.area === area ? "text-foreground" : "text-muted-foreground"}`}
-        >
-          {n.icon}
-          {n.label}
-        </a>
-      ))}
-    </nav>
   );
 }
 

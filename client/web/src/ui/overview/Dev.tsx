@@ -25,7 +25,7 @@ import { EXTERNAL } from "../../core/constants";
 import { localTimeZone } from "@hx-aioa/protocol";
 import { shortTime } from "../ChatList";
 import { useOnce } from "../resources/useOnce";
-import { Feat, Panel, Quiet, TONE } from "./parts";
+import { Fact, Panel, Quiet, TONE } from "./parts";
 
 const DAY_MS = 86_400_000;
 const FRESH_DAYS = [3, 14];
@@ -64,11 +64,11 @@ export function DevBoard() {
           </Button>
         }
       >
-        <div className="grid grid-cols-2 gap-2">
-          <Feat value={today?.commits ?? "-"} label="今天提交" color={TONE.primary} />
-          <Feat value={daily.data?.streak ?? "-"} label="天连续提交" color={TONE.warning} />
-          <Feat value={daily.data?.openPrs ?? rs.reduce((n, r) => n + r.openPrs, 0)} label="开着的 PR" color={TONE.accent} />
-          <Feat value={ciFail} label="CI 失败的仓库" color={ciFail ? TONE.danger : TONE.muted} />
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-2 py-1.5">
+          <Fact value={today?.commits ?? "-"} label="今天提交" color={TONE.primary} />
+          <Fact value={daily.data?.streak ?? "-"} label="天连续提交" color={TONE.warning} />
+          <Fact value={daily.data?.openPrs ?? rs.reduce((n, r) => n + r.openPrs, 0)} label="开着的 PR" color={TONE.accent} />
+          <Fact value={ciFail} label="CI 失败的仓库" color={ciFail ? TONE.danger : undefined} />
         </div>
         {act.data?.items.slice(0, 5).map((it) => (
           <a key={it.id} href={it.url} {...EXTERNAL} className="flex items-center gap-2 rounded-md px-1 py-1 text-xs hover:bg-muted">

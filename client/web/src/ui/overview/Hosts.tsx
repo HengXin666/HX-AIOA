@@ -29,6 +29,7 @@ export function Hosts({ className }: { className?: string }) {
     <Panel
       title="资源"
       icon={<Server />}
+      tone={TONE.warning}
       count={hosts.filter((h) => on.has(h.subject) || h.online).length}
       hint="在线主机"
       className={className}
@@ -41,7 +42,7 @@ export function Hosts({ className }: { className?: string }) {
         </Button>
       }
     >
-      {list.length ? list.map((h, i) => <Host key={h.subject} h={h} online={on.has(h.subject) || h.online} tone={TONES[i % TONES.length]!} />) : <Quiet icon={<Server />}>还没有探针, 在资源栏添加</Quiet>}
+      {list.length ? list.map((h, i) => <Host key={h.subject} h={h} online={on.has(h.subject) || h.online} tone={TONES[i % TONES.length]!} />) : <Quiet>还没有探针, 在资源栏添加</Quiet>}
     </Panel>
   );
 }
