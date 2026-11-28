@@ -15,6 +15,8 @@ export type Attachment = {
   host?: HostCard;
   // 探针: key 带 probe:shell; 两端: 进行中的终端会话 id
   shell?: boolean;
+  // 探针: key 带 probe:agent (Agent GUI)
+  agent?: boolean;
   terms?: string[];
   // 人的连接: 账号 id; member 为子号, 只收自己所在群的消息
   uid?: string;

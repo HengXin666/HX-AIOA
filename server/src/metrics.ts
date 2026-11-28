@@ -38,6 +38,7 @@ export class MetricRouter {
   host(ws: WebSocket, att: Attachment, frame: HostFrame): void {
     const info = { ...frame.info };
     if (!att.shell) delete info.shell;
+    if (!att.agent) delete info.agent;
     const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info };
     if (frame.last) card.last = frame.last;
     if (frame.avail !== undefined) card.avail = frame.avail;

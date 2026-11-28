@@ -59,6 +59,11 @@ async function ghExpiryCheck(core: Core, storage: DurableObjectStorage): Promise
 export async function halfHourly(core: Core, storage: DurableObjectStorage): Promise<GithubSyncResult | null> {
   const env = core.env;
   flushActive(core);
+  try {
+    core.agentGui.sweep();
+  } catch (e) {
+    console.error("Agent GUI 审批清理失败:", e);
+  }
   const cf = env.CF_API_TOKEN && env.CF_ACCOUNT_ID ? cfCheck(core, storage).catch((e) => console.error("CF 额度检查失败:", e)) : null;
   const todos = ghOn(core) ? syncTodoIssues(core).catch((e) => console.error(SYNC_FAIL, e)) : null;
   const github = githubOn(core) && env.GITHUB_TOKEN ? core.github.sync().catch((e) => (console.error("GitHub 回填失败:", e), null)) : null;

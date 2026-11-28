@@ -1,4 +1,4 @@
-import { API_MESSAGES_PATH, API_SEND_PATH, API_V1, PATH_HOOKS, QUERY_LIMIT, QUERY_SINCE, isBody, type SendRequest } from "@hx-aioa/protocol";
+import { API_MESSAGES_PATH, API_SEND_PATH, API_V1, PATH_AGENT_GUI, PATH_HOOKS, QUERY_LIMIT, QUERY_SINCE, isBody, type SendRequest } from "@hx-aioa/protocol";
 import { AGENT_ROUTES } from "./api-agent";
 import { CF_ROUTES } from "./api-cf";
 import { CF_ZONE_ROUTES } from "./api-cf-zones";
@@ -31,6 +31,7 @@ import { TRANSLATE_ROUTES } from "./translate/api";
 import { CONFIG_ROUTES } from "./api-config";
 import { INTEGRATION_ROUTES } from "./api-integrations";
 import { PROBE_ROUTES } from "./api-probes";
+import { AGENT_GUI_ROUTES } from "./api-agent-gui";
 import { RELAY_ROUTES } from "./api-relay";
 import { GITHUB_ROUTES } from "./api-github";
 import { SPACE_ROUTES } from "./api-spaces";
@@ -59,7 +60,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...CHAT_META_ROUTES, ...BUNDLE_ROUTES, ...SENDER_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...AGENT_NEXT_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...DRIVE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...SOURCE_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES, ...WEBPUSH_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...CHAT_META_ROUTES, ...BUNDLE_ROUTES, ...SENDER_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...AGENT_NEXT_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...DRIVE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...SOURCE_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES, ...WEBPUSH_ROUTES, ...AGENT_GUI_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {
@@ -104,7 +105,7 @@ export async function handleHttp(core: Core, req: Request, pre?: Principal): Pro
     const who = pre ?? (await principalOf(core, req, url));
     if (!who) return await early(req, fail(401, ERR_UNAUTHORIZED, CODE_UNAUTHORIZED));
     if (!who.owner && !core.registry.allow(who.key)) return await early(req, fail(429, ERR_RATE, CODE_RATE_LIMITED));
-    if (!url.pathname.startsWith(API_V1)) return (await legacy(core, req, url, who)) ?? fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
+    if (!url.pathname.startsWith(API_V1) && !url.pathname.startsWith(PATH_AGENT_GUI)) return (await legacy(core, req, url, who)) ?? fail(404, ERR_NOT_FOUND, CODE_NOT_FOUND);
     for (const r of ROUTES) {
       if (r.method !== req.method) continue;
       const m = r.re.exec(url.pathname);
