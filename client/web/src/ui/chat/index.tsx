@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { setPane, usePane } from "../../app/hooks";
+import { setPane, useChats, usePane } from "../../app/hooks";
 import { nav } from "../../app/router";
 import { chats } from "../../core/chats";
 import { TXT_PICK_CHAT } from "../../core/constants";
@@ -8,6 +8,8 @@ import { Conversation } from "../Conversation";
 import { EmptyState, TwoPane } from "../kit/Panes";
 import type { AreaProps } from "../Shell";
 
+const FeedView = lazy(() => import("./feed/FeedView"));
+const MailView = lazy(() => import("./mail/MailView"));
 const InspectorPane = lazy(() => import("../Inspector").then((m) => ({ default: m.InspectorPane })));
 const InspectorSheet = lazy(() => import("../Inspector").then((m) => ({ default: m.InspectorSheet })));
 
@@ -21,7 +23,23 @@ export default function ChatArea({ loc, layout }: AreaProps) {
   useEffect(() => setDrawer(false), [channel, layout]);
   useChatKeys(channel, () => (layout === "wide" ? setPane(false) : setDrawer(false)));
 
-  const detail = channel ? <Conversation key={channel} channel={channel} focus={Number(loc.path[1]) || undefined} narrow={layout === "narrow"} pane={paneOpen} onPane={togglePane} /> : <EmptyState>{TXT_PICK_CHAT}</EmptyState>;
+  useChats();
+  const view = channel ? chats.meta(channel)?.view : undefined;
+  if (channel && view === "mail") {
+    // 邮件群自带列表与详情; 中屏只放得下两栏, 按手机方式排
+    const mail = (
+      <Suspense fallback={null}>
+        <MailView key={channel} channel={channel} layout={layout === "wide" ? "wide" : "narrow"} />
+      </Suspense>
+    );
+    return <TwoPane layout={layout} showDetail list={<ChatList active={channel} />} detail={mail} />;
+  }
+  const feedView = channel && view === "feed" && (
+    <Suspense fallback={null}>
+      <FeedView key={channel} channel={channel} narrow={layout === "narrow"} onPane={togglePane} />
+    </Suspense>
+  );
+  const detail = feedView ? feedView : channel ? <Conversation key={channel} channel={channel} focus={Number(loc.path[1]) || undefined} narrow={layout === "narrow"} pane={paneOpen} onPane={togglePane} /> : <EmptyState>{TXT_PICK_CHAT}</EmptyState>;
   const aside =
     channel && layout === "wide" && pane ? (
       <Suspense fallback={null}>

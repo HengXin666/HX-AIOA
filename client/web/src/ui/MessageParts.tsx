@@ -76,7 +76,6 @@ export function FileView({ file }: { file: FileRef }) {
   );
 }
 
-// 合并转发卡片: 只显示摘要 (前 4 条), 详情接口后续再接
 // 合并转发卡片: 点开看详情 (懒加载); 嵌套超过服务端允许的层数时只显示摘要
 export function BundleCard({ b, via }: { b: BundleInfo; via: number[] }) {
   const [open, setOpen] = useState(false);
