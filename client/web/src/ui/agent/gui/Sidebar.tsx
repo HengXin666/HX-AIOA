@@ -4,7 +4,8 @@ import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@hx/ui/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Input } from "@hx/ui/ui/input";
-import { Archive, BookOpen, ChevronDown, ChevronRight, Ellipsis, Pin, PinOff, Plus, Search, Settings } from "lucide-react";
+import { Archive, BookOpen, ChevronDown, Ellipsis, Folder, FolderOpen, Monitor, PenLine, Pin, PinOff, Plus, Search, Settings, SquarePen } from "lucide-react";
+import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemMeta, ItemTitle, ItemTrigger } from "@hx/ui/ui/item";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TXT_NEW_SESSION } from "../../../agentgui/constants";
@@ -17,7 +18,7 @@ import { agentDenied, ScopeFix, useAgentDenied } from "../../resources/ProbeDial
 import { useResources } from "../../../app/hooks";
 import { AddDel } from "./Diff";
 import { STORAGE_NEW_CWD } from "./NewSession";
-import { ago, AgentGlyph, basename, GUIDE, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
+import { ago, basename, GUIDE, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
 
 export const SEARCH_ID = "ag-session-search";
 type Row = Pick<SessionInfo, "id" | "title" | "agent" | "state" | "updated" | "pending"> & Partial<SessionInfo>;
@@ -55,13 +56,14 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
   const lacks = (h: string) => agentDenied(cards.find((x) => x.subject === h));
 
   return (
-    <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-border bg-sidebar">
-      <div className="flex h-[52px] items-center gap-2 border-b border-border px-2">
+    <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-border/60 bg-sidebar">
+      <div className="flex h-12 items-center gap-1 px-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start">
+            <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start gap-2 px-2">
+              <Monitor className="text-muted-foreground" />
               <span className="truncate font-semibold">{host || "选主机"}</span>
-              <ChevronDown />
+              <ChevronDown className="text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
@@ -91,29 +93,38 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
         </DropdownMenu>
         {host && <RouteBadge route={c.route} state={c.state} />}
       </div>
-      <div className="flex flex-col gap-2 p-2">
+      <div className="flex flex-col gap-1 px-2 pb-2">
         {scope.denied && <ScopeFix subject={host} shell={scope.shell} compact />}
         <Input id={SEARCH_ID} size="sm" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && (setQ(""), e.currentTarget.blur())} placeholder="搜索会话" leading={<Search className="size-4" />} trailing={<KeyOf command="chat.find" className="opacity-60" />} />
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={(e) => {
-            if (e.shiftKey && cur?.cwd) localStorage.setItem(STORAGE_NEW_CWD, cur.cwd);
-            location.hash = guiLink();
-          }}
-          title="Shift+点: 在当前项目直接开"
+        <Item
+          asChild
+          size="sm"
+          className="text-muted-foreground hover:text-foreground"
         >
-          <Plus />
-          {TXT_NEW_SESSION}
-          <KeyOf command="chat.new" className="ml-auto opacity-60" />
-        </Button>
+          <button
+            type="button"
+            onClick={(e) => {
+              if (e.shiftKey && cur?.cwd) localStorage.setItem(STORAGE_NEW_CWD, cur.cwd);
+              location.hash = guiLink();
+            }}
+            title="Shift+点: 在当前项目直接开"
+          >
+            <ItemMedia variant="icon">
+              <SquarePen />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle className="font-normal">{TXT_NEW_SESSION}</ItemTitle>
+            </ItemContent>
+            <KeyOf command="chat.new" className="opacity-60" />
+          </button>
+        </Item>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <ItemGroup size="sm" highlight="slide" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {need.length > 0 && (
-          <section className="mb-3">
-            <h3 className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground">
+          <section className="mb-1">
+            <h3 className="flex items-center gap-2 px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
               需要你
-              <Badge variant="destructive">{need.length}</Badge>
+              <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">{need.length}</Badge>
             </h3>
             {need.map((r) => (
               <SessionRow key={`n${r.id}`} host={host} row={r} active={r.id === sid} direct={direct} />
@@ -121,8 +132,8 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
           </section>
         )}
         {pinned.length > 0 && (
-          <section className="mb-3">
-            <h3 className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
+          <section className="mb-1">
+            <h3 className="flex items-center gap-1.5 px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
               <Pin className="size-3" />
               置顶
             </h3>
@@ -135,12 +146,28 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
           const g = `${host}|${cwd}`;
           const folded = prefs.folded.includes(g) && !q;
           return (
-            <section key={cwd} className="mb-3">
-              <button type="button" onClick={() => agPrefs.toggleFold(g)} aria-expanded={!folded} className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground" title={cwd}>
-                <ChevronRight className={`size-3 shrink-0 transition-transform ${folded ? "" : "rotate-90"}`} />
-                <span className="min-w-0 flex-1 truncate">{cwd ? basename(cwd) : "会话"}</span>
-                <span className="tabular-nums">{list.length}</span>
-              </button>
+            <section key={cwd} className="mb-1">
+              <div className="group/proj flex items-center gap-1 pt-2 pb-1">
+                <button type="button" onClick={() => agPrefs.toggleFold(g)} aria-expanded={!folded} className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground" title={cwd}>
+                  {folded ? <Folder className="size-3.5 shrink-0" /> : <FolderOpen className="size-3.5 shrink-0" />}
+                  <span className="min-w-0 flex-1 truncate">{cwd ? basename(cwd) : "会话"}</span>
+                  <span className="tabular-nums opacity-60 group-hover/proj:hidden">{list.length}</span>
+                </button>
+                {cwd && (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={`在 ${basename(cwd)} 开新会话`}
+                    className="hidden group-hover/proj:inline-flex"
+                    onClick={() => {
+                      localStorage.setItem(STORAGE_NEW_CWD, cwd);
+                      location.hash = guiLink();
+                    }}
+                  >
+                    <Plus />
+                  </Button>
+                )}
+              </div>
               {!folded && list.map((r) => <SessionRow key={r.id} host={host} row={r} active={r.id === sid} direct={direct} />)}
             </section>
           );
@@ -152,17 +179,30 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
           </Button>
         )}
         {host && rows.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">{c.state === "ready" ? "还没有会话" : "连上主机后显示会话"}</p>}
-      </div>
-      <div className="flex flex-col border-t border-border py-1">
-        <a href={guiLink(GUIDE)} className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground [&_svg]:size-4">
-          <BookOpen />
-          使用指引
-        </a>
-        <a href={guiLink(SETTINGS)} className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground [&_svg]:size-4">
-          <Settings />
-          设置: Agent 实例 · 设备 · 配对
-        </a>
-      </div>
+      </ItemGroup>
+      <ItemGroup size="sm" className="border-t border-border/60 p-2">
+        <Item asChild size="sm" className="text-muted-foreground hover:text-foreground">
+          <a href={guiLink(GUIDE)}>
+            <ItemMedia variant="icon">
+              <BookOpen />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle className="font-normal">使用指引</ItemTitle>
+            </ItemContent>
+          </a>
+        </Item>
+        <Item asChild size="sm" className="text-muted-foreground hover:text-foreground">
+          <a href={guiLink(SETTINGS)}>
+            <ItemMedia variant="icon">
+              <Settings />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle className="font-normal">设置</ItemTitle>
+            </ItemContent>
+            <span className="text-xs opacity-60">实例 · 设备 · 配对</span>
+          </a>
+        </Item>
+      </ItemGroup>
     </aside>
   );
 }
@@ -181,28 +221,42 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
       .hx(m, p)
       .then(() => after?.())
       .catch((e: Error) => toast.error(e.message));
+  const busy = row.state === "running" || row.state === "starting";
+  const waiting = row.state === "waiting" || row.pending > 0;
   return (
-    <div className={`group flex items-center gap-1 rounded-lg ${active ? "bg-accent" : "hover:bg-muted"}`}>
-      <a href={sessionLink(host, row.id)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5">
-        <StateDot state={row.state} />
-        <span className="min-w-0 flex-1">
-          <span className={`flex items-center gap-1 truncate text-sm ${unread ? "font-semibold text-foreground" : settled ? "text-muted-foreground" : "text-foreground"}`}>
-            <span className="truncate">{row.title || "未命名"}</span>
-            {unread && <span role="img" aria-label="有新结果" className="size-1.5 shrink-0 rounded-full bg-info" />}
-          </span>
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <AgentGlyph name={row.agent} />
-            <span className="truncate">{row.agent}</span>
-            <span className="shrink-0">· {ago(row.updated)}前</span>
-            {agDrafts.has(k) && <span className="shrink-0 text-warning">· 草稿</span>}
-          </span>
-        </span>
-        <AddDel add={row.adds ?? 0} del={row.dels ?? 0} />
-      </a>
+    <Item size="sm" active={active} className="group/row">
+      <StateDot state={row.state} className="mx-1" />
+      <ItemContent>
+        <ItemTitle className={unread ? "font-semibold" : settled ? "text-muted-foreground" : "font-normal"}>
+          <ItemTrigger asChild>
+            <a href={sessionLink(host, row.id)} title={`${row.title || "未命名"} · ${row.agent}${row.cwd ? ` · ${row.cwd}` : ""}`}>
+              {row.title || "未命名"}
+              {unread && <span role="img" aria-label="有新结果" className="ml-1.5 inline-block size-1.5 rounded-full bg-info align-middle" />}
+              {agDrafts.has(k) && <PenLine className="ml-1.5 inline size-3 align-[-1px] text-muted-foreground" aria-label="有草稿" />}
+            </a>
+          </ItemTrigger>
+        </ItemTitle>
+      </ItemContent>
+      <ItemMeta className="shrink-0 whitespace-nowrap">
+        {waiting ? (
+          <Badge variant="outline" dot="warning" className="h-5 px-1.5 text-[11px]">
+            等你
+          </Badge>
+        ) : busy ? (
+          <Badge variant="outline" dot="info" live className="h-5 px-1.5 text-[11px]">
+            运行中
+          </Badge>
+        ) : row.adds || row.dels ? (
+          <AddDel add={row.adds ?? 0} del={row.dels ?? 0} />
+        ) : (
+          <span className="tabular-nums">{ago(row.updated)}前</span>
+        )}
+      </ItemMeta>
       {direct && (
+        <ItemActions reveal="swap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon-xs" variant="ghost" aria-label="会话菜单" className="mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
+            <Button size="icon-xs" variant="ghost" aria-label="会话菜单">
               <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
@@ -225,6 +279,7 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </ItemActions>
       )}
       {renaming && <RenameDialog title={row.title} onClose={() => setRenaming(false)} onSave={(title) => c.c.hx<SessionInfo>("session/rename", { sid: row.id, title }).then(() => c.c.putSession({ ...(row as SessionInfo), title }))} />}
       <ConfirmDialog
@@ -241,7 +296,7 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
           })
         }
       />
-    </div>
+    </Item>
   );
 }
 

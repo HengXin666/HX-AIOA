@@ -204,7 +204,7 @@ function Workbench({ page, sub, routeHost, sid }: { page: "new" | "settings" | "
             <SessionView key={`${host}/${sid}`} right={showRight} toggleRight={toggleRight} draft={draft} />
           ) : (
             <>
-              <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3">
+              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
                 <SidebarButton />
                 <h2 className="flex-1 text-sm font-semibold text-foreground">{page === "settings" ? "设置" : page === "guide" ? "使用指引" : "新会话"}</h2>
                 <ModeToggle mode="work" />

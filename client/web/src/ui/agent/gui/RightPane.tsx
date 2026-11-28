@@ -1,14 +1,16 @@
 import { Button } from "@hx/ui/ui/button";
 import { Spin } from "@hx/ui/ui/spin";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@hx/ui/ui/tabs";
-import { ArrowLeft, File, Folder, RefreshCw, X } from "lucide-react";
+import { DiffView as HxDiff, parseUnifiedDiff } from "@hx/ui/agent";
+import { ArrowLeft, ChevronRight, File, Folder, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useConn } from "../../../agentgui/hooks";
-import { parseUnified, type View } from "../../../agentgui/reduce";
+import type { View } from "../../../agentgui/reduce";
 import type { AgFsEntry, AgGitFile } from "@hx-aioa/protocol";
 import type { RightTab } from "./ctx";
 import { useGui } from "./ctx";
-import { AddDel, DiffView } from "./Diff";
+import { AddDel } from "./Diff";
+import { basename } from "./parts";
 import { PlanList } from "./Timeline";
 
 type Load<T> = { data?: T; err?: string; loading: boolean };
@@ -40,11 +42,20 @@ function State({ s }: { s: Load<unknown> }) {
   return null;
 }
 
+const DIFF_FOLD = 400;
+// git 状态字母上色: 新增绿, 删除红, 其余黄
+function statusTone(x: string, y: string): string {
+  const v = `${x}${y}`;
+  if (v.includes("?") || v.includes("A")) return "text-success";
+  if (v.includes("D")) return "text-destructive";
+  return "text-warning";
+}
+
 // 右栏: 改动 (git status / diff) | 文件 (树 + 预览) | 计划
 export function RightPane({ tab, setTab, path, view, onClose }: { tab: RightTab; setTab: (t: RightTab) => void; path?: string; view: View; onClose: () => void }) {
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as RightTab)} className="flex h-full min-h-0 flex-col gap-0">
-      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-2">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
         <TabsList variant="line">
           <TabsTrigger value="changes">改动</TabsTrigger>
           <TabsTrigger value="files">文件</TabsTrigger>
@@ -123,10 +134,12 @@ function Changes({ focus, view }: { focus?: string; view: View }) {
       <ul>
         {files.map((f) => (
           <li key={f.path} className="border-t border-border">
-            <button type="button" onClick={() => setOpen(open === f.path ? undefined : f.path)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted">
-              <span className="w-5 shrink-0 font-mono text-xs text-muted-foreground">{`${f.x}${f.y}`.trim() || "M"}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground" title={f.path}>
-                {f.path}
+            <button type="button" onClick={() => setOpen(open === f.path ? undefined : f.path)} aria-expanded={open === f.path} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent/60">
+              <ChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open === f.path ? "rotate-90" : ""}`} />
+              <span className={`w-4 shrink-0 text-center font-mono text-[11px] font-semibold ${statusTone(f.x, f.y)}`}>{`${f.x}${f.y}`.trim().slice(0, 1) || "M"}</span>
+              <span className="min-w-0 flex-1 truncate text-xs" title={f.path}>
+                <span className="text-foreground">{basename(f.path)}</span>
+                {f.path.includes("/") && <span className="ml-1.5 text-muted-foreground">{f.path.slice(0, f.path.lastIndexOf("/"))}</span>}
               </span>
               <AddDel add={f.add} del={f.del} />
             </button>
@@ -147,13 +160,13 @@ function Changes({ focus, view }: { focus?: string; view: View }) {
 function FileDiff({ path }: { path: string }) {
   const { sid } = useGui();
   const d = useHx<{ diff: string }>("git/diff", { sid, path }, [sid, path]);
-  const parsed = d.data ? parseUnified(d.data.diff) : [];
+  const parsed = d.data ? parseUnifiedDiff(d.data.diff) : [];
   return (
     <div className="px-2 pb-2">
       <State s={d} />
       {d.data && parsed.length === 0 && <p className="text-xs text-muted-foreground">没有差异 (可能是新文件未跟踪)</p>}
-      {parsed.map((f) => (
-        <DiffView key={f.path} lines={f.lines} limit={400} />
+      {parsed.map((f, i) => (
+        <HxDiff key={f.path ?? i} rows={f.rows} fold={DIFF_FOLD} />
       ))}
     </div>
   );
