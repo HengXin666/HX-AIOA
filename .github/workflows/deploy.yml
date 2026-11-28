@@ -48,7 +48,7 @@ jobs:
 
       - name: 复制探针脚本到静态资源
         run: |
-          cp ../tools/probe.mjs ../tools/probe-term.mjs public/
+          cp ../tools/probe.mjs ../tools/probe-term.mjs ../tools/probe-agent*.mjs public/
           # Agent 命令行也随服务端发一份: <服务地址>/hxaioa.mjs
           npx esbuild ../cli/src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=public/hxaioa.mjs
 

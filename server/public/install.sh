@@ -1,6 +1,6 @@
 #!/bin/sh
 # HX-AIOA 探针一行安装 (命令由 App "资源 → 添加主机" 生成):
-#   curl -fsSL -A hx-aioa-agent/1 <服务端>/install.sh | sh -s -- --server <服务端> --key <key> --name <名字> [--shell]
+#   curl -fsSL -A hx-aioa-agent/1 <服务端>/install.sh | sh -s -- --server <服务端> --key <key> --name <名字> [--shell] [--agent]
 # 卸载: 同一条命令把参数换成 --uninstall
 set -eu
 UA="hx-aioa-agent/1"
@@ -9,6 +9,7 @@ SERVER=""
 KEY=""
 NAME=""
 SHELL_ON=0
+AGENT_ON=0
 UNINSTALL=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -16,6 +17,7 @@ while [ $# -gt 0 ]; do
     --key) KEY=$2; shift 2 ;;
     --name) NAME=$2; shift 2 ;;
     --shell) SHELL_ON=1; shift ;;
+    --agent) AGENT_ON=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     *) echo "未知参数: $1" >&2; exit 1 ;;
   esac
@@ -51,7 +53,10 @@ if [ "$SHELL_ON" = 1 ]; then
 fi
 
 mkdir -p "$DIR" "$UNIT_DIR"
-for f in probe.mjs probe-term.mjs; do
+FILES="probe.mjs probe-term.mjs"
+# Agent GUI (#126): 直连代理拆成几个模块, 只在 --agent 时下载
+[ "$AGENT_ON" = 1 ] && FILES="$FILES probe-agent.mjs probe-agent-acp.mjs probe-agent-api.mjs probe-agent-card.mjs probe-agent-const.mjs probe-agent-hx.mjs probe-agent-session.mjs probe-agent-store.mjs probe-agent-ws.mjs"
+for f in $FILES; do
   curl -fsSL -A "$UA" "$SERVER/$f" -o "$DIR/$f.new"
   mv "$DIR/$f.new" "$DIR/$f"
 done
@@ -62,6 +67,7 @@ AIOA_SERVER=$SERVER
 AIOA_TOKEN=$KEY
 AIOA_SUBJECT=$NAME
 AIOA_SHELL=$SHELL_ON
+AIOA_AGENT=$AGENT_ON
 CONF
 chmod 600 "$DIR/env"
 
