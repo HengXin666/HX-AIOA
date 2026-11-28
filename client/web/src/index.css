@@ -28,6 +28,10 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
 }
+/* ink 主题把 brand 设成黑白, 图表第一系列跟着变灰; 按安卓 chartPalette 改用 info 蓝 */
+[data-theme="ink"] {
+  --chart-1: var(--info);
+}
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }

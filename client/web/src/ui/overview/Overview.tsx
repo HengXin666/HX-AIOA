@@ -13,7 +13,9 @@ import { Agents } from "./Agents";
 import { Hosts } from "./Hosts";
 import { Sources } from "./Insights";
 import { Layer, NeedMe } from "./Layers";
+import { TONE, tint } from "./parts";
 import { Pulse } from "./Pulse";
+import { Rhythm } from "./Rhythm";
 import { ServerBoard } from "./Server";
 
 const BOARDS = [
@@ -79,16 +81,19 @@ function Daily() {
       <StaggerItem className="xl:col-span-4 3xl:col-span-3">
         <Sources />
       </StaggerItem>
-      <StaggerItem className="xl:col-span-4 3xl:col-span-3">
+      <StaggerItem className="xl:col-span-4 3xl:col-span-4">
         <Layer priority="happening" />
       </StaggerItem>
       <StaggerItem className="xl:col-span-4 3xl:col-span-3">
         <Layer priority="worth_reading" />
       </StaggerItem>
-      <StaggerItem className="xl:col-span-6 3xl:col-span-3 empty:hidden">
+      <StaggerItem className="xl:col-span-7 3xl:col-span-5">
+        <Rhythm />
+      </StaggerItem>
+      <StaggerItem className="xl:col-span-5 3xl:col-span-6 empty:hidden">
         <Agents />
       </StaggerItem>
-      <StaggerItem className="xl:col-span-6 3xl:col-span-3">
+      <StaggerItem className="xl:col-span-12 3xl:col-span-6">
         <Hosts />
       </StaggerItem>
     </Stagger>
@@ -111,24 +116,24 @@ function Stats() {
   const toNeedMe = () => document.getElementById(NEED_ME)?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-      <Stat label="需要我" icon={BellRing} value={att.total} alert={att.total > 0} hint={att.waiting.length ? `${att.waiting.length} 个任务等你确认` : "没有等你确认的任务"} onClick={toNeedMe} />
-      <Stat label="任务在跑" icon={Activity} value={running} hint={`共 ${tasks.length} 个任务`} to={link("agent")} />
-      <Stat label="未读消息" icon={MessageSquare} value={unread} hint={`${metas.length} 个会话`} to={link("chat")} />
-      <Stat label="主机在线" icon={Server} value={up} suffix={hosts.length ? ` / ${hosts.length}` : undefined} hint={hosts.length ? `${hosts.length - up} 台离线` : "还没有探针"} to={link("res")} />
-      <Stat label={CLOUD_AGENT_LABEL} icon={Bot} value={agents} hint={`分布在 ${groups} 个群`} to={link("chat")} />
+      <Stat label="需要我" icon={BellRing} tone={att.total ? TONE.danger : TONE.success} value={att.total} alert={att.total > 0} hint={att.waiting.length ? `${att.waiting.length} 个任务等你确认` : "没有等你确认的任务"} onClick={toNeedMe} />
+      <Stat label="任务在跑" icon={Activity} tone={TONE.primary} value={running} hint={`共 ${tasks.length} 个任务`} to={link("agent")} />
+      <Stat label="未读消息" icon={MessageSquare} tone={TONE.amber} value={unread} hint={`${metas.length} 个会话`} to={link("chat")} />
+      <Stat label="主机在线" icon={Server} tone={TONE.teal} value={up} suffix={hosts.length ? ` / ${hosts.length}` : undefined} hint={hosts.length ? `${hosts.length - up} 台离线` : "还没有探针"} to={link("res")} />
+      <Stat label={CLOUD_AGENT_LABEL} icon={Bot} tone={TONE.accent} value={agents} hint={`分布在 ${groups} 个群`} to={link("chat")} />
     </div>
   );
 }
 
-type StatProps = { label: string; icon: LucideIcon; value: number; suffix?: string; hint: ReactNode; alert?: boolean; to?: string; onClick?: () => void };
+type StatProps = { label: string; icon: LucideIcon; tone: string; value: number; suffix?: string; hint: ReactNode; alert?: boolean; to?: string; onClick?: () => void };
 
-// 一项计数: 说明 + 单色图标, 大号等宽数字, 一行补充; 只有需要我且不为 0 时数字变红
-function Stat({ label, icon: Icon, value, suffix, hint, alert, to, onClick }: StatProps) {
+// 一项计数: 说明 + 着色图标块 (对照安卓), 大号等宽数字, 一行补充; 需要我不为 0 时数字变红
+function Stat({ label, icon: Icon, tone, value, suffix, hint, alert, to, onClick }: StatProps) {
   const body = (
     <Card className="h-full gap-2 py-4 transition-colors hover:bg-muted/40">
       <div className="flex items-center justify-between px-4 text-xs text-muted-foreground">
         <span>{label}</span>
-        <span className="grid size-7 place-items-center rounded-md bg-muted [&_svg]:size-3.5">
+        <span className="grid size-7 place-items-center rounded-md [&_svg]:size-3.5" style={{ color: tone, background: tint(tone) }}>
           <Icon />
         </span>
       </div>
