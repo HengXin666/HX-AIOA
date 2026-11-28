@@ -36,7 +36,7 @@ Space → Panel → Item → Bind。每个组件 = 类型 + 数据绑定 + 显�
 | 阅读 | `report` 报告 | 可选 | 显示最新一篇报告摘要 |
 | 列表 | `todo` 待办 | 必须 | `bind[0].subject` 是群 channel (field 随意, 约定写 `todos`); 数据读插件数据 `hengxin666.todo/items` 里 body.channel 为该群的行, 收 `pdata_sync` 增量刷新, 勾选带 ver 写回, 冲突时重读; 未完成按优先级排, 勾选即完成, 点条目跳回来源消息; `props.limit` |
 
-Web (`client/web/src/components/registry.ts`) 与安卓 (`client/android/ui/.../kit/SpaceItems.kt`) 实现同一组类型, 渲染同一份 JSON。
+安卓 (`client/android/ui/.../kit/SpaceItems.kt`) 实现这组类型; Web 端 (#155) 重写后还没接工作台, 接入时实现同一组类型, 渲染同一份 JSON, 支持情况记进能力表 (#156)。
 
 ### 每个图表回答一个问题
 

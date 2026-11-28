@@ -10,8 +10,8 @@
 
 ## 调研时的现状 (2026-11-27)
 
-- 安卓 (Compose) 没有用到 HX-UI 的任何东西。令牌来自本仓库 `design/tokens.json`, 由 `tools/gen-tokens.mjs` 生成 `GeneratedTokens.kt` 和 `client/web/src/tokens.css`; 组件是 `client/android/ui` 里自己写的。
-- 网页端 `client/web` 也没装 `@hx/ui`, 只用了 `lucide-static`。
+- 安卓 (Compose) 没有用到 HX-UI 的任何东西。令牌来自本仓库 `design/tokens.json`, 由 `tools/gen-tokens.mjs` 生成 `GeneratedTokens.kt` (当时还生成 Web 的 `tokens.css`, #155 起 Web 直接用 HX-UI 令牌, 不再生成); 组件是 `client/android/ui` 里自己写的。
+- 网页端 `client/web` 当时也没装 `@hx/ui`; #155 起换成 React + `@hx/ui` (版本取 `design/hx-ui.lock.json`)。
 - HX-UI 2.2.0 是 React 库 (shadcn + Tailwind v4), 令牌写在 `next/src/styles/theme.css` 的 CSS 变量里, 没有导出机器可读的令牌文件。
 
 所以两边现在 "看着像" 全靠手抄, HX-UI 一改, 安卓不会知道。

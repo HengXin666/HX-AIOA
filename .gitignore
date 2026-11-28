@@ -18,3 +18,9 @@ client/android/**/build/
 client/android/.kotlin/
 server/public/probe*.mjs
 server/public/hxaioa.mjs
+
+# Web 端构建产物, 部署时从 client/web/dist 复制 (#155)
+server/public/index.html
+server/public/version.json
+server/public/_headers
+server/public/assets/

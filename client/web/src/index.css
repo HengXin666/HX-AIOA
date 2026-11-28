@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "@hx/ui/tailwind.css";
+
+/* 只补 HX-UI 没有的: 全屏布局与安全区; 颜色一律用令牌类 */
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  overscroll-behavior: none;
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

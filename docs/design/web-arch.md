@@ -8,7 +8,7 @@
 | --- | --- |
 | 部署在哪 | 同一个 Worker 的静态资源 (`[assets]`), 域名仍是 `aioa.woa.qzz.io`, 页面和接口同源 |
 | 为什么不单开 Pages / 子域 | 跨域时每个带 `Authorization` 的请求先发一次 OPTIONS 预检, Worker 请求翻倍; 同源没有预检, 也不用维护第二个项目 |
-| 页面请求花不花额度 | 静态资源请求免费且不限量, 不进 Worker; SPA 导航由资源层直接回 `index.html`, 也不进 Worker |
+| 页面请求花不花额度 | 静态资源请求免费且不限量, 不进 Worker; 路由用 hash (`/#/c/<群>`), 每次导航都是 `/` 这一个文件, 也不进 Worker |
 | 框架 | React 19 + HX-UI 2 (按路径单独引组件, 不引根入口), Vite 构建; 现有 `client/web` (原生 TS, 约 5 千行, 功能停在早期) 不再扩展, 新版本整体替换 |
 | 布局 | 电脑优先: 侧栏 + 列表 + 详情三栏, 宽屏再加右侧检查栏; 窄屏退回与安卓相同的单栏规则 |
 | 实时 | 每个浏览器只开一条 WebSocket (多标签共用), 数据靠推送同步, 不轮询 |
@@ -29,26 +29,16 @@ server/public/           现有静态资源 (install.sh, probe*.mjs, hxaioa.mjs)
 
 部署流程 (`deploy.yml`) 在 `wrangler deploy` 前多一步: `npm run build -w client/web`, 把 `dist/` 拷进 `server/public/` (与探针脚本同一目录, 文件名不冲突, CI 检查)。一次部署同时发服务端与页面, 版本天然一致。
 
-`wrangler.toml`:
+路由用 hash (`/#/`, `/#/c/<群>`, `/#/settings`), 不用 SPA 回退 (W1 实现时定):
 
-```toml
-compatibility_flags = ["assets_navigation_prefers_asset_serving"]
-
-[assets]
-directory = "./public"
-not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/ws", "/health", "/join/*"]
-```
-
-- `not_found_handling = "single-page-application"` 加上 `assets_navigation_prefers_asset_serving`: 浏览器地址栏导航 (`Sec-Fetch-Mode: navigate`) 没命中文件就回 `index.html`, 不调用 Worker。现在的 `compatibility_date` 是 2024-11-01, 早于 2025-04-01, 默认不开这个行为, 必须显式加标志 (不整体抬日期, 避免顺带改变别的运行时行为)。
-- 副作用: 开了这个标志后, 在浏览器里直接打开 `/api/...` (例如新标签页打开文件直链) 也会拿到 `index.html`。所以 Worker 自己的路径 (`/api/*` `/ws` `/health` `/join/*`) 全部列进 `run_worker_first`。这些路径本来就进 Worker, 列进去不多花额度; 只是免费额度用尽后它们返回 429 而不是页面, 与现在一致。
-- 以后 Worker 再加不在这几个前缀下的路径, 必须同步加进列表; 加一条测试比对 `protocol` 里的路径常量与这个列表。
-- 页面自己 (`/`, `/c/<群>`, `/s/<空间>`...) 与静态文件都不进 Worker。
+- 地址栏里只有 `/` 一个文件, 命中静态资源直接返回, 不进 Worker, `wrangler.toml` 一行不改。
+- 不用 `not_found_handling = "single-page-application"` + `assets_navigation_prefers_asset_serving`: 那样要把 `/api/*` `/ws` `/health` `/join/*` 全列进 `run_worker_first`, 数组写法要 wrangler 4 (现在是 3.114), 以后 Worker 加路径还得同步; 漏一个, 在浏览器里直接打开那个地址就会拿到页面。
+- 代价只是地址里多一个 `#`。Web Push 点开通知用 `/#/c/<群>` 跳转; 页面 id 与安卓深链 `hxaioa://<id>` 的对应关系不变。
 
 ### 2.2 缓存
 
 - `index.html`: `Cache-Control: no-cache` (带 ETag, 304 也不进 Worker)。
-- 带哈希的 `assets/*`: `public, max-age=31536000, immutable`。用 `_headers` 文件声明, 不经过 Worker。
+- 带哈希的 `assets/*`: `public, max-age=31536000, immutable`。用 `_headers` 文件声明, 不经过 Worker。wrangler 3 若不认 `_headers`, 资源层默认 `max-age=0, must-revalidate` + ETag, 只是多一次 304, 仍不花额度。
 - 版本号: 构建时写入 `version.json` (`{ web: <构建号>, sha }`), 静态文件, 查它不花额度。
 
 ### 2.3 版本偏移
@@ -73,7 +63,7 @@ run_worker_first = ["/api/*", "/ws", "/health", "/join/*"]
 | --- | --- | --- |
 | 视图 | React 19 | HX-UI 2 是 React 组件库, 直接用; 不引 Next, 纯 SPA |
 | 组件 | `@hx/ui` 2.x, 锁版本 (与安卓共用 `design/hx-ui.lock.json`) | 只按路径引 (`@hx/ui/ui/button`), 不引根入口, 保证摇树 |
-| 样式 | Tailwind v4 + HX-UI `tokens.css` / `skins` | 皮肤用 `ink`, 与安卓同一份令牌 |
+| 样式 | Tailwind v4 + `@hx/ui/tailwind.css` | 皮肤用 `ink`; 不再用 `tools/gen-tokens.mjs` 生成的 Web CSS |
 | 路由 | 自写约 100 行的 history 路由, 路由表由 `docs/design/ui-spec/pages.json` 生成 | 页面 id 与安卓深链 `hxaioa://<id>` 一一对应, 通知点开落到同一页 |
 | 状态 | 现有 `Store` 的思路 (按 topic 订阅) 改成 `useSyncExternalStore` | 不引 Redux / Zustand |
 | 协议 | `@hx-aioa/protocol` (已是 workspace 包) | 与服务端, 安卓同源 |
@@ -128,6 +118,23 @@ run_worker_first = ["/api/*", "/ws", "/health", "/join/*"]
 - 快捷键: `Alt+↑/↓` 切会话, `Esc` 关检查栏, `Ctrl+Enter` 发送 (可改为 Enter 发送)。
 - 分栏宽度可拖, 存账号设置 (与 `homeTabs` 一起, 不多发请求)。
 - 拖放上传: 拖到会话即发送文件, 走现有文件票据接口。
+
+### 4.1 手机浏览器
+
+结论: 能用, 做到 "不比 App 难用", 但不承诺和 App 一样; 安卓手机提示一次装 App, 不强制。
+
+| 方面 | 手机网页 | 安卓 App |
+| --- | --- | --- |
+| 版式 | `<720px` 单栏 + 底栏, 子页推入, 与安卓同一套页面 id 与层级 | 同 |
+| 消息, 会话, 设置, 图表 | 都有, 同一份代码 | 同 |
+| 页面关着收消息 | Web Push: 安卓 Chrome 在浏览器没打开时也能收 (走 FCM, 大陆要代理); iOS 要先 "添加到主屏幕" (16.4+) | 自有常驻连接 + 小米推送, 不依赖 Google |
+| 内置浏览器, 订阅代理, 保活, 耗电, 免安装更新 | 不做 | 有 |
+| 扫码加入 | 改粘贴邀请链接 | 扫码 |
+
+- 安卓手机浏览器打开时, 登录页显示一次 "建议装 App" (关掉写本地, 不再出现); iOS 没有 App, 不提示。
+- 不做 UA 跳转, 不拦截: 有人就是想在别人的手机上临时看一眼。
+- 输入框贴底并留安全区 (`env(safe-area-inset-bottom)`); 触控目标不小于 40px; 悬停才出现的按钮在触屏上常显。
+- W2 加 PWA 清单 (图标, `display: standalone`), 能添加到主屏幕, iOS 才能收 Web Push。
 
 ## 5. 功能映射 (安卓 → Web)
 
@@ -256,8 +263,8 @@ Recharts 适合静态报表; 实时指标每秒重渲染整张 SVG, 点多时主
 | 期 | 内容 | 完成标准 |
 | --- | --- | --- |
 | W0 | 本文定稿; issue 标签按端拆分 (`安卓` / `Web`); 文档目录按端整理 | 合并 |
-| W1 | `client/web` 换成 React + HX-UI 骨架, SPA 部署, `_headers`, `version.json`, 版本偏移处理 | 部署后打开页面 Worker 请求数为 0 (导航与静态资源) |
+| W1 (已做) | `client/web` 换成 React + HX-UI 骨架: 登录 (访问令牌只在内存, 不再把 token 打进包), 三档布局, 会话列表与聊天收发, hash 路由, `_headers`, `version.json`, 版本偏移提示; `deploy.yml` 随服务端一起部署 | 部署后打开页面 Worker 请求数为 0 (导航与静态资源) |
 | W2 | 连接层: SharedWorker 单连接, IndexedDB 缓存, 推送失效; 三栏布局; 消息与会话 | 常开 24 小时请求数在预算内 |
 | W3 | Web Push 渠道 (服务端 + SW) | 关掉页面后 3 秒内收到通知 (浏览器在运行) |
 | W4 | 图表层与资源 / CF 额度 / GitHub 页 | 实时图隐藏时 CPU 为 0, 可见时单核占用 < 2% |
-| W5 | 插件兼容声明, 能力表, 市场 CI, 握手带端与构建号 | 存量插件在 Web 显示 "仅安卓"; 缺能力的 PR 被 CI 拦下 |
+| W5 | 插件兼容声明, 能力表, 市场 CI, 握手带端与构建号 (#156) | 存量插件在 Web 显示 "仅安卓"; 缺能力的 PR 被 CI 拦下 |

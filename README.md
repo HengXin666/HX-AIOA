@@ -33,9 +33,9 @@ cd server
 npx wrangler secret put AUTH_TOKEN
 npx wrangler deploy
 
-# Web 端
+# Web 端 (部署时随服务端一起发布, 本地开发见 docs/client/web/dev.md)
 cd client/web
-cp .env.example .env.local   # 填服务端地址与 token
+cp .env.example .env.local   # 填一个服务端地址, 开发时 /api 转发过去
 npm run dev
 
 # 探针 (在要监控的机器上, Node 22+): App "资源 → 添加主机" 生成一行安装命令, 见 docs/features/terminal.md

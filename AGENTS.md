@@ -17,7 +17,7 @@ HX-AIOA (All In One App) 是一个个人用的随处可用对话入口: 把各�
 | --- | --- | --- |
 | `protocol/` | 客户端与服务端共用的消息协议, 唯一真源 | TypeScript |
 | `server/` | 部署在 Cloudflare 的服务端 | Workers + Durable Objects (SQLite, 休眠 WebSocket) |
-| `client/web/` | Web 端 (电脑优先, 随 Worker 静态资源部署), 架构见 `docs/design/web-arch.md` | Vite + TypeScript (将换 React + HX-UI 2, #155) |
+| `client/web/` | Web 端 (电脑优先, 随 Worker 静态资源部署), 架构见 `docs/design/web-arch.md` | React 19 + HX-UI 2 + Vite (#155) |
 | `client/android/` | 原生安卓端 | Kotlin + Jetpack Compose + OkHttp |
 | `tools/` | 延迟压测等辅助脚本 | Node.js |
 | `docs/aegis/` | Aegis 工作区记录 (计划, 证据, ADR) | Markdown |

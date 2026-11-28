@@ -52,6 +52,20 @@ jobs:
           # Agent 命令行也随服务端发一份: <服务地址>/hxaioa.mjs
           npx esbuild ../cli/src/main.mjs --bundle --platform=node --format=esm --target=node22 --outfile=public/hxaioa.mjs
 
+      # Web 端 (#155): 与 Worker 同源部署, 页面与静态资源请求不进 Worker, 不计额度
+      - name: 构建 Web 端到静态资源
+        working-directory: .
+        run: |
+          npm run build -w client/web
+          for f in client/web/dist/*; do
+            n=$(basename "$f")
+            if [ -e "server/public/$n" ]; then
+              echo "::error::Web 构建产物 $n 与 server/public 里已有的文件重名"
+              exit 1
+            fi
+          done
+          cp -r client/web/dist/. server/public/
+
       # 文件桶 (#45): 没有就建; 部署 token 没有 R2 权限建不了时去掉绑定照常部署, 文件接口返回 503
       - name: 确保 R2 文件桶
         run: |

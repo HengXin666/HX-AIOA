@@ -51,7 +51,7 @@
 
 ## 客户端开发 `client/`
 
-按端分目录, 与代码目录 `client/<端>/` 和 issue 标签 (`安卓` / `Web`) 一一对应; Web 端文档在 #155 的 W1 开工时放进 `client/web/`。`cli.md` 是群 Agent 命令行, 不属于某一端。
+按端分目录, 与代码目录 `client/<端>/` 和 issue 标签 (`安卓` / `Web`) 一一对应; `cli.md` 是群 Agent 命令行, 不属于某一端。
 
 | 文档 | 内容 |
 |---|---|
@@ -62,6 +62,7 @@
 | [android/browser.md](client/android/browser.md) | 安卓内置浏览器: 链接入口, 登录态, 走订阅代理, 广告拦截 |
 | [android/permissions.md](client/android/permissions.md) | 安卓权限清单: 现有, 规划, 申请时机 (#121) |
 | [android/navigation.md](client/android/navigation.md) | 安卓返回键与页面跳转规则, 入口清单 |
+| [web/dev.md](client/web/dev.md) | Web 端本地开发, 目录, 规则, 部署方式 (#155) |
 
 ## 设计与调研 `design/`
 
