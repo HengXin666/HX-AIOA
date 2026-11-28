@@ -60,6 +60,11 @@ export class DriveFs {
     return fs;
   }
 
+  /** 缓存用的网盘身份 (#159): 同一个 Drive 地址加同一个令牌就是同一个网盘, 令牌本身只在哈希后进缓存键。 */
+  get cacheId(): string {
+    return `${this.origin} ${this.token}`;
+  }
+
   /** 整盘: 令牌根是 /。 */
   get whole(): boolean {
     return this.tokenAbs === "/";
