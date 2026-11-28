@@ -1,8 +1,21 @@
 import type { DriveNode, DriveShare, DriveTrashItem } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@hx/ui/ui/command";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@hx/ui/ui/command";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@hx/ui/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@hx/ui/ui/dialog";
 import { Field } from "@hx/ui/ui/field";
 import { Input } from "@hx/ui/ui/input";
 import { Table, TableBody, TableCell, TableRow } from "@hx/ui/ui/table";
@@ -17,8 +30,10 @@ import { link } from "../../core/link";
 import { sizeText } from "../MessageParts";
 import { UserAvatar } from "../UserAvatar";
 
-export const err = (e: unknown) => toast.error(e instanceof Error ? e.message : String(e));
-const copy = (t: string, ok: string) => void navigator.clipboard.writeText(t).then(() => toast.success(ok));
+export const err = (e: unknown) =>
+  toast.error(e instanceof Error ? e.message : String(e));
+const copy = (t: string, ok: string) =>
+  void navigator.clipboard.writeText(t).then(() => toast.success(ok));
 const DAY_SEC = 86_400;
 const TTLS = [
   { v: "0", label: "永久" },
@@ -27,7 +42,8 @@ const TTLS = [
   { v: String(30 * DAY_SEC), label: "30 天" },
 ];
 const FILE_TEXT_PREFIX = "[文件] ";
-export const joinPath = (dir: string, name: string) => (dir === "/" ? `/${name}` : `${dir}/${name}`);
+export const joinPath = (dir: string, name: string) =>
+  dir === "/" ? `/${name}` : `${dir}/${name}`;
 
 // 回收站 (对照安卓 ov-drive-trash): 恢复, 彻底删除, 清空
 export function TrashDialog({ onClose }: { onClose: () => void }) {
@@ -39,7 +55,9 @@ export function TrashDialog({ onClose }: { onClose: () => void }) {
       <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>回收站</DialogTitle>
-          <DialogDescription>{items ? `${items.length} 项` : TXT_LOADING}</DialogDescription>
+          <DialogDescription>
+            {items ? `${items.length} 项` : TXT_LOADING}
+          </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Table>
@@ -47,12 +65,24 @@ export function TrashDialog({ onClose }: { onClose: () => void }) {
               {items?.map((n) => (
                 <TableRow key={n.id}>
                   <TableCell className="max-w-0 truncate">{n.name}</TableCell>
-                  <TableCell className="w-28 text-muted-foreground">{new Date(n.deletedAt).toLocaleDateString(LOCALE)}</TableCell>
+                  <TableCell className="w-28 text-muted-foreground">
+                    {new Date(n.deletedAt).toLocaleDateString(LOCALE)}
+                  </TableCell>
                   <TableCell className="w-24 text-right">
-                    <Button size="icon-xs" variant="ghost" aria-label="恢复" onClick={() => void drive.restore(n.id).then(load, err)}>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label="恢复"
+                      onClick={() => void drive.restore(n.id).then(load, err)}
+                    >
                       <Undo2 />
                     </Button>
-                    <Button size="icon-xs" variant="ghost" aria-label="彻底删除" onClick={() => void drive.purge(n.id).then(load, err)}>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label="彻底删除"
+                      onClick={() => void drive.purge(n.id).then(load, err)}
+                    >
                       <Trash2 />
                     </Button>
                   </TableCell>
@@ -88,7 +118,9 @@ export function SharesDialog({ onClose }: { onClose: () => void }) {
       <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>我的分享</DialogTitle>
-          <DialogDescription>{items ? `${items.length} 个` : TXT_LOADING}</DialogDescription>
+          <DialogDescription>
+            {items ? `${items.length} 个` : TXT_LOADING}
+          </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Table>
@@ -97,14 +129,26 @@ export function SharesDialog({ onClose }: { onClose: () => void }) {
                 <TableRow key={s.id}>
                   <TableCell className="max-w-0 truncate">{s.name}</TableCell>
                   <TableCell className="w-32 text-xs text-muted-foreground">
-                    {s.expiresAt ? `${new Date(s.expiresAt).toLocaleDateString(LOCALE)} 到期` : "永久"}
+                    {s.expiresAt
+                      ? `${new Date(s.expiresAt).toLocaleDateString(LOCALE)} 到期`
+                      : "永久"}
                     {s.hasPassword ? " · 有密码" : ""}
                   </TableCell>
                   <TableCell className="w-24 text-right">
-                    <Button size="icon-xs" variant="ghost" aria-label="复制链接" onClick={() => copy(s.url, "链接已复制")}>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label="复制链接"
+                      onClick={() => copy(s.url, "链接已复制")}
+                    >
                       <Copy />
                     </Button>
-                    <Button size="icon-xs" variant="ghost" aria-label="撤销" onClick={() => void drive.unshare(s.id).then(load, err)}>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label="撤销"
+                      onClick={() => void drive.unshare(s.id).then(load, err)}
+                    >
                       <Trash2 />
                     </Button>
                   </TableCell>
@@ -119,13 +163,23 @@ export function SharesDialog({ onClose }: { onClose: () => void }) {
 }
 
 // 新建分享: 有效期与可选密码; 链接与密码分开复制
-export function ShareDialog({ node, onClose }: { node: DriveNode; onClose: () => void }) {
+export function ShareDialog({
+  node,
+  onClose,
+}: {
+  node: DriveNode;
+  onClose: () => void;
+}) {
   const [ttl, setTtl] = useState(String(7 * DAY_SEC));
   const [pwd, setPwd] = useState("");
   const [url, setUrl] = useState<string | null>(null);
   const create = async () => {
     try {
-      const r = await drive.share(node.id, Number(ttl) || undefined, pwd || undefined);
+      const r = await drive.share(
+        node.id,
+        Number(ttl) || undefined,
+        pwd || undefined,
+      );
       const all = await drive.shares();
       const u = all.find((s) => s.id === r.id)?.url ?? "";
       setUrl(u);
@@ -139,10 +193,18 @@ export function ShareDialog({ node, onClose }: { node: DriveNode; onClose: () =>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>分享 {node.name}</DialogTitle>
-          <DialogDescription>打开链接的人不用登录; 设了密码要先输入。</DialogDescription>
+          <DialogDescription>
+            打开链接的人不用登录; 设了密码要先输入。
+          </DialogDescription>
         </DialogHeader>
         <Field label="有效期">
-          <ToggleGroup type="single" variant="outline" size="sm" value={ttl} onValueChange={(v) => v && setTtl(v)}>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={ttl}
+            onValueChange={(v) => v && setTtl(v)}
+          >
             {TTLS.map((t) => (
               <ToggleGroupItem key={t.v} value={t.v}>
                 {t.label}
@@ -151,7 +213,11 @@ export function ShareDialog({ node, onClose }: { node: DriveNode; onClose: () =>
           </ToggleGroup>
         </Field>
         <Field label="密码 (可选)">
-          <Input value={pwd} onChange={(e) => setPwd(e.target.value)} maxLength={64} />
+          <Input
+            value={pwd}
+            onChange={(e) => setPwd(e.target.value)}
+            maxLength={64}
+          />
         </Field>
         {url ? (
           <div className="flex gap-2">
@@ -174,12 +240,22 @@ export function ShareDialog({ node, onClose }: { node: DriveNode; onClose: () =>
 }
 
 // 选目录 (移动到): 从根开始逐级点进去
-export function PickDir({ title, onPick, onClose }: { title: string; onPick: (path: string) => void; onClose: () => void }) {
+export function PickDir({
+  title,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  onPick: (path: string) => void;
+  onClose: () => void;
+}) {
   const [path, setPath] = useState("/");
   const [dirs, setDirs] = useState<DriveNode[] | null>(null);
   useEffect(() => {
     setDirs(null);
-    void drive.list(path).then((l) => setDirs(l.items.filter((n) => n.kind === "dir")), err);
+    void drive
+      .list(path)
+      .then((l) => setDirs(l.items.filter((n) => n.kind === "dir")), err);
   }, [path]);
   const up = path === "/" ? null : path.slice(0, path.lastIndexOf("/")) || "/";
   return (
@@ -191,13 +267,24 @@ export function PickDir({ title, onPick, onClose }: { title: string; onPick: (pa
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {up && (
-            <Button variant="ghost" className="justify-start" onClick={() => setPath(up)}>
+            <Button
+              variant="ghost"
+              className="justify-start"
+              onClick={() => setPath(up)}
+            >
               ..
             </Button>
           )}
-          {!dirs && <p className="text-sm text-muted-foreground">{TXT_LOADING}</p>}
+          {!dirs && (
+            <p className="text-sm text-muted-foreground">{TXT_LOADING}</p>
+          )}
           {dirs?.map((d) => (
-            <Button key={d.id} variant="ghost" className="justify-start" onClick={() => setPath(joinPath(path, d.name))}>
+            <Button
+              key={d.id}
+              variant="ghost"
+              className="justify-start"
+              onClick={() => setPath(joinPath(path, d.name))}
+            >
               <Folder />
               {d.name}
             </Button>
@@ -217,19 +304,36 @@ export function PickDir({ title, onPick, onClose }: { title: string; onPick: (pa
 }
 
 // 发到群 (#157): 只列能发消息的会话, 邮件群与信息流群不列
-export function SendToChat({ node, onClose }: { node: DriveNode; onClose: () => void }) {
+export function SendToChat({
+  node,
+  onClose,
+}: {
+  node: DriveNode;
+  onClose: () => void;
+}) {
   const pick = async (channel: string) => {
     onClose();
     try {
       const r = await drive.attach(node.id, channel);
-      link.send({ body: { kind: "text", text: FILE_TEXT_PREFIX + node.name }, channel, file: r.file.id });
-      toast.success(`已发到 ${titleOf(chats.meta(channel) ?? { channel, updated: 0 })}`);
+      link.send({
+        body: { kind: "text", text: FILE_TEXT_PREFIX + node.name },
+        channel,
+        file: r.file.id,
+      });
+      toast.success(
+        `已发到 ${titleOf(chats.meta(channel) ?? { channel, updated: 0 })}`,
+      );
     } catch (e) {
       err(e);
     }
   };
   return (
-    <CommandDialog open onOpenChange={(o) => !o && onClose()} title="发到群" description={`${node.name} · ${sizeText(node.size)}`}>
+    <CommandDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="发到群"
+      description={`${node.name} · ${sizeText(node.size)}`}
+    >
       <CommandInput placeholder="发到群..." />
       <CommandList>
         <CommandEmpty>没有匹配的会话</CommandEmpty>
@@ -238,7 +342,11 @@ export function SendToChat({ node, onClose }: { node: DriveNode; onClose: () => 
             .ordered()
             .filter((c) => !c.view || c.view === "chat")
             .map((c) => (
-              <CommandItem key={c.channel} value={`${titleOf(c)} ${c.channel}`} onSelect={() => void pick(c.channel)}>
+              <CommandItem
+                key={c.channel}
+                value={`${titleOf(c)} ${c.channel}`}
+                onSelect={() => void pick(c.channel)}
+              >
                 <UserAvatar id={c.avatar} name={titleOf(c)} size="sm" />
                 {titleOf(c)}
               </CommandItem>
@@ -250,7 +358,17 @@ export function SendToChat({ node, onClose }: { node: DriveNode; onClose: () => 
 }
 
 // 输入名字 (新建文件夹, 改名)
-export function NameDialog({ title, initial, onSubmit, onClose }: { title: string; initial: string; onSubmit: (name: string) => void; onClose: () => void }) {
+export function NameDialog({
+  title,
+  initial,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  initial: string;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(initial);
   const ok = name.trim() && name.trim() !== initial && !name.includes("/");
   const submit = () => {
@@ -265,7 +383,12 @@ export function NameDialog({ title, initial, onSubmit, onClose }: { title: strin
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>名字里不能有 /</DialogDescription>
         </DialogHeader>
-        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
         <Button disabled={!ok} onClick={submit}>
           确定
         </Button>

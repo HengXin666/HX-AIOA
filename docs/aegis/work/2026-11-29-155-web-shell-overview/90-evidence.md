@@ -16,3 +16,10 @@
 | 本地 wrangler dev + 种子数据 + playwright (暗色 ink) | 1440x900, 1920x1080, 2560x1440, 390x844 截图, 无页面错误 |
 
 注意: 本地联调用临时 `.dev.vars`, 跑完已删除。
+
+## 第三版 (36b2637, 07e75c6, 本提交)
+- 配色对照安卓 chartPalette: 主色 info, 序列 蓝/琥珀/青/品红/绿; ink 主题下 --chart-1 改用 info。
+- 3D: HX-UI @hx/ui/data/3d 的 Bar3D (总览一周节奏, 开发看板 12 周提交)。进入视口且空闲才加载, Save-Data 或 2g/3g 不加载; 首包 index 569 KB (gzip 174 KB), three.js 在懒加载分包。新增依赖 three, @react-three/fiber, @react-three/drei, d3-geo (HX-UI 的可选 peer)。
+- 总览加回开发看板; GitHub 页用总览的 Section 与配色, 热力格换 HX-UI HeatCalendar。
+- 网盘: 移植 HX-CF-Drive 的预览与本机缓存 (core/blobcache.ts: 内存 + Cache Storage 两层 LRU, 单文件 64 MB 以内), 预览过的文件下载直接从本机存; 网格视图, 小图缩略图进视口才取; 退出登录清空缓存。
+- 验证: typecheck, build 通过; 1920 / 2560 截图无页面错误。开发看板与网盘本地没有 GitHub 插件和 Drive 后端, 没有真实数据截图。
