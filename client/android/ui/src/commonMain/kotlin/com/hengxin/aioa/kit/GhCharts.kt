@@ -77,13 +77,48 @@ fun MixChart(
     grid: Color = Aioa.colors.border,
     axis: Color = Aioa.colors.textSecondary,
     onSelect: (Int) -> Unit = {},
+) = MixCanvas(series, emptyList(), labels, modifier, height, selected, grid, axis, onSelect)
+
+/**
+ * 双轴混合图 (#144): left 的系列共用左轴, right 的系列用独立的右轴 (量级差很多时不再被压扁),
+ * 右轴刻度只有一个系列时用它的颜色, 一眼看出对应关系; 其余同 MixChart。right 为空时等于 MixChart。
+ */
+@Composable
+fun DualMixChart(
+    left: List<MixSeries>,
+    right: List<MixSeries>,
+    labels: List<String>,
+    modifier: Modifier = Modifier,
+    height: Dp = 132.dp,
+    selected: Int = -1,
+    grid: Color = Aioa.colors.border,
+    axis: Color = Aioa.colors.textSecondary,
+    onSelect: (Int) -> Unit = {},
+) = MixCanvas(left, right, labels, modifier, height, selected, grid, axis, onSelect)
+
+/** 系列里的最大值取好看的上限; 空的按 0。 */
+private fun topOf(series: List<MixSeries>): Float = mixCeil(series.maxOfOrNull { s -> s.values.maxOrNull() ?: 0f } ?: 0f)
+
+@Composable
+private fun MixCanvas(
+    left: List<MixSeries>,
+    right: List<MixSeries>,
+    labels: List<String>,
+    modifier: Modifier,
+    height: Dp,
+    selected: Int,
+    grid: Color,
+    axis: Color,
+    onSelect: (Int) -> Unit,
 ) {
     val n = labels.size
+    val series = left + right
     if (n == 0 || series.isEmpty()) return
     val measurer = rememberTextMeasurer()
     val reveal = remember(series.map { it.label }, n) { Animatable(0f) }
     LaunchedEffect(reveal) { reveal.animateTo(1f, tween(DRAW_MS, easing = FastOutSlowInEasing)) }
     val small = TextStyle(color = axis, fontSize = 10.sp)
+    val rightStyle = small.copy(color = right.singleOrNull()?.color ?: axis)
     val bg = Aioa.colors.surface
     // 画的时候记下格宽与左边距, 手势按它换算格子; 回调取最新的
     val geo = remember { FloatArray(2) { 1f } }
@@ -94,60 +129,71 @@ fun MixChart(
             .pointerInput(n) { detectTapGestures { pick(it.x) } }
             .pointerInput(n) { detectHorizontalDragGestures { ch, _ -> pick(ch.position.x) } },
     ) {
-        val top = mixCeil(series.maxOf { s -> s.values.maxOrNull() ?: 0f })
-        val topText = measurer.measure(fmt(top), small)
-        val left = topText.size.width + 6.dp.toPx()
+        val topL = topOf(left)
+        val topR = topOf(right)
+        val topText = measurer.measure(fmt(topL), small)
+        val left0 = topText.size.width + 6.dp.toPx()
+        val rightW = if (right.isEmpty()) 0f else measurer.measure(fmt(topR), rightStyle).size.width + 6.dp.toPx()
+        val plotRight = size.width - rightW
         val bottom = size.height - topText.size.height - 4.dp.toPx()
         val plotTop = topText.size.height / 2f
-        val slot = (size.width - left) / n
+        val slot = (plotRight - left0) / n
         geo[0] = slot
-        geo[1] = left
-        fun x(i: Int) = left + slot * (i + 0.5f)
-        fun y(v: Float) = bottom - v / top * (bottom - plotTop)
+        geo[1] = left0
+        fun x(i: Int) = left0 + slot * (i + 0.5f)
+        fun yOf(top: Float): (Float) -> Float = { v -> bottom - v / top * (bottom - plotTop) }
+        val yL = yOf(topL)
+        val yR = yOf(topR)
+        // 按下标认轴, 不靠 equals: 左右两边有一样的系列也不会认错
+        val drawn = series.mapIndexed { i, s -> s to if (i < left.size) yL else yR }
         val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 4.dp.toPx()))
         for (k in 0 until GRID_LINES) {
-            val v = top * k / (GRID_LINES - 1)
-            drawLine(grid.copy(alpha = 0.7f), Offset(left, y(v)), Offset(size.width, y(v)), 1f, pathEffect = if (k == 0) null else dash)
+            val v = topL * k / (GRID_LINES - 1)
+            drawLine(grid.copy(alpha = 0.7f), Offset(left0, yL(v)), Offset(plotRight, yL(v)), 1f, pathEffect = if (k == 0) null else dash)
             val t = measurer.measure(fmt(v), small)
-            drawText(t, topLeft = Offset(left - 6.dp.toPx() - t.size.width, y(v) - t.size.height / 2f))
+            drawText(t, topLeft = Offset(left0 - 6.dp.toPx() - t.size.width, yL(v) - t.size.height / 2f))
+            if (right.isNotEmpty()) {
+                val r = measurer.measure(fmt(topR * k / (GRID_LINES - 1)), rightStyle)
+                drawText(r, topLeft = Offset(plotRight + 6.dp.toPx(), yL(v) - r.size.height / 2f))
+            }
         }
         val ticks = minOf(X_TICKS, n)
         for (k in 0 until ticks) {
             val i = if (ticks == 1) 0 else k * (n - 1) / (ticks - 1)
             val t = measurer.measure(labels[i], small)
-            drawText(t, topLeft = Offset((x(i) - t.size.width / 2f).coerceIn(left, size.width - t.size.width), bottom + 4.dp.toPx()))
+            drawText(t, topLeft = Offset((x(i) - t.size.width / 2f).coerceIn(left0, size.width - t.size.width), bottom + 4.dp.toPx()))
         }
         if (selected in 0 until n) drawLine(axis.copy(alpha = 0.45f), Offset(x(selected), plotTop), Offset(x(selected), bottom), 1.dp.toPx())
-        val bars = series.filter { it.style == MixStyle.BARS }
+        val bars = drawn.filter { it.first.style == MixStyle.BARS }
         val barW = slot * BAR_SHARE / maxOf(1, bars.size)
         val p = reveal.value
         // 柱在最下层, 再画面积与线, 点在最上
-        bars.forEachIndexed { b, s ->
+        bars.forEachIndexed { b, (s, ys) ->
             s.values.forEachIndexed { i, v ->
                 if (v <= 0f) return@forEachIndexed
                 val bx = x(i) - slot * BAR_SHARE / 2f + b * barW
-                val h = (bottom - y(v)) * p
+                val h = (bottom - ys(v)) * p
                 drawRoundRect(s.color.copy(alpha = if (i == selected) 1f else 0.78f), Offset(bx + barW * 0.1f, bottom - h), Size(barW * 0.8f, h), CornerRadius(2.dp.toPx()))
             }
         }
-        clipRect(right = left + (size.width - left) * p) {
-            for (s in series) when (s.style) {
+        clipRect(right = left0 + (plotRight - left0) * p) {
+            for ((s, ys) in drawn) when (s.style) {
                 MixStyle.AREA -> {
-                    val line = path(s.values, ::x, ::y)
+                    val line = path(s.values, ::x, ys)
                     val fill = Path().apply { addPath(line); lineTo(x(s.values.lastIndex), bottom); lineTo(x(0), bottom); close() }
                     drawPath(fill, Brush.verticalGradient(listOf(s.color.copy(alpha = AREA_TOP_ALPHA), s.color.copy(alpha = 0f)), plotTop, bottom))
                     drawPath(line, s.color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                 }
-                MixStyle.LINE -> drawPath(path(s.values, ::x, ::y), s.color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                MixStyle.DASHED -> drawPath(path(s.values, ::x, ::y), s.color, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
+                MixStyle.LINE -> drawPath(path(s.values, ::x, ys), s.color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                MixStyle.DASHED -> drawPath(path(s.values, ::x, ys), s.color, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
                 else -> Unit
             }
         }
-        for (s in series.filter { it.style == MixStyle.DOTS }) s.values.forEachIndexed { i, v ->
-            if (v > 0f && p >= 1f) dot(s.color, bg, Offset(x(i), y(v)), if (i == selected) 4.5.dp.toPx() else 3.5.dp.toPx())
+        for ((s, ys) in drawn.filter { it.first.style == MixStyle.DOTS }) s.values.forEachIndexed { i, v ->
+            if (v > 0f && p >= 1f) dot(s.color, bg, Offset(x(i), ys(v)), if (i == selected) 4.5.dp.toPx() else 3.5.dp.toPx())
         }
-        if (selected in 0 until n && p >= 1f) for (s in series) if (s.style == MixStyle.LINE || s.style == MixStyle.AREA || s.style == MixStyle.DASHED) {
-            s.values.getOrNull(selected)?.let { dot(s.color, bg, Offset(x(selected), y(it)), 3.5.dp.toPx()) }
+        if (selected in 0 until n && p >= 1f) for ((s, ys) in drawn) if (s.style == MixStyle.LINE || s.style == MixStyle.AREA || s.style == MixStyle.DASHED) {
+            s.values.getOrNull(selected)?.let { dot(s.color, bg, Offset(x(selected), ys(it)), 3.5.dp.toPx()) }
         }
     }
 }

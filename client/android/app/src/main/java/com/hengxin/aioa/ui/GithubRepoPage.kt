@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -17,11 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
-import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.CardState
 import com.hengxin.aioa.kit.Chip
 import com.hengxin.aioa.kit.Dot
-import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.StateBody
 import com.hengxin.aioa.kit.Text
@@ -44,15 +43,17 @@ fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
     val detail = state.details[repo]
     val summary = detail?.repo ?: state.repos.firstOrNull { it.repo == repo }
     val url = summary?.url?.ifEmpty { null } ?: GH_WEB_ROOT + repo
-    GhRefreshBox(false, { state.loadDetail(repo) }) {
+    var reload by rememberSaveable(repo) { mutableIntStateOf(0) }
+    GhRefreshBox(false, { state.loadDetail(repo); reload++ }) {
         SubPage(repo.substringAfter('/'), onBack, "在 GitHub 打开" to { openUrl(context, url) }) {
             summary?.let { RepoHeader(it) }
+            RepoTrendCard(repo, reload)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RepoTab.entries.forEach { t -> Chip(t.label + count(detail, t, open), tab == t) { tab = t } }
             }
             val error = state.detailErrors[repo]
-            if (tab == RepoTab.HISTORY) Card { HistoryTab(state.history, repo) { openUrl(context, it) } }
-            else Card {
+            if (tab == RepoTab.HISTORY) FoldCard(FOLD_REPO_LIST, tabIcon(tab), tab.label) { HistoryTab(state.history, repo) { openUrl(context, it) } }
+            else FoldCard(FOLD_REPO_LIST, tabIcon(tab), tab.label + count(detail, tab, open)) {
                 val shown = when {
                     detail != null -> if (rows(detail, tab, open) == 0) CardState.Empty else CardState.Ready
                     error != null -> CardState.Error(error)
@@ -69,8 +70,9 @@ fun GithubRepoPage(state: GithubState, repo: String, onBack: () -> Unit) {
 @Composable
 private fun RepoHeader(r: GhRepo) {
     val c = Aioa.colors
-    Card {
-        Text(r.repo, c.textSecondary, GH_META_SP)
+    FoldCard(FOLD_REPO_HEAD, if (r.fork) ICON_FORK else ICON_GITHUB, r.repo, repoOrigin(r.fork, r.parent)) {
+        // fork / 自建 (#144): fork 写上游
+        Text(repoOrigin(r.fork, r.parent), c.textSecondary, GH_META_SP)
         r.description?.let { Paragraph(it, c.text, 14) }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconCount(ICON_STAR, r.stars, "星")
@@ -123,6 +125,15 @@ private fun RunRow(r: GhRun, onClick: () -> Unit) {
         val meta = metaOf(r.branch, ciLabel(r.status), ago(r.at))
         GhRow(ICON_RUN, r.workflow.ifEmpty { LABEL_CI }, meta, c.textSecondary, onClick)
     }
+}
+
+private fun tabIcon(tab: RepoTab): String = when (tab) {
+    RepoTab.TIMELINE -> "activity"
+    RepoTab.HISTORY -> "folder"
+    RepoTab.BRANCHES -> "git-branch"
+    RepoTab.PRS -> ICON_PR
+    RepoTab.ISSUES -> ICON_ISSUE
+    RepoTab.CI -> ICON_RUN
 }
 
 private fun rows(d: GhDetail, tab: RepoTab, unmerged: List<GhOpenBranch>?): Int = when (tab) {

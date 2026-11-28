@@ -18,9 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
-import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.Dot
-import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Paragraph
 import com.hengxin.aioa.kit.Text
 
@@ -42,14 +40,10 @@ fun BranchBoard(b: GithubBranches, openRepo: (String) -> Unit) {
     if (!b.loaded) return
     val c = Aioa.colors
     val withAny = b.repos.filter { it.branches.isNotEmpty() }
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(ICON_GITHUB, c.textSecondary, 16.dp)
-            Box(Modifier.weight(1f)) { Text("未合入分支", c.text, GH_ROW_SP, weight = FontWeight.Medium) }
-            Text(if (b.total == 0) "全部已合入" else "${b.total} 条 · ${withAny.size} 个仓库", c.textSecondary, 13)
-        }
+    val badge = if (b.total == 0) "全部已合入" else "${b.total} 条 · ${withAny.size} 个仓库"
+    FoldCard(FOLD_BRANCHES, ICON_GITHUB, "未合入分支", badge, trailing = { Text(badge, c.textSecondary, 13) }) {
         b.error?.takeIf { b.repos.isEmpty() }?.let { Paragraph(it, c.danger, 13) }
-        if (b.total == 0) return@Card
+        if (b.total == 0) return@FoldCard
         FreshBar(b.all)
         withAny.take(MAX_REPOS).forEach { r -> RepoBlock(r) { openRepo(r.repo) } }
         if (withAny.size > MAX_REPOS) Text("还有 ${withAny.size - MAX_REPOS} 个仓库, 在仓库列表里看", c.textSecondary, GH_META_SP)

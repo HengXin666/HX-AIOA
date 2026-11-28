@@ -2,7 +2,6 @@ package com.hengxin.aioa.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -21,9 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.Aioa
-import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.Chip
-import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.MixChart
 import com.hengxin.aioa.kit.MixLegend
 import com.hengxin.aioa.kit.MixSeries
@@ -70,13 +67,10 @@ fun TrendCard(gh: GithubState) {
     val labels = s.points.map { trendAxis(it.label) }
     fun of(name: String, color: androidx.compose.ui.graphics.Color, style: MixStyle, f: (GhTrendPoint) -> Int) = MixSeries(name, s.points.map { f(it).toFloat() }, color, style)
     val sum = s.total
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon("activity", c.textSecondary, 16.dp)
-            Box(Modifier.weight(1f)) { Text("走势", c.text, GH_ROW_SP, weight = FontWeight.Medium) }
-            Chip("14 天", !weekly) { weekly = false; picked = -1 }
-            Chip("12 周", weekly) { weekly = true; picked = -1 }
-        }
+    FoldCard(FOLD_TREND, "activity", "走势", "提交 ${sum.commits}", trailing = {
+        Chip("14 天", !weekly) { weekly = false; picked = -1 }
+        Chip("12 周", weekly) { weekly = true; picked = -1 }
+    }) {
         Row {
             SummaryCell(sum.commits, "提交", Modifier.weight(1f))
             SummaryCell(sum.prMerged, "PR 合入", Modifier.weight(1f), pal.success)
@@ -119,17 +113,17 @@ private fun FootprintCard(t: GhTrend) {
     var stars by rememberSaveable { mutableStateOf(t.created.isEmpty()) }
     var all by rememberSaveable { mutableStateOf(false) }
     val list = if (stars) t.starred else t.created
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon("folder", c.textSecondary, 16.dp)
-            Box(Modifier.weight(1f)) { Text("足迹", c.text, GH_ROW_SP, weight = FontWeight.Medium) }
-            Chip("新建仓库 ${t.created.size}", !stars) { stars = false; all = false }
-            Chip("Star ${t.starred.size}", stars) { stars = true; all = false }
-        }
-        if (list.isEmpty()) Text(if (stars) "还没有 star 过仓库。" else "近一年没有新建仓库。", c.textSecondary, 13)
+    FoldCard(FOLD_FOOT, "folder", "足迹", trailing = {
+        Chip("新建仓库 ${t.created.size}", !stars) { stars = false; all = false }
+        Chip("Star ${t.starred.size}", stars) { stars = true; all = false }
+    }) {
+        if (list.isEmpty()) Text(if (stars) "还没有 star 过仓库。" else "还没有新建仓库。", c.textSecondary, 13)
         for (f in if (all) list else list.take(FOOT_SHOWN)) {
-            val meta = metaOf(if (f.private) "私有" else "", f.stars?.let { "★ $it" }.orEmpty(), footDate(f.at))
-            OneRow(if (stars) ICON_STAR else "folder", f.repo, meta, onClick = { openUrl(context, f.url) }, sub = f.description.orEmpty())
+            // 新建仓库区分 fork 与自建 (#144), fork 写上游
+            val origin = if (stars) "" else repoOrigin(f.fork, f.parent)
+            val meta = metaOf(origin, if (f.private) "私有" else "", f.stars?.let { "★ $it" }.orEmpty(), footDate(f.at))
+            val icon = if (stars) ICON_STAR else if (f.fork) ICON_FORK else "folder"
+            OneRow(icon, f.repo, meta, onClick = { openUrl(context, f.url) }, sub = f.description.orEmpty())
         }
         if (!all && list.size > FOOT_SHOWN) Chip("再显示 ${list.size - FOOT_SHOWN} 个", false) { all = true }
     }

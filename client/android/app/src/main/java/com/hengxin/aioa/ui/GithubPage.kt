@@ -55,10 +55,9 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
             when {
                 !state.loaded -> Card { StateBody(CardState.Loading) {} }
                 state.repos.isEmpty() && state.error == null -> EmptyRepos(state.synced, onPick, onAddSource)
-                state.repos.isNotEmpty() -> {
+                state.repos.isNotEmpty() -> FoldCard(FOLD_REPOS, ICON_GITHUB, "仓库", "${state.repos.size} 个", trailing = { Chip("选择仓库", false, onPick) }) {
                     Summary(state)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Chip("选择仓库", false, onPick) }
-                    Card { AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r, state.branches.of(r.repo)?.branches?.size ?: 0) { openRepo(r.repo) } } }
+                    AnimatedItems(state.repos, { it.repo }) { r -> RepoCard(r, state.branches.of(r.repo)?.branches?.size ?: 0) { openRepo(r.repo) } }
                 }
             }
         }
@@ -67,14 +66,12 @@ fun GithubPage(state: GithubState, onBack: () -> Unit, openRepo: (String) -> Uni
 
 @Composable
 private fun Summary(state: GithubState) {
-    Card {
-        Row(Modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-            SummaryCell(state.repos.size, "仓库", Modifier.weight(1f))
-            SummaryCell(state.openPrs, "开放 PR", Modifier.weight(1f))
-            SummaryCell(state.openIssues, "开放 Issue", Modifier.weight(1f))
-            val failed = state.ciFailures
-            SummaryCell(failed, "CI 失败", Modifier.weight(1f), if (failed > 0) Aioa.colors.danger else Aioa.colors.text)
-        }
+    Row(Modifier, horizontalArrangement = Arrangement.SpaceBetween) {
+        SummaryCell(state.repos.size, "仓库", Modifier.weight(1f))
+        SummaryCell(state.openPrs, "开放 PR", Modifier.weight(1f))
+        SummaryCell(state.openIssues, "开放 Issue", Modifier.weight(1f))
+        val failed = state.ciFailures
+        SummaryCell(failed, "CI 失败", Modifier.weight(1f), if (failed > 0) Aioa.colors.danger else Aioa.colors.text)
     }
 }
 
@@ -102,6 +99,8 @@ private fun EmptyRepos(synced: Boolean, onPick: () -> Unit, onAddSource: () -> U
 @Composable
 private fun RepoCard(repo: GhRepo, unmerged: Int, open: () -> Unit) {
     val meta = metaOf(
+        // fork / 自建标识 (#144), 上游写在次行
+        if (repo.fork) "fork" else "自建",
         if (repo.stars > 0) "★ ${repo.stars}" else "",
         if (repo.openPrs > 0) "${repo.openPrs} $LABEL_PR" else "",
         if (repo.openIssues > 0) "${repo.openIssues} $LABEL_ISSUE" else "",
@@ -110,6 +109,7 @@ private fun RepoCard(repo: GhRepo, unmerged: Int, open: () -> Unit) {
     val ci = repo.ci
     val alert = if (ci?.status == CiStatus.FAILURE) "CI 失败 · ${metaOf(ci.workflow, ci.branch, ago(ci.at))}" else ""
     val push = repo.lastPush?.let { p -> metaOf("${p.by.ifEmpty { "有人" }} 推送 ${p.commits} 个提交到 ${p.branch}", ago(p.at)) }.orEmpty()
-    val sub = listOf(push, repo.description.orEmpty()).filter { it.isNotBlank() }.joinToString("\n")
-    OneRow(ICON_GITHUB, repo.repo, meta, onClick = open, sub = sub, alert = alert) { Dot(ciColor(ci?.status)) }
+    val up = if (repo.fork) repoOrigin(true, repo.parent) else ""
+    val sub = listOf(up, push, repo.description.orEmpty()).filter { it.isNotBlank() }.joinToString("\n")
+    OneRow(if (repo.fork) ICON_FORK else ICON_GITHUB, repo.repo, meta, onClick = open, sub = sub, alert = alert) { Dot(ciColor(ci?.status)) }
 }

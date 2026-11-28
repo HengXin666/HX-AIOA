@@ -31,8 +31,11 @@ data class GhTrendSeries(val points: List<GhTrendPoint>, val received: Int) {
     val total get() = points.fold(GhTrendPoint("")) { a, b -> a + b }
 }
 
-/** 足迹: 新建的仓库 (at 为创建时间) 或 star 的仓库 (at 为 star 时间)。 */
-data class GhFootprint(val repo: String, val url: String, val at: Long, val description: String?, val private: Boolean, val stars: Int?)
+/** 足迹: 新建的仓库 (at 为创建时间, fork 带上游 parent) 或 star 的仓库 (at 为 star 时间)。 */
+data class GhFootprint(
+    val repo: String, val url: String, val at: Long, val description: String?, val private: Boolean, val stars: Int?,
+    val fork: Boolean = false, val parent: String? = null,
+)
 
 data class GhTrend(
     val login: String,
@@ -60,6 +63,7 @@ private fun footprints(a: JSONArray?): List<GhFootprint> = objects(a).map {
     GhFootprint(
         it.optString("repo"), it.optString("url"), it.optLong("at"), it.optString("description").ifEmpty { null },
         it.optBoolean("private"), if (it.has("stars")) it.optInt("stars") else null,
+        it.optBoolean("fork"), it.optString("parent").ifEmpty { null },
     )
 }
 

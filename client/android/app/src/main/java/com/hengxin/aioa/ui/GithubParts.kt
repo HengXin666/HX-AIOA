@@ -27,6 +27,8 @@ const val ICON_PR = "git-pull-request"
 const val ICON_ISSUE = "circle-dot"
 const val ICON_STAR = "star"
 const val ICON_RUN = "circle-play"
+// 图标库里没有 git-fork, 用分支图标表示 fork
+const val ICON_FORK = "git-branch"
 const val LABEL_PR = "PR"
 const val LABEL_ISSUE = "Issue"
 const val LABEL_CI = "CI"
@@ -134,3 +136,10 @@ fun pushLine(p: GhPush?): String? = p?.let {
 
 /** 把非空的几段说明用 " · " 连起来。 */
 fun metaOf(vararg parts: String): String = parts.filter { it.isNotEmpty() }.joinToString(GH_SEP)
+
+/** 仓库来源标识 (#144): fork 写上游 ("fork 自 a/b"), 不知道上游只写 "fork", 自建写 "自建"。 */
+fun repoOrigin(fork: Boolean, parent: String?): String = when {
+    !fork -> "自建"
+    parent.isNullOrEmpty() -> "fork"
+    else -> "fork 自 $parent"
+}

@@ -41,4 +41,19 @@ class GithubHeatTest {
         // 2019-01-01 是周二, 前面补一格
         assertEquals(listOf(0, 2, 4), heatLevels(h))
     }
+
+    @Test
+    fun 服务端补到周一_第一列不留空格_有提交的天都着色() {
+        // #144: 11-28 (周六) 往前 140 天从 07-12 (周日) 起, 第一列补 6 个空格, 07-06..07-11 其实有提交;
+        // 服务端改成补到 07-06 (周一) 后, 不再补空格, 每个有提交的日子都有颜色
+        val today = LocalDate.parse("2026-11-28")
+        val start = LocalDate.parse("2026-07-06")
+        val n = (today.toEpochDay() - start.toEpochDay() + 1).toInt()
+        val m = (0 until n).associate { start.plusDays(it.toLong()) to (it % 5 + 1) }
+        val h = GhHeatmap(m, 0)
+        val levels = heatLevels(h)
+        assertEquals(n, levels.size)
+        assertTrue(levels.all { it > 0 })
+        assertEquals(n - 1, todayIndex(h, today))
+    }
 }

@@ -62,6 +62,9 @@ data class GhRepo(
     val lastPush: GhPush?,
     val ci: GhCi?,
     val updatedAt: Long,
+    // fork 来的仓库 (#144) 带上游 owner/repo; 自建的 fork = false
+    val fork: Boolean = false,
+    val parent: String? = null,
 ) {
     /** 最近一次活动时间, 用于排序。 */
     val active: Long get() = maxOf(updatedAt, lastPush?.at ?: 0L, ci?.at ?: 0L)
@@ -279,6 +282,8 @@ class GithubState(private val context: Context, private val scope: CoroutineScop
             o.optJSONObject("lastPush")?.let { GhPush(it.optLong(F_AT), it.optString("by"), it.optString(F_BRANCH), it.optInt("commits")) },
             o.optJSONObject("ci")?.let { GhCi(ci(it.optString(F_STATUS)), it.optString(F_WORKFLOW), it.optString(F_BRANCH), opt(it, F_URL), it.optLong(F_AT)) },
             o.optLong(F_UPDATED),
+            o.optBoolean("fork"),
+            opt(o, "parent"),
         )
     }
 

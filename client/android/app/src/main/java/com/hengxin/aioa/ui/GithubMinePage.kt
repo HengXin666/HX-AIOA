@@ -4,7 +4,6 @@ import com.hengxin.aioa.kit.AnimatedItems
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Card
@@ -40,11 +38,7 @@ fun TodayCard(mine: GithubMine) {
     val c = Aioa.colors
     val t = mine.today ?: return
     var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon("github", c.textSecondary, 16.dp)
-            Box(Modifier.weight(1f)) { Text("今天" + if (t.login.isNotEmpty()) " · ${t.login}" else "", c.text, GH_ROW_SP, weight = FontWeight.Medium) }
-        }
+    FoldCard(FOLD_TODAY, ICON_GITHUB, "今天" + if (t.login.isNotEmpty()) " · ${t.login}" else "", "${t.stats.pushes} 次推送") {
         Row(Modifier, horizontalArrangement = Arrangement.SpaceBetween) {
             SummaryCell(t.stats.pushes, "推送", Modifier.weight(1f))
             SummaryCell(t.stats.prs, LABEL_PR, Modifier.weight(1f))

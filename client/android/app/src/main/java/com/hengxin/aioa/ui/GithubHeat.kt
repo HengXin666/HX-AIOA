@@ -23,11 +23,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.hengxin.aioa.Constants
 import com.hengxin.aioa.kit.Aioa
-import com.hengxin.aioa.kit.Card
 import com.hengxin.aioa.kit.Chip
 import com.hengxin.aioa.kit.CountUp
 import com.hengxin.aioa.kit.Heatmap
-import com.hengxin.aioa.kit.Icon
 import com.hengxin.aioa.kit.Text
 import com.hengxin.aioa.kit.hxPalette
 import com.hengxin.aioa.net.ApiCache
@@ -144,12 +142,12 @@ fun GithubHeatCard(gh: GithubState) {
     val streak = heatStreak(map, today)
     val best = map.days.maxByOrNull { it.value }?.takeIf { it.value > 0 }
     val active = map.days.count { it.value > 0 }
-    Card {
+    val shown = if (year == RECENT) weekCommits(map, today) else total
+    FoldCard(FOLD_HEAT, ICON_GITHUB, "提交热力", if (year == RECENT) "本周 $shown 次" else "$year 年 $total 次") {
         // 事实数据 (#140): 本周 / 这一年的提交, 连续天数, 最高一天, 点亮天数; 不做自定的里程碑
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Icon(ICON_GITHUB, c.text, 18.dp)
             Column {
-                CountUp(if (year == RECENT) weekCommits(map, today) else total, 26, c.text, delayMs = 100)
+                CountUp(shown, 26, c.text, delayMs = 100)
                 Text(if (year == RECENT) "本周提交" else "$year 年提交", c.textSecondary, GH_META_SP)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
