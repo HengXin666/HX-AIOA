@@ -1,3 +1,5 @@
+import { Tabs, TabsList, TabsTrigger } from "@hx/ui/ui/tabs";
+import { Card } from "@hx/ui/ui/card";
 import { FEED_STATUS_LABEL, feedTagsOf, type FeedTag } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -49,13 +51,15 @@ export default function FeedView({ channel, narrow, onPane }: { channel: string;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={meta ? titleOf(meta) : channel} sub="信息流" back={narrow ? () => nav("chat") : undefined} actions={onPane && <Button size="sm" variant="ghost" onClick={onPane}>群资料</Button>} />
-      <div className="flex gap-4 px-4 pt-2">
-        {TABS.map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} className={`border-b-2 pb-1 text-sm ${tab === t ? "border-brand font-semibold text-foreground" : "border-transparent text-muted-foreground"}`}>
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="px-3 pt-2">
+        <TabsList variant="line">
+          {TABS.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {t}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       <div className="flex gap-1 overflow-x-auto px-3 py-2">
         <Button size="xs" variant={kind === null ? "secondary" : "ghost"} onClick={() => setKind(null)}>
           全部 {inTab.length}
@@ -81,7 +85,7 @@ export default function FeedView({ channel, narrow, onPane }: { channel: string;
           {!thread && <p className="text-sm text-muted-foreground">{TXT_LOADING}</p>}
           {thread && shown.length === 0 && <p className="col-span-full p-10 text-center text-sm text-muted-foreground">{tab === "收藏" ? "还没有收藏, 点条目右上角的星标收藏" : "这里还没有内容"}</p>}
           {shown.map((e) => (
-            <Card key={e.key} e={e} tags={tags} />
+            <FeedCard key={e.key} e={e} tags={tags} />
           ))}
         </div>
         {thread?.more && thread.synced && (
@@ -101,7 +105,7 @@ function Today({ items, kinds, tags }: { items: FeedEntry[]; kinds: string[]; ta
   const rated = items.filter((e) => e.status);
   const ok = rated.filter((e) => LIVE.has(feedMarks.status(e) ?? "")).length;
   return (
-    <section className="col-span-full rounded-xl border border-border bg-card p-3">
+    <Card className="col-span-full p-3 gap-0">
       <h3 className="flex text-sm font-semibold text-foreground">
         <span className="flex-1">今天 · {new Date().toLocaleDateString(LOCALE, { month: "numeric", day: "numeric" })}</span>
         <span className="text-xs font-normal text-muted-foreground">截至 {new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })}</span>
@@ -116,7 +120,7 @@ function Today({ items, kinds, tags }: { items: FeedEntry[]; kinds: string[]; ta
           {rated.length > 0 && <Stat label="仍有效" n={ok} />}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -129,7 +133,7 @@ function Stat({ label, n }: { label: string; n: number }) {
   );
 }
 
-function Card({ e, tags }: { e: FeedEntry; tags: FeedTag[] }) {
+function FeedCard({ e, tags }: { e: FeedEntry; tags: FeedTag[] }) {
   const status = feedMarks.status(e);
   const used = feedMarks.has(MARK_USED, e.key);
   const star = feedMarks.has(MARK_STAR, e.key);
@@ -142,7 +146,7 @@ function Card({ e, tags }: { e: FeedEntry; tags: FeedTag[] }) {
     e.title
   );
   return (
-    <article className={`flex flex-col gap-2 rounded-xl border border-border bg-card p-3 ${used || status === "dead" ? "opacity-60" : ""}`}>
+    <Card className={`flex flex-col gap-2 p-3 ${used || status ==="dead" ? "opacity-60" : ""}`}>
       <div className="flex items-start gap-2">
         <h4 className="min-w-0 flex-1 text-sm font-semibold break-words text-foreground">{title}</h4>
         <Button size="icon-xs" variant="ghost" aria-label={star ? "取消收藏" : "收藏"} aria-pressed={star} onClick={() => feedMarks.toggle(MARK_STAR, e.key)}>
@@ -201,6 +205,6 @@ function Card({ e, tags }: { e: FeedEntry; tags: FeedTag[] }) {
           {mine ? "已标失效" : "标失效"}
         </Button>
       </div>
-    </article>
+    </Card>
   );
 }

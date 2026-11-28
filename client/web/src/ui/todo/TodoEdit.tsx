@@ -1,3 +1,4 @@
+import { Label } from "@hx/ui/ui/label";
 import type { TodoPriority, TodoState } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
@@ -76,10 +77,10 @@ export function TodoEdit({ draft, fresh, areas, onClose }: { draft: TodoDraft; f
           <Field label="截止">
             <Input type="datetime-local" value={toLocal(d.due)} onChange={(e) => set("due", e.target.value ? new Date(e.target.value).getTime() : undefined)} />
           </Field>
-          <label className="flex items-center justify-between text-sm text-foreground">
+          <Label className="flex items-center justify-between text-sm text-foreground">
             重点 (上总览)
             <Switch size="sm" checked={Boolean(d.star)} onCheckedChange={(v) => set("star", v || undefined)} />
-          </label>
+          </Label>
           {d.src && (
             <Button
               size="sm"

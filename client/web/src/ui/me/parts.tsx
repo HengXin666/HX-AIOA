@@ -1,11 +1,12 @@
+import { Card } from "@hx/ui/ui/card";
 import type { ReactNode } from "react";
 
 export function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
       {children}
-    </section>
+    </Card>
   );
 }
 

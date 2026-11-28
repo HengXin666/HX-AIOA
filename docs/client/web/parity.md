@@ -28,3 +28,19 @@ Agent / 探针 / Webhook 侧的接口 (`PATH_AGENT_NEXT`, `PATH_AGENT_DONE`, `PA
 | 审计, 账号组 | `PATH_AUDIT` `PATH_GROUPS` | 未做 |
 
 Web 端按设计稿不做: 代理, 保活, 耗电, APK 更新, 系统权限, 内置浏览器 (链接一律新标签页)。
+
+## 等 HX-UI 补的组件
+
+Web 端只用 HX-UI 2 组件; HX-UI 还没有的, 先用最少的原生元素顶上, 并在 HX-UI 仓库提了单独的 issue, 组件发布后替换。
+
+| 用途 | 现在的写法 | HX-UI issue |
+| --- | --- | --- |
+| 列表行 (会话, 邮件, 收藏, 我的导航) | 原生 button / a | HengXin666/HX-UI#58 |
+| 空状态 | `ui/kit/Panes.tsx` EmptyState | HengXin666/HX-UI#59 |
+| 长列表虚拟滚动 | 全量渲染 | HengXin666/HX-UI#60 |
+| 分栏拖宽 | 固定宽度 | HengXin666/HX-UI#61 |
+| 拖放上传与进度 | 未做 | HengXin666/HX-UI#62 |
+| 头像裁剪 | 自动居中裁 | HengXin666/HX-UI#63 |
+| @ 提及输入 | `ui/chat/Mentions.tsx` 浮层 | HengXin666/HX-UI#64 |
+| 可复制字段 | 原生 button | HengXin666/HX-UI#65 |
+| 筛选标签 (带计数) | Button xs | HengXin666/HX-UI#66 |

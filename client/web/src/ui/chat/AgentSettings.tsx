@@ -1,3 +1,4 @@
+import { Label } from "@hx/ui/ui/label";
 import { PATH_CHAT_AGENT, PATH_CHAT_AGENT_PROMPT, PATH_CHAT_AGENT_ROTATE, PATH_CHAT_AGENTS, type AgentRequest, type ChatAgent, type ChatMeta, type OnboardResult } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -146,10 +147,10 @@ function AgentForm({ channel, agent, onClose, onSubmit }: { channel: string; age
             <Field label="还能读这些群 (可选)">
               <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-md border border-border p-2">
                 {others.map((c) => (
-                  <label key={c.channel} className="flex items-center gap-2 text-sm">
+                  <Label key={c.channel} className="flex items-center gap-2 text-sm">
                     <Switch size="sm" checked={reads.includes(c.channel)} onCheckedChange={(v) => setReads((r) => (v ? [...r, c.channel] : r.filter((x) => x !== c.channel)))} />
                     {titleOf(c)}
-                  </label>
+                  </Label>
                 ))}
               </div>
             </Field>

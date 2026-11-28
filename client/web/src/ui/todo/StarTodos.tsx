@@ -1,10 +1,11 @@
+import { Card } from "@hx/ui/ui/card";
 import { Button } from "@hx/ui/ui/button";
 import { ListTodo } from "lucide-react";
 import { useState } from "react";
 import { link } from "../../app/router";
 import { todos, type TodoDraft } from "../../core/todos";
 import { areasOf, finished } from "./model";
-import { Card, useTodos } from "./TodoBoard";
+import { TodoCard, useTodos } from "./TodoBoard";
 import { TodoEdit } from "./TodoEdit";
 
 const MAX_SHOWN = 6;
@@ -18,7 +19,7 @@ export function StarTodos() {
   const rows = (star.length ? star : open.filter((t) => t.due !== undefined).sort((a, b) => a.due! - b.due!)).slice(0, MAX_SHOWN);
   if (!todos.loaded || !all.length) return null;
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <h3 className="flex items-center gap-2 text-sm font-medium text-foreground [&_svg]:size-4">
         <ListTodo className="text-muted-foreground" />
         <span className="flex-1">{star.length ? "重点待办" : "快到期的待办"}</span>
@@ -30,13 +31,13 @@ export function StarTodos() {
       {rows.length ? (
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
           {rows.map((t) => (
-            <Card key={`${t.channel}:${t.id}`} t={t} all={all} showGroup onOpen={() => setEdit(todos.draftOf(t))} />
+            <TodoCard key={`${t.channel}:${t.id}`} t={t} all={all} showGroup onOpen={() => setEdit(todos.draftOf(t))} />
           ))}
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">没有重点或带截止的待办。</p>
       )}
       {edit && <TodoEdit draft={edit} fresh={false} areas={areasOf(all)} onClose={() => setEdit(null)} />}
-    </section>
+    </Card>
   );
 }

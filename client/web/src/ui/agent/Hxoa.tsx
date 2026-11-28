@@ -1,3 +1,5 @@
+import { Label } from "@hx/ui/ui/label";
+import { Card } from "@hx/ui/ui/card";
 import type { HxoaBrowse, HxoaConn, HxoaState, HxoaToken, HxoaWorkspace } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -53,7 +55,7 @@ function Conn({ c, onChanged }: { c: HxoaConn; onChanged: () => void }) {
   }, [open]);
   const online = Boolean(c.hello);
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <Card className=" gap-0 py-0">
       <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 p-3 text-left [&_svg]:size-4">
         {open ? <ChevronDown /> : <ChevronRight />}
         <span className="min-w-0 flex-1">
@@ -95,7 +97,7 @@ function Conn({ c, onChanged }: { c: HxoaConn; onChanged: () => void }) {
           {addWs && <AddWorkspace id={c.id} onClose={() => setAddWs(false)} onDone={load} />}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -133,14 +135,14 @@ function Workspace({ id, w, onChanged }: { id: string; w: HxoaWorkspace; onChang
         />
       </div>
       <div className="flex flex-wrap gap-4 text-xs text-foreground">
-        <label className="flex items-center gap-2">
+        <Label className="flex items-center gap-2">
           <Switch size="sm" checked={w.workers} disabled={!w.git} onCheckedChange={(v) => patch({ workers: v })} />
           workers{!w.git ? " (需要 git)" : ""}
-        </label>
-        <label className="flex items-center gap-2">
+        </Label>
+        <Label className="flex items-center gap-2">
           <Switch size="sm" checked={w.exec} onCheckedChange={(v) => patch({ exec: v })} />
           允许执行命令
-        </label>
+        </Label>
       </div>
       {w.tokens.map((t) => (
         <Token key={t.id} id={id} t={t} onChanged={onChanged} />
@@ -286,14 +288,14 @@ function AddWorkspace({ id, onClose, onDone }: { id: string; onClose: () => void
         <Field label="名字 (可选)">
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="flex items-center gap-2 text-sm">
           <Switch size="sm" checked={workers && Boolean(dir?.git)} disabled={!dir?.git} onCheckedChange={setWorkers} />
           workers (每个连接独立 git 工作树){dir && !dir.git ? ", 这里不是 git 仓库" : ""}
-        </label>
-        <label className="flex items-center gap-2 text-sm">
+        </Label>
+        <Label className="flex items-center gap-2 text-sm">
           <Switch size="sm" checked={exec} onCheckedChange={setExec} />
           允许执行命令
-        </label>
+        </Label>
         <Button disabled={!dir} onClick={() => void submit()}>
           用这个目录
         </Button>

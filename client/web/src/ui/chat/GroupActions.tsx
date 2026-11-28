@@ -1,3 +1,4 @@
+import { Label } from "@hx/ui/ui/label";
 import { PATH_CHAT, PATH_CHAT_INVITES, PATH_CHAT_MEMBER, PATH_CHAT_MESSAGES, type ChatMeta, type ChatPatch, type RoomInviteCreated } from "@hx-aioa/protocol";
 import { Button } from "@hx/ui/ui/button";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
@@ -43,10 +44,10 @@ export function GroupActions({ meta }: { meta: ChatMeta }) {
 
 function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-2 text-sm text-foreground">
+    <Label className="flex items-center justify-between gap-2 text-sm text-foreground">
       {label}
       <Switch size="sm" checked={on} onCheckedChange={set} />
-    </label>
+    </Label>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Label } from "@hx/ui/ui/label";
 import type { InviteInfo, UserPublic } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -81,10 +82,10 @@ export default function Members() {
         ))}
       </Group>
       <Group title="邀请">
-        <label className="flex items-center justify-between gap-2 text-sm text-foreground">
+        <Label className="flex items-center justify-between gap-2 text-sm text-foreground">
           加入后需要我批准
           <Switch size="sm" checked={approval} onCheckedChange={setApproval} />
-        </label>
+        </Label>
         <Button size="sm" onClick={() => void invite()}>
           <Plus />
           新建邀请码并复制

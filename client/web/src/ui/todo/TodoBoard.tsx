@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
 import { Checkbox } from "@hx/ui/ui/checkbox";
@@ -71,7 +72,7 @@ export function TodoBoard({ channel }: { channel?: string }) {
             </h3>
             <div className={kanban ? "flex flex-col gap-2" : "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]"}>
               {s.items.map((t) => (
-                <Card key={`${t.channel}:${t.id}`} t={t} all={all} showGroup={!channel} onOpen={() => setEdit({ fresh: false, d: todos.draftOf(t) })} />
+                <TodoCard key={`${t.channel}:${t.id}`} t={t} all={all} showGroup={!channel} onOpen={() => setEdit({ fresh: false, d: todos.draftOf(t) })} />
               ))}
             </div>
           </section>
@@ -82,14 +83,14 @@ export function TodoBoard({ channel }: { channel?: string }) {
   );
 }
 
-export function Card({ t, all, showGroup, onOpen }: { t: Todo; all: Todo[]; showGroup: boolean; onOpen: () => void }) {
+export function TodoCard({ t, all, showGroup, onOpen }: { t: Todo; all: Todo[]; showGroup: boolean; onOpen: () => void }) {
   const done = finished(t);
   const prog = progressOf(t, all);
   const parent = t.parent ? all.find((x) => x.channel === t.channel && x.id === t.parent) : undefined;
   const overdue = !done && t.due !== undefined && t.due < Date.now();
   const group = chats.meta(t.channel);
   return (
-    <div className="group flex items-start gap-2 rounded-lg border border-border bg-card p-2.5 shadow-xs transition-colors hover:border-ring/50">
+    <Card className="group flex-row items-start gap-2 rounded-lg p-2.5 shadow-xs transition-colors hover:border-ring/50">
       <Checkbox className="mt-0.5" checked={done} aria-label={done ? "标为未完成" : "完成"} onCheckedChange={(v) => void todos.setState(t, v ? "done" : "open")} />
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 flex-col gap-1 text-left">
         {parent && <span className="truncate text-xs text-muted-foreground">↳ {parent.title}</span>}
@@ -127,6 +128,6 @@ export function Card({ t, all, showGroup, onOpen }: { t: Todo; all: Todo[]; show
           {showGroup && group && <span className="truncate">· {titleOf(group)}</span>}
         </span>
       </button>
-    </div>
+    </Card>
   );
 }

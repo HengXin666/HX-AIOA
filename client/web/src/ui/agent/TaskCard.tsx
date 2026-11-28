@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import type { PromptOption, TaskSnapshot, TaskState } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
@@ -33,7 +34,7 @@ export function TaskCard({ task, pending, onOption }: { task: TaskSnapshot; pend
   const expired = waiting && expiredOf(task);
   const result = task.result ?? task.error;
   return (
-    <article className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground [&_svg]:size-3.5">
         {waiting ? <Bell /> : <Activity />}
         <span className="min-w-0 flex-1 truncate">{task.agent || HARNESS}</span>
@@ -61,6 +62,6 @@ export function TaskCard({ task, pending, onOption }: { task: TaskSnapshot; pend
         </div>
       )}
       {!waiting && result && <p className="text-xs break-words whitespace-pre-wrap text-muted-foreground">{result}</p>}
-    </article>
+    </Card>
   );
 }

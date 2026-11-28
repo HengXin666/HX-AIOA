@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import { PATH_CF_USAGE } from "@hx-aioa/protocol";
 import { api } from "../../core/auth";
 import { TXT_LOADING, LOCALE } from "../../core/constants";
@@ -31,7 +32,7 @@ export function CfUsagePage() {
         {u?.items?.map((it) => <Quota key={it.key} it={it} />)}
         {u?.split && <p className="text-xs text-muted-foreground">按 worker 拆分失败: {u.split}</p>}
         {u?.storage && (
-          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+          <Card className="flex flex-col gap-2 p-3">
             <h3 className="text-sm font-medium text-foreground">存储 (不按天重置)</h3>
             <Bar used={u.storage.storedBytes ?? 0} limit={u.storage.limit} parts={[]} />
             <p className="text-xs text-muted-foreground">
@@ -39,7 +40,7 @@ export function CfUsagePage() {
               {u.storage.hubBytes !== undefined ? ` · 主库 ${sizeText(u.storage.hubBytes)}` : ""}
               {u.storage.error ? ` · ${u.storage.error}` : ""}
             </p>
-          </section>
+          </Card>
         )}
       </div>
     </div>
@@ -49,7 +50,7 @@ export function CfUsagePage() {
 function Quota({ it }: { it: Item }) {
   const frac = it.limit ? it.used / it.limit : 0;
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium text-foreground">{it.label}</h3>
         <span className={`text-sm tabular-nums ${frac >= WARN_AT ? "text-destructive" : "text-muted-foreground"}`}>
@@ -67,7 +68,7 @@ function Quota({ it }: { it: Item }) {
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Card } from "@hx/ui/ui/card";
 import type { OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Progress } from "@hx/ui/ui/progress";
@@ -33,7 +34,7 @@ export default function Overview() {
         {data && (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
             {LAYERS.map((l) => (
-              <section key={l.key} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+              <Card key={l.key} className="flex flex-col gap-2 p-3">
                 <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <Badge variant="outline" dot={l.dot}>
                     {l.title}
@@ -46,7 +47,7 @@ export default function Overview() {
                   ))}
                   {!data.layers[l.key]?.length && <li className="text-xs text-muted-foreground">暂无</li>}
                 </ul>
-              </section>
+              </Card>
             ))}
           </div>
         )}
@@ -83,7 +84,7 @@ const TASK_TEXT: Record<string, string> = { running: "进行中", waiting: "等�
 
 function Tasks({ tasks }: { tasks: TaskSnapshot[] }) {
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <Card className="flex flex-col gap-2 p-3">
       <h3 className="flex items-center text-sm font-medium text-foreground">
         <span className="flex-1">任务</span>
         <a href={link("agent")} className="text-xs text-muted-foreground hover:text-foreground">
@@ -104,6 +105,6 @@ function Tasks({ tasks }: { tasks: TaskSnapshot[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }
