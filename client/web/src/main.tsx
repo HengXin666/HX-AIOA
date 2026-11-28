@@ -1,3 +1,4 @@
+import { MotionProvider } from "@hx/ui/motion";
 import { ThemeProvider } from "@hx/ui/theme";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -18,7 +19,10 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <ThemeProvider defaultMode="system">
-        <App />
+        {/* HX-UI 的动效组件 (图表, 骨架, 弹层) 一律用 m.*, 要根部的 MotionProvider 加载特性, 否则停在初始态 */}
+        <MotionProvider>
+          <App />
+        </MotionProvider>
       </ThemeProvider>
     </StrictMode>,
   );

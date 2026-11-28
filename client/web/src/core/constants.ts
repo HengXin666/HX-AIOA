@@ -64,3 +64,5 @@ export const HARNESS = "agent harness";
 export const TXT_ACT_OFFLINE = "未连接服务端, 操作没有发出";
 export const TXT_ACT_QUEUED = `${HARNESS} 离线, 已排队, 上线后送达`;
 export const TXT_ACT_FAILED = "操作失败";
+// 群里接入的 Agent 在界面上的统称 (与安卓 Constants.CLOUD_AGENT 一致)
+export const CLOUD_AGENT_LABEL = "群 Agent";
