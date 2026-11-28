@@ -25,7 +25,7 @@ object NotifyKit {
     // 外观设置文件与键名, 与 config/AppearanceStore 一致; 那边依赖 Compose, 这里只读原始 JSON
     private const val APPEARANCE_FILE = "appearance.json"
     private const val KEY_ACCENT = "accent"
-    private const val UI_ACTIVITY = "com.hengxin.aioa.ui.MainActivity"
+    internal const val UI_ACTIVITY = "com.hengxin.aioa.ui.MainActivity"
     private const val SUMMARY_LINES = 5
 
     fun granted(context: Context): Boolean =

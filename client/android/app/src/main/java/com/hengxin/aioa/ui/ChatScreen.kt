@@ -147,6 +147,8 @@ fun ChatScreen(model: ChatModel) {
     val atNames = remember(candidates) { MentionOps.names(candidates) }
     val roles = remember(members) { members.associate { MentionOps.USER_PREFIX + it.id to MentionOps.roleLabel(it.role) } }
     val faces = remember(members) { members.mapNotNull { m -> m.avatar?.let { MentionOps.USER_PREFIX + m.id to it } }.toMap() }
+    // 通知头像索引 (#151): 群成员头像记下来, :link 进程发通知时用
+    LaunchedEffect(faces) { if (faces.isNotEmpty()) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.hengxin.aioa.data.AvatarIndex.addMembers(context, faces) } }
     val agentSids = meta?.agents?.mapNotNull { it.sourceId }?.toSet().orEmpty()
     val actions = BubbleActions(
         onReply = { g.replyTo = it },

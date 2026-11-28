@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.hengxin.aioa.data.AvatarIndex
 import com.hengxin.aioa.data.GroupTitles
 import com.hengxin.aioa.data.MutedGroups
 import com.hengxin.aioa.net.Api
@@ -85,6 +86,13 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         withContext(Dispatchers.IO) { ApiCache.read(context, Senders.CACHE) }?.let(Senders::apply)
         val r = withContext(Dispatchers.IO) { ApiCache.refresh(context, Senders.CACHE, listOf(Senders.PATH)) }
         if (r.changed) Senders.apply(r.body)
+        indexSenders()
+    }
+
+    // 通知头像索引 (#151): :link 进程不能读 Senders, 换头像后同步一份到文件
+    private fun indexSenders() {
+        val avatars = Senders.list().mapNotNull { s -> s.avatar?.let { s.sid to it } }.toMap()
+        scope.launch(Dispatchers.IO) { AvatarIndex.writeSenders(context, avatars) }
     }
 
     /** 主人给发送者换头像: 先上传图片, 再记到发送者上; 返回错误文字, 成功为 null。 */
@@ -93,6 +101,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", id)) }
         if (r.error != null) return "没保存: ${r.error}"
         Senders.setLocal(sid) { it.copy(avatar = id) }
+        indexSenders()
         return null
     }
 
@@ -110,6 +119,7 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
 
     fun clearSenderAvatar(sid: String) {
         Senders.setLocal(sid) { it.copy(avatar = null) }
+        indexSenders()
         scope.launch {
             val r = withContext(Dispatchers.IO) { Api.call(context, PUT, listOf(Senders.PATH, sid), JSONObject().put("avatar", JSONObject.NULL)) }
             if (r.error != null) {
@@ -143,9 +153,11 @@ class ChatDirectory(private val context: Context, private val scope: CoroutineSc
         Names.agents(next.values.filter { it.deleted == 0L }.flatMap { it.agents }.mapNotNull { a -> a.sourceId?.let { it to a.name } }.toMap())
         val muted = next.values.filter { it.muted }.map { it.channel }.toSet()
         val titles = next.values.mapNotNull { m -> m.title?.let { m.channel to it } }.toMap()
+        val avatars = next.values.mapNotNull { m -> m.avatar?.let { m.channel to it } }.toMap()
         scope.launch(Dispatchers.IO) {
             MutedGroups.write(context, muted)
             GroupTitles.write(context, titles)
+            AvatarIndex.writeGroups(context, avatars)
         }
     }
 
