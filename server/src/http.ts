@@ -3,7 +3,7 @@ import { CODE_BAD_REQUEST, CONTENT_TYPE_JSON, ERR_BAD_JSON, HEADER_CONTENT_TYPE 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-GitHub-Event, X-Hub-Signature-256",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-GitHub-Event, X-Hub-Signature-256, X-Aioa-Drive, If-None-Match",
 };
 
 export function json(data: unknown, status = 200): Response {

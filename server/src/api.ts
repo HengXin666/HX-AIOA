@@ -15,6 +15,7 @@ import { CHAT_DELETE_ROUTES } from "./api-chat-delete";
 import { RECALL_ROUTES } from "./recall";
 import { ROOM_ROUTES } from "./api-rooms";
 import { FILE_ROUTES } from "./files/api";
+import { DRIVE_ROUTES } from "./drive/api";
 import { PLUGIN_ROUTES } from "./plugins/api";
 import { EXT_ROUTES } from "./plugins/ext";
 import { GH_ROUTES } from "./gh/api";
@@ -57,7 +58,7 @@ import { handleHook } from "./hooks";
 import { ApiFail, clampInt, fail, json, readJson } from "./http";
 import { toMsgFrame } from "./legacy";
 
-const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...CHAT_META_ROUTES, ...BUNDLE_ROUTES, ...SENDER_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...AGENT_NEXT_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...SOURCE_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
+const ROUTES: Route[] = [...EVENT_ROUTES, ...CONFIG_ROUTES, ...AGENT_ROUTES, ...SPACE_ROUTES, ...GITHUB_ROUTES, ...CHAT_ROUTES, ...CHAT_META_ROUTES, ...BUNDLE_ROUTES, ...SENDER_ROUTES, ...FEED_TAG_ROUTES, ...PRESENCE_ROUTES, ...MEMORY_ROUTES, ...AGENT_NEXT_ROUTES, ...CHAT_DELETE_ROUTES, ...ROOM_ROUTES, ...FILE_ROUTES, ...DRIVE_ROUTES, ...PLUGIN_ROUTES, ...ALLOW_ROUTES, ...SOURCE_ROUTES, ...DEV_ROUTES, ...COMPAT_ROUTES, ...PDATA_ROUTES, ...EXT_ROUTES, ...GH_ROUTES, ...HXOA_ROUTES, ...MAIL_RULE_ROUTES, ...MAIL_ROUTES, ...TRANSLATE_ROUTES, ...RECALL_ROUTES, ...INTEGRATION_ROUTES, ...RELAY_ROUTES, ...PROBE_ROUTES, ...CF_ROUTES, ...CF_ZONE_ROUTES, ...CF_STORAGE_ROUTES];
 const HOOK_RE = new RegExp(`^${PATH_HOOKS}/([^/]+)/([^/]+)$`);
 
 export async function principalOf(core: Core, req: Request, url: URL): Promise<Principal | null> {
