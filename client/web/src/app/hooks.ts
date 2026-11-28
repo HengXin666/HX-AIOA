@@ -1,3 +1,4 @@
+import { faces } from "../core/faces";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authChanged, currentUser } from "../core/auth";
 import { chats } from "../core/chats";
@@ -50,3 +51,11 @@ export function useVisible(): boolean {
     () => document.visibilityState === "visible",
   );
 }
+
+// 头像来源变化 (发送者, 成员, 自己的旧版头像)
+export const useFaces = () => useSyncExternalStore((fn) => faces.changed.on(fn), () => faces.version);
+export const useMyFace = () => {
+  useUser();
+  useFaces();
+  return faces.me();
+};

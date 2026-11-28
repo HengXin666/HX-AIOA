@@ -2,10 +2,11 @@ import { Button } from "@hx/ui/ui/button";
 import { ArrowLeft, PanelRight } from "lucide-react";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useChats, usePresence, useUser, useVisible } from "../app/hooks";
+import { useChats, useFaces, usePresence, useUser, useVisible } from "../app/hooks";
 import { go } from "../app/router";
 import { chats, titleOf, type Message } from "../core/chats";
 import { TXT_LOADING } from "../core/constants";
+import { faces } from "../core/faces";
 import { Composer } from "./Composer";
 import type { ForwardMode } from "./chat/ForwardDialog";
 import { SelectBar } from "./chat/SelectBar";
@@ -15,6 +16,7 @@ const ForwardDialog = lazy(() => import("./chat/ForwardDialog"));
 type Fwd = { items: Message[]; mode: ForwardMode };
 
 const NEAR_BOTTOM_PX = 80;
+const GROUP_GAP_MS = 5 * 60_000;
 
 // focus: 打开时要定位的消息 seq (收藏, 总览跳来)
 export function Conversation({ channel, focus, narrow, pane, onPane }: { channel: string; focus?: number; narrow: boolean; pane: boolean; onPane: () => void }) {
@@ -31,9 +33,14 @@ export function Conversation({ channel, focus, narrow, pane, onPane }: { channel
   const [selected, setSelected] = useState<Set<number> | null>(null);
   const [fwd, setFwd] = useState<Fwd | null>(null);
 
+  useFaces();
   useEffect(() => {
     void chats.loadThread(channel).catch((e: Error) => toast.error(e.message));
   }, [channel]);
+  const room = Boolean(meta?.members);
+  useEffect(() => {
+    if (room) faces.room(channel);
+  }, [channel, room]);
 
   // 新消息到达时, 只有本来就在底部才跟着滚, 往上翻历史时不打扰
   const count = (thread?.items.length ?? 0) + pending.length;
@@ -107,10 +114,26 @@ export function Conversation({ channel, focus, narrow, pane, onPane }: { channel
       </header>
       <div ref={box} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {!thread && <p className="text-center text-sm text-muted-foreground">{TXT_LOADING}</p>}
-        <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          {thread?.items.map((m) => (
-            <MessageItem key={m.id} m={m} mine={Boolean(me && m.by === me.id)} owner={owner} act={act} selecting={selected !== null} selected={Boolean(selected?.has(m.seq))} />
-          ))}
+        <div className="mx-auto flex max-w-3xl flex-col gap-1">
+          {thread?.items.map((m, i) => {
+            const prev = thread.items[i - 1];
+            // 同一发送者 5 分钟内连发只在第一条画头像与名字
+            const head = !prev || prev.deleted !== undefined || prev.source.id !== m.source.id || m.ts - prev.ts > GROUP_GAP_MS;
+            return (
+              <MessageItem
+                key={m.id}
+                m={m}
+                mine={Boolean(me && m.by === me.id)}
+                owner={owner}
+                act={act}
+                selecting={selected !== null}
+                selected={Boolean(selected?.has(m.seq))}
+                head={head}
+                face={faces.of(m)}
+                name={faces.name(m)}
+              />
+            );
+          })}
           {pending.map((p) => (
             <PendingItem key={p.cid} p={p} onRetry={() => chats.outbox.retry(p.cid)} onDiscard={() => chats.outbox.discard(p.cid)} />
           ))}

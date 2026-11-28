@@ -1,6 +1,6 @@
 import { Bell, ChevronRight, Database, HardDrive, Info, Keyboard, Palette, UserRound, Users } from "lucide-react";
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
-import { useLinkState, useUser } from "../../app/hooks";
+import { useLinkState, useMyFace, useUser } from "../../app/hooks";
 import { link, nav } from "../../app/router";
 import { EmptyState, PageHeader, TwoPane } from "../kit/Panes";
 import type { AreaProps } from "../Shell";
@@ -22,6 +22,7 @@ const PAGES: Page[] = [
 // 我的栏: 左列表右详情 (#/me/<页>); 手机进子页
 export default function MeArea({ loc, layout }: AreaProps) {
   const user = useUser();
+  const face = useMyFace();
   const admin = user?.role === "owner" || user?.role === "admin";
   const owner = user?.role === "owner";
   const pages = PAGES.filter((p) => (!p.admin || admin) && (!p.owner || owner));
@@ -32,7 +33,7 @@ export default function MeArea({ loc, layout }: AreaProps) {
     <div className="flex h-full flex-col overflow-y-auto">
       <PageHeader title="我的" />
       <a href={link("me", "account")} className="mx-3 mt-3 flex items-center gap-3 rounded-xl border border-border bg-card p-3 hover:bg-muted">
-        <UserAvatar id={user?.avatar} name={user?.display ?? ""} size="lg" />
+        <UserAvatar id={face} name={user?.display ?? ""} size="lg" />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium text-foreground">{user?.display}</span>
           <span className="block truncate text-xs text-muted-foreground">

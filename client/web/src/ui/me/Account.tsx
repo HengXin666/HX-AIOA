@@ -5,7 +5,7 @@ import { Input } from "@hx/ui/ui/input";
 import { Camera, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useUser } from "../../app/hooks";
+import { useMyFace, useUser } from "../../app/hooks";
 import { logout } from "../../core/auth";
 import { changePassword, dropDevice, loadMe, patchMe, uploadAvatar } from "../../core/account";
 import { LOCALE, TXT_LOADING } from "../../core/constants";
@@ -61,6 +61,7 @@ export default function Account() {
 
 function Profile() {
   const user = useUser()!;
+  const face = useMyFace();
   const [name, setName] = useState(user.display);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
@@ -83,7 +84,7 @@ function Profile() {
     <Group title="资料">
       <div className="flex items-center gap-3">
         <button type="button" disabled={busy} onClick={() => file.current?.click()} className="group relative rounded-full" aria-label="换头像">
-          <UserAvatar id={user.avatar} name={user.display} size="lg" />
+          <UserAvatar id={face} name={user.display} size="lg" />
           <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 [&_svg]:size-4">
             <Camera />
           </span>

@@ -2,7 +2,7 @@ import { Button } from "@hx/ui/ui/button";
 import { Spin } from "@hx/ui/ui/spin";
 import { Bot, LayoutDashboard, MessageSquare, Server, UserRound } from "lucide-react";
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { useLayout, useLinkState, useUser, type Layout } from "../app/hooks";
+import { useLayout, useLinkState, useMyFace, useUser, type Layout } from "../app/hooks";
 import { link, useLoc, type AreaId, type Loc } from "../app/router";
 import { newVersion } from "../core/version";
 import { UserAvatar } from "./UserAvatar";
@@ -92,12 +92,13 @@ function Lazy({ children }: { children: ReactNode }) {
 
 function Rail({ layout, area }: { layout: Layout; area: AreaId }) {
   const user = useUser();
+  const face = useMyFace();
   const state = useLinkState();
   const wide = layout === "wide";
   return (
     <nav className={`flex shrink-0 flex-col gap-1 border-r border-border bg-sidebar p-2 ${wide ? "w-[200px]" : "w-16 items-center"}`}>
       <a href={link("me")} className={`mb-2 flex items-center gap-2 p-2 ${wide ? "" : "justify-center"}`}>
-        <UserAvatar id={user?.avatar} name={user?.display ?? ""} online={state === "online"} />
+        <UserAvatar id={face} name={user?.display ?? ""} online={state === "online"} />
         {wide && <span className="truncate text-sm font-medium text-foreground">{user?.display}</span>}
       </a>
       {NAV.map((n) => (
