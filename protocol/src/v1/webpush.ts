@@ -15,7 +15,8 @@ export type WebPushSubscription = { endpoint: string; keys: { p256dh: string; au
 export type WebPushKey = { key: string | null };
 
 /** SW 收到的明文: 只放通知要用的字段。 */
-export type WebPushPayload = { title: string; body: string; channel?: string; seq: number; tag: string };
+// url: 点通知打开的地址 (如 Agent GUI 审批 `/#/agent/gui/<host>/<sid>`); silent: 静默通知 (无声无震动)
+export type WebPushPayload = { title: string; body: string; channel?: string; seq: number; tag: string; url?: string; silent?: boolean };
 
 export const isWebDevice = (id: string): boolean => id.length <= WEB_DEVICE_MAX && DEVICE_RE.test(id);
 
