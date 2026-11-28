@@ -4,6 +4,7 @@ import { Toaster } from "@hx/ui/ui/sonner";
 import { useEffect, useState } from "react";
 import { hasRefresh, refresh } from "../core/auth";
 import { chats } from "../core/chats";
+import { feed } from "../core/feed";
 import { link } from "../core/link";
 import { presence } from "../core/presence";
 import { resources } from "../core/resources";
@@ -29,7 +30,7 @@ export function App() {
 
   useEffect(() => {
     if (!user) return;
-    const offs = [chats.attach(), presence.attach(), resources.attach()];
+    const offs = [chats.attach(), presence.attach(), resources.attach(), feed.attach()];
     // 列表先读本地缓存, 再走 HTTP (带 ETag) 校验, 不等长连接; 连上后 welcome 再校验一次
     void chats.loadChats().catch(() => undefined);
     link.start();

@@ -55,3 +55,12 @@ export const TXT_LOAD_MORE = "加载更多";
 
 // 日期时间显示的区域设置
 export const LOCALE = "zh-CN";
+
+// 任务与 Agent 栏 (对照安卓 FeedState / AgentPage)
+export const LAYER_MAX = 20;
+export const AID_LENGTH = 16;
+export const ACT_QUEUED = "queued";
+export const HARNESS = "agent harness";
+export const TXT_ACT_OFFLINE = "未连接服务端, 操作没有发出";
+export const TXT_ACT_QUEUED = `${HARNESS} 离线, 已排队, 上线后送达`;
+export const TXT_ACT_FAILED = "操作失败";

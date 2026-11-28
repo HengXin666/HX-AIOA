@@ -3,6 +3,7 @@ import { authChanged, currentUser } from "../core/auth";
 import { chats } from "../core/chats";
 import { BP_MID, BP_WIDE, STORAGE_PANE } from "../core/constants";
 import { Emitter } from "../core/emitter";
+import { feed } from "../core/feed";
 import { link } from "../core/link";
 import { presence } from "../core/presence";
 import { resources } from "../core/resources";
@@ -11,6 +12,7 @@ export const useChats = () => useSyncExternalStore((fn) => chats.changed.on(fn),
 export const useLinkState = () => useSyncExternalStore((fn) => link.states.on(fn), () => link.state);
 export const useUser = () => useSyncExternalStore((fn) => authChanged.on(fn), currentUser);
 export const usePresence = (channel: string) => useSyncExternalStore((fn) => presence.changed.on(fn), () => presence.get(channel));
+export const useFeed = () => useSyncExternalStore((fn) => feed.changed.on(fn), feed.snapshot);
 export const useResources = () => useSyncExternalStore((fn) => resources.changed.on(fn), resources.snapshot);
 
 export type Layout = "wide" | "mid" | "narrow";

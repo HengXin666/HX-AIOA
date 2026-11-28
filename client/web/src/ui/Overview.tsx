@@ -1,12 +1,10 @@
-import type { Overview as OverviewData, OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
+import type { OverviewItem, Priority, TaskSnapshot } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Progress } from "@hx/ui/ui/progress";
-import { useEffect, useState } from "react";
-import { useLinkState } from "../app/hooks";
-import { go } from "../app/router";
+import { useFeed, useLinkState } from "../app/hooks";
+import { go, link } from "../app/router";
 import { groupOf, textOf, type Message } from "../core/chats";
 import { TXT_LOADING } from "../core/constants";
-import { link } from "../core/link";
 import { shortTime } from "./ChatList";
 
 const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "muted" }[] = [
@@ -15,14 +13,11 @@ const LAYERS: { key: Priority; title: string; dot: "destructive" | "info" | "mut
   { key: "worth_reading", title: "值得一看", dot: "muted" },
 ];
 
-// 总览: 进页时发一次 overview 帧 (连上后若还没有再发), 不轮询
+// 总览: overview 快照打底, ev / task 帧实时合并 (core/feed.ts), 不轮询
 export default function Overview() {
-  const [data, setData] = useState<OverviewData | null>(null);
+  const snap = useFeed();
   const state = useLinkState();
-  useEffect(() => link.frames.on((f) => f.t === "overview" && setData(f.overview as OverviewData)), []);
-  useEffect(() => {
-    if (state === "online" && !data) link.write({ t: "overview" });
-  }, [state, data]);
+  const data = snap.loaded ? { generatedAt: snap.generatedAt, layers: snap.layers, tasks: Object.values(snap.tasks).sort((a, b) => b.updated - a.updated) } : null;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -87,7 +82,12 @@ const TASK_TEXT: Record<string, string> = { running: "进行中", waiting: "等�
 function Tasks({ tasks }: { tasks: TaskSnapshot[] }) {
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
-      <h3 className="text-sm font-medium text-foreground">任务</h3>
+      <h3 className="flex items-center text-sm font-medium text-foreground">
+        <span className="flex-1">任务</span>
+        <a href={link("agent")} className="text-xs text-muted-foreground hover:text-foreground">
+          去 Agent 栏
+        </a>
+      </h3>
       <ul className="flex flex-col gap-2">
         {tasks.map((t) => (
           <li key={t.id} className="flex flex-col gap-1">
