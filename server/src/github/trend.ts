@@ -1,7 +1,7 @@
 import type { GithubFootprint, GithubTrendPoint, GithubTrendSeries } from "@hx-aioa/protocol";
 import { GITHUB_TREND_DAYS, GITHUB_TREND_WEEKS } from "@hx-aioa/protocol";
 import { lastDates } from "./heatmap";
-import { type TrendFetcher, type TrendKind, type TrendPage, type TrendRow, FOOTPRINT_LIMIT, TREND_PAGE, fetchTrend, parseTrend } from "./trend-fetch";
+import { type TrendFetcher, type TrendKind, type TrendPage, type TrendRow, FOOTPRINT_LIMIT, fetchTrend, parseTrend } from "./trend-fetch";
 
 const DAY_MS = 24 * 3600_000;
 const WEEK = 7;
@@ -9,13 +9,12 @@ const WEEK = 7;
 export const TREND_HORIZON_MS = 98 * DAY_MS;
 export const TREND_KEEP_MS = TREND_HORIZON_MS + WEEK * DAY_MS;
 const KEEP_MS = TREND_KEEP_MS;
-// 搜索游标往回让一点, 防同一秒更新的漏掉
-const OVERLAP_MS = 60_000;
 // 新建仓库与 star 每次整份重拿, 不按时间删
 const KEPT: TrendKind[] = ["repo", "star"];
 
-export type TrendState = { at?: number; cursor: number; caught: boolean; before?: string; cmtDone: boolean };
-export const emptyTrend = (now: number): TrendState => ({ cursor: now - TREND_HORIZON_MS, caught: false, cmtDone: false });
+// ia / pa: 贡献集合里我开的 Issue / PR 往前翻的游标; 旧状态没有 iDone / pDone, 读到 undefined 就当没翻完 (#145)
+export type TrendState = { at?: number; before?: string; cmtDone: boolean; ia?: string; pa?: string; iDone?: boolean; pDone?: boolean };
+export const emptyTrend = (): TrendState => ({ cmtDone: false });
 
 type Row = { k: string; kind: TrendKind; ts: number; body: string };
 
@@ -62,19 +61,20 @@ export class TrendStore {
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 /**
- * 同步一轮: 第一页带全部 (提交, 评审, 新建仓库, star, 最近评论, 搜索), 之后几页只翻搜索与更早的评论,
- * 直到追上或用完 pages。state 原地更新; 返回写入行数。
+ * 同步一轮: 第一页带全部 (提交, 评审, 新建仓库, star, 最近评论, 我开的 Issue / PR), 之后几页只往前翻
+ * 更早的评论与我开的 Issue / PR, 直到翻完或用完 pages。state 原地更新; 返回写入行数。
  */
-export async function trendStep(store: TrendStore, token: string, login: string, state: TrendState, now: number, pages: number, fetcher: TrendFetcher = fetchTrend): Promise<number> {
+export async function trendStep(store: TrendStore, token: string, state: TrendState, now: number, pages: number, fetcher: TrendFetcher = fetchTrend): Promise<number> {
   let wrote = 0;
   for (let i = 0; i < Math.max(1, pages); i++) {
     const full = i === 0;
     const older = !state.cmtDone && Boolean(state.before);
-    if (!full && state.caught && !older) break;
+    const bi = !state.iDone;
+    const bp = !state.pDone;
+    if (!full && !older && !bi && !bp) break;
     // to 放到明天: 今天的提交在 GitHub 那边记在 "今天 (提交者本地日期) 太平洋零点", 可能晚于现在
-    const q = `author:${login} updated:>=${iso(state.cursor)} sort:updated-asc`;
     // 贡献集合只拉保留期内的: 拉一年的话一大半是马上要删的旧提交 (#145)
-    const data = await fetcher(token, { from: iso(now - KEEP_MS), to: iso(now + DAY_MS), q, full, older, ...(older ? { before: state.before } : {}) });
+    const data = await fetcher(token, { from: iso(now - KEEP_MS), to: iso(now + DAY_MS), full, older, ...(older ? { before: state.before } : {}), back: bi || bp, bi, bp, ...(bi && state.ia ? { ia: state.ia } : {}), ...(bp && state.pa ? { pa: state.pa } : {}) });
     const page: TrendPage = parseTrend(data, full);
     wrote += store.put(page.rows, full, now);
     advance(state, page, now);
@@ -84,17 +84,25 @@ export async function trendStep(store: TrendStore, token: string, login: string,
 }
 
 function advance(state: TrendState, page: TrendPage, now: number): void {
-  state.caught = page.found < TREND_PAGE;
-  if (page.lastUpdated) {
-    // 满页时从最后一条往后接着翻; 追上后下次从这次的时间 (减一点) 再看
-    const next = state.caught ? Math.min(now, page.lastUpdated) - OVERLAP_MS : page.lastUpdated;
-    state.cursor = next > state.cursor ? next : state.caught ? state.cursor : state.cursor + 1000;
-  }
+  advanceBack(state, page, now);
   const c = page.cmt;
   if (!c || state.cmtDone) return;
   if (c.before) state.before = c.before;
   if (!c.more || (c.oldest !== undefined && c.oldest < now - TREND_HORIZON_MS)) state.cmtDone = true;
 }
+
+/** 贡献集合往前翻: 没有游标时从最新一页起, 到底或翻过 HORIZON 就停。 */
+function advanceBack(state: TrendState, page: TrendPage, now: number): void {
+  const step = (b: TrendPage["ic"], done: boolean | undefined, set: (after: string | undefined, done: boolean) => void) => {
+    if (!b || done) return;
+    set(b.after, !b.more || !b.after || (b.oldest !== undefined && b.oldest < now - TREND_HORIZON_MS));
+  };
+  step(page.ic, state.iDone, (a, d) => ((state.ia = a ?? state.ia), (state.iDone = d)));
+  step(page.pc, state.pDone, (a, d) => ((state.pa = a ?? state.pa), (state.pDone = d)));
+}
+
+/** 历史是否补完: 评论与我开的 Issue / PR 都翻到底。 */
+export const trendDone = (st: TrendState | undefined): boolean => Boolean(st?.cmtDone && st.iDone && st.pDone);
 
 const FIELDS = ["commits", "prOpened", "prMerged", "prClosed", "issueOpened", "issueClosed", "prComments", "issueComments", "reviews"] as const;
 type Field = (typeof FIELDS)[number];

@@ -78,10 +78,11 @@ GithubTrendPoint = { label: "YYYY-MM-DD" (那一格第一天), commits, prOpened
 
 同步 (每 30 分钟 cron 与 `POST /sync` 顺带, 需要 `GITHUB_TOKEN`):
 
-- 一次 GraphQL 拿全: `viewer.contributionsCollection` (近一年, `commitContributionsByRepository` 每仓库最近 100 个有提交的日子, `pullRequestReviewContributions`), `viewer.repositories(ownerAffiliations: OWNER, orderBy: CREATED_AT DESC)` 最新 20 个 (带 `isFork` 与 `parent`), `starredRepositories` (按 star 时间最近 50), `issueComments` (最近 100), 加一次搜索 `author:<login> updated:>=<游标> sort:updated-asc` (Issue 与 PR 一起, 每页 100)。GraphQL 计费约 1 点。
-- 补历史: 首次游标为 98 天前; 搜索满页就从最后一条的更新时间接着翻, 评论用 `issueComments(last: 100, before: …)` 往前翻到 98 天前为止。每次同步除第一页外用剩余子请求额度最多再翻 3 页 (只带搜索与更早的评论), 一般几轮 cron 补完。追上后游标停在最后一条更新时间前 1 分钟。
+- 一次 GraphQL 拿全: `viewer.contributionsCollection` (近 105 天, `commitContributionsByRepository` 每仓库最近 100 个有提交的日子, `pullRequestReviewContributions`), `viewer.repositories(ownerAffiliations: OWNER, orderBy: CREATED_AT DESC)` 最新 20 个 (带 `isFork` 与 `parent`), `starredRepositories` (按 star 时间最近 50), `issueComments` (最近 100), `viewer.issues` / `viewer.pullRequests` (按更新时间最近 50, 新开 / 关闭 / 合入都会出现在这里)。GraphQL 计费约 1 点。
+- 为什么不用搜索 (#145): 服务端是 fine-grained 令牌, 同一轮里依赖 viewer 的提交与评论都有数据, 但 `search(author:<login>)` 一直拿不到我开的 Issue / PR (本机经典令牌同一查询有 400 多条), 线上 PR / Issue 全为 0。改成只用 viewer 自己的列表与贡献集合, 不依赖令牌类型。
+- 补历史: 我开的 Issue / PR 用贡献集合 `issueContributions` / `pullRequestContributions(first: 100, after: …)` 按开的时间往前翻, 评论用 `issueComments(last: 100, before: …)` 往前翻, 都到 98 天前或到底为止, 只补一次。每次同步除第一页外用剩余子请求额度最多再翻 3 页 (只带更早的评论与贡献), 一般一两轮 cron 补完。旧状态 (搜索游标) 升级后会从最新一页重新补。
 - 新建仓库为什么不用 `repositoryContributions` (#144): 它不含私有仓库 (算受限贡献), 足迹跟 GitHub 仓库列表对不上; 改用仓库列表后私有与 fork 都在, 每次整份替换, 删掉的仓库也跟着消失。fork 在安卓上标 "fork" 并显示上游, 自建的标 "自建"。
-- 存储: 表 `gh_trend (k 主键, kind, ts, body)`, 一件事一行 (Issue / PR / 评论按节点 id, 提交按 仓库 + 日期, 评审按 URL, 新建仓库与 star 按仓库名), 内容没变不写。`ts` 为最后一次动静 (Issue / PR 取 开 / 关 / 合入 的最晚者); 超过 105 天的行删掉, 新建仓库与 star 每次整份替换 (取消 star 即消失)。游标存 `githubTrend` (KV)。停用插件带 `purge=1` 时一并清掉。
+- 存储: 表 `gh_trend (k 主键, kind, ts, body)`, 一件事一行 (Issue / PR / 评论按节点 id, 提交按 仓库 + 日期, 评审按 URL, 新建仓库与 star 按仓库名), 内容没变不写。`ts` 为最后一次动静 (Issue / PR 取 开 / 关 / 合入 的最晚者); 超过 105 天的行删掉, 新建仓库与 star 每次整份替换 (取消 star 即消失)。回补游标存 `githubTrend` (KV)。停用插件带 `purge=1` 时一并清掉。
 - 为什么不用事件 API: `/users/{login}/events` 只给最近 300 条 / 90 天, 原实现只拉第 1 页 (100 条), 一天就有上百条 (评论, 加标签) 时只能盖住一两天, 更早的永远拉不到; 推送事件也不再带提交数。`GET /github/daily` (总览, 周报用) 在走势同步过一次后, 提交 / PR / Issue / 评审 / 评论也改从 `gh_trend` 算, 只有推送次数仍来自事件。
 - 安卓单仓库页 (#144): "走势" 卡带 `repo` 请求, PR / Issue / 提交合成一张双轴混合图: PR 新开 = 实线, PR 合入 = 柱, Issue 新开 = 虚线, Issue 关闭 = 点, 共用左轴; 提交 = 面积, 用独立右轴 (刻度同色)。
 - 安卓卡片折叠 (#144): GitHub 页与单仓库页每张卡点卡片头收起 / 展开, 折起的卡片记在本机 (`github_fold`), 单仓库页的卡片所有仓库共用一份。仓库列表与足迹的新建仓库标 fork (写上游) 或自建。

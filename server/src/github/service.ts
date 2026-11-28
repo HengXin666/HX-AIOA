@@ -25,7 +25,7 @@ import { type HeatState, HeatYears, KV_HEAT_STATE, backfillOf, backfillStep, emp
 import { type LegacyHeat, commitsByDate, dateIn, heatDates } from "./heatmap";
 import { HistoryFail, fetchHistory, historyTtl } from "./history";
 import { calendarStep } from "./calendar";
-import { type TrendState, TrendStore, emptyTrend, footprintOf, seriesOf, trendOf, trendSince, trendStep } from "./trend";
+import { type TrendState, TrendStore, emptyTrend, footprintOf, seriesOf, trendDone, trendOf, trendSince, trendStep } from "./trend";
 import { GithubStore, emptyMeta, repoKey } from "./store";
 import { type Picks, syncGithub, trackedRepos } from "./sync";
 
@@ -179,7 +179,7 @@ export class GithubService {
       weeks,
       created: repo ? [] : this.trendStore.footprints("repo").map(footprintOf),
       starred: repo ? [] : this.trendStore.footprints("star").map(footprintOf),
-      backfill: { done: Boolean(st?.caught && st.cmtDone) },
+      backfill: { done: trendDone(st) },
       ...(st?.at ? { syncedAt: st.at } : {}),
     };
     return { body, tag: `t-${repo ? repoKey(repo) : ""}-${tz}-${today}-${st?.at ?? 0}` };
@@ -188,9 +188,8 @@ export class GithubService {
   /** 走势同步: 一次 GraphQL 拿全, 补历史时多翻几页; 失败只记错误, 不影响仓库同步。 */
   private async syncTrend(token: string, pages: number, now = Date.now()): Promise<string | null> {
     try {
-      const login = await this.login(token);
-      const st = (await this.storage.get<TrendState>(KV_TREND)) ?? emptyTrend(now);
-      await trendStep(this.trendStore, token, login, st, now, pages);
+      const st = (await this.storage.get<TrendState>(KV_TREND)) ?? emptyTrend();
+      await trendStep(this.trendStore, token, st, now, pages);
       await this.storage.put(KV_TREND, st);
       return null;
     } catch (e) {
