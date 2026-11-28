@@ -21,8 +21,10 @@ import com.hengxin.aioa.net.ProxyController
 import com.hengxin.aioa.net.ProxyCore
 import com.hengxin.aioa.net.ProxyDemand
 import com.hengxin.aioa.net.Subscription
+import com.hengxin.aioa.update.AutoDownload
 import com.hengxin.aioa.update.ReleaseNote
 import com.hengxin.aioa.update.ReleaseNotes
+import com.hengxin.aioa.update.UpdatePrefs
 import com.hengxin.aioa.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -62,6 +64,11 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
         private set
     // 检查更新发现的待安装版本说明
     var pendingNotes by mutableStateOf<ReleaseNote?>(null)
+        private set
+    // 自动更新的两个开关, 存在文件里供 :link 进程的维护一起遵守
+    var autoCheck by mutableStateOf(UpdatePrefs.load(app).autoCheck)
+        private set
+    var autoDownload by mutableStateOf(UpdatePrefs.load(app).autoDownload)
         private set
 
     private val app get() = getApplication<Application>()
@@ -162,6 +169,14 @@ class SettingsModel(app: Application) : AndroidViewModel(app) {
             }
             updating = false
         }
+    }
+
+    fun changeAutoCheck(on: Boolean) {
+        autoCheck = UpdatePrefs.edit(app) { it.copy(autoCheck = on) }.autoCheck
+    }
+
+    fun changeAutoDownload(mode: AutoDownload) {
+        autoDownload = UpdatePrefs.edit(app) { it.copy(autoDownload = mode) }.autoDownload
     }
 
     private fun proxyJob(start: String, block: () -> String) {

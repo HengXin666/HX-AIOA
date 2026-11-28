@@ -15,10 +15,12 @@ import com.hengxin.aioa.link.NotifyKit
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.ui.SettingsModel
 import com.hengxin.aioa.ui.SystemActions
+import com.hengxin.aioa.update.AutoDownload
 import com.hengxin.aioa.update.InstallPermission
 
 // 与 Notifier 的通知 id 错开, 测试通知不覆盖真实未读汇总
 private const val NOTIFY_ID_TEST = 99
+private val AUTO_DOWNLOAD_ICONS = mapOf(AutoDownload.WIFI to "download", AutoDownload.ANY to "globe", AutoDownload.OFF to "ban")
 private const val TEST_TEXT = "这是一条测试通知。能在顶部弹出, 锁屏可见, 有声音振动, 就说明设置好了。"
 
 /** 通知设置: 权限状态, 进入 "新消息" 渠道设置 (MIUI 悬浮与锁屏通知引导), 测试通知。 */
@@ -87,6 +89,17 @@ fun UpdatePage(model: SettingsModel, onNotes: () -> Unit, onBack: (() -> Unit)?)
             InfoRow("当前版本", model.version)
             RowDivider(false)
             InfoRow("更新下载", model.updateRoute())
+        }
+        SettingsGroup("自动更新", "距上次检查超过 6 小时, 打开 App 时直接查 GitHub; 下载好后提示安装。首次安装需在系统界面确认一次, 之后 Android 12+ 一般可免确认。") {
+            SwitchRow("打开时自动检查更新", model.autoCheck) { model.changeAutoCheck(it) }
+        }
+        if (model.autoCheck) {
+            SettingsGroup("自动下载") {
+                AutoDownload.entries.forEachIndexed { i, m ->
+                    if (i > 0) RowDivider()
+                    ChoiceRow(AUTO_DOWNLOAD_ICONS.getValue(m), m.label, model.autoDownload == m) { model.changeAutoDownload(m) }
+                }
+            }
         }
         SettingsGroup {
             ActionRow(

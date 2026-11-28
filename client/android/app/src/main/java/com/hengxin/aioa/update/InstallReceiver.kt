@@ -5,23 +5,36 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
+import android.widget.Toast
 import com.hengxin.aioa.R
 
-// 静默安装会话的回调: 成功清理安装包; 需要确认或失败时, 改走系统安装界面兜底
+// 安装会话的回调: 成功清理安装包; 要确认时 App 在前台就直接拉起系统确认界面, 否则发通知; 失败提示并给系统安装界面兜底
 class InstallReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-            PackageInstaller.STATUS_SUCCESS -> Updater.cleanup(context)
+            PackageInstaller.STATUS_SUCCESS -> {
+                Updater.cleanup(context)
+                toast(context, context.getString(R.string.update_done))
+            }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirm = confirmIntent(intent)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Android 14+ 后台不能拉起界面, 只有 App 在前台时直接打开
+                if (confirm != null && AutoUpdate.foreground && runCatching { context.startActivity(confirm) }.isSuccess) return
                 Installer.notify(context, context.getString(R.string.update_confirm), confirm ?: manual(context))
             }
+            PackageInstaller.STATUS_FAILURE_ABORTED -> toast(context, context.getString(R.string.update_aborted))
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
-                Installer.notify(context, context.getString(R.string.update_failed, message), manual(context))
+                val text = context.getString(R.string.update_failed, message)
+                toast(context, text)
+                Installer.notify(context, text, manual(context))
             }
         }
+    }
+
+    private fun toast(context: Context, text: String) {
+        if (AutoUpdate.foreground) Toast.makeText(context, text, Toast.LENGTH_LONG).show()
     }
 
     private fun manual(context: Context): Intent? = Updater.pendingApk(context)?.let { Installer.viewIntent(context, it) }

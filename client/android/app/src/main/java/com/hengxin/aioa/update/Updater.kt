@@ -9,8 +9,10 @@ import com.hengxin.aioa.net.ProxyDemand
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.nio.channels.OverlappingFileLockException
 import java.security.MessageDigest
 
 data class UpdateFile(val url: String, val size: Long, val sha256: String)
@@ -24,7 +26,7 @@ data class UpdateManifest(
 )
 
 // 代理内核按需启动: 先按当前路径请求, 失败再拉起内核走代理重试一次
-// 检查更新 -> 优先下载增量补丁 (要求本机 APK 的 sha256 与补丁起点一致) -> 带进度下载 -> 校验 -> 交给 Installer
+// 检查更新 -> 优先下载增量补丁 (要求本机 APK 的 sha256 与补丁起点一致) -> 带进度续传下载 -> 校验 -> 交给 Installer
 class Updater(private val context: Context) {
 
     fun interface Progress {
@@ -49,31 +51,45 @@ class Updater(private val context: Context) {
         )
     }
 
-    // foreground: 界面发起的检查可以直接弹系统安装界面, 后台检查只发通知
+    // foreground: 界面发起的检查可以直接弹系统确认界面; 后台 (维护) 检查受设置里的自动更新开关约束
     // 返回 true 表示已交给系统安装
     fun update(foreground: Boolean, progress: Progress): Boolean {
-        val lock = File(dir(), LOCK_FILE)
-        RandomAccessFile(lock, "rw").channel.use { channel ->
-            val held = channel.tryLock() ?: run { progress.on("另一个更新任务正在进行"); return false }
-            held.use {
-                val manifest = fetchManifest()
-                if (manifest.versionCode <= currentVersion()) {
-                    progress.on("已是最新版本")
-                    return false
-                }
-                ReleaseNotes.remember(context, ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes))
-                progress.on("发现新版本 ${manifest.versionName}, 准备下载")
-                val apk = prepare(manifest, progress)
-                if (!context.packageManager.canRequestPackageInstalls()) {
-                    File(dir(), PERMISSION_MARK).createNewFile()
-                    progress.on("${manifest.versionName} 已下载到本机, 需要允许本应用安装未知应用, 允许后返回会自动继续")
-                    InstallPermission.request(context)
-                    return false
-                }
-                progress.on(Installer.install(context, apk, foreground))
-                return true
+        if (!foreground && !UpdatePrefs.allowsAuto(context)) return false
+        return locked(progress, false) {
+            UpdatePrefs.edit(context) { it.copy(lastCheck = System.currentTimeMillis()) }
+            val manifest = fetchManifest()
+            if (manifest.versionCode <= currentVersion()) {
+                progress.on("已是最新版本")
+                return@locked false
             }
+            ReleaseNotes.remember(context, ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes))
+            progress.on("发现新版本 ${manifest.versionName}, 准备下载")
+            prepare(manifest, progress)
+            val text = installPending(foreground)
+            progress.on(text)
+            text != NEED_PERMISSION
         }
+    }
+
+    /** 只下载不安装 (打开 App 时的自动更新用), 返回已就绪版本的说明; 已是最新或另一个任务在跑时返回 null。 */
+    fun downloadLatest(progress: Progress): ReleaseNote? = locked(progress, null) {
+        val manifest = fetchManifest()
+        if (manifest.versionCode <= currentVersion()) return@locked null
+        val note = ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes)
+        ReleaseNotes.remember(context, note)
+        prepare(manifest, progress)
+        note
+    }
+
+    /** 安装已下载校验过的安装包; 没有 "安装未知应用" 授权就先去授权, 回到前台后自动继续。 */
+    fun installPending(foreground: Boolean): String {
+        val apk = pendingApk(context) ?: return "没有待安装的新版本"
+        if (!context.packageManager.canRequestPackageInstalls()) {
+            File(dir(), PERMISSION_MARK).createNewFile()
+            InstallPermission.request(context)
+            return NEED_PERMISSION
+        }
+        return Installer.install(context, apk, foreground)
     }
 
     // 新版本首次启动的公告: 本地存过就直接用, 没有就拉 update.json, 版本号对得上才采用; 网络失败下次启动再试
@@ -89,21 +105,36 @@ class Updater(private val context: Context) {
         return ReleaseNote(manifest.versionCode, manifest.versionName, manifest.notes).also { ReleaseNotes.remember(context, it) }
     }
 
+    // 同进程里两个线程抢锁时 tryLock 会抛 OverlappingFileLockException, 也当作忙
+    private inline fun <T> locked(progress: Progress, busy: T, block: () -> T): T {
+        RandomAccessFile(File(dir(), LOCK_FILE), "rw").channel.use { channel ->
+            val held = runCatching { channel.tryLock() }.getOrElse { if (it is OverlappingFileLockException) null else throw it }
+            if (held == null) {
+                progress.on("另一个更新任务正在进行")
+                return busy
+            }
+            held.use { return block() }
+        }
+    }
+
     private fun prepare(manifest: UpdateManifest, progress: Progress): File {
         val target = File(dir(), "$APK_PREFIX${manifest.versionCode}$APK_SUFFIX")
         if (target.exists() && sha256(target).equals(manifest.apk.sha256, ignoreCase = true)) {
             progress.on("本机已有下载好的安装包, 校验通过")
             return target
         }
+        target.delete()
         val base = File(context.applicationInfo.sourceDir)
         val patch = manifest.patches.firstOrNull { it.fromSha256 == sha256(base) }
         if (patch != null) {
             val ok = runCatching {
                 val patchFile = fetchTo(patch.file, File(dir(), PATCH_FILE), "增量补丁", progress)
                 progress.on("正在合成新安装包...")
-                BsPatch.apply(base, patchFile, target)
+                val part = partOf(target)
+                BsPatch.apply(base, patchFile, part)
                 patchFile.delete()
-                verify(target, manifest.apk.sha256)
+                verify(part, manifest.apk.sha256)
+                if (!part.renameTo(target)) throw IOException("保存安装包失败")
             }.isSuccess
             if (ok) return target
             progress.on("补丁失败, 改为完整下载")
@@ -115,22 +146,38 @@ class Updater(private val context: Context) {
         // 安装包较大, 配了订阅就先拉起代理, 避免直连慢速下载长时间占着网络
         ProxyDemand.ensure(context)
         try {
-            downloadFile(file, target, label, progress)
+            val part = partOf(target)
+            if (part.length() > file.size) part.delete()
+            if (part.length() < file.size) downloadPart(file, part, label, progress)
+            if (part.length() != file.size) {
+                if (part.length() > file.size) part.delete()
+                throw IOException("大小不符 (${part.length()} / ${file.size}), 下次继续")
+            }
         } finally {
             Installer.clearProgress(context)
         }
         progress.on("下载完成, 正在校验...")
-        verify(target, file.sha256)
+        val part = partOf(target)
+        verify(part, file.sha256)
+        if (!part.renameTo(target)) throw IOException("保存安装包失败")
         return target
     }
 
-    private fun downloadFile(file: UpdateFile, target: File, label: String, progress: Progress) {
-        Net.client(context).newCall(Request.Builder().url(file.url).build()).execute().use { resp ->
+    // 已有 .part 就带 Range 续传; 服务器不支持续传 (回 200) 时从头写
+    private fun downloadPart(file: UpdateFile, part: File, label: String, progress: Progress) {
+        val have = part.length()
+        val req = Request.Builder().url(file.url).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
+        Net.client(context).newCall(req).execute().use { resp ->
+            if (resp.code == HTTP_RANGE_NOT_SATISFIABLE) {
+                part.delete()
+                throw IOException("续传失败, 下次重新下载")
+            }
             if (!resp.isSuccessful) throw IOException("下载失败 ${resp.code}")
+            val append = have > 0 && resp.code == HTTP_PARTIAL
             val total = file.size.coerceAtLeast(1)
-            var done = 0L
+            var done = if (append) have else 0L
             var shown = -1L
-            target.outputStream().use { out ->
+            FileOutputStream(part, append).use { out ->
                 resp.body!!.byteStream().use { input ->
                     val buf = ByteArray(BUFFER)
                     while (true) {
@@ -177,12 +224,18 @@ class Updater(private val context: Context) {
         private const val LOCK_FILE = "lock"
         private const val APK_PREFIX = "update-"
         private const val APK_SUFFIX = ".apk"
+        private const val PART_SUFFIX = ".part"
         private const val PATCH_FILE = "update.patch"
         private const val PERMISSION_MARK = "need_permission"
+        private const val NEED_PERMISSION = "新版本已下载到本机, 需要允许本应用安装未知应用, 允许后返回会自动继续"
         private const val BUFFER = 64 * 1024
         private const val PERCENT = 100
         private const val PROGRESS_STEP = 2
         private const val BYTES_PER_MB = 1024.0 * 1024.0
+        private const val HTTP_PARTIAL = 206
+        private const val HTTP_RANGE_NOT_SATISFIABLE = 416
+
+        private fun partOf(target: File) = File(target.path + PART_SUFFIX)
 
         // 只有因为缺权限而中断过, 回到前台拿到权限后才自动继续, 避免每次回前台都弹安装界面
         fun takePermissionResume(context: Context): Boolean {
@@ -192,23 +245,32 @@ class Updater(private val context: Context) {
             return pendingApk(context) != null
         }
 
-        // 已下载但还没装上的最新安装包
+        // 已下载且校验过 (.part 校验通过才改名) 但还没装上的最新安装包
         fun pendingApk(context: Context): File? {
             val current = Updater(context).currentVersion()
             return cached(context).filter { it.second > current }.maxByOrNull { it.second }?.first
         }
 
-        // 升级完成后删掉安装包和补丁: 启动时版本号已不小于缓存的就清掉
+        // 升级完成后删掉安装包, 补丁和续传残片: 启动时版本号已不小于缓存的就清掉
         fun cleanup(context: Context) {
             val current = Updater(context).currentVersion()
             cached(context).filter { it.second <= current }.forEach { it.first.delete() }
-            File(File(context.cacheDir, Constants.UPDATE_DIR), PATCH_FILE).delete()
+            val dir = File(context.cacheDir, Constants.UPDATE_DIR)
+            dir.listFiles().orEmpty().filter { f ->
+                f.name.endsWith(PART_SUFFIX) && (version(f.name.removeSuffix(PART_SUFFIX)) ?: Long.MAX_VALUE) <= current
+            }.forEach { it.delete() }
+            File(dir, PATCH_FILE).delete()
+            File(dir, PATCH_FILE + PART_SUFFIX).delete()
         }
+
+        fun versionOf(apk: File): Long? = version(apk.name)
+
+        private fun version(name: String): Long? =
+            if (name.startsWith(APK_PREFIX) && name.endsWith(APK_SUFFIX)) name.removePrefix(APK_PREFIX).removeSuffix(APK_SUFFIX).toLongOrNull() else null
 
         private fun cached(context: Context): List<Pair<File, Long>> =
             File(context.cacheDir, Constants.UPDATE_DIR).listFiles().orEmpty().mapNotNull { file ->
-                val code = file.name.removePrefix(APK_PREFIX).removeSuffix(APK_SUFFIX).toLongOrNull()
-                if (file.name.startsWith(APK_PREFIX) && code != null) file to code else null
+                version(file.name)?.let { file to it }
             }
 
         fun sha256(file: File): String {

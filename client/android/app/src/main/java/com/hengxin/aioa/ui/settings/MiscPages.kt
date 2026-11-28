@@ -59,7 +59,7 @@ fun AppearancePage(prefs: AppearancePrefs, setPrefs: (AppearancePrefs) -> Unit, 
 }
 
 @Composable
-private fun ChoiceRow(icon: String, title: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceRow(icon: String, title: String, selected: Boolean, onClick: () -> Unit) {
     val c = Aioa.colors
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),

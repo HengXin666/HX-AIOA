@@ -12,9 +12,8 @@ import com.hengxin.aioa.R
 import com.hengxin.aioa.link.NotifyKit
 import java.io.File
 
-// 两条安装路径:
-// 1. 本应用就是上次的安装来源且 Android 12+: PackageInstaller 会话静默安装
-// 2. 其余情况: 交给系统安装界面 (ACTION_VIEW), 红米上这条路最稳, 不会出现会话被判定 "用户拒绝"
+// 统一走 PackageInstaller 会话: Android 12+ 请求免确认 (USER_ACTION_NOT_REQUIRED),
+// 系统要确认时 (首次, 或本 App 不是安装来源) 由 InstallReceiver 拉起确认界面; 会话建不起来才退回 ACTION_VIEW
 object Installer {
 
     private const val APK_MIME = "application/vnd.android.package-archive"
@@ -22,14 +21,14 @@ object Installer {
     private const val AUTHORITY_SUFFIX = ".files"
     private const val PERCENT_MAX = 100
 
+    /** 本 App 已是自己的安装来源且 Android 12+: 一般可免确认更新 (MIUI 等仍可能强制确认)。 */
     fun canSilent(context: Context): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && installerOf(context) == context.packageName
 
     // 返回给界面看的说明
     fun install(context: Context, apk: File, foreground: Boolean): String {
-        if (canSilent(context)) {
-            silent(context, apk)
-            return "正在静默安装, 完成后应用会自动重启"
+        if (runCatching { session(context, apk) }.isSuccess) {
+            return if (canSilent(context)) "正在安装, 完成后应用会自动重启" else "正在安装, 首次需要在系统界面确认一次"
         }
         val intent = viewIntent(context, apk)
         if (foreground && runCatching { context.startActivity(intent) }.isSuccess) {
@@ -76,26 +75,33 @@ object Installer {
     /** 下载结束 (成功或失败) 撤掉进度条, 后续的安装提示另发。 */
     fun clearProgress(context: Context) = NotifyKit.cancel(context, null, Constants.NOTIFY_ID_UPDATE)
 
-    private fun silent(context: Context, apk: File) {
+    private fun session(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(context.packageName)
+        params.setSize(apk.length())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         val sessionId = installer.createSession(params)
-        installer.openSession(sessionId).use { session ->
-            session.openWrite(SESSION_NAME, 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
+        runCatching {
+            installer.openSession(sessionId).use { session ->
+                session.openWrite(SESSION_NAME, 0, apk.length()).use { out ->
+                    apk.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                // 回调必须是显式 Intent: targetSdk 34+ 不允许可变 PendingIntent 携带隐式 Intent
+                val callback = PendingIntent.getBroadcast(
+                    context,
+                    sessionId,
+                    Intent(context, InstallReceiver::class.java).setAction(Constants.ACTION_INSTALL_RESULT),
+                    PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                session.commit(callback.intentSender)
             }
-            val callback = PendingIntent.getBroadcast(
-                context,
-                sessionId,
-                Intent(Constants.ACTION_INSTALL_RESULT).setPackage(context.packageName),
-                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            session.commit(callback.intentSender)
+        }.onFailure {
+            runCatching { installer.abandonSession(sessionId) }
+            throw it
         }
     }
 

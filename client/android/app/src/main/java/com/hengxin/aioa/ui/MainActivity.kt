@@ -33,6 +33,7 @@ import com.hengxin.aioa.R
 import com.hengxin.aioa.config.AppearanceStore
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.AioaTheme
+import com.hengxin.aioa.update.AutoUpdate
 import com.hengxin.aioa.update.ReleaseNote
 import com.hengxin.aioa.update.ReleaseNotes
 import com.hengxin.aioa.update.Updater
@@ -87,7 +88,10 @@ class MainActivity : ComponentActivity() {
                                 AppearanceStore.save(this, next)
                             }, ::showHistory)
                         }
-                        notes?.let { NotesSheet(it, ::closeNotes) }
+                        val ready by AutoUpdate.ready.collectAsState()
+                        notes?.let { NotesSheet(it, ::closeNotes) } ?: ready?.let { r ->
+                            ReadySheet(r, { AutoUpdate.install(this@MainActivity) }, AutoUpdate::dismiss)
+                        }
                     } }
                 }
             }
@@ -121,7 +125,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         usage.begin()
         chat.resume()
-        resumePendingUpdate()
+        AutoUpdate.onStart(this)
     }
 
     // 新版本首次启动弹一次更新公告; 本地没有说明时会拉一次 update.json, 放后台线程
@@ -143,15 +147,8 @@ class MainActivity : ComponentActivity() {
         Thread { runCatching { ReleaseNotes.markShown(context, Updater(context).currentVersion()) } }.start()
     }
 
-    // 从 "安装未知应用" 授权页回来后, 用已下载的安装包继续安装
-    private fun resumePendingUpdate() {
-        val context = applicationContext
-        Thread {
-            if (Updater.takePermissionResume(context)) runCatching { Updater(context).update(foreground = true) { } }
-        }.start()
-    }
-
     override fun onStop() {
+        AutoUpdate.onStop()
         chat.pause()
         usage.end()
         com.hengxin.aioa.data.AppPower.sample(applicationContext, "ui")

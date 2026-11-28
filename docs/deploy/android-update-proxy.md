@@ -6,7 +6,8 @@
 - app 读取 `releases/latest/download/update.json`: 本机 APK 的 sha256 命中某个补丁起点就下增量补丁, 否则下完整包; 合成后再校验一次 sha256。
 - 与订阅刷新合并为一次 "维护", 不单独设闹钟: 搭看门狗闹钟, 亮屏, 网络变化这些已有的唤醒, 距上次超过 6 小时才检查; 设置页也能手动检查。
 - `update.json` 的 `notes` 为每行一条 "- 标题", `changes` 为 `[{ "title", "sha", "pr"? }]`, 由 CI 用 `tools/release_notes.py` 从上一个发布标签以来的提交 / PR 标题生成。新版本首次启动弹一次 "更新内容" 底部抽屉, 我的 → 版本与更新公告 可看历史, 检查更新时设置页也显示待安装版本的说明。
-- 安装走 PackageInstaller。Android 12+ 且上一次是本 app 自己装的, 可以静默安装; 第一次 (从浏览器装的) 需要确认一次, MIUI 也可能强制确认。
+- 打开 App (回到前台) 时: 设置 → 更新 里 "打开时自动检查更新" (默认开) 打开且距上次检查超过 6 小时, 直接查 GitHub API `releases/latest` (带 ETag, 304 不计入未认证 60 次/小时限额, 不经过我们的服务端), 标签 `android-N` 的 N 即 versionCode; 有新版且满足 "自动下载" (仅 Wi-Fi / 任意网络 / 关) 就后台下载到私有目录 (`.part` 续传, 校验大小和 sha256 后改名), 下好后弹 "新版本已就绪"。后台维护的检查同样受这两个开关约束。
+- 安装统一走 PackageInstaller 会话, Android 12+ 请求 `USER_ACTION_NOT_REQUIRED`。上一次是本 app 自己装的 (本 app 是安装来源) 才能免确认; 第一次 (从浏览器装的) 需要确认一次, MIUI 也可能强制确认。系统要确认时 App 在前台直接拉起确认界面, 否则发通知; 成功 / 失败 / 取消都有提示, 会话建不起来才退回系统安装界面。
 - 补丁格式 HXPATCH1: bsdiff 的三段数据改用 zlib 压缩, 手机端只依赖 `java.util.zip`。生成与自检见 `tools/release.py`。
 
 ## 订阅代理
