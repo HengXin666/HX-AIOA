@@ -11,8 +11,9 @@
   },
   "dependencies": {
     "@hx-aioa/protocol": "0.1.0",
-    "@hx/ui": "https://github.com/HengXin666/HX-UI/releases/download/v2.3.0/hx-ui-2.3.0.tgz",
+    "@hx/ui": "https://github.com/HengXin666/HX-UI/releases/download/v2.7.0/hx-ui-2.7.0.tgz",
     "lucide-react": "^1.77.0",
+    "motion": "^14.14.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "sonner": "^2.0.8"

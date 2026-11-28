@@ -1,14 +1,11 @@
 @import "tailwindcss";
 @import "@hx/ui/tailwind.css";
 /* 不用的 HX-UI 目录 (见 web-arch.md 3.2) 不扫描, 少生成用不到的工具类 */
-@source not "../../../node_modules/@hx/ui/dist/effects";
 @source not "../../../node_modules/@hx/ui/dist/backgrounds";
 @source not "../../../node_modules/@hx/ui/dist/stage";
-@source not "../../../node_modules/@hx/ui/dist/text";
-@source not "../../../node_modules/@hx/ui/dist/data";
 @source not "../../../node_modules/@hx/ui/dist/scroll";
 @source not "../../../node_modules/@hx/ui/dist/interactions";
-@source not "../../../node_modules/@hx/ui/dist/motion";
+@source not "../../../node_modules/@hx/ui/dist/blueprint";
 
 /* 只补 HX-UI 没有的: 全屏布局与安全区; 颜色一律用令牌类 */
 html,

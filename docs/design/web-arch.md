@@ -81,8 +81,10 @@ server/public/           现有静态资源 (install.sh, probe*.mjs, hxaioa.mjs)
 
 ### 3.2 HX-UI 用法限制 (省 CPU / GPU)
 
-- 不用: `effects/` 整层 (`SpotlightCard` `BorderBeam` `Marquee` `Backdrop aurora` `GlassPanel`), `typography/` `site/` `commerce/` `blocks/` `studio`; 它们是营销页用的, 常驻动画或大面积 `backdrop-filter` 会让 GPU 一直合成。
-- 慎用: `motion/` 只允许进入动画 (一次性), 不允许循环; 全部尊重 `prefers-reduced-motion`; `Spin` 只用 `fixed`。
+- 不用会一直合成的: `BorderBeam` `Marquee` `Backdrop aurora` `GlassPanel`, `backgrounds/` (WebGL), 大面积 `backdrop-filter`; `typography/` `site/` `commerce/` `blocks/` `studio` 是营销页用的, 也不用。
+- 可以用 (只在交互或进入时动, 静止时不耗 GPU): `Card effect="spotlight"` (指针移动时), `Backdrop glow / grid / dots` (静态), `NumberRoll`, `LiveDot` (脉冲只给实时 / 在线这类小点), `motion/` 的进入, 布局, 悬停与按压动画, 列表增删 (`AnimatePresence`)。
+- 不允许循环动画 (除 `LiveDot`); 全部尊重 `prefers-reduced-motion`; `Spin` 只用 `fixed`。
+- Tailwind 只扫用到的 HX-UI 目录 (`client/web/src/index.css` 的 `@source not`); 新用一个目录就把它从排除里拿掉, 否则组件的类不生成, 看起来像坏了。
 - 阴影只给浮层 (抽屉, 对话框, 菜单); 平铺卡片只描边。不对 `box-shadow` `filter` 做过渡。
 - 门禁: Web 构建跑一个导入白名单检查 (类似 `LayoutLintTest`), 引了禁用目录就失败。
 
