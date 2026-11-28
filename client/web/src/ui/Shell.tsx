@@ -4,7 +4,8 @@ import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode
 import { useLayout, type Layout } from "../app/hooks";
 import { useLoc, type AreaId, type Loc } from "../app/router";
 import { newVersion, reloadFresh } from "../core/version";
-import { BottomNav, Rail } from "./shell/Sidebar";
+import { SidebarInset, SidebarProvider } from "@hx/ui/ui/sidebar";
+import { AppSidebar, TopBar } from "./shell/Sidebar";
 
 export type AreaProps = { loc: Loc; layout: Layout };
 
@@ -18,39 +19,27 @@ const PAGES: Record<AreaId, ComponentType<AreaProps>> = {
 };
 const CommandPalette = lazy(() => import("./CommandPalette"));
 
-// 电脑: 左侧栏 + 栏内容; 手机: 栏内容 + 底栏 (进子页时底栏隐藏, 与安卓一致)
+// 电脑: HX-UI 侧栏 + 顶栏 + 栏内容; 手机宽度在 App 层就换成了下载页 (AppGate)
 export function Shell() {
   const layout = useLayout();
   const loc = useLoc();
   const [palette, setPalette] = useState(false);
   usePaletteKey(() => setPalette(true));
   const Page = PAGES[loc.area];
-  const body = (
-    <Lazy>
-      <Page loc={loc} layout={layout} />
-    </Lazy>
-  );
-  const overlays = <Suspense fallback={null}>{palette && <CommandPalette open={palette} onOpenChange={setPalette} />}</Suspense>;
-
-  if (layout === "narrow") {
-    return (
-      <div className="app-canvas flex h-full flex-col">
-        <UpdateBar />
-        <div className="min-h-0 flex-1">{body}</div>
-        {loc.path.length === 0 && <BottomNav area={loc.area} />}
-        {overlays}
-      </div>
-    );
-  }
   return (
-    <div className="app-canvas flex h-full">
-      <Rail layout={layout} area={loc.area} onSearch={() => setPalette(true)} />
-      <main className="flex min-w-0 flex-1 flex-col">
+    <SidebarProvider defaultOpen={layout === "wide"} className="h-full min-h-0">
+      <AppSidebar area={loc.area} />
+      <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
         <UpdateBar />
-        <div className="flex min-h-0 flex-1">{body}</div>
-      </main>
-      {overlays}
-    </div>
+        <TopBar area={loc.area} onSearch={() => setPalette(true)} />
+        <div className="flex min-h-0 flex-1">
+          <Lazy>
+            <Page loc={loc} layout={layout} />
+          </Lazy>
+        </div>
+      </SidebarInset>
+      <Suspense fallback={null}>{palette && <CommandPalette open={palette} onOpenChange={setPalette} />}</Suspense>
+    </SidebarProvider>
   );
 }
 

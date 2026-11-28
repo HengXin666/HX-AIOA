@@ -1,18 +1,18 @@
-import { Bot, LayoutDashboard, MessageSquare, Server, UserRound } from "lucide-react";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { Bot, LayoutDashboard, MessageSquare, Server, UserRound, type LucideIcon } from "lucide-react";
+import { useEffect } from "react";
 import { useAttention, useChats } from "../../app/hooks";
 import { nav, type AreaId } from "../../app/router";
 import { chats } from "../../core/chats";
 
-export type NavItem = { area: AreaId; label: string; icon: ReactNode; tone: string; key: string };
+export type NavItem = { area: AreaId; label: string; icon: LucideIcon; key: string };
 
-// 每栏一个固定色, 侧栏图标块, 底栏, 页内标题都用它, 一眼认出在哪
+// 主导航; 图标一律单色, 颜色只留给状态 (需要我的红点)
 export const NAV: NavItem[] = [
-  { area: "overview", label: "总览", icon: <LayoutDashboard />, tone: "var(--info)", key: "1" },
-  { area: "chat", label: "消息", icon: <MessageSquare />, tone: "var(--success)", key: "2" },
-  { area: "agent", label: "Agent", icon: <Bot />, tone: "var(--chart-2)", key: "3" },
-  { area: "res", label: "资源", icon: <Server />, tone: "var(--warning)", key: "4" },
-  { area: "me", label: "我的", icon: <UserRound />, tone: "var(--muted-foreground)", key: "5" },
+  { area: "overview", label: "总览", icon: LayoutDashboard, key: "1" },
+  { area: "chat", label: "消息", icon: MessageSquare, key: "2" },
+  { area: "agent", label: "Agent", icon: Bot, key: "3" },
+  { area: "res", label: "资源", icon: Server, key: "4" },
+  { area: "me", label: "我的", icon: UserRound, key: "5" },
 ];
 
 // -1 表示有新内容但数不出条数, 只画圆点
@@ -53,25 +53,9 @@ export function useNavKeys(): void {
 
 const MAX_SHOWN = 99;
 
-export function CountBadge({ c, compact }: { c?: Counts[AreaId]; compact?: boolean }) {
+export function CountBadge({ c }: { c?: Counts[AreaId] }) {
   if (!c) return null;
   const danger = c.tone === "danger";
-  if (c.n < 0 || compact) {
-    return <span aria-hidden className={`size-2 rounded-full ring-2 ring-sidebar ${danger ? "bg-destructive" : "bg-foreground"}`} />;
-  }
-  return (
-    <span className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] leading-none font-semibold tabular-nums ${danger ? "bg-destructive text-white" : "bg-foreground/90 text-background"}`}>
-      {c.n > MAX_SHOWN ? `${MAX_SHOWN}+` : c.n}
-    </span>
-  );
-}
-
-// 图标块: 选中时实色渐变底 + 白图标, 平时是淡底 + 有色图标; 悬停时淡底加深
-export function IconTile({ tone, active, size = "md", children }: { tone: string; active?: boolean; size?: "sm" | "md"; children: ReactNode }) {
-  const box = size === "sm" ? "size-6 rounded-[7px] [&_svg]:size-3.5" : "size-7 rounded-[9px] [&_svg]:size-4";
-  return (
-    <span className={`nav-tile ${box} ${active ? "is-on" : ""}`} style={{ "--tile": tone } as CSSProperties}>
-      {children}
-    </span>
-  );
+  if (c.n < 0) return <span aria-label="有新消息" className="size-1.5 rounded-full bg-foreground/70" />;
+  return <span className={`tabular-nums ${danger ? "text-destructive" : ""}`}>{c.n > MAX_SHOWN ? `${MAX_SHOWN}+` : c.n}</span>;
 }

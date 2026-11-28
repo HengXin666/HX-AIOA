@@ -11,14 +11,16 @@ import { faces } from "../core/faces";
 import { link } from "../core/link";
 import { presence } from "../core/presence";
 import { resources } from "../core/resources";
+import { AppGate } from "../ui/AppGate";
 import { Login } from "../ui/Login";
 import { Shell } from "../ui/Shell";
-import { useUser } from "./hooks";
+import { useLayout, useUser } from "./hooks";
 
 const SKIN = "ink";
 
 export function App() {
   const user = useUser();
+  const narrow = useLayout() === "narrow";
   const [booting, setBooting] = useState(hasRefresh);
   const { accent, setAccent } = useTheme();
 
@@ -32,7 +34,7 @@ export function App() {
   }, [booting]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || narrow) return;
     const offs = [chats.attach(), presence.attach(), resources.attach(), feed.attach(), faces.attach(), todos.attach(), agHub.attach(user.role === "owner")];
     // 列表先读本地缓存, 再走 HTTP (带 ETag) 校验, 不等长连接; 连上后 welcome 再校验一次
     void chats.loadChats().catch(() => undefined);
@@ -41,8 +43,10 @@ export function App() {
       for (const off of offs) off();
       link.stop();
     };
-  }, [user]);
+  }, [user, narrow]);
 
+  // 手机宽度: 不登录也不连接, 直接给 App 下载页
+  if (narrow) return <AppGate />;
   if (booting) {
     return (
       <div className="flex h-full items-center justify-center bg-background">
