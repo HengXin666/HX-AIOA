@@ -20,8 +20,12 @@ object Constants {
     const val DEVICE_LINK = "link"
     const val DEVICE_UI = "ui"
 
-    // :link 的心跳只由看门狗闹钟发文本 ping (服务端自动回 pong, 不唤醒 DO), OkHttp 协议 ping 关闭, 避免双重心跳
+    // :link 不开 OkHttp 协议 ping, 只发文本 ping (服务端自动回 pong, 不唤醒 DO), 一条连接只有一个心跳来源
     const val LINK_PING_INTERVAL_SEC = 0L
+    // CF 边缘约 100 秒双向无数据就回收 WebSocket (#149); 空闲超过这个值的连接一定已被关掉
+    const val EDGE_IDLE_MS = 100_000L
+    // :link 在 CPU 醒着时空闲这么久就发一次文本 ping, 留 20 秒余量给调度抖动; 深睡时计时停走, 不新增唤醒
+    const val LINK_KEEPALIVE_MS = 80_000L
     // 界面进程只在前台连接, 短心跳便于尽快发现断线, 不影响后台耗电
     const val UI_PING_INTERVAL_SEC = 30L
     // 界面连接连续这么多个心跳间隔收不到任何数据才重连
@@ -30,15 +34,20 @@ object Constants {
     const val UI_LINGER_MS = 90_000L
     const val RECONNECT_MIN_MS = 500L
     const val RECONNECT_MAX_MS = 30_000L
+    // App 不在前台时退避上限放宽, 网络或代理长时间不通时少空转; 网络恢复由网络回调立即重连
+    const val RECONNECT_BG_MAX_MS = 120_000L
     const val NORMAL_CLOSE = 1000
     const val CONNECT_STALL_MS = 20_000L
     const val PROBE_TIMEOUT_MS = 5000L
-    // 自适应心跳: 从保守值起步, 探测成功就拉长, 探测到连接已死就退回上一个可用值并固定; 上限接近 Doze 闹钟最短间隔的整数倍
-    const val HEARTBEAT_MIN_MS = 4 * 60_000L
-    const val HEARTBEAT_MAX_MS = 14 * 60_000L
-    const val HEARTBEAT_STEP_MS = 2 * 60_000L
+    // 看门狗闹钟固定间隔: 边缘 100 秒就回收, 再长的心跳都保不住连接, 间隔只决定深睡时补拉的最大延迟与建连次数
+    const val WATCHDOG_INTERVAL_MS = 5 * 60_000L
     // 唤醒锁上限: 覆盖一次探测超时加一次重连; 收到 pong 或有流量免探测时立即释放
     const val WATCHDOG_WAKE_MS = PROBE_TIMEOUT_MS + CONNECT_STALL_MS / 2
+    // 重连成功后唤醒锁再留一会, 让 welcome 之后的补拉帧处理完再睡
+    const val ONLINE_GRACE_MS = 3000L
+    // 重连补拉的事件里, 多久以内的仍然提醒, 每次重连最多提醒几条
+    const val REPLAY_NOTIFY_MAX_AGE_MS = 6 * 3_600_000L
+    const val REPLAY_NOTIFY_MAX = 20
     const val MAINTENANCE_WAKE_MS = 60_000L
 
     // 渠道 id 一旦创建, 重要性等设置就由用户掌控, 改设置只能换新 id

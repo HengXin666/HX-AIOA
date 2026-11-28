@@ -9,7 +9,9 @@
 | 耗电点 | 改之前 | 改之后 |
 | --- | --- | --- |
 | 心跳 | OkHttp 协议 ping 每 60 秒 + 看门狗文本 ping 每 5 分钟, 两套心跳并存 | `:link` 关掉 OkHttp ping, 只由看门狗闹钟发文本 `ping` (服务端 `setWebSocketAutoResponse` 自动回 `pong`, 不唤醒 DO); 最近有流量就不发探测 |
-| 看门狗间隔 | 固定 5 分钟闹钟 | 自适应: 从 4 分钟起, 每次探测成功加 2 分钟, 上限 14 分钟; 某一档探测到连接已死就退回上一档并固定; 换网络重新学习 |
+| 看门狗间隔 | 固定 5 分钟闹钟 | 曾按 NAT 自适应 4-14 分钟; #149 起改回固定 5 分钟 (`WATCHDOG_INTERVAL_MS`), 见下方 "CF 边缘 100 秒回收" |
+| 醒着时保活 (#149) | 无, 两次闹钟之间连接空着 | `:link` 空闲 80 秒发一次文本 `ping` (`LINK_KEEPALIVE_MS`), Handler 计时, 深睡时停走, 不新增唤醒; 空闲已超过 100 秒的不发也不重连, 交给看门狗 |
+| 补拉提醒 (#149) | 重连补拉 (seq <= welcome.head) 的事件只入库不提醒 | 不是首次同步, 不是 resync, 6 小时内的照常提醒, 每次重连最多 20 条 |
 | 唤醒锁 | 每次闹钟固定持有 10 秒 | 收到 `pong` 或判定有流量立即释放 (通常几百毫秒); 只有离线需要重连时才持有到超时 |
 | 额外触发 | 无 | 亮屏 (`ACTION_SCREEN_ON`, 较久没流量才探测) 与网络变化 (`NetworkCallback`) 时检查, 这些时刻 CPU 本来就醒着 |
 | 代理内核 mihomo | 只要配了订阅就常驻 | "消息长连接也走代理" 开着时常驻 (长连接需要它); 关着时按需启动 (检查更新失败重试, 下载安装包, 打开设置页), 空闲 5 分钟且没有活动连接就停掉 |
@@ -22,9 +24,9 @@
 | 界面连接 | 切到后台立即断开, 每次打开 App 重新建连并显示 "连接中" | 切走后保留 90 秒 (`UI_LINGER_MS`), 短时间切回不重连; 保留期间收到的消息只入库, 不算已读 |
 | 调试模式 | 只有计数摘要与日志 | 设置 → 调试模式: 今天后台 / 界面连接的尝试与连上次数 (后台连接再分 App 是否打开), 近 24 小时整机亮屏 / 熄屏每小时掉电 (`BatteryLog`, 搭已有唤醒采样), 后台收帧与其中用不到的帧计数; 开 "详细记录" 后每帧记一行 |
 
-相关常量都在 `client/android/app/src/main/java/com/hengxin/aioa/Constants.kt` (`HEARTBEAT_*`, `WATCHDOG_WAKE_MS`, `PROXY_IDLE_STOP_MS`, `PROXY_OPTIMIZE_MAX_AGE_MS`, `UPDATE_INTERVAL_MS`)。
+相关常量都在 `client/android/app/src/main/java/com/hengxin/aioa/Constants.kt` (`EDGE_IDLE_MS`, `LINK_KEEPALIVE_MS`, `WATCHDOG_INTERVAL_MS`, `WATCHDOG_WAKE_MS`, `RECONNECT_*`, `PROXY_IDLE_STOP_MS`, `PROXY_OPTIMIZE_MAX_AGE_MS`, `UPDATE_INTERVAL_MS`), 决策逻辑在 `link/LinkPolicy.kt`。
 
-注意: 4 分钟起步与 14 分钟上限是按国内运营商 NAT 常见的 5 分钟以上超时估的, 需要真机数据确认。如果连接日志里频繁出现 "心跳 N 分钟时连接已断", 说明该网络 NAT 更短, 下调 `HEARTBEAT_MIN_MS`。
+CF 边缘 100 秒回收 (#149): CF 对 WebSocket 约 100 秒双向无数据就关掉 TCP (不带关闭帧, 客户端读到 EOFException)。原先 4-14 分钟的自适应心跳按 NAT 估, 远超 100 秒, debug 群 36.6 小时记到 196 次后台 EOF, 每次闹钟唤醒都读到。深睡时闹钟最短间隔是分钟级 (系统配额加厂商对齐), 100 秒内的心跳做不到, 所以深睡时每次闹钟重连一次并补拉提醒, 最大延迟约等于闹钟间隔; 醒着时靠 80 秒保活不断。空闲超过 100 秒后读到的关闭记为 "空闲回收" (`LinkStats` 单独计数), 不进失败转发。
 
 ## 2. 测量步骤
 
@@ -113,7 +115,7 @@ App 内计数 (设置 → 连接日志第一行) 在测量开始与结束各记�
 ## 4. 还没做的
 
 - 息屏且长时间无消息时更多依赖 MiPush 系统通道 (需要先接入 MiPush SDK 与服务端兜底推送)。
-- 自适应心跳只在内存里记, 进程重启后从 4 分钟重新学; 如果实测重启频繁, 再按网络类型落盘。
+- 深睡时的秒级推送: 受 CF 100 秒回收与闹钟配额所限, 长连接做不到, 只能靠系统推送通道 (上一条)。
 
 ## 调试模式的监听 (#111)
 

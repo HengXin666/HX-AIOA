@@ -39,8 +39,11 @@ class LinkService : Service(), LinkSocket.Listener {
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
 
-    // 补拉 (seq <= welcome.head) 的事件只入库不弹通知
+    // 补拉 (seq <= welcome.head) 的事件: 断线期间错过的照常提醒, 首次同步 / resync / 太旧的只入库 (#149)
     private var replayHead = 0L
+    private var replaySince = 0L
+    private var replayResync = false
+    private var replayNotified = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -108,6 +111,10 @@ class LinkService : Service(), LinkSocket.Listener {
         when (frame) {
             is ServerFrame.Welcome -> {
                 replayHead = frame.head
+                // 帧按到达顺序在主线程处理, 此刻库里最大的 seq 就是建连时带的 since
+                replaySince = db.maxSeq()
+                replayResync = frame.resync
+                replayNotified = 0
                 Me.set(this, frame.uid, frame.name)
                 if (frame.resync && frame.floor > 0) db.dropBefore(frame.floor)
             }
@@ -127,7 +134,11 @@ class LinkService : Service(), LinkSocket.Listener {
             socket.send(Frames.ack(msg.seq))
             return notifier.retract(ev, msg)
         }
-        if (!store(msg) || ev.seq <= replayHead) return
+        if (!store(msg)) return
+        if (ev.seq <= replayHead) {
+            if (!LinkPolicy.notifyReplay(replaySince, replayResync, ev.ts, System.currentTimeMillis(), replayNotified)) return
+            replayNotified++
+        }
         notifier.event(ev, msg, loud = ev.shouldNotify() && !quiet(msg) && !AioaApp.uiForeground(application))
     }
 

@@ -49,7 +49,7 @@ class LinkSocket(
 
     @Volatile
     private var socket: WebSocket? = null
-    private var retryMs = Constants.RECONNECT_MIN_MS
+    private val backoff = LinkPolicy.Backoff()
 
     @Volatile
     private var running = false
@@ -67,6 +67,7 @@ class LinkSocket(
     private val reconnectTask = Runnable { connect() }
     private val probeCheck = Runnable { verifyProbe() }
     private val keepAlive = Runnable { keepAlive() }
+    private val edgeKeep = Runnable { edgeKeep() }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -92,6 +93,7 @@ class LinkSocket(
         connectivity.unregisterNetworkCallback(networkCallback)
         handler.removeCallbacks(reconnectTask)
         handler.removeCallbacks(keepAlive)
+        handler.removeCallbacks(edgeKeep)
         socket?.close(Constants.NORMAL_CLOSE, null)
         socket = null
     }
@@ -106,19 +108,25 @@ class LinkSocket(
     /** 距上次收到任何数据的毫秒数, 用它判断 NAT 映射是否刚被刷新过。 */
     fun idleMs(): Long = SystemClock.elapsedRealtime() - lastRx
 
-    // 看门狗调用: 没连上且不在建连中就立刻重连; 在线且最近 skipIdleMs 内有流量就不发探测, 否则发文本 ping 等 pong
+    // 看门狗 / 亮屏调用: 最近有流量免探测; 空闲未到边缘上限就发文本 ping 等 pong; 超过上限或离线太久直接重建
     fun check(skipIdleMs: Long, done: (Probe) -> Unit) = handler.post {
         if (!running) return@post done(Probe.OFFLINE)
         val now = SystemClock.elapsedRealtime()
-        when {
-            open && now - lastRx < skipIdleMs -> done(Probe.SKIPPED)
-            open -> probe(now, done)
-            now - connectAt > Constants.CONNECT_STALL_MS -> {
-                log("看门狗: 当前离线, 立即重连")
+        val idle = now - lastRx
+        when (LinkPolicy.onWake(open, idle, now - connectAt, skipIdleMs)) {
+            LinkPolicy.Wake.SKIP -> done(Probe.SKIPPED)
+            LinkPolicy.Wake.PROBE -> probe(now, done)
+            LinkPolicy.Wake.RECONNECT -> {
+                if (open) {
+                    log("看门狗: 空闲 ${idle / MS_PER_SEC}s 超过边缘上限, 连接已被回收, 重建")
+                    if (!ui) LinkStats.hit(LinkStats.Key.IDLE_CLOSE)
+                } else {
+                    log("看门狗: 当前离线, 立即重连")
+                }
                 reconnectNow()
                 done(Probe.OFFLINE)
             }
-            else -> done(Probe.OFFLINE)
+            LinkPolicy.Wake.WAIT -> done(Probe.OFFLINE)
         }
     }
 
@@ -166,6 +174,16 @@ class LinkSocket(
         handler.postDelayed(keepAlive, intervalMs)
     }
 
+    // :link 保活 (#149): Handler 计时在深睡时停走, 只在 CPU 本来醒着时让连接不被边缘 100 秒回收
+    private fun edgeKeep() {
+        if (!running || !open) return
+        val (ping, next) = LinkPolicy.keepAlive(idleMs())
+        if (ping) socket?.send(Frames.PING)
+        handler.postDelayed(edgeKeep, next)
+    }
+
+    private fun background(): Boolean = !com.hengxin.aioa.AioaApp.uiForeground(context.applicationContext as android.app.Application)
+
     private fun log(event: String) {
         // 后台连接的记录标上 App 当时是否打开, 方便区分 "打开 App 时的重连" 与 "后台自己的重连"
         val app = context.applicationContext as android.app.Application
@@ -176,7 +194,7 @@ class LinkSocket(
     private fun reconnectNow() {
         if (!running) return
         handler.removeCallbacks(reconnectTask)
-        retryMs = Constants.RECONNECT_MIN_MS
+        backoff.reset()
         connect()
     }
 
@@ -187,6 +205,7 @@ class LinkSocket(
         open = false
         handler.removeCallbacks(probeCheck)
         handler.removeCallbacks(keepAlive)
+        handler.removeCallbacks(edgeKeep)
         probeDone?.invoke(Probe.OFFLINE)
         probeDone = null
         connectAt = SystemClock.elapsedRealtime()
@@ -214,9 +233,9 @@ class LinkSocket(
     private fun scheduleReconnect() {
         if (!running) return
         handler.removeCallbacks(reconnectTask)
-        handler.postDelayed(reconnectTask, retryMs)
-        log("${retryMs}ms 后重连")
-        retryMs = (retryMs * 2).coerceAtMost(Constants.RECONNECT_MAX_MS)
+        val wait = backoff.next(background())
+        handler.postDelayed(reconnectTask, wait)
+        log("${wait}ms 后重连")
     }
 
     private inner class SocketListener : WebSocketListener() {
@@ -225,11 +244,13 @@ class LinkSocket(
                 if (webSocket !== socket) return@post
                 open = true
                 lastRx = SystemClock.elapsedRealtime()
-                retryMs = Constants.RECONNECT_MIN_MS
+                backoff.reset()
                 if (!ui) LinkStats.hit(LinkStats.Key.CONNECT)
                 log("已连接")
                 handler.removeCallbacks(keepAlive)
+                handler.removeCallbacks(edgeKeep)
                 if (pingSec > 0) handler.postDelayed(keepAlive, pingSec * MS_PER_SEC)
+                else if (forLink) handler.postDelayed(edgeKeep, Constants.LINK_KEEPALIVE_MS)
             }
             main.post { listener.onStatus(true) }
         }
@@ -262,15 +283,19 @@ class LinkSocket(
         private fun lost(webSocket: WebSocket, why: String) {
             handler.post {
                 if (webSocket !== socket) return@post
-                log(why)
-                if (!ui && open) LinkStats.hit(LinkStats.Key.DISCONNECT)
+                val idle = idleMs()
+                // 空闲超过边缘上限后才读到的关闭是正常回收 (#149): 不算异常断线, 不进失败转发, 直接重建
+                val reclaimed = open && LinkPolicy.idleClosed(idle)
+                if (reclaimed) log("空闲 ${idle / MS_PER_SEC}s 后连接被边缘回收 (${why.substringAfter(": ").trim()}), 重建") else log(why)
+                if (!ui && open) LinkStats.hit(if (reclaimed) LinkStats.Key.IDLE_CLOSE else LinkStats.Key.DISCONNECT)
                 handler.removeCallbacks(keepAlive)
+                handler.removeCallbacks(edgeKeep)
                 socket = null
                 open = false
                 probeDone?.invoke(Probe.DEAD)
                 probeDone = null
                 main.post { listener.onStatus(false) }
-                scheduleReconnect()
+                if (reclaimed) reconnectNow() else scheduleReconnect()
             }
         }
     }

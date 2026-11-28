@@ -23,6 +23,8 @@ object LinkStats {
         OPTIMIZE("节点测速"),
         RX("后台收帧"),
         RX_UNUSED("其中后台用不到的帧"),
+        // 追加在末尾: 快照按序号存, 中间插入会错位 (#149)
+        IDLE_CLOSE("空闲回收"),
     }
 
     private const val FILE_NAME = "link_stats.json"
