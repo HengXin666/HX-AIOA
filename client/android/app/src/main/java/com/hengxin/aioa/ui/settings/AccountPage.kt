@@ -21,6 +21,7 @@ import com.hengxin.aioa.ui.chat.UploadingAvatar
 import com.hengxin.aioa.ui.chat.rememberAvatarPicker
 import com.hengxin.aioa.ui.chat.ChatAvatar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -74,7 +75,8 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     var oldPw by remember { mutableStateOf("") }
     var newPw by remember { mutableStateOf("") }
     val c = Aioa.colors
-    var avatar by remember { mutableStateOf<String?>(null) }
+    // 账号头像与侧栏, 我的页账号卡同一来源 (#144): 账号上的 user.avatar, 没有用旧设置里的
+    val avatar by com.hengxin.aioa.data.Me.face.collectAsState()
     // 上传在应用级作用域里跑 (#125): 离开页面继续, 回来接着看进度与结果
     val job = AvatarUploads.jobs[AvatarUploads.ME]
     val upload = { bytes: ByteArray ->
@@ -91,7 +93,6 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
     val pickAvatar = rememberAvatarPicker({ message = it }) { upload(it) }
     LaunchedEffect(job?.done) {
         val id = job?.done ?: return@LaunchedEffect
-        avatar = id
         com.hengxin.aioa.data.Me.setAvatar(app, id)
         message = "头像已更新"
         AvatarUploads.clear(AvatarUploads.ME)
@@ -108,15 +109,13 @@ fun AccountPage(model: SettingsModel, onChanged: () -> Unit, onBack: (() -> Unit
         if (session == null) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             ApiCache.get(context, "settings", listOf(Constants.SETTINGS_PATH)) { body, _ ->
-                val id = body.optJSONObject("settings")?.optString(SETTING_AVATAR)?.ifEmpty { null }
-                withContext(Dispatchers.Main) { avatar = id }
+                val s = body.optJSONObject("settings")
+                val id = s?.optString(SETTING_AVATAR)?.takeIf { !s.isNull(SETTING_AVATAR) && it.isNotEmpty() }
+                withContext(Dispatchers.Main) { com.hengxin.aioa.data.Me.setSettingsAvatar(app, id) }
             }
         }
         val r = withContext(Dispatchers.IO) { Api.call(context, GET, listOf(Constants.ME_PATH)) }
-        r.body?.optJSONObject("user")?.optString(SETTING_AVATAR)?.ifEmpty { null }?.let {
-            avatar = it
-            com.hengxin.aioa.data.Me.setAvatar(app, it)
-        }
+        r.body?.optJSONObject("user")?.let { u -> com.hengxin.aioa.data.Me.setAvatar(app, u.optString(SETTING_AVATAR).takeIf { !u.isNull(SETTING_AVATAR) && it.isNotEmpty() }) }
         val arr = r.body?.optJSONArray("devices")
         devices = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it) }.map {
             Device(it.optString("id"), it.optString("name"), it.optString("platform"), it.optBoolean("current"))

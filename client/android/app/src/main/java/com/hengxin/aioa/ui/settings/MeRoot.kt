@@ -3,7 +3,6 @@ package com.hengxin.aioa.ui.settings
 import android.content.Context
 import android.net.Uri
 import android.os.PowerManager
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,11 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -23,9 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,11 +33,14 @@ import com.hengxin.aioa.R
 import com.hengxin.aioa.config.Auth
 import com.hengxin.aioa.config.ConfigStore
 import com.hengxin.aioa.config.ThemeMode
+import com.hengxin.aioa.data.Me
 import com.hengxin.aioa.kit.Aioa
 import com.hengxin.aioa.kit.Text
+import com.hengxin.aioa.ui.chat.ChatAvatar
 
 private const val NAME_SP = 18
 private const val SUB_SP = 13
+private val AVATAR = 56.dp
 
 /** 根页摘要只读本机状态, 不碰 SettingsModel, 免得一进 "我的" 就拉起代理内核。 */
 class MeSummary(
@@ -148,14 +147,11 @@ private fun AccountCard(who: String?, host: String, online: Boolean, selected: B
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Image(
-            painterResource(R.drawable.about_art),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(56.dp).clip(CircleShape),
-        )
+        // 账号头像 (#144): 与侧栏同一来源 (Me.face: 账号上的 user.avatar, 没有用旧设置里的), 没有或加载失败用昵称首字, 不再用 App 图片
+        val face by Me.face.collectAsState()
+        ChatAvatar(who ?: Me.label, face, AVATAR)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(who ?: stringResource(R.string.app_name), c.text, NAME_SP, weight = FontWeight.SemiBold)
+            Text(who ?: Me.name ?: stringResource(R.string.app_name), c.text, NAME_SP, weight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 StatusDot(online)
                 val state = stringResource(if (online) R.string.status_online else R.string.status_offline)
