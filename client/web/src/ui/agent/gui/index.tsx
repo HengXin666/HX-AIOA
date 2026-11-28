@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STORAGE_AG_HOST, STORAGE_AG_RIGHT } from "../../../agentgui/constants";
 import { conn, knownConn, startConns } from "../../../agentgui/conns";
-import { useAgHub, useConn, useConnsVersion, usePairs } from "../../../agentgui/hooks";
+import { useAgHub, useConn, useConnsVersion, useInbox, usePairs } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
 import { BP_WIDE } from "../../../core/constants";
 import type { AreaProps } from "../../Shell";
@@ -57,7 +57,8 @@ function useTitleCount(n: number): void {
 // Agent GUI 工作台: #/agent/gui (新会话), #/agent/gui/<主机>/<会话>, #/agent/gui/inbox (审批), #/agent/gui/settings
 export default function AgentGui({ loc }: AreaProps) {
   const ok = useBoot();
-  const hub = useAgHub();
+  // 进 Agent GUI 才补拉收件箱
+  const hub = useInbox();
   useConnsVersion();
   // 直连会话里的待审批 (Hub 不可达时也要计数) 与 Hub 收件箱取大的
   const direct = allPairs().reduce((n, p) => n + (knownConn(p.host)?.snapshot().sessions.reduce((m, s) => m + (s.pending || 0), 0) ?? 0), 0);

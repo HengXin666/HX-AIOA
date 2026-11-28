@@ -2,9 +2,9 @@ import { Card } from "@hx/ui/ui/card";
 import type { HostCard } from "@hx-aioa/protocol";
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useResources, useVisible, type Layout } from "../../app/hooks";
+import { useResources, useUser, useVisible, type Layout } from "../../app/hooks";
 import { go, href } from "../../app/router";
 import { LIVE_WINDOW_MS, LOCALE } from "../../core/constants";
 import { nameOf, resources, unitOf } from "../../core/resources";
@@ -13,6 +13,7 @@ import { TimeSeries } from "../../charts/TimeSeries";
 import type { SeriesDef } from "../../charts/timechart";
 import { shortTime } from "../ChatList";
 import { sizeText } from "../MessageParts";
+import { AddHostDialog, agentDenied, ScopeFix } from "./ProbeDialogs";
 
 type Row = { subject: string; online: boolean; card?: HostCard };
 const PERCENT = "%";
@@ -43,10 +44,35 @@ function Pick() {
   return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">选一台主机看实时指标</div>;
 }
 
+// 添加主机只给主账号 (服务端 OWNER 路由)
+function AddHost() {
+  const owner = useUser()?.role === "owner";
+  const [open, setOpen] = useState(false);
+  if (!owner) return null;
+  return (
+    <>
+      <Button size="sm" variant="outline" className="w-full" onClick={() => setOpen(true)}>
+        <Plus />
+        添加主机
+      </Button>
+      <AddHostDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 function HostList({ rows, active }: { rows: Row[]; active?: string }) {
-  if (!rows.length) return <p className="p-6 text-center text-sm text-muted-foreground">还没有探针。在安卓 App 的 "资源" 里添加。</p>;
+  if (!rows.length)
+    return (
+      <div className="flex flex-col gap-3 p-4">
+        <p className="text-center text-sm text-muted-foreground">还没有探针。</p>
+        <AddHost />
+      </div>
+    );
   return (
     <ul className="flex h-full flex-col gap-1 overflow-y-auto p-2">
+      <li className="mb-1">
+        <AddHost />
+      </li>
       {rows.map((r) => {
         const v = r.card?.last?.values ?? {};
         return (
@@ -58,6 +84,11 @@ function HostList({ rows, active }: { rows: Row[]; active?: string }) {
                   <Badge variant="outline" dot={r.online ? "success" : "muted"}>
                     {r.online ? "在线" : "离线"}
                   </Badge>
+                  {agentDenied(r.card) && (
+                    <Badge variant="outline" dot="warning">
+                      Agent 缺权限
+                    </Badge>
+                  )}
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
                   {[r.card?.info.hostname, r.card?.info.os].filter(Boolean).join(" · ") || (r.card && !r.online ? `${shortTime(r.card.seen)} 最后在线` : " ")}
@@ -120,6 +151,7 @@ function Detail({ subject, row, back }: { subject: string; row?: Row; back?: boo
             {row?.online ? "实时" : "离线"}
           </Badge>
         </header>
+        {agentDenied(row?.card) && <ScopeFix subject={subject} shell={info?.shell === true} />}
         {info && (
           <dl className="grid gap-x-4 gap-y-1 text-sm [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]">
             {info.hostname && <Info k="主机名" v={info.hostname} />}

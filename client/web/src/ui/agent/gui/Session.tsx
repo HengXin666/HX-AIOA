@@ -10,7 +10,8 @@ import type { Card } from "../../../agentgui/types";
 import { WorkPermCard } from "./Approve";
 import { Composer } from "./Composer";
 import { useGui } from "./ctx";
-import { guiLink, INBOX, ModeToggle, ReconnectBar, RouteBadge } from "./parts";
+import { LoginCard } from "./Login";
+import { ApproveOnly, guiLink, INBOX, ModeToggle, ReconnectBar, RouteBadge } from "./parts";
 import { StatsBar } from "./StatsBar";
 import { Timeline } from "./Timeline";
 
@@ -65,7 +66,10 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
 
   const model = nameOf(modelPicker(s.view, info));
   const title = s.view.title || info?.title || "会话";
-  const blocked = c.state === "unpaired" ? TXT_UNPAIRED : c.state === "noroute" ? TXT_NO_ROUTE : c.state === "auth" || c.state === "changed" ? c.err || TXT_AUTH_FAIL : "";
+  const approveOnly = c.state === "noroute" || c.state === "unreachable";
+  const blocked = c.state === "unpaired" ? TXT_UNPAIRED : approveOnly ? c.err || TXT_NO_ROUTE : c.state === "auth" || c.state === "changed" ? c.err || TXT_AUTH_FAIL : "";
+  const login = c.login && (c.login.sid === sid || (!c.login.sid && (!c.login.instance || c.login.instance === info?.instance))) ? c.login : null;
+  const inst = c.instances.find((i) => i.id === (login?.instance || info?.instance));
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -83,8 +87,8 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
       <ReconnectBar state={c.state} />
       {blocked && s.view.turns.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
-          <p>{blocked}</p>
-          {perms.length > 0 && (
+          {approveOnly ? <ApproveOnly text={blocked} n={perms.length} onRetry={c.state === "unreachable" ? () => c.c.kick() : undefined} /> : <p>{blocked}</p>}
+          {!approveOnly && perms.length > 0 && (
             <Button asChild>
               <a href={guiLink(INBOX)}>去审批模式处理 {perms.length} 个请求</a>
             </Button>
@@ -94,6 +98,7 @@ export function SessionView({ right, toggleRight, draft }: { right: boolean; tog
         <Timeline snap={s} onRetry={retry} onModel={() => setModelOpen(true)} />
       )}
       <div className={`shrink-0 px-4 pb-2 ${c.stale ? "opacity-80" : ""}`}>
+        {login && <LoginCard conn={c.c} login={login} instance={inst} onDone={retry} />}
         {perm && <WorkPermCard card={perm} more={perms.length - 1} busy={Boolean(s.answering[perm.rid] || hub.answering[`${host}/${perm.rid}`])} onAnswer={(o) => answer(perm, o)} />}
         <Composer
           view={s.view}

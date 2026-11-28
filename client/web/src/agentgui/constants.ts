@@ -19,12 +19,24 @@ export const PAGE_TURNS = 20;
 export const DIFF_PREVIEW_LINES = 40;
 export const HOLD_MS = 1_000;
 export const SLOW_RETRY_MS = 60_000;
+// 打开页面时先拉的 inbox, 这么久内长连第一次连上就不再拉
+export const INBOX_FRESH_MS = 10_000;
+// 所有路线连续这么多轮都不通: 不再快速退避, 改为 "只能审批" 并慢速重试
+export const ROUTE_FAIL_ROUNDS = 3;
+// 建会话超过这么久还没回: 提示首次下载适配器
+export const CREATE_SLOW_MS = 5_000;
+export const CREATE_TIMEOUT_MS = 5 * 60_000;
 export const ID_HEX = 16;
 
 export const ROUTE_LABEL: Record<string, string> = { local: "本机", lan: "局域网", tunnel: "隧道", relay: "中继" };
 export const ROUTE_ORDER = ["local", "lan", "tunnel"] as const;
 
 export const TXT_NO_ROUTE = "需要在这台主机上或同一局域网打开, 隧道下一期";
+export const TXT_APPROVE_ONLY = "此设备只能用审批模式 (局域网直连需隧道或 https, 本期未做)";
+export const TXT_ROUTE_LOCAL_OFF = "不是这台主机本机, 本机地址用不了";
+export const TXT_ROUTE_MIXED = "https 页面不能连 ws:// 局域网地址";
+export const TXT_CREATE_SLOW = "首次启动正在下载适配器, 最长可能几分钟";
+export const TXT_SCOPE_DENIED = "此主机开了 Agent 但密钥缺 probe:agent 权限";
 export const TXT_RECONNECT = "重连中, 显示的可能不是最新";
 export const TXT_UNPAIRED = "这台主机还没配对";
 export const TXT_AUTH_FAIL = "主机不认这台设备, 请重新配对";

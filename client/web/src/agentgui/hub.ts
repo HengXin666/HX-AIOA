@@ -2,6 +2,7 @@ import { api } from "../core/auth";
 import { Emitter } from "../core/emitter";
 import { link } from "../core/link";
 import { AID_LENGTH } from "../core/constants";
+import { INBOX_FRESH_MS } from "./constants";
 import { PATH_AGENT_GUI_INBOX } from "@hx-aioa/protocol";
 import { updateRoutes } from "./pairs";
 import type { Card, HubHost, InboxResult } from "./types";
@@ -10,10 +11,17 @@ export type HubSnap = { hosts: HubHost[]; cards: Card[]; answering: Record<strin
 const EMPTY: HubSnap = { hosts: [], cards: [], answering: {}, loaded: false, err: "", version: 0 };
 export const cardKey = (c: { host: string; rid: string }): string => `${c.host}/${c.rid}`;
 
-// 经 Hub 的那一小部分: 主机索引 (ag_hosts), 待审批卡 (ag_req / ag_unreq), 离线回来补拉 inbox
+// 经 Hub 的那一小部分: 主机索引 (ag_hosts), 待审批卡 (ag_req / ag_unreq), 离线回来补拉 inbox。
+// 帧走 App 已有的长连 (link), 不另建连接; inbox 只在有页面要用 (need) 时拉, 每次连上 (welcome) 最多一次
 class AgentHub {
   readonly changed = new Emitter<void>();
   private snap: HubSnap = EMPTY;
+  private owner = false;
+  private needs = 0;
+  // gen: 长连第几次连上 (welcome 计数); fetched: 拉过的那一代, -1 = 没拉过
+  private gen = 0;
+  private fetched = -1;
+  private fetchedAt = 0;
   // 连接运行时加载后注入: 有直连就走直连 perm
   direct: ((card: Card, option: string | null, text: string) => boolean) | null = null;
 
@@ -21,10 +29,11 @@ class AgentHub {
 
   attach(owner: boolean): () => void {
     if (!owner) return () => undefined;
+    this.owner = true;
     const off = link.frames.on((f) => {
       switch (f.t) {
         case "welcome":
-          return void this.fetchInbox();
+          return this.onWelcome();
         case "ag_hosts":
           return Array.isArray(f.hosts) && this.setHosts(f.hosts as HubHost[]);
         case "ag_req":
@@ -33,20 +42,51 @@ class AgentHub {
           return this.dropCard(String(f.host ?? ""), String(f.sid ?? ""), String(f.rid ?? ""));
       }
     });
-    void this.fetchInbox();
     return () => {
       off();
+      this.owner = false;
+      this.gen = 0;
+      this.fetched = -1;
       this.snap = { ...EMPTY, version: this.snap.version + 1 };
     };
   }
 
-  async fetchInbox(): Promise<void> {
+  // 进 Agent GUI 或要显示收件箱计数的页面调用, 返回释放函数; 普通页面不调就不拉
+  need(): () => void {
+    this.needs++;
+    this.maybeFetch();
+    return () => {
+      this.needs = Math.max(0, this.needs - 1);
+    };
+  }
+
+  private onWelcome(): void {
+    // 第一次连上前刚拉过 (打开页面时 HTTP 比长连快): 算这一代的, 不再拉
+    if (this.gen === 0 && this.fetched === 0 && Date.now() - this.fetchedAt < INBOX_FRESH_MS) {
+      this.gen = 1;
+      this.fetched = 1;
+      return;
+    }
+    this.gen++;
+    this.maybeFetch();
+  }
+
+  private maybeFetch(): void {
+    if (!this.owner || this.needs === 0 || this.fetched === this.gen) return;
+    this.fetched = this.gen;
+    this.fetchedAt = Date.now();
+    void this.fetchInbox(this.gen);
+  }
+
+  private async fetchInbox(gen: number): Promise<void> {
     try {
       const r = await api<InboxResult>(PATH_AGENT_GUI_INBOX);
       const cards = (r?.cards ?? []).slice().sort((a, b) => a.at - b.at);
       this.set({ cards, loaded: true, err: "" });
       if (Array.isArray(r?.hosts)) this.setHosts(r.hosts);
     } catch (e) {
+      // 失败: 这一代算没拉过, 下次 need / 重连再试
+      if (this.fetched === gen) this.fetched = -1;
       this.set({ loaded: true, err: (e as Error).message });
     }
   }

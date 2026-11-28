@@ -33,7 +33,7 @@ export type LogItem = { seq: number; m: JsonRpc; at?: number };
 export type ProbeFrame =
   | { t: "challenge"; nonce: string; host: string; pub: JsonWebKey }
   | { t: "ready"; device: string; host: string; sessions: SessionInfo[]; instances: Instance[]; settings: Settings }
-  | { t: "error"; code: string; msg: string }
+  | { t: "error"; code: string; msg: string; methods?: unknown[]; instance?: string; sid?: string }
   | { t: "acp"; sid: string; seq: number; m: JsonRpc; at?: number }
   | { t: "window"; sid: string; from: number; to: number; more: boolean; items: LogItem[] }
   | { t: "perm_req"; sid: string; rid: string; card: Card }
@@ -42,6 +42,12 @@ export type ProbeFrame =
   | ({ t: "stats"; sid: string } & Stats)
   | { t: "hx_res"; id: number; ok: boolean; r?: unknown; err?: string };
 
+
+// Agent 未登录 (探针下发 code=auth_required): methods 是 ACP AuthMethod
+export type AuthMethod = { id: string; name: string; description?: string };
+export type AuthNeed = { msg: string; methods: AuthMethod[]; instance?: string; sid?: string; at: number };
+// 主机 info.agent: 开了 Agent 但 key 缺 probe:agent 时探针报 denied (protocol 还没声明, 先本地补)
+export type AgentDenied = { denied?: "scope" | string };
 
 // ACP 子集: 只声明渲染用到的字段, 其余原样保留
 export type ContentBlock = { type: string; text?: string; uri?: string; name?: string; mimeType?: string; data?: string; resource?: { uri?: string; text?: string } };

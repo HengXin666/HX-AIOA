@@ -1,13 +1,28 @@
 import { Emitter } from "../core/emitter";
-import { HANDSHAKE_TIMEOUT_MS, HELLO_TIMEOUT_MS, HX_TIMEOUT_MS, LIVENESS_TIMEOUT_MS, RETRY_MAX_MS, RETRY_MIN_MS, SLOW_RETRY_MS, TXT_AUTH_FAIL, TXT_HOST_CHANGED, TXT_NOT_READY } from "./constants";
+import { HANDSHAKE_TIMEOUT_MS, HELLO_TIMEOUT_MS, HX_TIMEOUT_MS, LIVENESS_TIMEOUT_MS, RETRY_MAX_MS, RETRY_MIN_MS, ROUTE_FAIL_ROUNDS, SLOW_RETRY_MS, TXT_APPROVE_ONLY, TXT_AUTH_FAIL, TXT_HOST_CHANGED, TXT_NOT_READY } from "./constants";
 import { agHub } from "./hub";
 import { deviceKey, sameKey, signNonce } from "./keys";
-import { getPair, rememberRoute, routeOrder, type Pair } from "./pairs";
+import { getPair, rememberRoute, routeBlock, routeOrder, type Pair } from "./pairs";
 import { SessionStore } from "./session";
-import type { Hello, Instance, JsonRpc, ProbeFrame, Route, SessionInfo, Settings } from "./types";
+import type { AuthMethod, AuthNeed, Hello, Instance, JsonRpc, ProbeFrame, Route, SessionInfo, Settings } from "./types";
 
-export type ConnState = "idle" | "connecting" | "ready" | "retry" | "unpaired" | "noroute" | "auth" | "changed";
-export type ConnSnap = { state: ConnState; route: Route | null; sessions: SessionInfo[]; instances: Instance[]; settings: Settings | null; err: string; stale: boolean; version: number };
+// noroute: 没有路线或全被过滤; unreachable: 可试的路线连续几轮都不通 (只能审批, 慢速重试)
+export type ConnState = "idle" | "connecting" | "ready" | "retry" | "unpaired" | "noroute" | "unreachable" | "auth" | "changed";
+export type RouteNote = { route: Route; why: string };
+export type ConnSnap = {
+  state: ConnState;
+  route: Route | null;
+  sessions: SessionInfo[];
+  instances: Instance[];
+  settings: Settings | null;
+  err: string;
+  stale: boolean;
+  // 在这台设备上被跳过的路线与原因
+  skipped: RouteNote[];
+  // Agent 未登录 (探针报 auth_required)
+  login: AuthNeed | null;
+  version: number;
+};
 
 // 与 WebSocket 同形的最小接口, dev 下的模拟探针也实现它
 export type Sock = { send(s: string): void; close(): void; onopen: (() => void) | null; onmessage: ((e: { data: unknown }) => void) | null; onclose: (() => void) | null; readyState: number };
@@ -21,7 +36,8 @@ const wsUrl = (http: string) => http.replace(/^http/, "ws").replace(/\/$/, "") +
 /** 一台主机唯一的连接主人: 唯一的重试者, 路线按序试, 先验主机公钥再签挑战, 断线按 seq 补帧。 */
 export class HostConn {
   readonly changed = new Emitter<void>();
-  private snap: ConnSnap = { state: "idle", route: null, sessions: [], instances: [], settings: null, err: "", stale: false, version: 0 };
+  private snap: ConnSnap = { state: "idle", route: null, sessions: [], instances: [], settings: null, err: "", stale: false, skipped: [], login: null, version: 0 };
+  private fails = 0;
   private sock: Sock | null = null;
   private retry = RETRY_MIN_MS;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -98,7 +114,7 @@ export class HostConn {
 
   private schedule(state: ConnState, err = ""): void {
     this.drop();
-    const hard = state === "auth" || state === "changed" || state === "unpaired";
+    const hard = state === "auth" || state === "changed" || state === "unpaired" || state === "unreachable";
     this.set({ state: hard ? state : "retry", err, stale: this.snap.sessions.length > 0 });
     if (!this.running) return;
     clearTimeout(this.timer);
@@ -112,9 +128,19 @@ export class HostConn {
     if (!this.running || this.sock) return;
     const pair = getPair(this.host);
     if (!pair) return this.set({ state: "unpaired" });
-    if (pair.routes.length === 0) return this.set({ state: "noroute" });
-    this.set({ state: "connecting" });
-    for (const r of routeOrder(pair)) {
+    if (pair.routes.length === 0) return this.set({ state: "noroute", err: "", skipped: [] });
+    const order = routeOrder(pair);
+    // dev 模拟探针 (skipHello) 不过滤
+    const block = (r: Route) => (this.skipHello ? "" : routeBlock(r));
+    const skipped = order.flatMap((route) => {
+      const why = block(route);
+      return why ? [{ route, why }] : [];
+    });
+    const usable = order.filter((r) => !block(r));
+    // 这台设备上一条能试的都没有: 不退避重试, 直接说只能审批
+    if (usable.length === 0) return this.set({ state: "noroute", err: TXT_APPROVE_ONLY, skipped });
+    this.set({ state: "connecting", skipped });
+    for (const r of usable) {
       if (!this.running) return;
       const ok = this.skipHello || (await this.hello(r, pair));
       if (ok === "changed") return this.schedule("changed", TXT_HOST_CHANGED);
@@ -123,7 +149,8 @@ export class HostConn {
       if (res === "ok") return;
       if (res === "auth" || res === "changed") return this.schedule(res, res === "auth" ? TXT_AUTH_FAIL : TXT_HOST_CHANGED);
     }
-    this.schedule("retry");
+    this.fails++;
+    this.schedule(this.fails >= ROUTE_FAIL_ROUNDS ? "unreachable" : "retry", this.fails >= ROUTE_FAIL_ROUNDS ? TXT_APPROVE_ONLY : "");
   }
 
   // 先确认对端就是配对时那台主机, 再把签名交出去
@@ -185,6 +212,7 @@ export class HostConn {
   private onReady(sock: Sock, r: Route, f: Extract<ProbeFrame, { t: "ready" }>): void {
     this.sock = sock;
     this.retry = RETRY_MIN_MS;
+    this.fails = 0;
     rememberRoute(this.host, r.url);
     sock.onmessage = (e) => {
       for (const x of parse(e.data)) this.onFrame(x);
@@ -209,6 +237,9 @@ export class HostConn {
         return this.session(f.sid).permDone(f.rid);
       case "session":
         return this.putSession(f.info);
+      case "error":
+        if (f.code === "auth_required") this.set({ login: { msg: f.msg || "Agent 还没登录", methods: authMethods(f.methods), instance: f.instance, sid: f.sid, at: Date.now() } });
+        return;
       case "stats":
         return this.session(f.sid).stats(f);
       case "hx_res": {
@@ -247,6 +278,10 @@ export class HostConn {
 
   setSettings(s: Settings): void {
     this.set({ settings: s });
+  }
+
+  clearLogin(): void {
+    if (this.snap.login) this.set({ login: null });
   }
 
   private write(f: object): boolean {
@@ -326,12 +361,25 @@ export class HostConn {
       void this.hx("settings/get", {}, LIVENESS_TIMEOUT_MS)
         .then((s) => this.setSettings(s as Settings))
         .catch(() => this.schedule("retry"));
-    } else if (this.snap.state === "retry") this.kick();
+    } else if (this.snap.state === "retry" || this.snap.state === "unreachable") this.kick();
   };
 
   private readonly onOnline = (): void => {
-    if (this.snap.state === "retry") this.kick();
+    if (this.snap.state === "retry" || this.snap.state === "unreachable") this.kick();
   };
+}
+
+// ACP AuthMethod 原样; 只是字符串时当 id
+function authMethods(v: unknown): AuthMethod[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((m): AuthMethod[] => {
+    if (typeof m === "string") return [{ id: m, name: m }];
+    if (!m || typeof m !== "object") return [];
+    const o = m as Record<string, unknown>;
+    const id = typeof o.id === "string" ? o.id : typeof o.methodId === "string" ? o.methodId : "";
+    if (!id) return [];
+    return [{ id, name: typeof o.name === "string" && o.name ? o.name : id, description: typeof o.description === "string" ? o.description : undefined }];
+  });
 }
 
 function parse(data: unknown): ProbeFrame[] {

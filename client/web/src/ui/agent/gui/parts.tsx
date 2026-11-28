@@ -1,4 +1,5 @@
 import { Badge } from "@hx/ui/ui/badge";
+import { Button } from "@hx/ui/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@hx/ui/ui/toggle-group";
 import { ArrowRightLeft, Brain, FilePen, FileText, Globe, Search, SquareTerminal, Trash2, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -43,7 +44,29 @@ export function RouteBadge({ route, state }: { route: Route | null; state: ConnS
   if (state === "connecting" || state === "retry") return <Badge variant="outline" dot="warning">连接中</Badge>;
   if (state === "unpaired") return <Badge variant="outline" dot="muted">未配对</Badge>;
   if (state === "noroute") return <Badge variant="outline" dot="muted">无直连</Badge>;
+  if (state === "unreachable") return <Badge variant="outline" dot="warning">只能审批</Badge>;
   return <Badge variant="outline" dot="destructive">不可用</Badge>;
+}
+
+// 这台设备连不上主机: 说清楚只能审批, 引导到收件箱
+export function ApproveOnly({ text, n, onRetry }: { text: string; n?: number; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <p className="text-sm text-muted-foreground">{text}</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button size="sm" asChild>
+          <a href={guiLink(INBOX)} onClick={() => localStorage.setItem(STORAGE_AG_MODE, "approve")}>
+            去收件箱{n ? ` 处理 ${n} 个请求` : ""}
+          </a>
+        </Button>
+        {onRetry && (
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            再试直连
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // 断线时顶部细条; 内容保持可读

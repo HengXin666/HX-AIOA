@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useResources } from "../../../app/hooks";
 import { STORAGE_AG_MOCK as STORAGE_MOCK } from "../../../agentgui/constants";
 import { useAgHub, useConn, usePairs } from "../../../agentgui/hooks";
-import { allPairs, pairHost, removePair } from "../../../agentgui/pairs";
+import { allPairs, pairHost, removePair, routeBlock } from "../../../agentgui/pairs";
 import type { Device, Instance, Settings, WatchPush } from "../../../agentgui/types";
 import { conn } from "../../../agentgui/conns";
 import { ago } from "./parts";
@@ -112,7 +112,7 @@ function PairSection() {
       {allPairs().map((p) => (
         <div key={p.host} className="flex items-center gap-2 text-sm">
           <span className="min-w-0 flex-1 truncate text-foreground">{p.host}</span>
-          <span className="truncate text-xs text-muted-foreground">{p.routes.map((r) => r.url).join(", ") || "没有直连路线"}</span>
+          <span className="truncate text-xs text-muted-foreground">{p.routes.map((r) => (routeBlock(r) ? `${r.url} (此设备不可用: ${routeBlock(r)})` : r.url)).join(", ") || "没有直连路线"}</span>
           <Button size="sm" variant="ghost" onClick={() => removePair(p.host)}>
             忘记
           </Button>

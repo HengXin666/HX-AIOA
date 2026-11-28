@@ -6,6 +6,12 @@ import { pairsChanged, pairsVersion } from "./pairs";
 import type { SessionStore } from "./session";
 
 export const useAgHub = () => useSyncExternalStore((fn) => agHub.changed.on(fn), agHub.snapshot);
+
+// 要收件箱 (卡片或计数) 的页面用它: 挂着时才补拉 inbox, 每次连上最多一次
+export function useInbox(): ReturnType<typeof agHub.snapshot> {
+  useEffect(() => agHub.need(), []);
+  return useAgHub();
+}
 export const usePairs = () => useSyncExternalStore((fn) => pairsChanged.on(fn), pairsVersion);
 export const useConnsVersion = () => useSyncExternalStore((fn) => connsChanged.on(fn), connsVersion);
 

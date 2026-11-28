@@ -1,7 +1,7 @@
 import { api } from "../core/auth";
 import { Emitter } from "../core/emitter";
 import { PATH_AGENT_GUI_PAIR } from "@hx-aioa/protocol";
-import { ROUTE_ORDER, STORAGE_AG_PAIRS } from "./constants";
+import { ROUTE_ORDER, STORAGE_AG_PAIRS, TXT_ROUTE_LOCAL_OFF, TXT_ROUTE_MIXED } from "./constants";
 import { deviceKey } from "./keys";
 import type { PairResult, Route } from "./types";
 
@@ -66,6 +66,34 @@ export function updateRoutes(host: string, routes: Route[]): void {
 export function routeOrder(p: Pair): Route[] {
   const rank = (r: Route) => (r.url === p.last ? -1 : ROUTE_ORDER.indexOf(r.kind));
   return [...p.routes].sort((a, b) => rank(a) - rank(b));
+}
+
+const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[?::1\]?)$/i;
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+};
+export const isLoopback = (url: string): boolean => LOOPBACK.test(hostOf(url));
+// 页面就是在本机打开的 (localhost / 127.0.0.1)
+const localPage = (): boolean => LOOPBACK.test(location.hostname);
+// 手机 / 平板不可能是跑探针的那台电脑 (iPadOS 报 Macintosh, 靠触点数认)
+export function isDesktop(): boolean {
+  const ua = navigator.userAgent;
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return false;
+  return !(/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/** 这条路线在这台设备 / 这个页面上能不能试: 返回不能的原因, 能试返回 ""。 */
+export function routeBlock(r: Route): string {
+  const loop = r.kind === "local" || isLoopback(r.url);
+  // 本机地址: 只有在这台主机本机 (桌面浏览器, 或页面本身就是本机打开) 才有意义
+  if (loop) return localPage() || isDesktop() ? "" : TXT_ROUTE_LOCAL_OFF;
+  // https 页面连不了 http / ws:// 的非本机地址 (混合内容), 直接标不可用, 不去连
+  if (location.protocol === "https:" && /^http:/i.test(r.url)) return TXT_ROUTE_MIXED;
+  return "";
 }
 
 function deviceName(): string {

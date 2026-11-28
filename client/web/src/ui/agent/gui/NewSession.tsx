@@ -5,12 +5,14 @@ import { Textarea } from "@hx/ui/ui/textarea";
 import { ArrowUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { TXT_NO_ROUTE, TXT_UNPAIRED } from "../../../agentgui/constants";
-import { useConn } from "../../../agentgui/hooks";
+import { CREATE_SLOW_MS, CREATE_TIMEOUT_MS, TXT_CREATE_SLOW, TXT_NO_ROUTE, TXT_UNPAIRED } from "../../../agentgui/constants";
+import { useAgHub, useConn } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
 import type { SessionInfo } from "../../../agentgui/types";
 import { STORAGE_NEW_INSTANCE } from "./ModelPanel";
-import { guiLink, SETTINGS, sessionLink } from "./parts";
+import { useAgentDenied, ScopeFix } from "../../resources/ProbeDialogs";
+import { LoginCard } from "./Login";
+import { ApproveOnly, guiLink, SETTINGS, sessionLink } from "./parts";
 
 export const STORAGE_NEW_CWD = "aioa.ag.newCwd";
 const TITLE_MAX = 40;
@@ -42,6 +44,9 @@ export function NewSession({ host, onHost }: { host: string; onHost: (h: string)
   const [mode, setMode] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const hub = useAgHub();
+  const scope = useAgentDenied(host);
   const ready = c.state === "ready";
   const inst = c.instances.find((i) => i.id === instance) ?? c.instances[0];
 
@@ -68,35 +73,57 @@ export function NewSession({ host, onHost }: { host: string; onHost: (h: string)
     const t = text.trim();
     if (!t || !inst || !cwd.trim() || busy) return;
     setBusy(true);
+    setSlow(false);
+    c.c.clearLogin();
+    // 第一次用某个 Agent 时 npx 要下载适配器, 可能几分钟
+    const slowTimer = setTimeout(() => setSlow(true), CREATE_SLOW_MS);
     try {
       const p: Record<string, string> = { instance: inst.id, cwd: cwd.trim(), title: t.split("\n")[0]!.slice(0, TITLE_MAX) };
       if (model.trim()) p.model = model.trim();
       if (mode.trim()) p.mode = mode.trim();
-      const info = await c.c.hx<SessionInfo>("session/create", p, 60_000);
+      const info = await c.c.hx<SessionInfo>("session/create", p, CREATE_TIMEOUT_MS);
       c.c.putSession(info);
       void c.c.acpRequest(info.id, "session/prompt", { prompt: [{ type: "text", text: t }] }).catch((e: Error) => toast.error(e.message));
       location.hash = sessionLink(host, info.id);
     } catch (e) {
-      toast.error((e as Error).message);
+      // 未登录时探针另发 auth_required, 由登录卡说明, 不再弹一条
+      if (!c.c.snapshot().login) toast.error((e as Error).message);
       setBusy(false);
+    } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
     }
   };
 
   const hosts = allPairs().map((p) => ({ value: p.host, name: p.host }));
-  const blocked = !host ? "先在设置里配对一台主机" : c.state === "unpaired" ? TXT_UNPAIRED : c.state === "noroute" ? TXT_NO_ROUTE : !ready ? (c.err || "正在连接主机") : "";
+  const approveOnly = c.state === "noroute" || c.state === "unreachable";
+  const blocked = !host ? "先在设置里配对一台主机" : c.state === "unpaired" ? TXT_UNPAIRED : approveOnly ? c.err || TXT_NO_ROUTE : !ready ? c.err || "正在连接主机" : "";
+  const login = c.login && (!c.login.instance || c.login.instance === inst?.id) && !c.login.sid ? c.login : null;
+  const pending = hub.cards.filter((x) => x.host === host).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
         <h2 className="text-2xl font-semibold text-foreground">今天让 Agent 做点什么?</h2>
-        <p className="text-sm text-muted-foreground">{blocked || "选好主机, 项目目录与 Agent 实例, 发出第一条消息就开始"}</p>
-        {blocked && (
+        {scope.denied && <ScopeFix subject={host} shell={scope.shell} />}
+        {approveOnly ? (
+          <ApproveOnly text={blocked} n={pending} onRetry={c.state === "unreachable" ? () => c.c.kick() : undefined} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{blocked || "选好主机, 项目目录与 Agent 实例, 发出第一条消息就开始"}</p>
+        )}
+        {blocked && !approveOnly && (
           <Button variant="outline" size="sm" asChild>
             <a href={guiLink(SETTINGS)}>去设置</a>
           </Button>
         )}
       </div>
       <div className="mx-auto w-full max-w-[768px] px-4 pb-6">
+        {login && <LoginCard conn={c.c} login={login} instance={inst} onDone={() => void start()} />}
+        {busy && slow && (
+          <p role="status" className="mb-2 text-center text-xs text-muted-foreground">
+            {TXT_CREATE_SLOW}
+          </p>
+        )}
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Pick label="主机" value={host} onChange={onHost} items={hosts} />
           <Input size="sm" list="ag-dirs" value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder="项目目录" className="w-64 font-mono" aria-label="项目目录" />

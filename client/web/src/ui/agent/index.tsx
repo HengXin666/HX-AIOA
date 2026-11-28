@@ -4,7 +4,7 @@ import { Button } from "@hx/ui/ui/button";
 import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
 import { Code } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
-import { useAgHub } from "../../agentgui/hooks";
+import { useInbox } from "../../agentgui/hooks";
 import { useFeed, useLinkState, useUser } from "../../app/hooks";
 import { TXT_LOADING } from "../../core/constants";
 import { feed } from "../../core/feed";
@@ -30,8 +30,9 @@ export default function AgentArea(props: AreaProps) {
   return <AgentHome />;
 }
 
+// 只在主账号看得到入口卡时补拉收件箱 (要显示 "等你 n")
 function GuiEntry() {
-  const hub = useAgHub();
+  const hub = useInbox();
   const n = hub.cards.length;
   return (
     <a href="#/agent/gui" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 hover:bg-muted [&_svg]:size-5">

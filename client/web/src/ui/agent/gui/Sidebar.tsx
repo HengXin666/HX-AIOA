@@ -1,5 +1,7 @@
 import { Badge } from "@hx/ui/ui/badge";
 import { Button } from "@hx/ui/ui/button";
+import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@hx/ui/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Input } from "@hx/ui/ui/input";
 import { ChevronDown, Ellipsis, Plus, Search, Settings } from "lucide-react";
@@ -9,6 +11,8 @@ import { TXT_NEW_SESSION } from "../../../agentgui/constants";
 import { useAgHub, useConn, usePairs } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
 import type { SessionInfo } from "../../../agentgui/types";
+import { agentDenied, ScopeFix, useAgentDenied } from "../../resources/ProbeDialogs";
+import { useResources } from "../../../app/hooks";
 import { AddDel } from "./Diff";
 import { STORAGE_NEW_CWD } from "./NewSession";
 import { ago, AgentGlyph, basename, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
@@ -35,6 +39,9 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
   const paired = allPairs().map((p) => p.host);
   const others = hub.hosts.map((h) => h.subject).filter((h) => !paired.includes(h));
   const cur = rows.find((r) => r.id === sid);
+  const scope = useAgentDenied(host);
+  const { hosts: cards } = useResources();
+  const lacks = (h: string) => agentDenied(cards.find((x) => x.subject === h));
 
   return (
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-border bg-sidebar">
@@ -51,6 +58,7 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
             {paired.map((h) => (
               <DropdownMenuItem key={h} onSelect={() => onHost(h)}>
                 {h}
+                {lacks(h) && <span className="ml-auto text-xs text-warning">缺权限</span>}
               </DropdownMenuItem>
             ))}
             {paired.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">还没有</p>}
@@ -61,6 +69,7 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
                 {others.map((h) => (
                   <DropdownMenuItem key={h} onSelect={() => onHost(h)}>
                     {h}
+                    {lacks(h) && <span className="ml-auto text-xs text-warning">缺权限</span>}
                   </DropdownMenuItem>
                 ))}
               </>
@@ -72,6 +81,7 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
         {host && <RouteBadge route={c.route} state={c.state} />}
       </div>
       <div className="flex flex-col gap-2 p-2">
+        {scope.denied && <ScopeFix subject={host} shell={scope.shell} compact />}
         <Input size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" leading={<Search className="size-4" />} />
         <Button
           variant="outline"
@@ -120,15 +130,13 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
 
 function SessionRow({ host, row, active, direct }: { host: string; row: Row; active: boolean; direct: boolean }) {
   const c = useConn(host);
+  const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const act = (m: string, p: object, after?: () => void) =>
     void c.c
       .hx(m, p)
       .then(() => after?.())
       .catch((e: Error) => toast.error(e.message));
-  const rename = () => {
-    const title = prompt("新标题", row.title);
-    if (title?.trim()) act("session/rename", { sid: row.id, title: title.trim() }, () => c.c.putSession({ ...(row as SessionInfo), title: title.trim() }));
-  };
   return (
     <div className={`group flex items-center gap-1 rounded-lg ${active ? "bg-accent" : "hover:bg-muted"}`}>
       <a href={sessionLink(host, row.id)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5">
@@ -151,15 +159,65 @@ function SessionRow({ host, row, active, direct }: { host: string; row: Row; act
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={rename}>重命名</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setRenaming(true)}>重命名</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => act("session/resume", { sid: row.id }, undefined)}>恢复 (重新载入)</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => act("session/close", { sid: row.id })}>结束 (留档)</DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => confirm(`删除会话 "${row.title}"?`) && act("session/delete", { sid: row.id }, () => c.c.dropSession(row.id))}>
+            <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
               删除
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {renaming && <RenameDialog title={row.title} onClose={() => setRenaming(false)} onSave={(title) => c.c.hx<SessionInfo>("session/rename", { sid: row.id, title }).then(() => c.c.putSession({ ...(row as SessionInfo), title }))} />}
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title="删除会话?"
+        description={`"${row.title || "未命名"}" 的记录会从主机上删掉, 不能恢复。`}
+        confirmLabel="删除"
+        tone="destructive"
+        onConfirm={() => c.c.hx("session/delete", { sid: row.id }).then(() => c.c.dropSession(row.id))}
+      />
     </div>
+  );
+}
+
+// 重命名: 失败留在对话框里显示原因
+function RenameDialog({ title, onClose, onSave }: { title: string; onClose: () => void; onSave: (t: string) => Promise<unknown> }) {
+  const [v, setV] = useState(title);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const save = async () => {
+    const t = v.trim();
+    if (!t || busy) return;
+    if (t === title) return onClose();
+    setBusy(true);
+    setErr("");
+    try {
+      await onSave(t);
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>重命名会话</DialogTitle>
+        </DialogHeader>
+        <Input value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void save()} autoFocus aria-label="新标题" />
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button onClick={() => void save()} disabled={busy || !v.trim()}>
+            {busy ? "保存中" : "保存"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
