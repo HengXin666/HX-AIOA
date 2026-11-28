@@ -3,8 +3,6 @@
 /* 字体: 拉丁与数字用 Geist (HX-UI 令牌首选), 中文用思源黑体可变字重; 两者都按 unicode-range 分片, 只下载页面用到的字 */
 @import "@hx/ui/fonts.css";
 @import "@fontsource-variable/noto-sans-sc/wght.css";
-@import "./styles/shell.css";
-@import "./styles/overview.css";
 /* 不用的 HX-UI 目录 (见 web-arch.md 3.2) 不扫描, 少生成用不到的工具类 */
 @source not "../../../node_modules/@hx/ui/dist/backgrounds";
 @source not "../../../node_modules/@hx/ui/dist/stage";
@@ -12,13 +10,11 @@
 @source not "../../../node_modules/@hx/ui/dist/interactions";
 @source not "../../../node_modules/@hx/ui/dist/blueprint";
 
-/* 字体与断点令牌: 全站只认这两套字体; 3xl / 4xl 给 2K, 4K 大屏多排几列 */
+/* 字体与断点令牌: 全站只认这两套字体; 3xl 给 2K / 4K 大屏多排几列 */
 @theme {
   --font-sans: "Geist Variable", "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", "Noto Sans SC Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-display: "Geist Variable", "Noto Sans SC Variable", ui-sans-serif, sans-serif;
   --breakpoint-3xl: 120rem;
-  --breakpoint-4xl: 160rem;
 }
 
 /* 只补 HX-UI 没有的: 全屏布局与安全区; 颜色一律用令牌类 */
@@ -30,59 +26,12 @@ body,
 body {
   overscroll-behavior: none;
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01", "ss03";
-  letter-spacing: -0.005em;
-}
-/* 4K 原生分辨率 (缩放 100%) 下整体放大, 字与控件不至于小成一片; 布局仍按 24 列排 */
-@media (min-width: 160rem) {
-  #root {
-    zoom: 1.3;
-  }
+  font-feature-settings: "cv11", "ss01";
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
 /* 数字一律等宽, 跳动时不抖 */
 .num {
-  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum", "zero";
-  letter-spacing: -0.02em;
-}
-
-/* 底色: 点阵 + 两团缓慢漂移的冷暖光; 只动 transform, 合成层完成, 不重排 */
-.app-canvas {
-  position: relative;
-  isolation: isolate;
-  background-color: var(--background);
-}
-.app-canvas::before,
-.app-canvas::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  pointer-events: none;
-}
-.app-canvas::before {
-  inset: 0;
-  background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
-  background-size: 20px 20px;
-  mask-image: linear-gradient(180deg, black, transparent 70%);
-}
-.app-canvas::after {
-  inset: -20%;
-  background:
-    radial-gradient(38% 30% at 72% 8%, color-mix(in oklab, var(--info) 16%, transparent), transparent 70%),
-    radial-gradient(30% 26% at 18% 92%, color-mix(in oklab, var(--chart-2) 12%, transparent), transparent 70%);
-  animation: canvas-drift 38s ease-in-out infinite alternate;
-}
-@keyframes canvas-drift {
-  to {
-    transform: translate3d(-4%, 3%, 0) scale(1.06);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .app-canvas::after {
-    animation: none;
-  }
 }

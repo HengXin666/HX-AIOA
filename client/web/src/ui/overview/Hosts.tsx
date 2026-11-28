@@ -12,7 +12,7 @@ import { Meter, Quiet, Section, TONE } from "./parts";
 
 const SHOWN = 3;
 const TREND = 30;
-const TONES = [TONE.accent, TONE.success, TONE.warning];
+const TONES = ["var(--foreground)"];
 const STEP_DELAY = 0.12;
 
 // 资源 (对照安卓 OverviewV2.Hosts): 每台主机一块, 分段负载条 + CPU 走势; 只在总览看得见时 watch 前几台
@@ -67,8 +67,7 @@ function Host({ h, online, tone, i }: { h: HostCard; online: boolean; tone: stri
   return (
     <m.a
       href={href({ name: "res", tab: "hosts", id: h.subject })}
-      whileHover={{ y: -2 }}
-      className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-3.5 transition-colors hover:border-ring/50"
+      className="flex flex-col gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/40"
     >
       <div className="flex items-center gap-2">
         <LiveDot tone={online ? "success" : "muted"} live={online} />

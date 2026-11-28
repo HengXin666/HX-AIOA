@@ -36,7 +36,7 @@ export function Agents() {
         </Button>
       }
     >
-      <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+      <div className="@container grid grid-cols-1 gap-x-4 @lg:grid-cols-2">
         {rows.slice(0, SHOWN).map(({ m, a, s }) => (
           <Row key={a.keyId} meta={m} a={a} s={s} />
         ))}

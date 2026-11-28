@@ -1,5 +1,4 @@
-import { AreaTrend } from "@hx/ui/data";
-import { LiveDot } from "@hx/ui/effects/live-dot";
+import { AreaTrend, HeatCalendar } from "@hx/ui/data";
 import { Chip, ChipGroup } from "@hx/ui/ui/chip-group";
 import { Skeleton } from "@hx/ui/ui/skeleton";
 import { Activity } from "lucide-react";
@@ -9,14 +8,21 @@ import { chats } from "../../core/chats";
 import { CLOUD_AGENT_LABEL } from "../../core/constants";
 import { buildPulse, lifetime, streakOf, type PulseSpan } from "../../core/pulse";
 import { useActivity } from "../shell/activity";
-import { Feat, Quiet, Section, TONE } from "./parts";
+import { Feat, Quiet, Section } from "./parts";
 
 const HUNDRED = 100;
-const CHART_H = 236;
+const CHART_H = 220;
+const HEAT_WEEKS = 26;
 const SPANS: { id: PulseSpan; label: string }[] = [
   { id: "day", label: "今天" },
   { id: "week", label: "本周" },
 ];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const isoDay = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 // 群 Agent 的来源 id: 判断一条消息是不是 Agent 发的
 export function useAgentSids(): Set<string> {
@@ -24,7 +30,7 @@ export function useAgentSids(): Set<string> {
   return useMemo(() => new Set(chats.ordered().flatMap((c) => (c.agents ?? []).map((a) => a.sourceId))), [version]);
 }
 
-// 你和 Agent 一起 (对照安卓 OverviewPulse, #140 #142): 面积图是我和 Agent 发的 (按小时 / 按天), 下面一排是本机能算出的事实数据。
+// 活跃 (对照安卓 OverviewPulse, #140 #142): 上面是我和群 Agent 发的 (按小时 / 按天), 中间几项事实, 下面是每天一格的活跃日历。
 // 完成待办属于待办插件, 内置总览不画。
 export function Pulse({ className }: { className?: string }) {
   const me = useUser();
@@ -34,20 +40,19 @@ export function Pulse({ className }: { className?: string }) {
   const uid = me?.id ?? "";
   const data = useMemo(() => events && buildPulse(span, events, uid, agentSids, []), [events, span, uid, agentSids]);
   const life = useMemo(() => events && lifetime(events, uid, agentSids), [events, uid, agentSids]);
+  const heat = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const e of events ?? []) out[isoDay(e.ts)] = (out[isoDay(e.ts)] ?? 0) + 1;
+    return out;
+  }, [events]);
   const busiest = life ? Math.max(0, ...life.perDay.values()) : null;
 
   return (
     <Section
-      title={`你和 ${CLOUD_AGENT_LABEL} 一起`}
+      title="活跃"
       icon={<Activity />}
-      tone="accent"
       className={className}
-      hint={
-        <span className="inline-flex items-center gap-1.5">
-          <LiveDot tone="success" live />
-          实时{data?.peak ? ` · 峰值 ${data.peak.label}, ${data.peak.count} 条` : ""}
-        </span>
-      }
+      hint={`我和${CLOUD_AGENT_LABEL}发出的消息${data?.peak ? `, 峰值 ${data.peak.label} 有 ${data.peak.count} 条` : ""}`}
       action={
         <ChipGroup type="single" size="sm" variant="soft" value={span} onValueChange={(v) => v && setSpan(v as PulseSpan)}>
           {SPANS.map((s) => (
@@ -59,10 +64,10 @@ export function Pulse({ className }: { className?: string }) {
       }
     >
       {!data ? (
-        <Skeleton className="w-full rounded-xl" style={{ height: CHART_H }} />
+        <Skeleton className="w-full rounded-lg" style={{ height: CHART_H }} />
       ) : data.mine + data.agent === 0 ? (
-        <div style={{ height: CHART_H }} className="flex">
-          <Quiet icon={<Activity />}>{span === "day" ? "今天还没有动静" : "这周还没有动静"}</Quiet>
+        <div className="flex" style={{ height: CHART_H }}>
+          <Quiet icon={<Activity />}>{span === "day" ? "今天还没有消息" : "这周还没有消息"}</Quiet>
         </div>
       ) : (
         <AreaTrend
@@ -70,19 +75,20 @@ export function Pulse({ className }: { className?: string }) {
           data={data.rows}
           x="label"
           series={[
-            { key: "mine", label: `我 ${data.mine}`, color: TONE.primary },
-            { key: "agent", label: `${CLOUD_AGENT_LABEL} ${data.agent}`, color: TONE.accent },
+            { key: "mine", label: `我 ${data.mine}` },
+            { key: "agent", label: `${CLOUD_AGENT_LABEL} ${data.agent}` },
           ]}
           stacked
           height={CHART_H}
         />
       )}
-      <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Feat value={life ? streakOf(life.perDay) : null} label="天连续活跃" color={TONE.warning} />
-        <Feat value={busiest} label="条最忙一天" color={TONE.primary} />
-        <Feat value={life?.total ?? null} label="条近期消息" color={TONE.success} />
-        <Feat value={life ? (life.total ? Math.round((life.agent * HUNDRED) / life.total) : 0) : null} label={`% 由 ${CLOUD_AGENT_LABEL} 发出`} color={TONE.accent} />
+      <div className="grid grid-cols-4 gap-4 border-y py-3">
+        <Feat value={life ? streakOf(life.perDay) : null} label="天连续活跃" />
+        <Feat value={busiest} label="条最忙一天" />
+        <Feat value={life?.total ?? null} label="条最近消息" />
+        <Feat value={life ? (life.total ? Math.round((life.agent * HUNDRED) / life.total) : 0) : null} label={`% 由${CLOUD_AGENT_LABEL}发出`} />
       </div>
+      {events ? <HeatCalendar values={heat} weeks={HEAT_WEEKS} unit="条" label="每天的消息数" className="w-full" /> : <Skeleton className="h-[120px] w-full rounded-lg" />}
     </Section>
   );
 }

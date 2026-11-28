@@ -1,19 +1,18 @@
 # Web 侧栏与总览重做 (#155) - Evidence
 
-2026-11-29, 分支 hxoa/oa_1-2f21a422 (基于 main 111fc66)。
+2026-11-29, 分支 hxoa/oa_1-2f21a422。第二版: 主人嫌第一版发光, 渐变, 多色太 "AI 味", 参考弹幕守护 (BiLiBiLi_DanMu_Crawling) 的前端收敛。
 
 ## 改了什么
-- 字体: 拉丁与数字 Geist (HX-UI fonts.css), 中文思源黑体可变字重 (@fontsource-variable/noto-sans-sc, 按 unicode-range 分片); 数字统一 `.num` 等宽。
-- 断点: 新增 3xl (1920) 与 4xl (2560); 4K 缩放 100% 时整页放大 1.3 倍。
-- 侧栏: 宽屏 268px / 收起 72px (可手动收起, 记住状态); 品牌环, 选中底与悬停底随指针弹动 (layoutId), 导航带说明, 近 24 小时消息柱 + 三项计数, 最近会话, 明暗切换。侧栏在首包里, 不引图表库。
-- 总览: 问候 + 逐字浮现的结论; 五项指标 (数字滚动, 需要我有事时呼吸 + 流光); 看板随屏宽 1/12/16/24 列: 你和群 Agent 一起 (面积图), 活跃时段 (玫瑰图), 需要我, 消息来源 (环图 + 仪表), 活跃日历, 群 Agent, 资源, 正在发生, 值得一看。
-- 最近消息事件由 ui/shell/activity.ts 一份共用, 首次取历史, 之后跟会话库实时补, 不轮询。
+- 侧栏换成 HX-UI 自带 Sidebar (inset, 可收成图标栏, Ctrl+B), 图标单色, 计数用 SidebarMenuBadge; 内容区加顶栏 (收起按钮, 栏名, 连接状态, 搜索)。
+- 总览: 中性卡片 (Card + CardHeader + CardDescription), 颜色只表达状态 (需要我不为 0 时变红); 五项计数, 需要我放最前, 活跃 (面积图 + 事实 + 活跃日历), 消息来源 (按群条形), 正在发生, 值得一看, 群 Agent, 资源; 1280 起 12 列, 1920 起同一行放更多块。去掉发光, 渐变, 呼吸, 流光, 玫瑰图, 4K 整页放大。
+- 字体: Geist + 思源黑体可变字重 (@fontsource-variable/noto-sans-sc)。
+- 手机宽度 (< 720px) 不提供网页版, 直接显示安卓 App 下载页 (ui/AppGate.tsx), 不登录也不建连接。
 
 ## 验证
 | 命令 | 结果 |
 | --- | --- |
 | `npm run typecheck -w client/web` | 通过 |
-| `npm run build -w client/web` | 通过, 首包 585 KB (与改前持平) |
-| 本地 wrangler dev + 种子数据 + playwright (暗色 ink) | 1920x1080, 3840x2160, 1280x800, 390x844 截图, 无页面错误 |
+| `npm run build -w client/web` | 通过 |
+| 本地 wrangler dev + 种子数据 + playwright (暗色 ink) | 1440x900, 1920x1080, 2560x1440, 390x844 截图, 无页面错误 |
 
 注意: 本地联调用临时 `.dev.vars`, 跑完已删除。
