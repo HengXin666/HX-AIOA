@@ -19,6 +19,7 @@
 - 每个文件记自己的后端 (`store`) 和 Drive 节点 id (`ext`)。改路由只影响之后上传的文件, 老文件留在原后端, 换地址时按文件自己的后端解析, 已发的消息和安卓本机缓存都不受影响。
 - cfd 文件: 上传票据带 `b=cfd` (签进票据, 改不了), Worker 把字节流式转给 Drive; `link` 返回 Drive 的签名直链 (24 小时, 绑定 AIOA 的令牌, 服务端缓存 12 小时), 字节不经过 AIOA; 删除时当场在 Drive 彻底删 (TG 消息一起删), Drive 删失败的行保留成不可用, 由每天的清理重试。
 - 接入 Drive 需要三项: Service Binding `DRIVE -> hx-cf-drive`, 变量 `CFD_ORIGIN` (Drive 公网地址), 密钥 `CFD_TOKEN` (Drive 后台建的受限令牌, 根目录 `/aioa`, read+write)。缺一项就当没接入, 不经公网退回。
+- 附件一律放在 Drive 的 `/aioa/YYYY-MM/`: 服务端按令牌根自动适配 (#157), 根是 `/aioa` 时写 `/YYYY-MM`, 主人在 Drive 后台把 `CFD_TOKEN` 的根改成 `/` (整盘) 后写 `/aioa/YYYY-MM`。令牌根每个 isolate 问一次 (`/fs/stat?path=/`, 缓存 10 分钟)。老附件按 Drive 节点 id 读删, 改根目录不受影响。
 - 迁移任务 (主人): `POST /api/v1/files/migrate { to: "r2" | "cfd" }` 开始, `GET` 看进度, `DELETE` 停止。一次只有一个任务, 状态存在 Hub 里, 由闹钟每 10 秒搬 3 个 (DO 重启后接着跑)。每个文件先写新后端, 再一次 UPDATE 改 `store` / `ext`, 最后删旧字节; 文件 id 不变, 已发的消息不用改。搬回 R2 只搬 95 MB 以内的 (大的计入 skipped), R2 满了就停。失败的文件记下不再重试, 超过 200 个就停。旧地址随之失效, 安卓遇到 403 / 404 / 410 会换一次地址。
 - 冷迁移: 每天 03:00 (UTC+8) 的清理任务里, `coldDays` 大于 0 且没有任务在跑时, 开一轮只搬冷文件的迁移。"最近下载" 按换下载地址的时间算, 一天最多写一次。
 - TG 直连 (主人设备): 安卓 "存储" 页存 Bot 令牌 (只在本机, Android Keystore 加密) 并打开 `direct`。下载 Drive 上的文件时 `GET /files/{id}/link?direct=1`, 服务端校验是主人且开了 `direct` 后向 Drive 要分片清单 (`/api/v1/fs/manifest`, Drive v0.3.1), 返回 `direct: { size, chunkSize, chunks: [{ bot, fileId, size }] }`。手机按 bot 对上令牌, `getFile` 后从 TG 3 片并发下载, 按偏移写入, 完成的片记在本地, 中断后只补缺的片; 走 App 的代理。只有某片的 Bot 令牌手机上没有, 或 TG 说 file_id 无效时, 这一片用 `url` 加 Range 从 Drive 取; 其他错误直接报错。上传不走直连。
@@ -39,7 +40,7 @@
 
 1. `POST /api/v1/files` `{ name, size, mime?, channel? }` → `{ file: FileRef, upload, expires }`。主人可传任意群 (默认备忘); 成员只能传自己所在的群; Agent 只能传自己的群。
 2. `PUT {upload}`, 请求体为文件字节, 必须带 `Content-Length` 且不大于登记的大小。
-   超过 95 MB 时登记结果多一个 `chunks: { size, count }`: 第 i 片 (从 0 开始) `PUT {upload}&i=<i>`, 回 `{ receipt }`; 全部传完后 `POST /api/v1/files/{id}/commit { receipts }` (按序号排好, 上传者或主人)。分片票据 24 小时有效, 里面带着 Drive 的上传票据, Worker 收到分片直接转给 Drive, 不唤醒 DO。安卓每片最多试 3 次, 429 / 503 按 `Retry-After` 等; 分片上传的大文件不拷进本机缓存。
+   超过 95 MB 时登记结果多一个 `chunks: { size, count }`: 第 i 片 (从 0 开始) `PUT {upload}&i=<i>`, 回 `{ receipt }`; 全部传完后 `POST /api/v1/files/{id}/commit { receipts }` (按序号排好, 上传者或主人)。超过 256 片 (约 4.75 GB) 时服务端先每 256 片向 Drive fold 成一个聚合回执再提交, 10 GB 约 540 片 = 3 次 fold + 1 次 commit, 不超 Drive 的 CPU (#157)。分片票据 24 小时有效, 里面带着 Drive 的上传票据, Worker 收到分片直接转给 Drive, 不唤醒 DO。安卓每片最多试 3 次, 429 / 503 按 `Retry-After` 等; 分片上传的大文件不拷进本机缓存。
 3. 发消息时带上 `file: <id>`: 长连接 `send` 帧, 或 `POST /api/v1/messages`。文件必须已传完, 且是发送者能读的群里的。只发文件时正文写 `[文件] 名字`。
 4. `GET /api/v1/files/{id}/link` → `{ url, expires }`, 能读这个群的人才能换; `GET {url}` 下载, 支持 `Range`。
 5. `DELETE /api/v1/files/{id}`: 主人, 上传者或群管理员。`GET /api/v1/files` (主人): 总用量。
