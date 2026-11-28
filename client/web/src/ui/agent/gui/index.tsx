@@ -8,7 +8,8 @@ import type { AreaProps } from "../../Shell";
 import { Ctx, type GuiCtx, type RightTab } from "./ctx";
 import { Inbox } from "./Inbox";
 import { NewSession } from "./NewSession";
-import { guiLink, guiMode, INBOX, ModeToggle, SETTINGS, sessionLink } from "./parts";
+import { GuidePage } from "./Guide";
+import { GUIDE, guiLink, guiMode, INBOX, ModeToggle, SETTINGS, sessionLink } from "./parts";
 import { RightPane } from "./RightPane";
 import { SessionView } from "./Session";
 import { SettingsPage } from "./Settings";
@@ -54,7 +55,7 @@ function useTitleCount(n: number): void {
   useEffect(() => () => void (document.title = base.current), []);
 }
 
-// Agent GUI 工作台: #/agent/gui (新会话), #/agent/gui/<主机>/<会话>, #/agent/gui/inbox (审批), #/agent/gui/settings
+// Agent GUI 工作台: #/agent/gui (新会话), #/agent/gui/<主机>/<会话>, #/agent/gui/inbox (审批), #/agent/gui/settings, #/agent/gui/guide (使用指引)
 export default function AgentGui({ loc }: AreaProps) {
   const ok = useBoot();
   // 进 Agent GUI 才补拉收件箱
@@ -64,7 +65,7 @@ export default function AgentGui({ loc }: AreaProps) {
   const direct = allPairs().reduce((n, p) => n + (knownConn(p.host)?.snapshot().sessions.reduce((m, s) => m + (s.pending || 0), 0) ?? 0), 0);
   useTitleCount(Math.max(hub.cards.length, direct));
   const path = loc.path.slice(1);
-  const page = path[0] === INBOX ? "inbox" : path[0] === SETTINGS ? "settings" : path.length >= 2 ? "session" : "new";
+  const page = path[0] === INBOX ? "inbox" : path[0] === SETTINGS ? "settings" : path[0] === GUIDE ? "guide" : path.length >= 2 ? "session" : "new";
 
   // 从 Agent 栏首页进来时按上次的模式开
   useEffect(() => {
@@ -87,7 +88,7 @@ function useWide(): boolean {
   return w;
 }
 
-function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "session"; routeHost?: string; sid?: string }) {
+function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "guide" | "session"; routeHost?: string; sid?: string }) {
   usePairs();
   const hub = useAgHub();
   const [picked, setPicked] = useState(() => localStorage.getItem(STORAGE_AG_HOST) ?? "");
@@ -142,10 +143,10 @@ function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "sessi
           ) : (
             <>
               <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3">
-                <h2 className="flex-1 text-sm font-semibold text-foreground">{page === "settings" ? "设置" : "新会话"}</h2>
+                <h2 className="flex-1 text-sm font-semibold text-foreground">{page === "settings" ? "设置" : page === "guide" ? "使用指引" : "新会话"}</h2>
                 <ModeToggle mode="work" />
               </header>
-              {page === "settings" ? <SettingsPage host={host} /> : <NewSession host={host} onHost={onHost} />}
+              {page === "settings" ? <SettingsPage host={host} /> : page === "guide" ? <GuidePage host={host} /> : <NewSession host={host} onHost={onHost} />}
             </>
           )}
         </main>

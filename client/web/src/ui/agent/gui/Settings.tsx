@@ -13,7 +13,7 @@ import { useAgHub, useConn, usePairs } from "../../../agentgui/hooks";
 import { allPairs, pairHost, removePair, routeBlock } from "../../../agentgui/pairs";
 import type { Device, Instance, Settings, WatchPush } from "../../../agentgui/types";
 import { conn } from "../../../agentgui/conns";
-import { ago } from "./parts";
+import { ago, GUIDE, guiLink } from "./parts";
 
 // 预设: 首次启动探针也会写入, 这里方便再加一个同类实例
 const PRESETS: Omit<Instance, "id">[] = [
@@ -46,7 +46,12 @@ export function SettingsPage({ host }: { host: string }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
-        <h2 className="text-xl font-semibold text-foreground">Agent GUI 设置</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="flex-1 text-xl font-semibold text-foreground">Agent GUI 设置</h2>
+          <Button size="sm" variant="ghost" asChild>
+            <a href={guiLink(GUIDE)}>使用指引</a>
+          </Button>
+        </div>
         <PairSection />
         {!host ? null : !ready ? (
           <p className="text-sm text-muted-foreground">{host}: 连上主机后可以管理 Agent 实例, 设备与推送 (这些都存在主机本地)</p>
@@ -63,12 +68,18 @@ export function SettingsPage({ host }: { host: string }) {
   );
 }
 
-function PairSection() {
+function Bare({ children }: { title: string; sub?: string; children: ReactNode }) {
+  return <div className="flex flex-col gap-3">{children}</div>;
+}
+
+// bare: 放进使用指引时不再套一层卡片; initial: 预选的主机
+export function PairSection({ bare, initial = "" }: { bare?: boolean; initial?: string } = {}) {
+  const Wrap = bare ? Bare : Section;
   usePairs();
   const hub = useAgHub();
   const { probes, hosts } = useResources();
   const candidates = [...new Set([...hub.hosts.map((h) => h.subject), ...probes, ...hosts.map((h) => h.subject)])].sort();
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(initial);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const go = async () => {
@@ -86,7 +97,7 @@ function PairSection() {
     }
   };
   return (
-    <Section title="配对这台主机" sub="经 Hub 一次, 要主账号密码; 之后浏览器直连探针, 不再经过 Hub">
+    <Wrap title="配对这台主机" sub="经 Hub 一次, 要主账号密码; 之后浏览器直连探针, 不再经过 Hub">
       <div className="flex flex-wrap items-end gap-2">
         <Field label="主机" className="w-56">
           <Select value={subject} onValueChange={setSubject}>
@@ -118,7 +129,7 @@ function PairSection() {
           </Button>
         </div>
       ))}
-    </Section>
+    </Wrap>
   );
 }
 

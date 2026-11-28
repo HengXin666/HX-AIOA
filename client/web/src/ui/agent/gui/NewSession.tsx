@@ -10,9 +10,9 @@ import { useAgHub, useConn } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
 import type { SessionInfo } from "../../../agentgui/types";
 import { STORAGE_NEW_INSTANCE } from "./ModelPanel";
-import { useAgentDenied, ScopeFix } from "../../resources/ProbeDialogs";
+import { GuideCard, useGuide } from "./Guide";
 import { LoginCard } from "./Login";
-import { ApproveOnly, guiLink, SETTINGS, sessionLink } from "./parts";
+import { ApproveOnly, GUIDE, guiLink, SETTINGS, sessionLink } from "./parts";
 
 export const STORAGE_NEW_CWD = "aioa.ag.newCwd";
 const TITLE_MAX = 40;
@@ -46,7 +46,7 @@ export function NewSession({ host, onHost }: { host: string; onHost: (h: string)
   const [busy, setBusy] = useState(false);
   const [slow, setSlow] = useState(false);
   const hub = useAgHub();
-  const scope = useAgentDenied(host);
+  const g = useGuide(host);
   const ready = c.state === "ready";
   const inst = c.instances.find((i) => i.id === instance) ?? c.instances[0];
 
@@ -105,16 +105,26 @@ export function NewSession({ host, onHost }: { host: string; onHost: (h: string)
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
         <h2 className="text-2xl font-semibold text-foreground">今天让 Agent 做点什么?</h2>
-        {scope.denied && <ScopeFix subject={host} shell={scope.shell} />}
-        {approveOnly ? (
-          <ApproveOnly text={blocked} n={pending} onRetry={c.state === "unreachable" ? () => c.c.kick() : undefined} />
+        {g.step && g.step !== "route" && g.step !== "login" ? (
+          <GuideCard g={g} />
         ) : (
-          <p className="text-sm text-muted-foreground">{blocked || "选好主机, 项目目录与 Agent 实例, 发出第一条消息就开始"}</p>
-        )}
-        {blocked && !approveOnly && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={guiLink(SETTINGS)}>去设置</a>
-          </Button>
+          <>
+            {approveOnly ? (
+              <ApproveOnly text={blocked} n={pending} onRetry={c.state === "unreachable" ? () => c.c.kick() : undefined} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{blocked || "选好主机, 项目目录与 Agent 实例, 发出第一条消息就开始"}</p>
+            )}
+            {blocked && !approveOnly && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={guiLink(SETTINGS)}>去设置</a>
+              </Button>
+            )}
+            {approveOnly && (
+              <a href={guiLink(GUIDE)} className="text-xs text-muted-foreground underline hover:text-foreground">
+                为什么只能审批?
+              </a>
+            )}
+          </>
         )}
       </div>
       <div className="mx-auto w-full max-w-[768px] px-4 pb-6">

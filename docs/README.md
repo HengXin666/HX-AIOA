@@ -28,6 +28,7 @@
 | [sources.md](features/sources.md) | 接入数据源 (GitHub, Uptime Kuma 等) 的操作步骤 |
 | [metrics.md](features/metrics.md) | 实时指标的懒更新 |
 | [terminal.md](features/terminal.md) | 一行安装探针, 经探针中转的终端 |
+| [agent-gui.md](features/agent-gui.md) | Agent GUI 本地上手: 要装什么, 探针 --agent, 已装主机开启, 配对, 新会话, 审批 |
 | [../plugins/README.md](../plugins/README.md) | 插件市场格式 |
 
 ## 给 Agent

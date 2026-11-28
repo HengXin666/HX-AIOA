@@ -24,12 +24,12 @@ export function useAgentDenied(subject: string): { denied: boolean; shell: boole
   return { denied: agentDenied(card), shell: card?.info.shell === true };
 }
 
-function CommandBox({ command, note }: { command: string; note: string }) {
+export function CommandBox({ command, note, copied = "安装命令已复制" }: { command: string; note: string; copied?: string }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">{note}</p>
       <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap text-foreground">{command}</pre>
-      <Button className="self-start" onClick={() => copy(command, "安装命令已复制")}>
+      <Button className="self-start" onClick={() => copy(command, copied)}>
         <Copy />
         复制命令
       </Button>

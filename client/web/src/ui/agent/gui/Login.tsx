@@ -6,11 +6,12 @@ import { CREATE_TIMEOUT_MS } from "../../../agentgui/constants";
 import type { HostConn } from "../../../agentgui/conn";
 import type { AuthNeed, Instance } from "../../../agentgui/types";
 
-// 终端里登录用的命令名: 预设按种类, 自定义按命令
-function cliName(inst?: Instance): string {
-  if (!inst) return "<agent>";
-  if (inst.kind === "claude" || inst.kind === "codex" || inst.kind === "dsh") return inst.kind;
-  return inst.cmd || inst.name;
+// 终端里怎么登录: 预设按种类, 自定义按命令
+function loginHint(inst?: Instance): string {
+  if (inst?.kind === "claude") return "claude 后输入 /login";
+  if (inst?.kind === "codex") return "codex login";
+  if (inst?.kind === "dsh") return "dsh (登录或配好 key)";
+  return `${inst?.cmd || inst?.name || "<agent>"} login`;
 }
 
 // Agent 未登录 (探针报 auth_required): 列出 Agent 公布的登录方式, 点了走 agent/authenticate, 成功后重试
@@ -54,11 +55,10 @@ export function LoginCard({ conn, login, instance, onDone }: { conn: HostConn; l
       ) : (
         <p className="text-xs text-muted-foreground">Agent 没有公布可在这里完成的登录方式。</p>
       )}
-      {(err || login.methods.length === 0) && (
-        <p className="text-xs text-destructive">
-          {err && `登录失败: ${err}。`}在那台电脑的终端运行 <code className="rounded bg-muted px-1 font-mono text-foreground">{cliName(instance)} login</code> 后再试。
-        </p>
-      )}
+      <p className={`text-xs ${err || login.methods.length === 0 ? "text-destructive" : "text-muted-foreground"}`}>
+        {err && `登录失败: ${err}。`}
+        {login.methods.length > 0 && !err ? "也可以" : ""}在那台电脑的终端 (与探针同一用户) 运行 <code className="rounded bg-muted px-1 font-mono text-foreground">{loginHint(instance)}</code> 后再试。
+      </p>
     </Card>
   );
 }

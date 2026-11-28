@@ -4,7 +4,7 @@ import { ConfirmDialog } from "@hx/ui/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@hx/ui/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@hx/ui/ui/dropdown-menu";
 import { Input } from "@hx/ui/ui/input";
-import { ChevronDown, Ellipsis, Plus, Search, Settings } from "lucide-react";
+import { BookOpen, ChevronDown, Ellipsis, Plus, Search, Settings } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TXT_NEW_SESSION } from "../../../agentgui/constants";
@@ -15,7 +15,7 @@ import { agentDenied, ScopeFix, useAgentDenied } from "../../resources/ProbeDial
 import { useResources } from "../../../app/hooks";
 import { AddDel } from "./Diff";
 import { STORAGE_NEW_CWD } from "./NewSession";
-import { ago, AgentGlyph, basename, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
+import { ago, AgentGlyph, basename, GUIDE, guiLink, RouteBadge, SETTINGS, sessionLink, StateDot } from "./parts";
 
 type Row = Pick<SessionInfo, "id" | "title" | "agent" | "state" | "updated" | "pending"> & Partial<SessionInfo>;
 
@@ -120,10 +120,16 @@ export function Sidebar({ host, sid, onHost }: { host: string; sid?: string; onH
         ))}
         {host && rows.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">{c.state === "ready" ? "还没有会话" : "连上主机后显示会话"}</p>}
       </div>
-      <a href={guiLink(SETTINGS)} className="flex items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground hover:text-foreground [&_svg]:size-4">
-        <Settings />
-        设置: Agent 实例 · 设备 · 配对
-      </a>
+      <div className="flex flex-col border-t border-border py-1">
+        <a href={guiLink(GUIDE)} className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground [&_svg]:size-4">
+          <BookOpen />
+          使用指引
+        </a>
+        <a href={guiLink(SETTINGS)} className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground [&_svg]:size-4">
+          <Settings />
+          设置: Agent 实例 · 设备 · 配对
+        </a>
+      </div>
     </aside>
   );
 }
