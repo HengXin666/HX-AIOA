@@ -8,7 +8,7 @@ import { chats } from "../../core/chats";
 import { CLOUD_AGENT_LABEL } from "../../core/constants";
 import { buildPulse, lifetime, streakOf, type PulseSpan } from "../../core/pulse";
 import { useActivity } from "../shell/activity";
-import { Feat, Quiet, Section } from "./parts";
+import { Feat, Quiet, Section, TONE } from "./parts";
 
 const HUNDRED = 100;
 const CHART_H = 220;
@@ -51,6 +51,7 @@ export function Pulse({ className }: { className?: string }) {
     <Section
       title="活跃"
       icon={<Activity />}
+      tone="primary"
       className={className}
       hint={`我和${CLOUD_AGENT_LABEL}发出的消息${data?.peak ? `, 峰值 ${data.peak.label} 有 ${data.peak.count} 条` : ""}`}
       action={
@@ -75,20 +76,20 @@ export function Pulse({ className }: { className?: string }) {
           data={data.rows}
           x="label"
           series={[
-            { key: "mine", label: `我 ${data.mine}` },
-            { key: "agent", label: `${CLOUD_AGENT_LABEL} ${data.agent}` },
+            { key: "mine", label: `我 ${data.mine}`, color: TONE.primary },
+            { key: "agent", label: `${CLOUD_AGENT_LABEL} ${data.agent}`, color: TONE.amber },
           ]}
           stacked
           height={CHART_H}
         />
       )}
       <div className="grid grid-cols-4 gap-4 border-y py-3">
-        <Feat value={life ? streakOf(life.perDay) : null} label="天连续活跃" />
-        <Feat value={busiest} label="条最忙一天" />
-        <Feat value={life?.total ?? null} label="条最近消息" />
-        <Feat value={life ? (life.total ? Math.round((life.agent * HUNDRED) / life.total) : 0) : null} label={`% 由${CLOUD_AGENT_LABEL}发出`} />
+        <Feat value={life ? streakOf(life.perDay) : null} label="天连续活跃" color={TONE.green} />
+        <Feat value={busiest} label="条最忙一天" color={TONE.teal} />
+        <Feat value={life?.total ?? null} label="条最近消息" color={TONE.primary} />
+        <Feat value={life ? (life.total ? Math.round((life.agent * HUNDRED) / life.total) : 0) : null} label={`% 由${CLOUD_AGENT_LABEL}发出`} color={TONE.amber} />
       </div>
-      {events ? <HeatCalendar values={heat} weeks={HEAT_WEEKS} unit="条" label="每天的消息数" className="w-full" /> : <Skeleton className="h-[120px] w-full rounded-lg" />}
+      {events ? <HeatCalendar values={heat} weeks={HEAT_WEEKS} unit="条" label="每天的消息数" color={TONE.primary} className="w-full" /> : <Skeleton className="h-[120px] w-full rounded-lg" />}
     </Section>
   );
 }

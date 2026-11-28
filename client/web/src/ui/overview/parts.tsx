@@ -5,9 +5,13 @@ import type { ReactNode } from "react";
 
 // 总览的公共件 (对照安卓 kit: Panel, SectionTitle, Ring, Meter, CountUp)
 
+// 配色对照安卓 chartPalette (#142): 主色 info, 第二系列 chart4 (品红), 青 / 琥珀 / 绿 = chart2 / chart3 / chart5
 export const TONE = {
   primary: "var(--info)",
-  accent: "var(--chart-2)",
+  accent: "var(--chart-4)",
+  teal: "var(--chart-2)",
+  amber: "var(--chart-3)",
+  green: "var(--chart-5)",
   success: "var(--success)",
   warning: "var(--warning)",
   danger: "var(--destructive)",
@@ -15,6 +19,9 @@ export const TONE = {
   muted: "var(--muted-foreground)",
 } as const;
 export type Tone = keyof typeof TONE;
+/** 多个对象 (群, 主机, Agent) 按序取色: 蓝, 琥珀, 青, 品红, 绿, 冷暖交替 */
+export const SERIES = [TONE.primary, TONE.amber, TONE.teal, TONE.accent, TONE.green] as const;
+export const seriesOf = (i: number): string => SERIES[i % SERIES.length]!;
 
 // 颜色的淡底: 图标方块, 指标块, 选中行都用它
 export const tint = (color: string, pct = 14) => `color-mix(in oklab, ${color} ${pct}%, transparent)`;
@@ -42,8 +49,10 @@ export function Section({
   return (
     <Card className={`h-full min-w-0 gap-4 py-5 ${className ?? ""}`}>
       <CardHeader className="px-5">
-        <CardTitle className="flex items-center gap-2 text-sm [&>svg]:size-4 [&>svg]:text-muted-foreground">
-          {icon}
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <span className="grid size-6 place-items-center rounded-md [&>svg]:size-3.5" style={{ color: TONE[tone], background: tint(TONE[tone]) }}>
+            {icon}
+          </span>
           {title}
           {count !== undefined && count > 0 && <span className={`text-xs font-normal tabular-nums ${tone === "danger" ? "text-destructive" : "text-muted-foreground"}`}>{count}</span>}
         </CardTitle>
@@ -73,11 +82,14 @@ export function Quiet({ icon, children, tone = "muted" }: { icon?: ReactNode; ch
 }
 
 /** 一项事实数据: 数字在上, 说明在下, 不上色。 */
-export function Feat({ value, label }: { value: ReactNode; label: string; color?: string }) {
+export function Feat({ value, label, color }: { value: ReactNode; label: string; color?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-lg font-semibold tabular-nums">{value ?? "-"}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span aria-hidden className="size-1.5 rounded-full" style={{ background: color ?? "var(--muted-foreground)" }} />
+        {label}
+      </span>
     </div>
   );
 }

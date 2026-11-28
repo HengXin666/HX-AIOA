@@ -25,7 +25,7 @@ export function EventSheet({ row, onClose }: { row: Row | null; onClose: () => v
           <>
             <SheetHeader className="gap-2">
               <Badge variant="outline" className="self-start" style={{ color: TONE[r.tone], background: tint(TONE[r.tone], 10) }}>
-                {TONE_LABEL[r.tone]}
+                {TONE_LABEL[r.tone as keyof typeof TONE_LABEL] ?? "动态"}
               </Badge>
               <SheetTitle className="text-lg leading-snug">{r.title}</SheetTitle>
               <SheetDescription>

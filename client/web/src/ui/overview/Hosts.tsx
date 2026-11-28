@@ -8,11 +8,11 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useResources, useVisible } from "../../app/hooks";
 import { href, link } from "../../app/router";
 import { resources } from "../../core/resources";
-import { Meter, Quiet, Section, TONE } from "./parts";
+import { Meter, Quiet, Section, SERIES, TONE } from "./parts";
 
 const SHOWN = 3;
 const TREND = 30;
-const TONES = ["var(--foreground)"];
+const TONES = SERIES;
 const STEP_DELAY = 0.12;
 
 // 资源 (对照安卓 OverviewV2.Hosts): 每台主机一块, 分段负载条 + CPU 走势; 只在总览看得见时 watch 前几台

@@ -6,7 +6,7 @@ import { link, nav } from "../../app/router";
 import { chats, titleOf } from "../../core/chats";
 import { CLOUD_AGENT_LABEL } from "../../core/constants";
 import { shortTime } from "../ChatList";
-import { Panel, TONE } from "./parts";
+import { Panel, TONE, seriesOf, tint } from "./parts";
 
 const SHOWN = 8;
 const MINUTE = 60_000;
@@ -37,8 +37,8 @@ export function Agents() {
       }
     >
       <div className="@container grid grid-cols-1 gap-x-4 @lg:grid-cols-2">
-        {rows.slice(0, SHOWN).map(({ m, a, s }) => (
-          <Row key={a.keyId} meta={m} a={a} s={s} />
+        {rows.slice(0, SHOWN).map(({ m, a, s }, i) => (
+          <Row key={a.keyId} meta={m} a={a} s={s} tone={seriesOf(i)} />
         ))}
       </div>
       {list.length > SHOWN && <p className="px-2 pt-1 text-xs text-muted-foreground">另有 {list.length - SHOWN} 个, 在各自的群里</p>}
@@ -61,10 +61,13 @@ function until(ms: number): string {
   return `${Math.round(ms / HOUR)} 小时`;
 }
 
-function Row({ meta, a, s }: { meta: ChatMeta; a: ChatAgent; s: Status }) {
+function Row({ meta, a, s, tone }: { meta: ChatMeta; a: ChatAgent; s: Status; tone: string }) {
   return (
     <button type="button" onClick={() => nav("chat", meta.channel)} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/70">
-      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: s.color }} />
+      <span aria-hidden className="relative grid size-8 shrink-0 place-items-center rounded-lg [&>svg]:size-4" style={{ color: tone, background: tint(tone) }}>
+        <Bot />
+        <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-card" style={{ background: s.color }} />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="truncate text-[13px] font-medium text-foreground">{a.name}</span>
