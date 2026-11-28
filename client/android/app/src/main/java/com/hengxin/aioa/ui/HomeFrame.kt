@@ -89,13 +89,19 @@ fun HomeFrame(
     val unread by remember { derivedStateOf { rows.sumOf { if (it.muted) 0 else it.unread } } }
     // 一级页面: 总览, 消息, 工作区 (agent harness), 开发, 服务器, 插件空间; 顶部标签与侧栏 "空间" 列同一份 (#121)
     // 置顶最多 5 个 (#139): 标签只放置顶的, 其余在侧栏 "更多空间" 与标题下的切换里
-    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons)
-    val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces)
+    // 网盘 (#154): 本机没记过 (或不可用已过一天) 时连上问一次通行证, 能换到 (主人且服务端接入了 Drive) 才出现
+    val context = LocalContext.current
+    com.hengxin.aioa.ui.drive.DriveGate.load(context)
+    val drive = com.hengxin.aioa.ui.drive.DriveGate.on == true
+    androidx.compose.runtime.LaunchedEffect(chat.online) {
+        if (chat.online) com.hengxin.aioa.ui.drive.DriveGate.maybeProbe(context.applicationContext)
+    }
+    val spaces = homeTabs(chat.spaces.spaces, unread, chat.spaces.tabOrder, pins = chat.spaces.pins(), icons = chat.spaces.tabs.icons, drive = drive)
+    val selected = homeSelected(tab, chat.spaces.board, chat.spaces.spaces, drive)
     val board: (String) -> Unit = { key ->
         chat.spaces.board = key
         if (tab != Tab.OVERVIEW) onTab(Tab.OVERVIEW)
     }
-    val context = LocalContext.current
     // 换服务端要重连, 连接状态一变就重读 (#139: 以前没带 key, 换了服务端侧栏还是旧地址)
     val server = remember(chat.online) { ConfigStore.load(context)?.server?.substringAfter("://")?.trimEnd('/').orEmpty() }
     // 侧栏账号头用账号的头像 (#139 #142): 连上时 welcome 帧带来 user.avatar (成员列表读的同一个), 没有再用旧设置里的;
@@ -169,6 +175,7 @@ fun HomeFrame(
             // GitHub 入口跟着 GitHub 插件 (hengxin666.github) 是否启用 (#139), 停用了不再点进空页
             listOfNotNull(SideLink(KEY_FAV, "收藏", "star"), SideLink(KEY_GITHUB, "GitHub", "github").takeIf { chat.github.enabled },
                 SideLink(KEY_HXOA, "hxoa", com.hengxin.aioa.ui.hxoa.HXOA_ICON).takeIf { com.hengxin.aioa.ui.hxoa.HxoaGate.on == true },
+                SideLink(BOARD_DRIVE, "网盘", "hard-drive").takeIf { drive },
             ),
             spaces,
             recents,
@@ -182,7 +189,7 @@ fun HomeFrame(
     }) {
         Column(Modifier.fillMaxSize()) {
             if (bars) {
-                val title = if (tab == Tab.OVERVIEW) boardTitle(chat.spaces.board, chat.spaces.spaces) else tab.label
+                val title = if (tab == Tab.OVERVIEW) boardTitle(chat.spaces.board, chat.spaces.spaces, drive) else tab.label
                 HomeTopBar(title, switcher, { scope.launch { shell.open() } }, { switcher = !switcher }, menu, { menu = !menu }, dot = unread > 0)
                 SpaceTabs(spaces.filter { it.pinned }, selected, pick)
             }

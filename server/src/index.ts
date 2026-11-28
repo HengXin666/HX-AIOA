@@ -4,6 +4,7 @@ import { HUB_NAME } from "./constants";
 import type { Env } from "./env";
 import { json, preflight } from "./http";
 import { fileData } from "./files/data";
+import { driveWorker } from "./drive/worker";
 import { cleanupTempMail, MAIL_CLEANUP_CRON } from "./mail-cleanup";
 import { handleEmail } from "./mail/email";
 
@@ -17,6 +18,8 @@ export default {
     if (url.pathname === HEALTH_PATH) return json({ ok: true, v: PROTOCOL_VERSION });
     const file = await fileData(req, env, url);
     if (file) return file;
+    const drive = await driveWorker(req, env, url);
+    if (drive) return drive;
     // 内部转发头只能由主 Hub 加, 外部传入的一律剥掉
     const headers = new Headers(req.headers);
     headers.delete(HEADER_INTERNAL_USER);

@@ -173,6 +173,8 @@ fun ChatScreen(model: ChatModel) {
         admin = meta?.canManage == true,
         look = { m -> SenderLook(roles[m.sid], m.sid in agentSids || com.hengxin.aioa.ui.chat.Names.isAgent(m.sid), faces[m.sid]) },
         atNames = atNames,
+        // 网盘可用时文件消息长按多一项 "存到网盘" (#154)
+        onSaveDrive = if (com.hengxin.aioa.ui.drive.DriveGate.on == true) { m -> m.file?.let { f -> com.hengxin.aioa.ui.drive.DriveTransfers.ui.launch { com.hengxin.aioa.ui.drive.saveChatFile(context, f) } } } else null,
     )
     CompositionLocalProvider(com.hengxin.aioa.ui.feed.LocalFeedTags provides (meta?.tags ?: com.hengxin.aioa.ui.feed.DEFAULT_TAGS)) { Column(Modifier.fillMaxSize().imePadding()) {
         if (picking.on) SubBar("已选 ${picking.seqs?.size ?: 0} 条", "", { picking.stop() }, right = null, back = "x")

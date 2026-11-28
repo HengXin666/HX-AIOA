@@ -130,6 +130,10 @@ class ChatModel(app: Application) : AndroidViewModel(app), LinkSocket.Listener {
         socket.restart()
     }
 
+    /** 发一条带附件的消息 (网盘文件发到群, #154); channel 为空是备忘。 */
+    fun sendFileRef(channel: String?, text: String, fileId: String): Boolean =
+        socket.send(Frames.send(UUID.randomUUID().toString(), text, channel, file = fileId))
+
     fun send(text: String): Boolean {
         val body = text.trim()
         if (body.isEmpty()) return false

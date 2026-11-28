@@ -98,6 +98,17 @@ jobs:
           fi
           printf '%s' "$AIOA_CFD_TOKEN" | npx wrangler secret put CFD_TOKEN
 
+      # 可选: 配置了 CFD_DRIVE_TOKEN (Drive 整盘令牌, 根目录 /) 时同步, 网盘 (#154) 才能看整个盘; 不配时网盘只看 /aioa
+      - name: 同步网盘 Drive 令牌
+        env:
+          AIOA_CFD_DRIVE_TOKEN: ${{ secrets.CFD_DRIVE_TOKEN }}
+        run: |
+          if [ -z "$AIOA_CFD_DRIVE_TOKEN" ]; then
+            echo "未配置 CFD_DRIVE_TOKEN secret, 跳过, 网盘退回 CFD_TOKEN 只看 /aioa"
+            exit 0
+          fi
+          printf '%s' "$AIOA_CFD_DRIVE_TOKEN" | npx wrangler secret put CFD_DRIVE_TOKEN
+
       # 可选: 仅当配置了 AUTH_TOKEN secret 时, 才同步 Worker 运行时密钥 (if 中不能引用 secrets, 改在脚本里判断)
       - name: 同步运行时密钥
         env:

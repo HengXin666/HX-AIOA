@@ -23,6 +23,11 @@
       {"id": "ov-todo", "t": "block", "label": "重点待办", "sub": "#120", "rt": "live", "kids": [
         {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "看板 (状态列) / 分区 / 截止 / 日期 / 仓库 · 筛选 (#152)", "rt": "live"}
       ]},
+      {"id": "ov-drive", "t": "block", "label": "网盘", "sub": "内置空间, 默认不置顶, 在更多空间与侧栏 (#154): 目录 / 搜索 / 上传 / 预览", "rt": "near", "kids": [
+        {"id": "ov-drive-act", "t": "sheet", "label": "文件操作", "sub": "预览 · 分享 · 发到群 · 改名 · 移动 · 删除", "rt": "static"},
+        {"id": "ov-drive-trash", "t": "page", "label": "回收站", "sub": "恢复 · 彻底删除 · 清空", "rt": "static"},
+        {"id": "ov-drive-shares", "t": "page", "label": "我的分享", "sub": "复制 · 撤销", "rt": "static"}
+      ]},
       {"id": "ov-server", "t": "block", "label": "服务器 / 设备", "sub": "在线 · 负载", "rt": "live", "kids": [
         {"id": "ov-go-res", "t": "go", "to": "resources", "label": "资源栏"}
       ]},
