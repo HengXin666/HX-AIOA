@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 
 // 树形列表 (带缩进的表格) 的连线: 每层一根竖线, 子项用圆角拐角连到自己的勾选框, 展开的父项往下引一根线
 
+private val GUIDE_STROKE = 1.5.dp
+
 /** 树形列表里一行的位置: 从第 1 层到自己, 每一层 "是不是兄弟里的最后一个"; 根为空表。 */
 typealias TreePath = List<Boolean>
 
@@ -28,7 +30,7 @@ fun Modifier.treeGuides(
     top: Dp = 9.dp,
 ): Modifier = drawBehind {
     val d = lasts.size
-    val w = 1.dp.toPx()
+    val w = GUIDE_STROKE.toPx()
     fun cx(level: Int) = (start + indent * level + marker / 2).toPx()
     val mid = (top + marker / 2).toPx()
     for (k in 0 until d - 1) if (!lasts[k]) drawLine(color, Offset(cx(k), 0f), Offset(cx(k), size.height), w)

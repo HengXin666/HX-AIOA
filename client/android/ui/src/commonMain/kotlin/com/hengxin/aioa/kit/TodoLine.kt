@@ -35,7 +35,8 @@ private const val MARK = 18
 private const val BAR_W = 28
 private const val START = 12
 private const val PRIO_URGENT = 1
-private const val GUIDE_ALPHA = 0.5f
+// 连线要一眼看得出层级 (#152), 比正文淡但不能淡到看不见
+private const val GUIDE_ALPHA = 0.8f
 private const val TAG_ALPHA = 0.12f
 private const val MARK_SP = 11
 private val PILL = RoundedCornerShape(50)
@@ -70,12 +71,13 @@ fun todoCountdown(due: Long, now: Long): Pair<String, Boolean> {
     return (if (left >= 0) "还剩 $span" else "逾期 $span") to (left < DAY_MS)
 }
 
-/** 父项的子项进度; shut 为已折叠。 */
-data class TodoFold(val done: Int, val total: Int, val shut: Boolean, val toggle: () -> Unit)
+/** 父项的子项进度; shut 为已折叠; canFold 为 false 时子项都没显示 (被筛掉或在别的列), 只画进度不画折叠箭头。 */
+data class TodoFold(val done: Int, val total: Int, val shut: Boolean, val canFold: Boolean = true, val toggle: () -> Unit)
 
 /**
  * 一行待办。lasts 为层级路径 (见 [TreePath]), fold 非空时这一行是父项 (左边是折叠箭头, 右边是进度条)。
  * showRepo / showArea 为在标注里写仓库 / 分区 (按仓库或分区分组时不必重复)。
+ * above 为上级标题: 父项不在同一视图时 (看板别的列, 被筛掉, 重点待办) 在标题下标出, 层级不丢 (#152)。
  */
 @Composable
 fun TodoLine(
@@ -88,11 +90,12 @@ fun TodoLine(
     fold: TodoFold? = null,
     showRepo: Boolean = false,
     showArea: Boolean = false,
+    above: String? = null,
 ) {
     val c = Aioa.colors
     val depth = lasts.size
     val inset = (START + depth * INDENT).dp
-    val open = fold != null && !fold.shut
+    val open = fold != null && fold.canFold && !fold.shut
     Column(modifier.fillMaxWidth().treeGuides(lasts, open, c.textSecondary.copy(alpha = GUIDE_ALPHA), START.dp, INDENT.dp, MARK.dp, (ROW_PAD + 0.5f).dp)) {
         Box(Modifier.fillMaxWidth().padding(start = inset).height(0.5.dp).background(c.border))
         Row(
@@ -100,7 +103,7 @@ fun TodoLine(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (fold != null) {
+            if (fold != null && fold.canFold) {
                 Box(Modifier.size(MARK.dp).clip(MARK_SHAPE).clickable(onClick = fold.toggle), contentAlignment = Alignment.Center) {
                     Icon(if (fold.shut) "chevron-right" else "chevron-down", c.textSecondary, 15.dp)
                 }
@@ -110,21 +113,35 @@ fun TodoLine(
                 }
             }
             row.issue?.let { Icon(if (row.ghOpen == false) "circle-check" else "circle-dot", if (row.ghOpen == false) DONE_PURPLE else c.success, 14.dp) }
-            BasicText(
-                row.title,
-                Modifier.weight(1f),
-                style = TextStyle(
-                    color = if (row.finished) c.textSecondary else c.text,
-                    fontSize = 14.sp,
-                    fontWeight = if (fold != null) FontWeight.SemiBold else FontWeight.Normal,
-                    textDecoration = if (row.finished) TextDecoration.LineThrough else null,
-                ),
-                overflow = TextOverflow.Ellipsis,
-                // 标题至少两行 (#139), 一行化后长标题只剩半句
-                maxLines = TITLE_LINES,
-            )
+            Column(Modifier.weight(1f)) {
+                BasicText(
+                    row.title,
+                    Modifier.fillMaxWidth(),
+                    style = TextStyle(
+                        color = if (row.finished) c.textSecondary else c.text,
+                        fontSize = 14.sp,
+                        fontWeight = if (fold != null) FontWeight.SemiBold else FontWeight.Normal,
+                        textDecoration = if (row.finished) TextDecoration.LineThrough else null,
+                    ),
+                    overflow = TextOverflow.Ellipsis,
+                    // 标题至少两行 (#139), 一行化后长标题只剩半句
+                    maxLines = TITLE_LINES,
+                )
+                above?.let { AboveHint(it) }
+            }
             TodoMarks(row, now, fold, showRepo, showArea)
         }
+    }
+}
+
+/** 标题下的一行小字: 拐角箭头 + 上级标题。 */
+@Composable
+private fun AboveHint(title: String) {
+    val c = Aioa.colors
+    Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon("corner-down-right", c.textSecondary, 11.dp)
+        Spacer(Modifier.width(3.dp))
+        BasicText(title, style = TextStyle(color = c.textSecondary, fontSize = MARK_SP.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

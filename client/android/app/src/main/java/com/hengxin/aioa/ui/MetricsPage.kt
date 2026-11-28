@@ -34,9 +34,9 @@ private const val CPU_ALERT = 90f
 
 private enum class MetricTile { CPU, MEM, LOAD, TEMP }
 
-/** 服务器页 (资源页): GitHub, CF 额度, 添加主机与在线探针; 可见时 watch 两者用到的主体, 离开即取消, 服务端随之让探针停推。 */
+/** 服务器页 (资源页): CF 额度, 添加主机与在线探针 (GitHub 只在开发页, #152); 可见时 watch 两者用到的主体, 离开即取消, 服务端随之让探针停推。 */
 @Composable
-fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
+fun MetricsPage(chat: ChatModel) {
     val state = chat.metrics
     val spaces = chat.spaces
     val current = spaces.spaces.firstOrNull { it.id == spaces.currentId } ?: spaces.spaces.firstOrNull()
@@ -53,7 +53,6 @@ fun MetricsPage(chat: ChatModel, openGithub: () -> Unit) {
     }
     session?.let { (s, ticket) -> TerminalDialog(chat.terms, s, ticket) { session = null } }
     PageColumn(Tab.RESOURCES.label) {
-        if (chat.github.enabled) Card { SettingRow(ICON_GITHUB, GITHUB_TITLE, chat.github.repos.size.takeIf { it > 0 }?.let { "$it 个仓库" }.orEmpty(), openGithub) }
         CfUsageCard()
         val carded = state.hosts.map { it.subject }.toSet()
         Card { SettingRow("server", "添加主机", "一行命令安装探针", { adding = true }) }

@@ -19,9 +19,9 @@
           {"id": "ov-go-chat", "t": "go", "to": "chat", "label": "消息 · 定位到条", "sub": "返回: 群列表 → 总览"}
         ]}
       ]},
-      {"id": "ov-board", "t": "block", "label": "看板切换", "sub": "新外壳: 顶部标签与侧栏 \"空间\" 直接列 开发 / 服务器 / 各插件空间 (点子待办, HX OA), 点标题也能切 (#121 #138); 旧外壳: 小 Chip", "rt": "live"},
+      {"id": "ov-board", "t": "block", "label": "看板切换", "sub": "新外壳: 顶部标签与侧栏 \"空间\" 直接列 开发 / 服务器 / 各插件空间 (点子待办, HX OA), 点标题也能切 (#121 #138); 只放待办组件的空间整页就是待办看板 (#152); 旧外壳: 小 Chip", "rt": "live"},
       {"id": "ov-todo", "t": "block", "label": "重点待办", "sub": "#120", "rt": "live", "kids": [
-        {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "按仓库 / 按日期 · 筛选", "rt": "live"}
+        {"id": "ov-todoboard", "t": "sheet", "label": "待办看板", "sub": "看板 (状态列) / 分区 / 截止 / 日期 / 仓库 · 筛选 (#152)", "rt": "live"}
       ]},
       {"id": "ov-server", "t": "block", "label": "服务器 / 设备", "sub": "在线 · 负载", "rt": "live", "kids": [
         {"id": "ov-go-res", "t": "go", "to": "resources", "label": "资源栏"}
@@ -107,9 +107,6 @@
           ]}
         ]},
         {"id": "hx-join", "t": "dialog", "label": "接入 hxoa", "sub": "地址 · 管理令牌", "rt": "static"}
-      ]},
-      {"id": "rs-gh", "t": "block", "label": "GitHub 入口", "rt": "near", "kids": [
-        {"id": "rs-go-gh", "t": "go", "to": "overview", "label": "GitHub 叠层 (同总览)", "sub": "返回回资源"}
       ]}
     ]},
     {"id": "me", "label": "我的", "icon": "user", "rt": "static", "kids": [

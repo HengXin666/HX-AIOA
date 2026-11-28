@@ -41,9 +41,10 @@ internal fun NodeRows(n: TodoNode, depth: Int, closed: Set<String>, toggle: (Str
     val r = n.row
     val key = "n:${r.channel}:${r.id}"
     val shut = key in closed
-    val fold = if (n.kids.isNotEmpty()) TodoFold(n.done, n.total, shut) { toggle(key) } else null
-    TodoLine(r, LocalNow.current, { open(r) }, { tick(r) }, lasts = lasts, fold = fold, showRepo = showRepo, showArea = showArea)
-    if (fold != null && !shut) n.kids.forEachIndexed { i, k -> NodeRows(k, depth + 1, closed, toggle, open, showRepo, showArea, lasts + (i == n.kids.lastIndex), tick) }
+    // 子项都没显示 (藏了已完成, 在别的列) 也画进度 (#152), 只是不能折叠
+    val fold = if (n.total > 0) TodoFold(n.done, n.total, shut, canFold = n.kids.isNotEmpty()) { toggle(key) } else null
+    TodoLine(r, LocalNow.current, { open(r) }, { tick(r) }, lasts = lasts, fold = fold, showRepo = showRepo, showArea = showArea, above = n.above?.title)
+    if (!shut) n.kids.forEachIndexed { i, k -> NodeRows(k, depth + 1, closed, toggle, open, showRepo, showArea, lasts + (i == n.kids.lastIndex), tick) }
 }
 
 @Composable

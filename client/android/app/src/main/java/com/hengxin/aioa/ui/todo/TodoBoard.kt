@@ -53,7 +53,8 @@ private val CARD = RoundedCornerShape(14.dp)
 private val PILL = RoundedCornerShape(50)
 
 /**
- * 待办看板 (群里的 "待办" 页与总览全屏看板同一个): 分区 / 截止 / 日期 / 仓库 四个维度, 父子树可折叠, 默认藏已完成。
+ * 待办看板 (点子待办空间整页, 群里的 "待办" 页, 总览全屏看板同一个, #152): 看板 (按状态分列) 与 分区 / 截止 / 日期 / 仓库 四种列表,
+ * 父子树可折叠, 父项显示全部子孙进度, 默认藏已完成。
  * channel 为 null 时看本账号全部群的待办; 群里可在 "本群 / 全部" 间切换。右下角新建 (生活事务不必经过群)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,7 +80,9 @@ fun TodoBoard(spaces: SpacesState, channel: String?, onJump: (String, Long) -> U
     val shown = remember(rows, filter) { rows.orEmpty().filter(filter::keep) }
     val now = rememberNow()
     // 截止分桶 (今天 / 明天) 跟着时间走
-    val secs = remember(shown, axis, now) { sections(shown, axis) }
+    val all = rows.orEmpty()
+    val secs = remember(shown, axis, now) { if (axis == TodoAxis.STATE) emptyList() else sections(shown, axis, all) }
+    val cols = remember(shown, axis) { if (axis == TodoAxis.STATE) stateColumns(shown, all) else emptyList() }
     val toggle = { k: String -> closed = if (k in closed) closed - k else closed + k }
     Box(modifier.background(c.background)) {
         Column(Modifier.fillMaxSize()) {
@@ -88,10 +91,15 @@ fun TodoBoard(spaces: SpacesState, channel: String?, onJump: (String, Long) -> U
             FilterBar(filter, { sheet = true }, { filter = filter.copy(onlyStar = !filter.onlyStar) }) { filter = filter.copy(showDone = !filter.showDone) }
             PullToRefreshBox(refreshing, { refreshing = true; spaces.syncTodos(channel ?: rows?.firstOrNull()?.channel ?: DEFAULT_TODO_GROUP) { refreshing = false } }, Modifier.fillMaxSize()) {
                 if (rows == null) return@PullToRefreshBox Empty("加载中...")
+                val pick = { r: TodoRow -> picked = r.channel to r.id }
+                val tick = { r: TodoRow -> spaces.setTodo(r.channel, r, !r.finished) }
+                if (axis == TodoAxis.STATE && rows.isNotEmpty()) return@PullToRefreshBox CompositionLocalProvider(LocalNow provides now) {
+                    TodoKanban(cols, closed, toggle, everywhere, pick, tick)
+                }
                 if (secs.isEmpty()) return@PullToRefreshBox Empty(if (rows.isEmpty()) "还没有待办, 点右下角新建, 或在群里丢个想法" else "筛选后没有待办")
                 CompositionLocalProvider(LocalNow provides now) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = PAD.dp, end = PAD.dp, bottom = 88.dp)) {
-                        for (s in secs) section(s, closed, toggle, everywhere, { picked = it.channel to it.id }) { r -> spaces.setTodo(r.channel, r, !r.finished) }
+                        for (s in secs) section(s, closed, toggle, everywhere, pick, tick)
                     }
                 }
             }

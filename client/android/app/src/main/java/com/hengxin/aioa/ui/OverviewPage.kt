@@ -31,6 +31,8 @@ import com.hengxin.aioa.kit.Tone
 import com.hengxin.aioa.link.LinkLog
 import java.util.Calendar
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -69,13 +71,15 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
         if (mail != null) com.hengxin.aioa.ui.chat.MailPeek(mail, mails) { detail = null }
         else EventSheet(ev, { detail = null }) { detail = null; chat.groups.openAt(ev.toMsg().groupKey(), ev.seq) }
     }
+    // 待办空间整页是看板 (#152): 看板自己管滚动, 不放进可滚动的卡片列
+    if (picked != null && isTodoSpace(picked)) return Column(Modifier.fillMaxSize()) {
+        if (!LocalShellBar.current) BoardChips(chat, spaces, board, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        com.hengxin.aioa.ui.todo.TodoBoard(chat.spaces, null, { ch, seq -> chat.groups.openAt(ch, seq) }, Modifier.weight(1f))
+    }
     PageColumn("总览") {
         if (!feed.v1) Status(chat.online, chat.metrics.probes.size, feed.v1)
         // 新外壳里看板在顶栏标题的空间切换里选 (#138), 这排 Chip 只留给旧外壳与平板
-        if (!LocalShellBar.current) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            BOARDS.forEach { (id, label) -> Chip(label, board == id) { chat.spaces.board = id } }
-            spaces.forEach { s -> Chip(s.title, board == s.id) { chat.spaces.board = s.id } }
-        }
+        if (!LocalShellBar.current) BoardChips(chat, spaces, board)
         when {
             picked != null -> SpacesSection(chat, picked.id)
             board == BOARD_DEV -> DevBoard(chat, openGithub, open)
@@ -86,6 +90,13 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
     }
 }
 
+@Composable
+private fun BoardChips(chat: ChatModel, spaces: List<com.hengxin.aioa.kit.Space>, board: String, modifier: Modifier = Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        BOARDS.forEach { (id, label) -> Chip(label, board == id) { chat.spaces.board = id } }
+        spaces.forEach { s -> Chip(s.title, board == s.id) { chat.spaces.board = s.id } }
+    }
+}
 
 private fun findEvent(feed: FeedState, id: String): Envelope? = feed.layers.values.flatten().firstOrNull { it.ev.id == id }?.ev
 

@@ -105,7 +105,7 @@ fun Shell(chat: ChatModel, settings: () -> SettingsModel, actions: SystemActions
                 Tab.OVERVIEW -> OverviewPage(chat, openGithub) { nav = nav.go(it) }
                 Tab.CHAT -> ChatScreen(chat)
                 Tab.AGENT -> AgentPage(chat)
-                Tab.RESOURCES -> MetricsPage(chat, openGithub)
+                Tab.RESOURCES -> MetricsPage(chat)
                 // "我的" 的子页自己处理返回键, 逐级回到列表
                 Tab.ME -> MeHost(MeDeps(chat, settings, actions, prefs, setPrefs, onNotes) { nav = nav.go(Tab.RESOURCES) }, meStart, if (meFromGithub) {
                     {

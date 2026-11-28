@@ -54,7 +54,7 @@ fun TodoCompact(spaces: SpacesState, limit: Int, onJump: (String, Long) -> Unit)
     var board by rememberSaveable { mutableStateOf(false) }
     val ui = rememberTodoUi(spaces, rows, onJump)
     val areas = remember(rows) { rows.filter { !it.finished }.map { it.areaKey }.distinct() }
-    val open = remember(rows, area) { forest(rows.filter { !it.finished && (area == ALL || it.areaKey == area) }) }
+    val open = remember(rows, area) { forest(rows.filter { !it.finished && (area == ALL || it.areaKey == area) }, rows) }
     val toggle = { k: String -> closed = if (k in closed) closed - k else closed + k }
     CompositionLocalProvider(LocalNow provides rememberNow()) { Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -76,12 +76,12 @@ fun TodoCompact(spaces: SpacesState, limit: Int, onJump: (String, Long) -> Unit)
 fun TodoFocus(spaces: SpacesState, onJump: (String, Long) -> Unit) {
     val rows = spaces.allTodos() ?: return
     val now = rememberNow()
-    val focus = remember(rows, now) { focusRows(rows, now) }
+    val focus = remember(rows, now) { focusNodes(rows, now) }
     var board by rememberSaveable { mutableStateOf(false) }
     val ui = rememberTodoUi(spaces, rows, onJump)
     if (focus.isNotEmpty()) CompositionLocalProvider(LocalNow provides now) { Card(onClick = { board = true }) {
         CardHeader("list-checks", "重点待办", "${focus.size} 条")
-        focus.take(FOCUS_LIMIT).forEach { NodeRows(TodoNode(it, emptyList()), 0, emptySet(), {}, ui.open, showRepo = true, showArea = true, tick = ui.tick) }
+        focus.take(FOCUS_LIMIT).forEach { NodeRows(it, 0, emptySet(), {}, ui.open, showRepo = true, showArea = true, tick = ui.tick) }
         if (focus.size > FOCUS_LIMIT) KitText("还有 ${focus.size - FOCUS_LIMIT} 条, 点开看板", Aioa.colors.textSecondary, 12, Modifier.padding(start = 12.dp, top = 4.dp))
         if (!board) UndoBar(spaces, Modifier.padding(top = 8.dp))
     } }

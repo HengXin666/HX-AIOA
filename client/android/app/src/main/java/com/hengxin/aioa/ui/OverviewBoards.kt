@@ -1,6 +1,7 @@
 package com.hengxin.aioa.ui
 
 import com.hengxin.aioa.kit.HomeSpace
+import com.hengxin.aioa.kit.ItemType
 import com.hengxin.aioa.kit.Space
 
 // 总览的看板: 日常 / 开发 / 服务器 / 插件空间 (#138); 新外壳是顶部标签与侧栏 "空间", 旧外壳在总览顶上的小 Chip 里选
@@ -16,6 +17,13 @@ fun pluginSpaces(spaces: List<Space>): List<HomeSpace> = spaces.filter { !it.lay
 
 // 用户自选的图标 (#142, state.icon) 优先, 其次插件声明的
 private fun pluginTab(s: Space) = HomeSpace(s.id, s.title, s.layout.icon ?: s.icon ?: SPACE_ICON, plugin = s.origin ?: s.id, tab = s.tab)
+
+/**
+ * 只放待办组件的空间 (点子待办这类, #152): 整页直接是待办看板, 不再套一层卡片面板。
+ * 按组件类型认, 不认插件 id, 换源或别的插件声明同样的布局也一样。
+ */
+fun isTodoSpace(s: Space): Boolean =
+    s.panels.isNotEmpty() && s.panels.all { p -> p.items.isNotEmpty() && p.items.all { it.type == ItemType.TODO } }
 
 /** 标题下的空间切换: 总览 (日常), 开发, 服务器, 再接插件空间。 */
 fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
