@@ -61,7 +61,7 @@ fun AgentsSection(model: ChatModel, group: String, agents: List<ChatAgent>, open
     val listening = model.groups.presence.listening(group, now)
     var wizard by remember { mutableStateOf(false) }
     HomeSection(Constants.CLOUD_AGENT, agents.size, action = "接入", onAction = { wizard = true }) {
-        if (agents.isEmpty()) GiNote("接入后它就能往这个群发消息, 读你允许的群, 三步就好。")
+        if (agents.isEmpty()) GiNote("群 Agent 是你自己的 AI (本地的或云端定时跑的都行): 接入后它在这个群里收你的话, 干活, 引用回复结果。点 \"接入\", 写一句任务, 把生成的接入语发给它就好。")
         agents.forEachIndexed { i, a -> AgentLine(group, a, stateOf(a, a.keyId in listening), i, now) { openAgent(a.keyId) } }
     }
     if (wizard) AgentWizard(model, group) { wizard = false }

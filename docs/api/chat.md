@@ -31,8 +31,8 @@
 
 主人只定名字和可读的群, 不写提示词。服务端给一段接入语 (文档链接, 服务地址, 群, 任务, 密钥), 主人整段发给外部 Agent, 它按文档拉取专属指令, 存进长期指令并报到。
 
-- `POST /api/v1/chats/{channel}/agents` `{ name, reads: [channel] }` → `{ agent, prompt, key }`。服务端新建一个来源 (默认频道为本群) 和一把 key (`messages:send`, `events:write`, 有 `reads` 时加 `events:read`, 白名单为本群 + reads)。`prompt` 是一句接入语, 含明文 key, 只在这一次返回。
-- `POST .../agents/{keyId}/rotate` → `{ agent, prompt, key }`: 作废旧 key 发新 key, 来源与历史不变, 需要重新报到。插件 Agent 的接入语带插件的定时与任务, 插件记录的 keyId 同步更新。改名不变指令版本, 不用重新报到。
+- `POST /api/v1/chats/{channel}/agents` `{ name, reads: [channel], task? }` → `{ agent, prompt, key }`。`task` 是主人写的一句任务, 跟在触发语后面; 旧客户端带的 `interval` 忽略, 定时由 Agent 按核心 skill 自适应 (#161)。服务端新建一个来源 (默认频道为本群) 和一把 key (`messages:send`, `events:write`, 有 `reads` 时加 `events:read`, 白名单为本群 + reads)。`prompt` 是一句接入语, 含明文 key, 只在这一次返回。
+- `POST .../agents/{keyId}/rotate` → `{ agent, prompt, key }`: 作废旧 key 发新 key, 来源与历史不变, 需要重新报到。接入语不写定时间隔 (#161), 插件记录的 keyId 同步更新。改名不变指令版本, 不用重新报到。
 - `PATCH .../agents/{keyId}` `{ name, reads }`: key 不变; 指令内容变了就标 `pending`, 等 Agent 重新拉取报到。
 - `GET .../agents/{keyId}/prompt` → 当前下发给它的完整指令 (不含 key)。
 - `DELETE .../agents/{keyId}`: 删除来源并作废 key。

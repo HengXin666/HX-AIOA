@@ -15,11 +15,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Bot, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useChats, usePresence } from "../app/hooks";
-import { api, fill } from "../core/auth";
+import { api, currentUser, fill } from "../core/auth";
 import { chats, titleOf } from "../core/chats";
 import { TXT_LOAD_MORE, TXT_LOADING } from "../core/constants";
 import { shortTime } from "./ChatList";
 import { UserAvatar } from "./UserAvatar";
+import { AgentOnboard } from "./agent/AgentOnboard";
+import { TXT_AGENT_INTRO } from "./agent/onboard-text";
 
 const ROLE_TEXT = { owner: "群主", admin: "管理员", member: "" } as const;
 
@@ -77,7 +79,7 @@ function Inspector({ channel }: { channel: string }) {
       <Section title="群公告">
         <p className="whitespace-pre-wrap break-words text-sm text-foreground">{meta.notice || <span className="text-muted-foreground">暂无公告</span>}</p>
       </Section>
-      <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} />
+      <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} canAdd={currentUser()?.role === "owner" && meta.kind !== "dm"} />
       {room && <Members key={channel} channel={channel} />}
     </div>
   );
@@ -95,12 +97,20 @@ function Section({ title, children, extra }: { title: string; children: ReactNod
   );
 }
 
-// 主人视图有完整的 Agent 资料; 子号只能从 presence 看到谁在听
-function Agents({ meta, listening, names }: { meta: ChatMeta; listening: Set<string>; names: string[] }) {
+// 主人视图有完整的 Agent 资料; 子号只能从 presence 看到谁在听; 主人可以在这里接入 (#161)
+function Agents({ meta, listening, names, canAdd }: { meta: ChatMeta; listening: Set<string>; names: string[]; canAdd: boolean }) {
+  const [adding, setAdding] = useState(false);
   const list = meta.agents ?? [];
-  if (!list.length && !names.length) return null;
+  if (!list.length && !names.length && !canAdd) return null;
+  const add = canAdd && (
+    <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+      接入
+    </Button>
+  );
   return (
-    <Section title={`Agent (${list.length || names.length})`}>
+    <Section title={`群 Agent (${list.length || names.length})`} extra={add}>
+      {canAdd && <AgentOnboard channel={meta.channel} open={adding} onClose={() => setAdding(false)} />}
+      {!list.length && !names.length && <p className="text-sm text-muted-foreground">{TXT_AGENT_INTRO}</p>}
       <ul className="flex flex-col gap-1">
         {list.map((a) => (
           <li key={a.keyId} className="flex items-center gap-2 text-sm">
