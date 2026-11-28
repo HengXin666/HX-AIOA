@@ -2,6 +2,7 @@ import { GITHUB_HEATMAP_DAYS, type GithubActivityItem } from "@hx-aioa/protocol"
 
 const DAY_MS = 24 * 3600_000;
 const DATE_LEN = 10;
+const WEEK_DAYS = 7;
 // 改版前每天 cron 累计的一行 { days: 日期 -> 提交数 }, 第一次刷新时并进年份行后删掉
 export type LegacyHeat = { days: Record<string, number>; updated: number };
 
@@ -24,8 +25,18 @@ export function yearDates(year: number, today: string): string[] {
   return n > 0 ? Array.from({ length: n }, (_, k) => new Date(start + k * DAY_MS).toISOString().slice(0, DATE_LEN)) : [];
 }
 
-/** 不带 year 是最近 GITHUB_HEATMAP_DAYS 天, 带 year 是那一年。 */
-export const heatDates = (today: string, year?: number): string[] => (year ? yearDates(year, today) : lastDates(today, GITHUB_HEATMAP_DAYS));
+/**
+ * 最近 n 天, 再往前补到第一天所在那周的周一 (#144): 安卓按周一对齐成列,
+ * 不补时第一列前几格画成空白, 可那几天其实有提交。
+ */
+export function recentDates(today: string, n = GITHUB_HEATMAP_DAYS): string[] {
+  const first = lastDates(today, n)[0] as string;
+  const back = (new Date(`${first}T00:00:00Z`).getUTCDay() + WEEK_DAYS - 1) % WEEK_DAYS;
+  return lastDates(today, n + back);
+}
+
+/** 不带 year 是最近 GITHUB_HEATMAP_DAYS 天 (补齐到周一), 带 year 是那一年。 */
+export const heatDates = (today: string, year?: number): string[] => (year ? yearDates(year, today) : recentDates(today));
 
 /** 推送按天累加提交数 (没带提交数的推送算 1 个)。 */
 export function commitsByDate(items: GithubActivityItem[], tz: string): Map<string, number> {

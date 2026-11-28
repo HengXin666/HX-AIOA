@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { TrendStore, emptyTrend, trendOf, trendStep } from "../src/github/trend";
 import { type TrendVars, parseTrend } from "../src/github/trend-fetch";
+import { GithubService } from "../src/github/service";
+import { memKv } from "./github-kv";
 import { memSql } from "./sql";
 
 const NOW = Date.parse("2026-11-27T20:30:00Z"); // 北京时间 11-28 04:30, 周六
@@ -17,8 +19,8 @@ const FULL = {
     contributionsCollection: {
       commitContributionsByRepository: [{ repository: { nameWithOwner: "a/b" }, contributions: { nodes: [{ occurredAt: "2026-11-27T08:00:00Z", commitCount: 62 }, { occurredAt: "2026-11-16T08:00:00Z", commitCount: 5 }] } }],
       pullRequestReviewContributions: { nodes: [{ occurredAt: "2026-11-20T03:00:00Z", pullRequestReview: { url: "rv1" }, pullRequest: { number: 3, repository: { nameWithOwner: "a/b" } } }] },
-      repositoryContributions: { nodes: [{ occurredAt: "2026-11-26T07:52:00Z", repository: { nameWithOwner: "me/new", url: "w", description: "d", isPrivate: true } }] },
     },
+    created: { nodes: [{ nameWithOwner: "me/new", url: "w", description: "d", isPrivate: true, isFork: false, createdAt: "2026-11-26T07:52:00Z", parent: null }, { nameWithOwner: "me/fk", url: "f", description: "", isPrivate: false, isFork: true, createdAt: "2026-11-20T01:00:00Z", parent: { nameWithOwner: "up/fk" } }] },
     starredRepositories: { edges: [{ starredAt: "2026-11-27T14:40:00Z", node: { nameWithOwner: "x/y", url: "s", description: "", stargazerCount: 143 } }] },
     recent: { pageInfo: { startCursor: "C1", hasPreviousPage: true }, nodes: [{ id: "IC1", createdAt: "2026-11-27T18:29:00Z", url: "c", pullRequest: null, repository: { nameWithOwner: "a/b" } }, { id: "IC2", createdAt: "2026-11-25T01:00:00Z", url: "c", pullRequest: { number: 2 }, repository: { nameWithOwner: "a/b" } }] },
   },
@@ -94,5 +96,24 @@ test("走势同步: 第一页带全部, 满页接着翻, 评论往前补到 12 �
   // star 取消后整份替换掉
   await trendStep(store, "t", "me", st, NOW, 1, async () => ({ ...FULL, viewer: { ...FULL.viewer, starredRepositories: { edges: [] } } }));
   assert.equal(store.footprints("star").length, 0);
-  assert.equal(store.footprints("repo").length, 1);
+  assert.equal(store.footprints("repo").length, 2);
+});
+
+test("单仓库走势: repo 只算这个仓库的行, 不带足迹, ETag 分开 (#144)", async () => {
+  const sql = memSql();
+  const kv = memKv();
+  const store = new TrendStore(sql);
+  store.put(parseTrend(FULL, true).rows, true, NOW);
+  store.put([{ k: "c:o/x:2026-11-27", kind: "commit", ts: NOW, body: { repo: "o/x", day: "2026-11-27", n: 9 } }], false, NOW);
+  await kv.storage.put("githubTrend", { ...emptyTrend(NOW), at: NOW });
+  const svc = new GithubService({} as never, sql, kv.storage, { sources: () => [] } as never);
+  const all = await svc.trend(TZ, NOW);
+  const one = await svc.trend(TZ, NOW, "A/B");
+  const sum = (t: typeof all) => t.body.days.points.reduce((n, p) => n + p.commits, 0);
+  assert.equal(sum(all), 76);
+  assert.equal(sum(one), 67);
+  assert.equal(one.body.days.points.find((p) => p.label === "2026-11-26")?.prMerged, 1);
+  assert.deepEqual(one.body.created, []);
+  assert.ok(all.body.created.length > 0);
+  assert.notEqual(one.tag, all.tag);
 });

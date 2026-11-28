@@ -1,7 +1,7 @@
 import type { GithubFootprint, GithubTrendPoint, GithubTrendSeries } from "@hx-aioa/protocol";
 import { GITHUB_TREND_DAYS, GITHUB_TREND_WEEKS } from "@hx-aioa/protocol";
 import { lastDates } from "./heatmap";
-import { type TrendFetcher, type TrendKind, type TrendPage, type TrendRow, TREND_PAGE, fetchTrend, parseTrend } from "./trend-fetch";
+import { type TrendFetcher, type TrendKind, type TrendPage, type TrendRow, FOOTPRINT_LIMIT, TREND_PAGE, fetchTrend, parseTrend } from "./trend-fetch";
 
 const DAY_MS = 24 * 3600_000;
 const WEEK = 7;
@@ -10,7 +10,6 @@ export const TREND_HORIZON_MS = 98 * DAY_MS;
 const KEEP_MS = TREND_HORIZON_MS + WEEK * DAY_MS;
 // 搜索游标往回让一点, 防同一秒更新的漏掉
 const OVERLAP_MS = 60_000;
-const FOOTPRINTS = 20;
 // 新建仓库与 star 每次整份重拿, 不按时间删
 const KEPT: TrendKind[] = ["repo", "star"];
 
@@ -46,7 +45,7 @@ export class TrendStore {
   }
 
   footprints(kind: "repo" | "star"): TrendRow[] {
-    return this.sql.exec<Row>("SELECT k, kind, ts, body FROM gh_trend WHERE kind = ? ORDER BY ts DESC LIMIT ?", kind, FOOTPRINTS).toArray().map((r) => ({ k: r.k, kind: r.kind, ts: r.ts, body: JSON.parse(r.body) }));
+    return this.sql.exec<Row>("SELECT k, kind, ts, body FROM gh_trend WHERE kind = ? ORDER BY ts DESC LIMIT ?", kind, FOOTPRINT_LIMIT).toArray().map((r) => ({ k: r.k, kind: r.kind, ts: r.ts, body: JSON.parse(r.body) }));
   }
 
   clear(): number {
@@ -167,5 +166,7 @@ export function footprintOf(r: TrendRow): GithubFootprint {
   if (b.d) f.description = String(b.d);
   if (b.p === true) f.private = true;
   if (typeof b.s === "number") f.stars = b.s;
+  if (b.f === true) f.fork = true;
+  if (b.f === true && b.up) f.parent = String(b.up);
   return f;
 }

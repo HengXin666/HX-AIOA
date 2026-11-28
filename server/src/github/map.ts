@@ -16,6 +16,16 @@ export function repoOfSubject(subject: string | undefined): string | null {
   return REPO_RE.test(v) ? v : null;
 }
 
+export type ForkInfo = { fork?: boolean; parent?: string };
+
+/** fork 标识 (#144): REST 给 fork + parent.full_name, GraphQL 给 isFork + parent.nameWithOwner; 自建的返回空对象。 */
+export function forkOf(repo: Obj): ForkInfo {
+  if (repo.fork !== true && repo.isFork !== true) return {};
+  const p = obj(repo.parent);
+  const parent = s(p.full_name) || s(p.nameWithOwner);
+  return parent ? { fork: true, parent } : { fork: true };
+}
+
 export function msOf(v: unknown, fallback: number): number {
   const t = typeof v === "string" ? Date.parse(v) : Number.NaN;
   return Number.isFinite(t) ? t : fallback;

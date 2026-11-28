@@ -21,6 +21,8 @@ export type RepoMeta = {
   lastPush?: GithubPush;
   // 各分支最近一次推送, 最近的在前; 跟 lastPush 同一行写, 不加写入
   branches?: GithubPush[];
+  fork?: boolean;
+  parent?: string;
   updatedAt: number;
 };
 
@@ -132,8 +134,10 @@ export class GithubStore {
   }
 
   summary(meta: RepoMeta): GithubRepoSummary {
-    const { lastPush, description, defaultBranch, branches: _b, ...rest } = meta;
+    const { lastPush, description, defaultBranch, branches: _b, fork, parent, ...rest } = meta;
     const out: GithubRepoSummary = { ...rest, openPrs: this.prCount(meta.repo) };
+    if (fork) out.fork = true;
+    if (fork && parent) out.parent = parent;
     if (description) out.description = description;
     if (defaultBranch) out.defaultBranch = defaultBranch;
     if (lastPush) out.lastPush = lastPush;

@@ -65,9 +65,12 @@ export const GITHUB_ROUTES: Route[] = [
     return etagged(c.req, h.tag, () => h.map);
   }),
   // 走势 (#142): GitHub 页全部折线 / 混合图与足迹一次给全, 只读库; tz=IANA 时区名, 不认识时用主人设置的; 没变 304
+  // repo=owner/name (#144): 只算这个仓库, 单仓库页的混合图用, 不带足迹
   gh(GET, PATH_GITHUB_TREND, READ, async (c) => {
     const zone = c.url.searchParams.get("tz") ?? "";
-    const t = await c.core.github.trend(validZone(zone) ? zone : await c.core.config.tz());
+    const repo = c.url.searchParams.get("repo") ?? "";
+    if (repo && !REPO_RE.test(repo)) return fail(400, "repo 要写成 owner/name");
+    const t = await c.core.github.trend(validZone(zone) ? zone : await c.core.config.tz(), Date.now(), repo || undefined);
     return etagged(c.req, t.tag, () => t.body);
   }),
   // 未合入分支: days 天内有提交 (默认 30, 最多 90); fresh=1 跳过 10 分钟缓存

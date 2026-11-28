@@ -112,6 +112,11 @@ function mergeMeta(meta: RepoMeta, repository: Obj): void {
   }
   const branch = s(repository.default_branch);
   if (branch) meta.defaultBranch = branch;
+  // webhook 只带 fork 布尔值不带上游, 上游等同步补
+  if (repository.fork === false) {
+    delete meta.fork;
+    delete meta.parent;
+  } else if (repository.fork === true) meta.fork = true;
 }
 
 // webhook 入库时同步更新 GitHub 页面状态, 只处理带 repository.full_name 的事件

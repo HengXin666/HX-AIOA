@@ -162,22 +162,27 @@ export class GithubService {
     });
   }
 
-  /** 走势与 ETag (#142): 按天 14 格 + 按周 12 格 + 足迹, 只读库不调 GitHub; 同步时间与今天没变就 304。 */
-  async trend(tz: string, now = Date.now()): Promise<{ body: GithubTrendResult; tag: string }> {
+  /**
+   * 走势与 ETag (#142): 按天 14 格 + 按周 12 格 + 足迹, 只读库不调 GitHub; 同步时间与今天没变就 304。
+   * 带 repo (#144) 只算这个仓库的行, 足迹为空, 给单仓库页的混合图。
+   */
+  async trend(tz: string, now = Date.now(), repo?: string): Promise<{ body: GithubTrendResult; tag: string }> {
     const st = await this.storage.get<TrendState>(KV_TREND);
     const login = (await this.storage.get<string>(KV_GITHUB_LOGIN)) ?? "";
     const today = dateIn(now, tz);
-    const { days, weeks } = trendOf(this.trendStore.since(trendSince(now)), today, (ts) => dateIn(ts, tz));
+    const rows = this.trendStore.since(trendSince(now));
+    const mine = repo ? rows.filter((r) => repoKey(String(r.body.repo ?? "")) === repoKey(repo)) : rows;
+    const { days, weeks } = trendOf(mine, today, (ts) => dateIn(ts, tz));
     const body: GithubTrendResult = {
       login,
       days,
       weeks,
-      created: this.trendStore.footprints("repo").map(footprintOf),
-      starred: this.trendStore.footprints("star").map(footprintOf),
+      created: repo ? [] : this.trendStore.footprints("repo").map(footprintOf),
+      starred: repo ? [] : this.trendStore.footprints("star").map(footprintOf),
       backfill: { done: Boolean(st?.caught && st.cmtDone) },
       ...(st?.at ? { syncedAt: st.at } : {}),
     };
-    return { body, tag: `t-${tz}-${today}-${st?.at ?? 0}` };
+    return { body, tag: `t-${repo ? repoKey(repo) : ""}-${tz}-${today}-${st?.at ?? 0}` };
   }
 
   /** 走势同步: 一次 GraphQL 拿全, 补历史时多翻几页; 失败只记错误, 不影响仓库同步。 */
@@ -264,7 +269,8 @@ export class GithubService {
     const map: GithubHeatmap = { days, updated: state.updated, years: list, backfill: backfillOf(state, await this.tracked()) };
     if (year) map.year = year;
     const sum = [...live.values()].reduce((a, b) => a + b, 0);
-    return { map, tag: `${year ?? 0}-${tz}-${today}-${state.updated}-${sum}` };
+    // w: 最近窗口改成按周一补齐 (#144), 换个前缀让旧缓存失效
+    return { map, tag: `w${year ?? 0}-${tz}-${today}-${state.updated}-${sum}` };
   }
 
   /** 仓库全部历史的一页 (#134): 只给关注的仓库, 按 (仓库, 类别, 游标) 放 Cache API, 不落库。 */

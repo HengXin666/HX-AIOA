@@ -9,8 +9,8 @@ import {
   GITHUB_USER_AGENT,
 } from "../constants";
 import type { Registry } from "../registry";
-import { type Obj, issueOf, num, obj, prOf, repoOfSubject, runOf } from "./map";
-import { type GithubStore, emptyMeta, repoKey } from "./store";
+import { type ForkInfo, type Obj, forkOf, issueOf, num, obj, prOf, repoOfSubject, runOf } from "./map";
+import { type GithubStore, type RepoMeta, emptyMeta, repoKey } from "./store";
 
 // 仓库来源 = 所有 type=github 数据源的 subject + 收到过 webhook 的仓库, 按小写去重
 export type Picks = { picks: string[]; hidden: string[] };
@@ -44,6 +44,13 @@ async function get(token: string, path: string): Promise<unknown> {
 
 const list = (v: unknown): Obj[] => (Array.isArray(v) ? v.map(obj) : []);
 
+/** 以 GitHub 为准覆盖 fork 标识: 自建的删掉字段, 不留旧值。 */
+export function setFork(meta: RepoMeta, f: ForkInfo): void {
+  delete meta.fork;
+  delete meta.parent;
+  Object.assign(meta, f);
+}
+
 async function syncRepo(store: GithubStore, token: string, repo: string, now: number): Promise<void> {
   const base = `/repos/${repo}`;
   const [info, pulls, issues, runs] = await Promise.all([
@@ -63,6 +70,7 @@ async function syncRepo(store: GithubStore, token: string, repo: string, now: nu
   else delete meta.description;
   const branch = s(r.default_branch);
   if (branch) meta.defaultBranch = branch;
+  setFork(meta, forkOf(r));
   // /issues 接口会混入 PR, 带 pull_request 字段的要排除
   const realIssues = list(issues).filter((i) => i.pull_request === undefined).map((i) => issueOf(i, now));
   store.replacePrs(full, list(pulls).map((p) => prOf(p, now)));

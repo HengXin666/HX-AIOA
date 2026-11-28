@@ -1,11 +1,13 @@
 import { s } from "../adapters/types";
 import { GITHUB_USER_AGENT } from "../constants";
-import { type Obj, num, obj } from "./map";
+import { type Obj, forkOf, num, obj } from "./map";
 
 // 走势 (#142): 一次 GraphQL 拿全 提交 (按仓库按天), 评审, 新建仓库, star, 我的评论, 我开的 Issue / PR (搜索按更新时间翻页)。
 // 事件 API 只给最近 300 条且推送不带提交数, 热闹时连两天都盖不住, 所以走势不再靠它。
 const GRAPHQL = "https://api.github.com/graphql";
 export const TREND_PAGE = 100;
+// 足迹列表各给几条; 新建仓库直接取账号下最新创建的这么多个 (#144)
+export const FOOTPRINT_LIMIT = 20;
 
 const ITEM = `id number url createdAt updatedAt closedAt repository { nameWithOwner } comments { totalCount }`;
 export const TREND_QUERY = `query($from: DateTime!, $to: DateTime!, $q: String!, $full: Boolean!, $older: Boolean!, $before: String) {
@@ -13,8 +15,8 @@ export const TREND_QUERY = `query($from: DateTime!, $to: DateTime!, $q: String!,
     contributionsCollection(from: $from, to: $to) @include(if: $full) {
       commitContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner } contributions(first: 100, orderBy: { field: OCCURRED_AT, direction: DESC }) { nodes { occurredAt commitCount } } }
       pullRequestReviewContributions(first: 100, orderBy: { direction: DESC }) { nodes { occurredAt pullRequestReview { url } pullRequest { number repository { nameWithOwner } } } }
-      repositoryContributions(first: 100, orderBy: { direction: DESC }) { nodes { occurredAt repository { nameWithOwner url description isPrivate } } }
     }
+    created: repositories(first: ${FOOTPRINT_LIMIT}, ownerAffiliations: [OWNER], orderBy: { field: CREATED_AT, direction: DESC }) @include(if: $full) { nodes { nameWithOwner url description isPrivate isFork createdAt parent { nameWithOwner } } }
     starredRepositories(first: 50, orderBy: { field: STARRED_AT, direction: DESC }) @include(if: $full) { edges { starredAt node { nameWithOwner url description stargazerCount } } }
     recent: issueComments(last: 100) @include(if: $full) { ...Cmt }
     older: issueComments(last: 100, before: $before) @include(if: $older) { ...Cmt }
@@ -86,10 +88,14 @@ export function parseTrend(data: Obj, full: boolean): TrendPage {
     const pr = obj(n.pullRequest);
     if (url) rows.push({ k: `r:${url}`, kind: "review", ts: ms(n.occurredAt), body: { repo: repoOf(pr.repository), n: num(pr.number) ?? 0, url } });
   }
-  for (const n of list(obj(cc.repositoryContributions).nodes)) {
-    const r = obj(n.repository);
+  // 新建仓库按账号仓库列表取 (#144): 贡献集合的 repositoryContributions 不含私有仓库, 跟 GitHub 对不上
+  for (const r of list(obj(v.created).nodes)) {
     const repo = repoOf(r);
-    if (repo) rows.push({ k: `new:${repo}`, kind: "repo", ts: ms(n.occurredAt), body: { repo, url: s(r.url), d: s(r.description), p: r.isPrivate === true } });
+    const f = forkOf(r);
+    const body: Obj = { repo, url: s(r.url), d: s(r.description), p: r.isPrivate === true };
+    if (f.fork) body.f = true;
+    if (f.parent) body.up = f.parent;
+    if (repo) rows.push({ k: `new:${repo}`, kind: "repo", ts: ms(r.createdAt), body });
   }
   for (const e of list(obj(v.starredRepositories).edges)) {
     const r = obj(e.node);

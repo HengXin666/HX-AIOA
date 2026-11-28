@@ -16,7 +16,8 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
 
 - `GET /api/v1/github/repos` (owner 或 `events:read`) -> `GithubReposResult`
   - `{ repos: GithubRepoSummary[], synced: boolean }`, 按 `updatedAt` 倒序。
-  - 摘要: `{ repo, url, description?, stars, openPrs, openIssues, defaultBranch?, lastPush?: { at, by, branch, commits, sha? }, ci?: { status, workflow, branch, url, at }, updatedAt }`。
+  - 摘要: `{ repo, url, description?, stars, openPrs, openIssues, defaultBranch?, lastPush?: { at, by, branch, commits, sha? }, ci?: { status, workflow, branch, url, at }, fork?, parent?, updatedAt }`。
+  - `fork` / `parent` (#144): fork 来的仓库为 `true` 与上游 `owner/repo`, 自建的不带。同步时按 `GET /repos/{repo}` 的 `fork` 与 `parent.full_name` 覆盖 (不多花子请求); webhook 只带 `repository.fork` 布尔值, 只改标识不动上游。
   - `ci.status`: `success` | `failure` | `running` | `cancelled` | `unknown`, 取最近一次 workflow run。
   - `synced`: 服务端配了 `GITHUB_TOKEN` 且至少成功回填过一次。为 false 时数据只来自 webhook, PR / Issue 列表可能不全。
 - `GET /api/v1/github/repos/{owner}/{name}` (owner 或 `events:read`) -> `GithubRepoDetail`
@@ -24,7 +25,7 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
   - `timeline.kind`: `push` | `pr` | `issue` | `ci` | `release` | `star` | `comment`。runs 与 timeline 各最多 30 条, 新的在前。
   - 未登记的仓库返回 404。
 - `POST /api/v1/github/sync` (owner) -> `{ ok, repos, error? }`
-  - 用 `GITHUB_TOKEN` 回填: 仓库信息, 开放 PR, 开放 Issue (排除 PR), 最近 10 次 workflow run。
+  - 用 `GITHUB_TOKEN` 回填: 仓库信息 (含 fork 与上游), 开放 PR, 开放 Issue (排除 PR), 最近 10 次 workflow run。
   - 没配 token 返回 400 `服务端没有配置 GITHUB_TOKEN` (code `not_configured`)。
   - 单次最多同步 10 个仓库 (免费计划每次调用 50 个子请求, 每个仓库 4 个)。部分失败时 `ok=false`, `error` 列出失败仓库。
 
@@ -39,7 +40,7 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
 
 `GET /api/v1/github/heatmap?year=2024` (owner 或 `events:read`) → `{ days: [{ date: "YYYY-MM-DD", commits }], updated, year?, years, backfill }`, 从早到晚, 日期按主人设置的时区 (设置 `tz`, 默认 Asia/Shanghai)。
 
-- 不带 `year`: 最近 140 天。带 `year` (2008 起): 那一年 1 月 1 日到 12 月 31 日, 今年只到今天, 未来的年份为空。
+- 不带 `year`: 最近 140 天, 再往前补到第一天所在那周的周一 (#144), 共 140 到 146 天, 第一天总是周一。安卓按周一对齐成列, 不补时第一列前几格画成空白, 其实那几天有提交。ETag 带 `w` 前缀, 旧缓存随之失效。带 `year` (2008 起): 那一年 1 月 1 日到 12 月 31 日, 今年只到今天, 未来的年份为空。
 - `years`: 有数据的年份 (含今年), 新的在前, 客户端据此切换年份。`backfill: { done, repos, pending, oldest? }`: 关注的仓库数, 全部历史还没拉完的仓库数, 有数据的最早一天。
 - 每天的数 = max(回填的提交数, 动态累计的提交数, 最近两天的实时动态)。
 
@@ -57,13 +58,15 @@ GitHub 接入是内置插件 `hengxin666.github` (清单 `plugins/hengxin666.git
 
 ## 走势与足迹 (#142)
 
-`GET /api/v1/github/trend?tz=Asia/Shanghai` (owner 或 `events:read`) → `GithubTrendResult`, GitHub 页的全部折线 / 混合图与足迹一次给全, 带 `ETag` (时区 + 今天 + 同步时间), 没变时 304。只读库, 不调 GitHub。
+`GET /api/v1/github/trend?tz=Asia/Shanghai&repo=owner/name` (owner 或 `events:read`) → `GithubTrendResult`, GitHub 页的全部折线 / 混合图与足迹一次给全, 带 `ETag` (仓库 + 时区 + 今天 + 同步时间), 没变时 304。只读库, 不调 GitHub。
+
+- `repo` (可选, #144): 只算这个仓库的行 (我的提交, 我开的 Issue / PR, 我的评论与评审), `created` / `starred` 为空, 给单仓库页的混合图; 格式不对 400。
 
 ```
 { login, syncedAt?, backfill: { done },
   days:  { points: GithubTrendPoint[14], received },   // 按天, 最近 14 天, 从早到晚
   weeks: { points: GithubTrendPoint[12], received },   // 按周 (周一起), 最近 12 周, 本周只算到今天
-  created: [{ repo, url, at, description?, private? }], // 我新建的仓库 (近一年), 新的在前, 最多 20
+  created: [{ repo, url, at, description?, private?, fork?, parent? }], // 账号下最新创建的仓库, 新的在前, 最多 20
   starred: [{ repo, url, at, description?, stars }] }   // 我 star 的仓库, 按 star 时间, 最多 20
 GithubTrendPoint = { label: "YYYY-MM-DD" (那一格第一天), commits, prOpened, prMerged, prClosed, issueOpened, issueClosed, prComments, issueComments, reviews }
 ```
@@ -75,10 +78,13 @@ GithubTrendPoint = { label: "YYYY-MM-DD" (那一格第一天), commits, prOpened
 
 同步 (每 30 分钟 cron 与 `POST /sync` 顺带, 需要 `GITHUB_TOKEN`):
 
-- 一次 GraphQL 拿全: `viewer.contributionsCollection` (近一年, `commitContributionsByRepository` 每仓库最近 100 个有提交的日子, `pullRequestReviewContributions`, `repositoryContributions`), `starredRepositories` (按 star 时间最近 50), `issueComments` (最近 100), 加一次搜索 `author:<login> updated:>=<游标> sort:updated-asc` (Issue 与 PR 一起, 每页 100)。GraphQL 计费约 1 点。
+- 一次 GraphQL 拿全: `viewer.contributionsCollection` (近一年, `commitContributionsByRepository` 每仓库最近 100 个有提交的日子, `pullRequestReviewContributions`), `viewer.repositories(ownerAffiliations: OWNER, orderBy: CREATED_AT DESC)` 最新 20 个 (带 `isFork` 与 `parent`), `starredRepositories` (按 star 时间最近 50), `issueComments` (最近 100), 加一次搜索 `author:<login> updated:>=<游标> sort:updated-asc` (Issue 与 PR 一起, 每页 100)。GraphQL 计费约 1 点。
 - 补历史: 首次游标为 98 天前; 搜索满页就从最后一条的更新时间接着翻, 评论用 `issueComments(last: 100, before: …)` 往前翻到 98 天前为止。每次同步除第一页外用剩余子请求额度最多再翻 3 页 (只带搜索与更早的评论), 一般几轮 cron 补完。追上后游标停在最后一条更新时间前 1 分钟。
+- 新建仓库为什么不用 `repositoryContributions` (#144): 它不含私有仓库 (算受限贡献), 足迹跟 GitHub 仓库列表对不上; 改用仓库列表后私有与 fork 都在, 每次整份替换, 删掉的仓库也跟着消失。fork 在安卓上标 "fork" 并显示上游, 自建的标 "自建"。
 - 存储: 表 `gh_trend (k 主键, kind, ts, body)`, 一件事一行 (Issue / PR / 评论按节点 id, 提交按 仓库 + 日期, 评审按 URL, 新建仓库与 star 按仓库名), 内容没变不写。`ts` 为最后一次动静 (Issue / PR 取 开 / 关 / 合入 的最晚者); 超过 105 天的行删掉, 新建仓库与 star 每次整份替换 (取消 star 即消失)。游标存 `githubTrend` (KV)。停用插件带 `purge=1` 时一并清掉。
 - 为什么不用事件 API: `/users/{login}/events` 只给最近 300 条 / 90 天, 原实现只拉第 1 页 (100 条), 一天就有上百条 (评论, 加标签) 时只能盖住一两天, 更早的永远拉不到; 推送事件也不再带提交数。`GET /github/daily` (总览, 周报用) 在走势同步过一次后, 提交 / PR / Issue / 评审 / 评论也改从 `gh_trend` 算, 只有推送次数仍来自事件。
+- 安卓单仓库页 (#144): "走势" 卡带 `repo` 请求, PR / Issue / 提交合成一张双轴混合图: PR 新开 = 实线, PR 合入 = 柱, Issue 新开 = 虚线, Issue 关闭 = 点, 共用左轴; 提交 = 面积, 用独立右轴 (刻度同色)。
+- 安卓卡片折叠 (#144): GitHub 页与单仓库页每张卡点卡片头收起 / 展开, 折起的卡片记在本机 (`github_fold`), 单仓库页的卡片所有仓库共用一份。仓库列表与足迹的新建仓库标 fork (写上游) 或自建。
 - 安卓: GitHub 页 "走势" 卡 (热力格下面), 14 天 / 12 周切换只换本地数据; 提交 = 面积折线, PR 新开 = 实线, Issue 新开 = 虚线, PR 合入 = 柱, Issue 关闭 = 点, 评论 = 细线; 下面是 "足迹" (新建仓库 / star 列表, 带时间)。
 
 ## 仓库历史 (#134)

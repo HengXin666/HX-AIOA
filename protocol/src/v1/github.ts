@@ -23,6 +23,9 @@ export type GithubRepoSummary = {
   defaultBranch?: string;
   lastPush?: GithubPush;
   ci?: GithubCi;
+  // fork 来的仓库 (#144): parent 为上游 owner/repo, 自建的不带这两个字段
+  fork?: boolean;
+  parent?: string;
   updatedAt: number;
 };
 
@@ -94,7 +97,7 @@ export type GithubBranchesResult = { at: number; days: number; repos: GithubRepo
 export const GITHUB_BRANCH_DEFAULT_DAYS = 30;
 export const GITHUB_BRANCH_MAX_DAYS = 90;
 
-// 提交热力图 (#134): 不带 year 时为最近 GITHUB_HEATMAP_DAYS 天, 带 year 时为该年 1 月 1 日到年底 (今年到今天); 按主人时区的日期
+// 提交热力图 (#134): 不带 year 时为最近 GITHUB_HEATMAP_DAYS 天并往前补到那周周一 (#144), 带 year 时为该年 1 月 1 日到年底 (今年到今天); 按主人时区的日期
 export type GithubHeatDay = { date: string; commits: number };
 // 历史回填进度: repos 为关注的仓库数, pending 为全部历史还没拉完的; oldest 为有提交数据的最早一天
 export type GithubHeatBackfill = { done: boolean; repos: number; pending: number; oldest?: string };
@@ -125,8 +128,8 @@ export type GithubTrendPoint = {
   reviews: number;
 };
 export type GithubTrendSeries = { points: GithubTrendPoint[]; received: number };
-// 足迹: 我新建的仓库 (at 为创建时间) 与我 star 的仓库 (at 为 star 时间, stars 为仓库星数), 新的在前
-export type GithubFootprint = { repo: string; url: string; at: number; description?: string; private?: boolean; stars?: number };
+// 足迹: 我新建的仓库 (at 为创建时间, fork 时带上游 parent) 与我 star 的仓库 (at 为 star 时间, stars 为仓库星数), 新的在前
+export type GithubFootprint = { repo: string; url: string; at: number; description?: string; private?: boolean; stars?: number; fork?: boolean; parent?: string };
 // backfill.done: Issue / PR 与评论都已补到 12 周前; syncedAt 为最近一次走势同步
 export type GithubTrendResult = {
   login: string;
