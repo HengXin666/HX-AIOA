@@ -64,6 +64,7 @@
 | [android/permissions.md](client/android/permissions.md) | 安卓权限清单: 现有, 规划, 申请时机 (#121) |
 | [android/navigation.md](client/android/navigation.md) | 安卓返回键与页面跳转规则, 入口清单 |
 | [web/dev.md](client/web/dev.md) | Web 端本地开发, 目录, 规则, 部署方式 (#155) |
+| [web/parity.md](client/web/parity.md) | Web 与安卓按接口逐组对照, 缺口与进度 (#155) |
 
 ## 设计与调研 `design/`
 

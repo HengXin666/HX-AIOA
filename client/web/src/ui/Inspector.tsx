@@ -18,6 +18,7 @@ import { useChats, usePresence, useUser } from "../app/hooks";
 import { api, fill } from "../core/auth";
 import { chats, titleOf } from "../core/chats";
 import { TXT_LOAD_MORE, TXT_LOADING } from "../core/constants";
+import { AgentSettings } from "./chat/AgentSettings";
 import { GroupActions } from "./chat/GroupActions";
 import { shortTime } from "./ChatList";
 import { UserAvatar } from "./UserAvatar";
@@ -79,7 +80,11 @@ function Inspector({ channel }: { channel: string }) {
       {!(me?.role === "owner" || meta.role === "owner" || meta.role === "admin") && <Section title="群公告">
         <p className="whitespace-pre-wrap break-words text-sm text-foreground">{meta.notice || <span className="text-muted-foreground">暂无公告</span>}</p>
       </Section>}
-      <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} />
+      {me?.role === "owner" && meta.kind !== "dm" && meta.view !== "mail" ? (
+        <AgentSettings meta={meta} listening={listening} />
+      ) : (
+        <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} />
+      )}
       {room && <Members key={channel} channel={channel} />}
       <GroupActions meta={meta} />
     </div>
