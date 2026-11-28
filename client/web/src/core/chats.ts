@@ -78,6 +78,11 @@ class ChatStore {
     return [...this.snap.chats].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || at(b) - at(a));
   }
 
+  // 已知的最新事件位置 (welcome 与新事件推进), 总览按它往前取一段历史
+  latest(): number {
+    return this.head;
+  }
+
   // 未读条数: 本地有的消息里数; 数不出来 (没缓存) 但有新消息时返回 -1 只显示圆点
   unread(c: ChatMeta): number {
     const read = c.read ?? 0;

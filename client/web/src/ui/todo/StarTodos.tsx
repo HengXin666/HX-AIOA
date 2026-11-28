@@ -1,43 +1,50 @@
-import { Card } from "@hx/ui/ui/card";
 import { Button } from "@hx/ui/ui/button";
-import { ListTodo } from "lucide-react";
+import { ChevronRight, ListTodo } from "lucide-react";
 import { useState } from "react";
 import { link } from "../../app/router";
 import { todos, type TodoDraft } from "../../core/todos";
+import { Panel, Quiet } from "../overview/parts";
 import { areasOf, finished } from "./model";
 import { TodoCard, useTodos } from "./TodoBoard";
 import { TodoEdit } from "./TodoEdit";
 
 const MAX_SHOWN = 6;
 
-// 总览上的 "重点待办" (对照安卓总览的待办空间): 标了重点且没完成的, 没有就显示最近要截止的
-export function StarTodos() {
+// 总览上的 "重点待办" (对照安卓 TodoFocus): 标了重点的在前, 再按截止与进行中补满
+export function StarTodos({ className }: { className?: string }) {
   const all = useTodos();
   const [edit, setEdit] = useState<TodoDraft | null>(null);
   const open = all.filter((t) => !finished(t));
   const star = open.filter((t) => t.star);
-  const rows = (star.length ? star : open.filter((t) => t.due !== undefined).sort((a, b) => a.due! - b.due!)).slice(0, MAX_SHOWN);
-  if (!todos.loaded || !all.length) return null;
+  // 重点在前, 再补快到期的与进行中的, 凑满一屏
+  const rest = open.filter((t) => !t.star).sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || Number(b.state === "doing") - Number(a.state === "doing") || a.prio - b.prio);
+  const rows = [...star, ...rest].slice(0, MAX_SHOWN);
   return (
-    <Card className="flex flex-col gap-2 p-3">
-      <h3 className="flex items-center gap-2 text-sm font-medium text-foreground [&_svg]:size-4">
-        <ListTodo className="text-muted-foreground" />
-        <span className="flex-1">{star.length ? "重点待办" : "快到期的待办"}</span>
-        <span className="text-xs text-muted-foreground">{open.length} 条未完成</span>
+    <Panel
+      title="重点待办"
+      icon={<ListTodo />}
+      count={open.length}
+      hint="未完成"
+      className={className}
+      action={
         <Button asChild size="xs" variant="ghost">
-          <a href={link("overview", "todo")}>全部</a>
+          <a href={link("overview", "todo")}>
+            看板
+            <ChevronRight />
+          </a>
         </Button>
-      </h3>
+      }
+    >
       {rows.length ? (
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
           {rows.map((t) => (
             <TodoCard key={`${t.channel}:${t.id}`} t={t} all={all} showGroup onOpen={() => setEdit(todos.draftOf(t))} />
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">没有重点或带截止的待办。</p>
+        <Quiet icon={<ListTodo />}>{todos.error ? "待办插件没有启用" : !todos.loaded ? "加载中" : "没有未完成的待办"}</Quiet>
       )}
       {edit && <TodoEdit draft={edit} fresh={false} areas={areasOf(all)} onClose={() => setEdit(null)} />}
-    </Card>
+    </Panel>
   );
 }

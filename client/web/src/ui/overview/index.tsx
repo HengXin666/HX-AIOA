@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { nav } from "../../app/router";
 import { PageHeader } from "../kit/Panes";
-import Overview from "../Overview";
+import Overview from "./Overview";
 import type { AreaProps } from "../Shell";
 
 const DriveView = lazy(() => import("../drive/DriveView"));
