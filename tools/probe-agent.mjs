@@ -108,7 +108,7 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
       record(sess, entry, own) {
         for (const c of attached(sess.id)) {
           const m = own && own.conn === c ? { ...entry.m, id: own.cid } : entry.m;
-          c.push({ t: "acp", sid: sess.id, seq: entry.seq, m });
+          c.push({ t: "acp", sid: sess.id, seq: entry.seq, at: entry.at, m });
         }
       },
       info(sess) {

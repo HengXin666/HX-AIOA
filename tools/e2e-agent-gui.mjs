@@ -1,7 +1,9 @@
 // Agent GUI 探针端到端 (#126): 起 probe-agent 模块 (不连 Hub, 注入 send), 用假 ACP Agent 跑一遍直连协议
 // 用法: node tools/e2e-agent-gui.mjs   (不需要服务端; 最后一段用假 Hub 验证 probe.mjs 的接入)
 import { spawn, execFileSync } from "node:child_process";
-import { createHash, webcrypto } from "node:crypto";
+import { createHash, randomBytes, webcrypto } from "node:crypto";
+import net from "node:net";
+import zlib from "node:zlib";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -146,6 +148,9 @@ async function main() {
   check("签名错 -> auth 错误并关闭", err.code === "auth");
   await bad.closed;
 
+  const dz = await deflateClient(agent.port, devA);
+  check("permessage-deflate 客户端压缩帧握手", dz.ext.includes("permessage-deflate") && dz.ready?.t === READY && dz.ready.device === devA.id, JSON.stringify(dz).slice(0, 200));
+
   const A = new Client(wsUrl, devA, true);
   const ready = await A.wait((f) => f.t === READY);
   check("握手 ready", ready.device === devA.id && ready.host === "pc" && Array.isArray(ready.sessions) && ready.instances.length === 3 && ready.settings.watchPush === "quiet");
@@ -208,7 +213,8 @@ async function main() {
   const win = await C.wait((f) => f.t === WINDOW && f.sid === sid);
   const cut = win.items.find((i) => i.cut);
   check("回放窗口 (含 prompt, 工具大输出已裁掉)", win.from === 1 && win.more === false && win.items.some((i) => i.m.method === PROMPT) && !!cut && !JSON.stringify(cut).includes("测试通过 测试通过"));
-  check("窗口无 hx 私有字段", win.items.every((i) => typeof i.seq === "number" && i.m.jsonrpc === RPC));
+  check("窗口条目带 seq 与 at", win.items.every((i) => typeof i.seq === "number" && typeof i.at === "number" && i.m.jsonrpc === RPC));
+  check("acp 帧带 at", A.frames.filter((f) => f.t === ACP).every((f) => typeof f.at === "number" && f.at > 0));
 
   // 断线补帧: A 断开, B 发第二轮, Hub 答复, A 以 since 重连
   const lastSeq = Math.max(...A.frames.filter((f) => f.t === ACP).map((f) => f.seq));
@@ -300,6 +306,66 @@ async function main() {
   await Promise.all([A2.close(), C.close()]);
   agent.close();
   await probeIntegration();
+}
+
+// 像 Chrome 一样发压缩帧 (RSV1, Z_SYNC_FLUSH 去掉 00 00 ff ff 尾巴), 并解压服务端回的压缩帧
+function deflateClient(port, dev) {
+  const TAIL = Buffer.from([0, 0, 0xff, 0xff]);
+  const inflate = (p) => zlib.inflateRawSync(Buffer.concat([p, TAIL]), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString();
+  const frameOut = (text) => {
+    const z = zlib.deflateRawSync(Buffer.from(text), { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+    const p = z.subarray(0, z.length - TAIL.length);
+    const mask = randomBytes(4);
+    const head = p.length < 126 ? Buffer.from([0xc1, 0x80 | p.length]) : Buffer.from([0xc1, 0x80 | 126, p.length >> 8, p.length & 0xff]);
+    return Buffer.concat([head, mask, Buffer.from(p.map((b, i) => b ^ mask[i & 3]))]);
+  };
+  return new Promise((resolve) => {
+    const sock = net.connect(port, "127.0.0.1");
+    const out = { ext: "" };
+    let buf = Buffer.alloc(0);
+    let upgraded = false;
+    const done = () => (sock.destroy(), resolve(out));
+    const timer = setTimeout(done, WAIT_MS);
+    sock.on("connect", () => sock.write(`GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${randomBytes(16).toString("base64")}\r\nSec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n\r\n`));
+    sock.on("data", async (d) => {
+      buf = Buffer.concat([buf, d]);
+      if (!upgraded) {
+        const i = buf.indexOf("\r\n\r\n");
+        if (i < 0) return;
+        out.ext = /sec-websocket-extensions: (.*)/i.exec(buf.subarray(0, i).toString())?.[1] ?? "";
+        buf = buf.subarray(i + 4);
+        upgraded = true;
+      }
+      while (buf.length >= 2) {
+        let len = buf[1] & 0x7f;
+        let at = 2;
+        if (len === 126) [len, at] = [buf.readUInt16BE(2), 4];
+        else if (len === 127) [len, at] = [Number(buf.readBigUInt64BE(2)), 10];
+        if (buf.length < at + len) return;
+        const d0 = buf[0];
+        const rsv1 = (d0 & 0x40) !== 0;
+        const p = buf.subarray(at, at + len);
+        buf = buf.subarray(at + len);
+        if ((d0 & 0x0f) === 8) {
+          out.close = `${p.length >= 2 ? p.readUInt16BE(0) : ""} ${p.subarray(2).toString()}`;
+          clearTimeout(timer);
+          return done();
+        }
+        const data = JSON.parse(rsv1 ? inflate(p) : p.toString());
+        for (const f of Array.isArray(data) ? data : [data]) {
+          if (f.t === "challenge") {
+            const sig = await webcrypto.subtle.sign(SIGN, dev.priv, new TextEncoder().encode(f.nonce));
+            sock.write(frameOut(JSON.stringify({ t: "hello", device: dev.id, sig: Buffer.from(sig).toString("base64url"), fg: false, pad: "x".repeat(600) })));
+          } else if (f.t === READY || f.t === "error") {
+            out.ready = f;
+            clearTimeout(timer);
+            return done();
+          }
+        }
+      }
+    });
+    sock.on("error", done);
+  });
 }
 
 // probe.mjs 接入: 假 Hub 收 host 帧 (带 agent), 发 ag_pair 收 ag_paired

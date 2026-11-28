@@ -143,7 +143,7 @@ export class WsConn extends EventEmitter {
     this.parts = [];
     if (this.compressed) {
       try {
-        data = zlib.inflateRawSync(Buffer.concat([data, TAIL]), { maxOutputLength: WS_MAX_MSG });
+        data = zlib.inflateRawSync(Buffer.concat([data, TAIL]), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: WS_MAX_MSG });
       } catch {
         return this.close(1007, "解压失败");
       }

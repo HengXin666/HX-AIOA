@@ -98,7 +98,7 @@ function trimEntry(e) {
   const big = (c) => c?.type === "content" && JSON.stringify(c).length > CUT_CONTENT_BYTES;
   if (!up.content.some(big)) return e;
   const update = { ...up, content: up.content.filter((c) => !big(c)) };
-  return { seq: e.seq, m: { ...e.m, params: { ...e.m.params, update } }, cut: true };
+  return { seq: e.seq, at: e.at, dir: e.dir, m: { ...e.m, params: { ...e.m.params, update } }, cut: true };
 }
 
 export class SessionLog {
