@@ -4,7 +4,7 @@ import { Bot, LayoutDashboard, MessageSquare, Server, UserRound } from "lucide-r
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { useLayout, useLinkState, useMyFace, useUser, type Layout } from "../app/hooks";
 import { link, useLoc, type AreaId, type Loc } from "../app/router";
-import { newVersion } from "../core/version";
+import { newVersion, reloadFresh } from "../core/version";
 import { UserAvatar } from "./UserAvatar";
 
 export type AreaProps = { loc: Loc; layout: Layout };
@@ -138,7 +138,7 @@ function UpdateBar() {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border bg-muted px-4 py-2 text-sm">
       <span className="text-foreground">有新版本</span>
-      <Button size="sm" onClick={() => location.reload()}>
+      <Button size="sm" onClick={() => void reloadFresh()}>
         刷新
       </Button>
     </div>

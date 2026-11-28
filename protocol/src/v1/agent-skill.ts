@@ -8,7 +8,7 @@ import type { ChatView } from "./mail";
 
 export const CORE_SKILL = "hx-aioa";
 // 必须和 skills/hx-aioa/manifest.json 的 version 一致 (check:plugins 校验)
-export const CORE_SKILL_VERSION = "1.1";
+export const CORE_SKILL_VERSION = "2.0";
 // 命令行 -> 服务端, 每个请求都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0
 export const HEADER_SKILL = "X-Aioa-Skill";
 // 服务端 -> 命令行, 群 Agent 的每个响应都带: setup=1,hx-aioa@1.0,hengxin666.todo@1.0[,auto]
@@ -52,7 +52,8 @@ export type AgentBrief = {
 // GET next?brief=<本地简报版本>&start=1&memory=1: 游标之后没处理的人发消息, 简报只在版本不同时带全文
 // mentioned: 这条消息 @ 了本 Agent 或全体 (#131)
 export type AgentPending = Envelope & { mentioned?: true };
-export type AgentNext = { pending: AgentPending[]; head: number; cursor: number; briefVersion: string; brief?: AgentBrief; memory?: string };
+// replan: 今天该重算定时了 (agent-plan.ts), 空闲时命令行以退出码 11 交给 Agent
+export type AgentNext = { pending: AgentPending[]; head: number; cursor: number; briefVersion: string; brief?: AgentBrief; memory?: string; replan?: true };
 // POST done 与 POST /messages 的 covers: 把这些 seq 记为已处理
 export type AgentDoneInput = { seqs: number[] };
 export type AgentDoneResult = { cursor: number; left: number };

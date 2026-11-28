@@ -1,5 +1,8 @@
 import {
   AGENT_TRIGGER_MAX,
+  PATH_AGENT_PLAN,
+  PLAN_DEFAULT_TZ,
+  replanDue,
   HANDLED_SET_MAX,
   HEADER_SKILL,
   MENTION_AGENT_PREFIX,
@@ -25,6 +28,7 @@ import { notePoll, touchAgent } from "./api-presence";
 import { CODE_SKILL_EXPIRED, FLAG_ON, GET, POST, QUERY_BRIEF, QUERY_MEMORY, QUERY_START } from "./constants";
 import { type Core, type Principal, type ReqCtx, type Route, route } from "./core";
 import { fail, json, readJson } from "./http";
+import { plan } from "./api-agent-plan";
 
 // 云 Agent 一轮的服务端接口 (docs/design/agent-skill.md 实现契约): next, done, trigger, 以及 POST /messages 的 covers
 const SEND_SCOPE: Scope = "messages:send";
@@ -48,9 +52,12 @@ async function next(c: ReqCtx): Promise<Response> {
   const q = c.url.searchParams;
   const cur = cursorOf(c.core, channel, agent);
   const start = q.get(QUERY_START) === FLAG_ON;
-  // 游标第一次初始化与本轮开始时间合成一次写
+  // 游标第一次初始化, 本轮开始时间与重算后的触发次数合成一次写
   if (agent.handled === undefined || start) {
-    putAgent(c.core, channel, agent.keyId, (a) => ({ ...(a.handled === undefined ? withCursor(a, cur) : a), ...(start ? { lastRun: now } : {}) }));
+    putAgent(c.core, channel, agent.keyId, (a) => ({
+      ...(a.handled === undefined ? withCursor(a, cur) : a),
+      ...(start ? { lastRun: now, ...(a.plan ? { plan: { ...a.plan, runs: a.plan.runs + 1 } } : {}) } : {}),
+    }));
   }
   const meta = c.core.chats.chat(channel);
   const fresh = meta?.agents?.find((a) => a.keyId === agent.keyId) ?? agent;
@@ -62,6 +69,7 @@ async function next(c: ReqCtx): Promise<Response> {
     briefVersion: brief?.version ?? "",
     ...(brief && q.get(QUERY_BRIEF) !== brief.version ? { brief } : {}),
     ...(q.get(QUERY_MEMORY) === FLAG_ON ? { memory: c.core.chats.memory(agent.sourceId).text } : {}),
+    ...(fresh.trigger && replanDue(fresh.plan?.at, now, fresh.trigger.tz ?? PLAN_DEFAULT_TZ) ? { replan: true as const } : {}),
   };
   return json(body);
 }
@@ -115,4 +123,9 @@ export function coversOf(core: Core, who: Principal, raw: unknown): { channel: s
   return typeof seqs === "string" ? `covers: ${seqs}` : { channel: hit.meta.channel, keyId: hit.agent.keyId, seqs };
 }
 
-export const AGENT_NEXT_ROUTES: Route[] = [route(GET, PATH_AGENT_NEXT, SEND_SCOPE, next), route(POST, PATH_AGENT_DONE, SEND_SCOPE, done), route(POST, PATH_AGENT_TRIGGER, SEND_SCOPE, trigger)];
+export const AGENT_NEXT_ROUTES: Route[] = [
+  route(GET, PATH_AGENT_NEXT, SEND_SCOPE, next),
+  route(POST, PATH_AGENT_DONE, SEND_SCOPE, done),
+  route(POST, PATH_AGENT_TRIGGER, SEND_SCOPE, trigger),
+  route(POST, PATH_AGENT_PLAN, SEND_SCOPE, plan),
+];

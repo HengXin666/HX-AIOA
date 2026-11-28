@@ -76,6 +76,7 @@ fun SendPane(model: ChatModel, group: String, name: String, ob: Onboard) {
             Spacer(Modifier.width(10.dp))
             Text(if (joined) "✓ $name 已接入, 可以关掉了" else "等待 $name 报到…", fontSize = 14.sp, fontWeight = if (joined) FontWeight.Medium else FontWeight.Normal)
         }
+        NextSteps(name)
     }
 }
 

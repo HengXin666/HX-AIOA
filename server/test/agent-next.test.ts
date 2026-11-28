@@ -121,12 +121,12 @@ test("want 头与 skill 上报: 只在变化时写; 插件大号缺失提醒一�
   const req = (v: string) => new Request(BASE, { headers: { [HEADER_SKILL]: v } });
   assert.equal(await noteSkill(a.core, new Request(BASE), meta(), a.me()), `setup=1,hx-aioa@${CORE_SKILL_VERSION},${PLUGIN}@2.0`);
   assert.equal(a.me().skills, undefined);
-  await noteSkill(a.core, req(`setup=1,hx-aioa@1.0,${PLUGIN}@1.3`), meta(), a.me(), Date.UTC(2026, 11, 1));
+  await noteSkill(a.core, req(`setup=1,hx-aioa@${CORE_SKILL_VERSION},${PLUGIN}@1.3`), meta(), a.me(), Date.UTC(2026, 11, 1));
   assert.equal(a.me().skills?.skills[PLUGIN], "1.3");
   assert.equal(a.notices.length, 1);
   assert.match(a.notices[0]!, /2\.0.*2026-12-31/);
   const updated = meta().updated;
-  await noteSkill(a.core, req(`setup=1,hx-aioa@1.0,${PLUGIN}@1.3`), meta(), a.me(), Date.UTC(2026, 11, 1));
+  await noteSkill(a.core, req(`setup=1,hx-aioa@${CORE_SKILL_VERSION},${PLUGIN}@1.3`), meta(), a.me(), Date.UTC(2026, 11, 1));
   assert.equal(a.notices.length, 1);
   assert.equal(meta().updated, updated);
   assert.equal(await majorRemind(a.core, Date.UTC(2026, 11, 2)), 0);

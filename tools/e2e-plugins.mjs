@@ -95,7 +95,7 @@ check("只能放行市场当前版本", wrongVer.status === 409, wrongVer.data);
 const inst = await api("POST", `${V1}/plugins/${ID}/install`);
 const key = inst.data?.key;
 check("安装", inst.status === 200 && inst.data.install.channel === CHANNEL && inst.data.install.space === SPACE && !!key, inst.data);
-check("接入语一段话: 命令行, 定时, 任务, 密钥", inst.data?.prompt?.includes(`hxaioa login`) && inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes("插件任务") && inst.data.prompt.includes(key) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
+check("接入语一段话: 命令行, 触发语, 不写固定间隔, 密钥", inst.data?.prompt?.includes(`hxaioa login`) && inst.data.prompt.includes("触发语") && !inst.data.prompt.includes("每 1800 秒") && inst.data.prompt.includes(key) && inst.data.key === key && !("request" in inst.data), inst.data?.prompt);
 const after = await api("GET", `${V1}/plugins/${ID}`);
 check("装好后任务提示词不含密钥", !!after.data.installed && after.data.task?.includes("插件任务") && !after.data.task.includes(key), after.data.task?.slice(0, 200));
 const again = await api("POST", `${V1}/plugins/${ID}/install`);
@@ -212,7 +212,7 @@ check("单条写入与删除", t2.status === 200 && del.status === 200, [t2.data
 // 重新接入: 不带请求体的 POST, 返回新密钥和同样格式的接入语; 插件记录跟着换 keyId, 卸载仍能清掉
 const rot = await api("POST", `${V1}/chats/${CHANNEL}/agents/${inst.data.install.keyId}/rotate`);
 const key2 = rot.data?.key;
-check("重新接入给出新密钥和插件接入语", rot.status === 200 && !!key2 && key2 !== key && rot.data.prompt.includes(key2) && rot.data.prompt.includes("每 1800 秒"), rot.data);
+check("重新接入给出新密钥和插件接入语", rot.status === 200 && !!key2 && key2 !== key && rot.data.prompt.includes(key2) && rot.data.prompt.includes("触发语"), rot.data);
 const oldDead = await call(key, "GET", `${V1}/chat-agent/guide`);
 check("重新接入后旧密钥失效", oldDead.status === 401 || oldDead.status === 403, oldDead.status);
 const off = await api("DELETE", `${V1}/plugins/${ID}`);

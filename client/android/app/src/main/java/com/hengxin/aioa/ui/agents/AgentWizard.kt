@@ -38,15 +38,6 @@ import kotlinx.coroutines.launch
 private const val STEPS = 3
 private const val NAME_MAX = 40
 
-// 任务模板: 名字, 一句话任务, 建议间隔 (秒)
-private data class Template(val label: String, val task: String, val interval: Int?)
-private val TEMPLATES = listOf(
-    Template("定时汇总", "把群里上次之后的新消息汇总成一条简报发到本群, 没有新消息就不发。", 3600),
-    Template("整理待办", "把我在群里说的要做的事整理成清单, 每条引用回复, 做完的标出来。", 1800),
-    Template("回答提问", "我在群里问你的问题, 读完上下文后引用回复, 回复后再等我 5 分钟。", 300),
-    Template("自定义", "", null),
-)
-private val INTERVALS = listOf(null to "不定时", 300 to "5 分钟", 1800 to "30 分钟", 3600 to "1 小时", 86400 to "每天")
 
 /** 名字 + 可读的群, 接入向导第一步和编辑共用。 */
 @OptIn(ExperimentalLayoutApi::class)
@@ -66,7 +57,7 @@ fun AgentForm(model: ChatModel, group: String, name: String, setName: (String) -
     }
 }
 
-/** 接入向导: 1 名字与可读群, 2 任务与定时, 3 发给 Agent 并等它报到。 */
+/** 接入向导: 1 名字与可读群, 2 任务 (定时由 Agent 按 skill 自适应, #161), 3 发给 Agent 并等它报到。 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AgentWizard(model: ChatModel, group: String, close: () -> Unit) {
@@ -75,9 +66,8 @@ fun AgentWizard(model: ChatModel, group: String, close: () -> Unit) {
     var step by remember { mutableStateOf(1) }
     var name by remember { mutableStateOf("") }
     var reads by remember { mutableStateOf(setOf(group)) }
-    var template by remember { mutableStateOf<Template?>(null) }
+    var template by remember { mutableStateOf<TaskTemplate?>(null) }
     var task by remember { mutableStateOf("") }
-    var interval by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf<Onboard?>(null) }
@@ -92,19 +82,15 @@ fun AgentWizard(model: ChatModel, group: String, close: () -> Unit) {
                 2 -> {
                     Text("让它做什么", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        TEMPLATES.forEach { t ->
+                        TASK_TEMPLATES.forEach { t ->
                             FilterChip(template == t, {
                                 template = t
                                 task = t.task
-                                interval = t.interval
                             }, { Text(t.label) })
                         }
                     }
-                    OutlinedTextField(task, { task = it }, Modifier.fillMaxWidth(), label = { Text("任务 (可以留空, 之后在它那边布置)") }, minLines = 2)
-                    Text("多久跑一次", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        INTERVALS.forEach { (v, label) -> FilterChip(interval == v, { interval = v }, { Text(label) }) }
-                    }
+                    OutlinedTextField(task, { task = it }, Modifier.fillMaxWidth(), label = { Text("任务 (可以留空, 之后在群里跟它说)") }, minLines = 3)
+                    TaskGuide()
                 }
                 else -> done?.let { SendPane(model, group, name, it) }
             }
@@ -118,7 +104,7 @@ fun AgentWizard(model: ChatModel, group: String, close: () -> Unit) {
                         busy = true
                         error = null
                         scope.launch {
-                            dir.addAgent(group, name.trim(), reads.toList(), interval, task.takeIf { it.isNotBlank() })
+                            dir.addAgent(group, name.trim(), reads.toList(), task = task.takeIf { it.isNotBlank() })
                                 .onSuccess { done = it; step = 3 }
                                 .onFailure { error = it.message }
                             busy = false

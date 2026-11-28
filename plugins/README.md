@@ -27,7 +27,7 @@ plugins/
 | `readme` | 介绍文件名, `.md` 或 `.html` |
 | `prompt` | 提示词模板文件名, `.md` |
 | `group.title` | 安装时建的群的标题, 群 channel 固定为 `plugin-<id>` (改过 id 的插件沿用旧 id, 如待办是 `plugin-todo`) |
-| `agent.name` | 接入 Agent 的名字 (api 2 可以不写 `agent`, 这类插件不安装只启用, 如 `hengxin666.github`, `hengxin666.gh`); `agent.interval` 是定时间隔 (秒), `agent.task` 是一句话任务, 两者拼进接入语; `agent.schedule` 是给人看的定时说明 |
+| `agent.name` | 接入 Agent 的名字 (api 2 可以不写 `agent`, 这类插件不安装只启用, 如 `hengxin666.github`, `hengxin666.gh`); `agent.task` 是一句话任务, 写进接入语; `agent.interval` (秒) 与 `agent.schedule` 只是给人看的建议, 不再写进接入语: 云 Agent 按核心 skill 的 `references/schedule.md` 自己定时 (#161) |
 | `base`, `deps` | 旧格式 (api 1) 的基础插件与依赖, 照常能解析; `base` 插件按无 Agent 插件处理。新插件改用 `provides` / `optional` 声明服务, 例 GitHub issue 代办是 `service:gh.issues` |
 | `space` | 可选, 工作台布局 (格式见 `docs/api/spaces.md`), 安装后 id 固定为 `plugin-<id>` |
 | `space.tab` | 可选, 顶部标签怎么自动补空位: `primary` 优先 (排在 "消息" 之后, 其它内置页之前), `auto` (缺省) 排在内置页之后, `none` 从不自动置顶 (用户仍可手动置顶)。只有官方源与主人私有源能用 `primary`, 其它来源服务端按 `auto` 处理。用户自己设过置顶的永远按用户的, 规则见 `docs/design/ui-spec/home-spaces.md` §3 |
@@ -65,14 +65,7 @@ api 2 的 `agent.interval` 也不能小于 60 秒, 更快请用长连 (`hxaioa w
 ## 安装后的专属指令
 
 Agent 拉取的专属指令 = 通用接入部分 + "插件任务: <name>" 一节 (提示词模板替换占位符后) + 服务端生成的待办接口说明 (pdata, 见 `docs/api/plugins.md`)。
-安装后给一段接入语, 整段复制给任何 Agent (本地或云端都行), 用户可以直接改里面的间隔和任务:
-
-```
-你看一下 <docs/agent-guide.md 链接> 这个文档, 帮我接入 HX-AIOA (服务地址 <地址>, 群 "<群名>"), 然后帮我每 <agent.interval> 秒完成以下任务:
-<agent.task>
-
-API 密钥: <密钥>
-```
+安装后给一段接入语, 整段复制给任何 Agent (本地或云端都行): 装命令行, 登录, 装 skill, 建一个只含触发语的定时任务。接入语不写间隔, 多久跑一次由核心 skill 的 `references/schedule.md` 按群里消息的时段与宿主额度自己定; 主人之后指定了定时, Agent 也会按这份 skill 在实时与省额度之间权衡。模板见 `server/src/agent-prompt.ts` 的 `agentSetup`。
 
 密钥另给一份方便单独复制。
 

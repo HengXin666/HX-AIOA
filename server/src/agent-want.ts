@@ -35,7 +35,7 @@ const TZ_MS = 8 * 3600_000;
 const END_OF_DAY = "T23:59:59+08:00";
 const WARN_NEW = ":new";
 const WARN_REMIND = ":remind";
-const CORE_CHANGE = { changes: "核心 skill 大版本更新", missing: "新功能用不上, 兼容期过后本群停止处理" };
+const CORE_CHANGE = { changes: "核心 skill 大版本更新: 定时改为按群消息时段与额度自适应 (#161)", missing: "定时不会自动调整, 空跑多费额度; 兼容期过后本群停止处理" };
 
 export type Missing = MajorChange & { key: string; until: string };
 type PluginSkill = { id: string; version: string; url: string; changes: MajorChange[] };

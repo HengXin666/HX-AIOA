@@ -42,6 +42,7 @@ export * from "./v1/term";
 export * from "./v1/presence";
 export * from "./v1/agent-skill";
 export * from "./v1/trigger";
+export * from "./v1/agent-plan";
 export * from "./v1/compat";
 export * from "./v1/webpush";
 import { parseTermFrame, type TermFrame } from "./v1/term";

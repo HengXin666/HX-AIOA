@@ -123,7 +123,7 @@ function parseAgent(raw: unknown, partial: boolean): Partial<AgentInput> | strin
     if (!Array.isArray(raw.reads) || raw.reads.length > MAX_AGENT_READS || !raw.reads.every((x) => typeof x === "string" && x)) return "reads 必须是群名数组";
     out.reads = [...new Set(raw.reads as string[])];
   }
-  // 接入向导第二步: 定时与任务只进这次的接入语
+  // 接入向导第二步: 任务只进这次的接入语; interval 是旧客户端带的, 定时改由 skill 自适应 (#161), 不再写进接入语
   const interval = typeof raw.interval === "number" && raw.interval >= 10 ? Math.round(raw.interval) : undefined;
   const task = typeof raw.task === "string" && raw.task.trim() ? raw.task.trim().slice(0, MAX_AGENT_TASK) : undefined;
   if (interval || task) out.job = { ...(interval ? { interval } : {}), ...(task ? { task } : {}) };
@@ -184,7 +184,7 @@ async function addAgent(c: ReqCtx): Promise<Response> {
   if (typeof p === "string") return fail(400, p);
   if ((c.core.chats.chat(channel)?.agents ?? []).length >= MAX_CHAT_AGENTS) return fail(400, `每个群最多 ${MAX_CHAT_AGENTS} 个 Agent`);
   const { agent, key } = await createAgent(c.core, channel, p.name!, p.reads ?? []);
-  const prompt = agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: 1, interval: p.job?.interval, task: p.job?.task, key });
+  const prompt = agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: 1, task: p.job?.task, key });
   return json({ agent, prompt, key } satisfies OnboardResult);
 }
 
@@ -242,8 +242,7 @@ function removeAgent(c: ReqCtx): Response {
 
 // 接入语: 给 key 时是新接入, 不给时是更新用 (不含密钥)
 function setupPrompt(c: ReqCtx, channel: string, agent: ChatAgent, key?: string): string {
-  const job = agent.plugin ? c.core.plugins.job(agent.plugin) : undefined;
-  return agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: agent.setup ?? 1, auto: agent.autoMajor, interval: job?.interval, ...(key ? { key } : {}) });
+  return agentSetup(baseOf(c.url), { title: titleOf(c.core, channel), channel, setup: agent.setup ?? 1, auto: agent.autoMajor, ...(key ? { key } : {}) });
 }
 
 // skill 版 Agent (有接入版本或上报过 skill) 给更新用接入语, 老 Agent 仍给专属指令
