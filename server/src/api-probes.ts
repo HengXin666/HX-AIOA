@@ -1,4 +1,4 @@
-import { PATH_PROBES, PATH_SHELL_TICKET, type KeyRequest, type Scope } from "@hx-aioa/protocol";
+import { AG_SCOPE, PATH_PROBE_SCOPE, PATH_PROBES, PATH_SHELL_TICKET, type KeyRequest, type ProbeScopeResponse, type Scope } from "@hx-aioa/protocol";
 import { CODE_FORBIDDEN, POST } from "./constants";
 import { OWNER, type ReqCtx, type Route, route } from "./core";
 import { fail, json, readJson } from "./http";
@@ -12,6 +12,12 @@ const ERR_NAME = "名字只能用小写字母, 数字和 -, 最长 32 位";
 const ERR_OWNER = "只有主账号能打开终端";
 const ERR_PASSWORD = "密码不对";
 const ERR_LOCKED = "密码错误次数过多, 5 分钟后再试";
+const ERR_SCOPE_OWNER = "只有主账号能修改主机权限";
+const ERR_SCOPE_ADD = `add 只能是 ["${AG_SCOPE}"]`;
+const ERR_NO_PROBE = "没有这台主机的 key";
+const PROBE_SCOPE: Scope = "probe";
+// 目前只允许事后补开 Agent GUI; 终端 (probe:shell) 仍需重新添加主机
+const ADDABLE: readonly Scope[] = [AG_SCOPE];
 
 // 密码失败计数只放内存: DO 被回收即清零, 不写库
 const failures = { n: 0, until: 0 };
@@ -67,4 +73,27 @@ async function shellTicket(c: ReqCtx): Promise<Response> {
   return json(await c.core.terms.ticket(subject));
 }
 
-export const PROBE_ROUTES: Route[] = [route(POST, PATH_PROBES, OWNER, createProbe), route(POST, PATH_SHELL_TICKET, OWNER, shellTicket)];
+// 补 scope (Agent GUI "开启"): scope 存在服务端 key 记录里, key 本身不变, 原安装命令继续可用;
+// 改完断开用这把 key 连着的探针, 它重连时带上新 scope, host info 里的 agent.denied 随之消失
+async function probeScope(c: ReqCtx): Promise<Response> {
+  const who = c.who;
+  if (!who.owner || who.user?.role !== "owner") return fail(403, ERR_SCOPE_OWNER, CODE_FORBIDDEN);
+  const b = (await readJson(c.req)) as Body;
+  const add = b?.add;
+  if (!Array.isArray(add) || !add.length || !add.every((s) => (ADDABLE as readonly unknown[]).includes(s))) return fail(400, ERR_SCOPE_ADD);
+  const id = decodeURIComponent(c.params[0] ?? "");
+  const keys = c.core.registry.keys().filter((k) => k.scopes.includes(PROBE_SCOPE) && (k.id === id || k.subject === id));
+  if (!keys.length) return fail(404, ERR_NO_PROBE);
+  const changed: string[] = [];
+  for (const k of keys) {
+    const missing = (add as Scope[]).filter((s) => !k.scopes.includes(s));
+    if (!missing.length) continue;
+    c.core.registry.saveKey({ ...k, scopes: [...k.scopes, ...missing] });
+    changed.push(k.id);
+  }
+  if (changed.length) c.core.agentGui.rescope(changed);
+  const out: ProbeScopeResponse = { ok: true };
+  return json(out);
+}
+
+export const PROBE_ROUTES: Route[] = [route(POST, PATH_PROBES, OWNER, createProbe), route(POST, PATH_SHELL_TICKET, OWNER, shellTicket), route(POST, PATH_PROBE_SCOPE, OWNER, probeScope)];

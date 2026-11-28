@@ -21,26 +21,28 @@ export class AgentGuiStore {
     return this.sql.exec<AgReqRow>("SELECT * FROM agent_gui_req WHERE host = ? AND rid = ?", host, rid).toArray()[0];
   }
 
-  put(card: AgCard, now = Date.now()): AgPutResult {
+  /** 存卡片; loud = 这次会发正常 (有声) 推送, 与卡片同一次写记下, 之后的重发不再推。 */
+  put(card: AgCard, now = Date.now(), loud = false): AgPutResult {
     const cur = this.get(card.host, card.rid);
     if (cur?.state === AG_DONE) return { kind: "done", loudBefore: cur.loud === 1 };
     const body = JSON.stringify(card);
+    const l = loud ? 1 : 0;
     if (cur) {
-      this.sql.exec("UPDATE agent_gui_req SET card = ?, sid = ? WHERE host = ? AND rid = ?", body, card.sid, card.host, card.rid);
+      this.sql.exec("UPDATE agent_gui_req SET card = ?, sid = ?, loud = MAX(loud, ?) WHERE host = ? AND rid = ?", body, card.sid, l, card.host, card.rid);
       return { kind: "update", loudBefore: cur.loud === 1 };
     }
-    this.sql.exec("INSERT INTO agent_gui_req (host, rid, sid, card, state, at) VALUES (?, ?, ?, ?, ?, ?)", card.host, card.rid, card.sid, body, AG_OPEN, now);
+    this.sql.exec("INSERT INTO agent_gui_req (host, rid, sid, card, state, at, loud) VALUES (?, ?, ?, ?, ?, ?, ?)", card.host, card.rid, card.sid, body, AG_OPEN, now, l);
     return { kind: "new", loudBefore: false };
-  }
-
-  /** 已发过正常 (有声) 推送, 之后的重发不再推。 */
-  markLoud(host: string, rid: string): void {
-    this.sql.exec("UPDATE agent_gui_req SET loud = 1 WHERE host = ? AND rid = ?", host, rid);
   }
 
   /** 先答先得: 只有还 open 的那一次返回 true。 */
   done(host: string, rid: string, by: string, now = Date.now()): boolean {
     return this.sql.exec(`UPDATE agent_gui_req SET state = ?, "by" = ?, done_at = ? WHERE host = ? AND rid = ? AND state = ?`, AG_DONE, by, now, host, rid, AG_OPEN).rowsWritten > 0;
+  }
+
+  /** 已 done 的行改正答复者 (探针说实际是别人答的 / Agent 取消了); by 没变返回 false。 */
+  setBy(host: string, rid: string, by: string): boolean {
+    return this.sql.exec(`UPDATE agent_gui_req SET "by" = ? WHERE host = ? AND rid = ? AND state = ? AND ("by" IS NULL OR "by" != ?)`, by, host, rid, AG_DONE, by).rowsWritten > 0;
   }
 
   open(): AgCard[] {

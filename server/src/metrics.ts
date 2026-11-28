@@ -38,7 +38,10 @@ export class MetricRouter {
   host(ws: WebSocket, att: Attachment, frame: HostFrame): void {
     const info = { ...frame.info };
     if (!att.shell) delete info.shell;
-    if (!att.agent) delete info.agent;
+    // key 缺 probe:agent: 不放行, 但留下 denied 让 Web 显示 "开启" (路线不给)
+    // denied 只由 Hub 写: 有 scope 的探针自报 denied 当没声明
+    if (!att.agent && info.agent) info.agent = { port: info.agent.port, v: info.agent.v, routes: [], denied: "scope" };
+    else if (info.agent?.denied) delete info.agent;
     const card: HostCard = { subject: frame.subject, online: true, seen: Date.now(), info };
     if (frame.last) card.last = frame.last;
     if (frame.avail !== undefined) card.avail = frame.avail;

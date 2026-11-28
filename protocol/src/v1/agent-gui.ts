@@ -10,6 +10,13 @@ export const AG_DONE_TTL_MS = 24 * 3600_000;
 export const AG_OPEN_TTL_MS = 7 * 24 * 3600_000;
 // 静默推送后多久探针以 quiet:false 重发
 export const AG_QUIET_REPUSH_SEC = 60;
+// ag_index 合并: 最后一次变化后再等这么久才发 (trailing), 一直在变也最迟这么久发一次
+export const AG_INDEX_MERGE_MS = 5000;
+export const AG_INDEX_MAX_WAIT_MS = 20_000;
+// 会话索引里的上下文占比只报分档 (档下限), 跨档才触发上报: <50% 报 0, 其余报 0.5 / 0.8 / 0.95
+export const AG_CTX_BANDS = [0.5, 0.8, 0.95] as const;
+// Hub 转出 ag_answer 后等探针 ag_ack 的时长 (只在内存, 超时丢弃)
+export const AG_ACK_TIMEOUT_MS = 30_000;
 
 export const AG_MAX_ID = 128;
 export const AG_MAX_TITLE = 300;
@@ -42,6 +49,13 @@ export const AG_PROBE_BY = ["desktop", "agent"] as const;
 export type AgProbeBy = (typeof AG_PROBE_BY)[number];
 export const AG_UNREQ_BY = ["desktop", "phone", "web", "agent"] as const;
 export type AgUnreqBy = (typeof AG_UNREQ_BY)[number];
+// 探针对 Hub 转来的答复的确认: hub = 这次答复生效; 其余 = 已被别处答了 / Agent 取消了, 以它为准
+export const AG_ACK_BY = ["hub", "desktop", "agent"] as const;
+export type AgAckBy = (typeof AG_ACK_BY)[number];
+// 主机声明了 agent 但 Hub 不放行的原因: scope = key 缺 probe:agent
+export const AG_DENIED = ["scope"] as const;
+export type AgDenied = (typeof AG_DENIED)[number];
+export const AG_SCOPE = "probe:agent";
 
 export type AgRoute = { kind: AgRouteKind; url: string };
 export type AgPublicJwk = { kty: "EC"; crv: "P-256"; x: string; y: string };
@@ -87,16 +101,29 @@ export type AgCard = {
 };
 // Hub 里的会话索引 (只放内存)
 export type AgIndexItem = { id: string; agent: string; title: string; state: AgSessionState; ctx?: number; pending: number; updated: number };
-export type AgHost = { subject: string; online: boolean; routes: AgRoute[]; sessions: AgIndexItem[] };
-// 探针在 host info 里声明 (AIOA_AGENT=1 时)
-export type AgHostInfo = { port: number; v: number; routes: AgRoute[] };
+// denied: 主机本地开了 Agent 但 key 缺 probe:agent, 此时 routes / sessions 为空 (Web 显示 "开启" 按钮, 调 PATH_PROBE_SCOPE)
+export type AgHost = { subject: string; online: boolean; routes: AgRoute[]; sessions: AgIndexItem[]; denied?: AgDenied };
+// 探针在 host info 里声明 (AIOA_AGENT=1 时); denied 只由 Hub 写 (探针报的会被丢掉), 写了 denied 时 routes 为空
+export type AgHostInfo = { port: number; v: number; routes: AgRoute[]; denied?: AgDenied };
+
+/** 上下文占比 -> 分档下限 (0 / 0.5 / 0.8 / 0.95); 没有占比返回 undefined。 */
+export function agCtxBand(ctx: number | undefined): number | undefined {
+  if (typeof ctx !== "number" || !Number.isFinite(ctx)) return undefined;
+  let band = 0;
+  for (const b of AG_CTX_BANDS) if (ctx >= b) band = b;
+  return band;
+}
 
 // ---- 直连 (浏览器 <-> 探针 WS), 探针与 Web 各自实现, 这里只给类型 ----
 export type AgHello = { v: number; host: string; pub: JsonWebKey; nonce: string; agent: "hx-aioa-agent" };
 export type AgDirectChallenge = { t: "challenge"; nonce: string; host: string; pub: JsonWebKey };
 export type AgDirectHello = { t: "hello"; device: string; sig: string; fg?: boolean };
 export type AgDirectReady = { t: "ready"; device: string; host: string; sessions: AgSessionInfo[]; instances: AgInstance[]; settings: AgSettings };
-export type AgDirectError = { t: "error"; code: string; msg: string };
+// code=auth_required: session/create 或 session/resume 时 Agent 要求先登录; methods 是 initialize 回的 authMethods 原样,
+// instance 是要登录的实例, id 是触发它的 hx 请求 id; 选一个 methodId 调 hx agent/authenticate
+export type AgAuthMethod = { id: string; name: string; description?: string | null; [k: string]: unknown };
+export type AgDirectError = { t: "error"; code: string; msg: string; methods?: AgAuthMethod[]; instance?: string; sid?: string; id?: number };
+export const AG_ERR_AUTH_REQUIRED = "auth_required";
 export type AgAttach = { t: "attach"; sid: string; since?: number };
 export type AgDetach = { t: "detach"; sid: string };
 export type AgFg = { t: "fg"; on: boolean };
@@ -132,10 +159,15 @@ export const AG_HX_METHODS = [
   "fs/read",
   "tool/output",
   "dirs/recent",
+  "agent/authenticate",
 ] as const;
 export type AgHxMethod = (typeof AG_HX_METHODS)[number];
 export type AgGitFile = { path: string; x: string; y: string; add: number; del: number };
 export type AgFsEntry = { name: string; dir: boolean; size: number };
+// hx agent/authenticate: 在等登录的那个 Agent 进程上调 ACP authenticate, 成功后重试原来的 session/new (或恢复)
+export type AgAuthenticateParams = { instance: string; methodId: string };
+// 有等登录的会话: 返回重试后的 SessionInfo; 没有: 起临时进程登录后退出, 返回 { authenticated: true } (客户端再 session/create)
+export type AgAuthenticateResult = AgSessionInfo | { authenticated: true };
 
 // ---- 经 Hub (现有长连帧) ----
 export type AgPairDevice = { id: string; name: string; pub: AgPublicJwk };
@@ -147,15 +179,24 @@ export type AgPairedFrame =
   | { t: "ag_paired"; pid: string; ok: false; err: string };
 export type AgPairFrame = { t: "ag_pair"; pid: string; device: AgPairDevice };
 export type AgProbeAnswerFrame = { t: "ag_answer"; aid: string; sid: string; rid: string; option: string | null; text: string };
+// Hub -> 探针: DO 休眠醒来内存索引为空, 请探针立刻重报 ag_index
+export type AgReindexFrame = { t: "ag_reindex" };
+// 探针 -> Hub: 对每个 ag_answer 的确认; by=hub 表示这次答复生效, 否则以 by 为准 (Hub 改正并回告答题端)
+export type AgAckFrame = { t: "ag_ack"; aid: string; sid: string; rid: string; by: AgAckBy; option?: string | null };
+// Hub -> 答题的客户端: 探针确认后回告; ok=false 表示答晚了, 实际由 by 答复 / 撤回, 这一端的选择没有生效
+export type AgAnsweredFrame = { t: "ag_answered"; aid: string; host: string; sid: string; rid: string; ok: boolean; by: AgUnreqBy };
 export type AgHostsFrame = { t: "ag_hosts"; hosts: AgHost[] };
 export type AgUnreqFrame = { t: "ag_unreq"; host: string; sid: string; rid: string; by: AgUnreqBy };
 export type AgAnswerFrame = { t: "ag_answer"; aid: string; host: string; sid: string; rid: string; option: string | null; text: string };
 // 探针 / 客户端 -> Hub (Hub 再按连接角色分别认)
-export type AgInFrame = AgIndexFrame | AgReqFrame | AgProbeUnreqFrame | AgPairedFrame | AgAnswerFrame;
-export type AgOutFrame = AgPairFrame | AgProbeAnswerFrame | AgHostsFrame | AgReqFrame | AgUnreqFrame;
+export type AgInFrame = AgIndexFrame | AgReqFrame | AgProbeUnreqFrame | AgPairedFrame | AgAnswerFrame | AgAckFrame;
+export type AgOutFrame = AgPairFrame | AgProbeAnswerFrame | AgReindexFrame | AgHostsFrame | AgReqFrame | AgUnreqFrame | AgAnsweredFrame;
 export type AgInboxResponse = { cards: AgCard[]; hosts: AgHost[] };
 export type AgPairRequest = { subject: string; password: string; device: AgPairDevice };
 export type AgPairResponse = { host: string; pub: AgPublicJwk; routes: AgRoute[]; device: AgDevice };
+// POST PATH_PROBE_SCOPE (主账号): 给主机的 key 补 scope; key 不变 (scope 存在服务端), 探针被断开后自动重连生效, 所以 key 总是不给
+export type ProbeScopeRequest = { add: "probe:agent"[] };
+export type ProbeScopeResponse = { ok: true; key?: string };
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -183,7 +224,12 @@ export function parseAgRoutes(v: unknown): AgRoute[] | null {
   return out;
 }
 
+/** host info 的 agent 声明; 带 denied (Hub 下发的 "key 缺 probe:agent") 时放行, port / v 缺省为 0, 路线清空。 */
 export function parseAgHostInfo(v: unknown): AgHostInfo | null {
+  if (isObj(v) && oneOf(AG_DENIED, v.denied)) {
+    const port = isNum(v.port) && Number.isInteger(v.port) && v.port > 0 && v.port <= 65535 ? v.port : 0;
+    return { port, v: isNum(v.v) ? v.v : 0, routes: [], denied: v.denied };
+  }
   if (!isObj(v) || !isNum(v.port) || !Number.isInteger(v.port) || v.port <= 0 || v.port > 65535 || !isNum(v.v)) return null;
   const routes = v.routes === undefined ? [] : parseAgRoutes(v.routes);
   return routes ? { port: v.port, v: v.v, routes } : null;
@@ -267,6 +313,13 @@ export function parseAgFrame(f: Record<string, unknown>): AgInFrame | null {
       const pub = parseAgJwk(f.pub);
       const routes = parseAgRoutes(f.routes ?? []);
       return device && pub && routes ? { t: "ag_paired", pid: f.pid, ok: true, device, pub, routes } : null;
+    }
+    case "ag_ack": {
+      if (!isId(f.aid) || !isId(f.sid) || !isId(f.rid) || !oneOf(AG_ACK_BY, f.by)) return null;
+      const out: AgAckFrame = { t: "ag_ack", aid: f.aid, sid: f.sid, rid: f.rid, by: f.by };
+      const option = optionOf(f.option);
+      if (option !== undefined) out.option = option;
+      return out;
     }
     case "ag_answer": {
       const option = optionOf(f.option);

@@ -1,6 +1,9 @@
 import {
+  AG_ACK_TIMEOUT_MS,
   AG_PAIR_TIMEOUT_MS,
   ANDROID_DEVICE_PREFIX,
+  type AgAckFrame,
+  type AgAnsweredFrame,
   type AgAnswerFrame,
   type AgCard,
   type AgHost,
@@ -45,6 +48,13 @@ export type AgDeps = {
 };
 
 type Pending = { subject: string; done: (f: AgPairedFrame | null) => void };
+// Hub 转给探针、还在等 ag_ack 的答复 (只在内存; DO 休眠丢了就只靠 ag_unreq 广播改正)
+type AckWait = { device: string; host: string; sid: string; rid: string; by: AgUnreqBy; at: number };
+// 探针断开 key 连接让它带新 scope 重连
+const CLOSE_RESCOPE = 4010;
+const RESCOPE_REASON = "scope 已更新, 请重连";
+// 索引比较时不看 updated: 只为 updated 变了就广播没有意义
+const indexSig = (items: AgIndexItem[]) => JSON.stringify(items.map(({ updated: _u, ...rest }) => rest));
 
 const AG_FRAME_PREFIX = "ag_";
 export const isAgFrame = (f: { t: string }): f is AgInFrame => f.t.startsWith(AG_FRAME_PREFIX);
@@ -70,6 +80,9 @@ export class AgentGui {
   // 主体 -> 会话索引; DO 被回收就丢, 探针下次状态变化或重连时重报
   private readonly index = new Map<string, AgIndexItem[]>();
   private readonly pairs = new Map<string, Pending>();
+  private readonly acks = new Map<string, AckWait>();
+  // 本次 DO 生命周期里已发过 ag_reindex 的主机 (每台只发一次)
+  private readonly reindexed = new Set<string>();
 
   constructor(private readonly d: AgDeps) {}
 
@@ -88,11 +101,48 @@ export class AgentGui {
     return this.d
       .hostCards()
       .filter((h) => h.info.agent)
-      .map((h) => ({ subject: h.subject, online: h.online, routes: h.info.agent?.routes ?? [], sessions: h.online ? (this.index.get(h.subject) ?? []) : [] }));
+      .map((h) => {
+        const denied = h.info.agent?.denied;
+        if (denied) return { subject: h.subject, online: h.online, routes: [], sessions: [], denied };
+        return { subject: h.subject, online: h.online, routes: h.info.agent?.routes ?? [], sessions: h.online ? (this.index.get(h.subject) ?? []) : [] };
+      });
   }
 
   hostsFrame(): AgHostsFrame {
     return { t: "ag_hosts", hosts: this.hosts() };
+  }
+
+  /** 客户端 welcome 时给的 ag_hosts: DO 醒来后内存索引为空的在线 Agent 主机, 先请探针重报 (每台只请一次)。 */
+  welcomeFrame(): AgHostsFrame {
+    this.reindex();
+    return this.hostsFrame();
+  }
+
+  /** 向内存里还没有索引的在线 Agent 探针发 ag_reindex; 返回发出的主机。 */
+  reindex(): string[] {
+    const sent: string[] = [];
+    for (const ws of this.d.all()) {
+      const a = attOf(ws);
+      const subject = a.host?.subject;
+      if (!subject || !isAgentProbe(a) || this.index.has(subject) || this.reindexed.has(subject)) continue;
+      this.reindexed.add(subject);
+      if (sendFrame(ws, { t: "ag_reindex" })) sent.push(subject);
+    }
+    return sent;
+  }
+
+  /** key 的 scope 改了: 断开用这些 key 连着的探针, 让它重连后带上新 scope。返回断开的连接数。 */
+  rescope(keyIds: string[]): number {
+    let n = 0;
+    for (const ws of this.d.all()) {
+      const a = attOf(ws);
+      if (!isProbe(a) || !a.keyId || !keyIds.includes(a.keyId)) continue;
+      try {
+        ws.close(CLOSE_RESCOPE, RESCOPE_REASON);
+        n += 1;
+      } catch {}
+    }
+    return n;
   }
 
   broadcastHosts(): void {
@@ -108,14 +158,21 @@ export class AgentGui {
     if (!isAgentProbe(att)) return this.deny(ws);
     const subject = att.host!.subject;
     switch (f.t) {
-      case "ag_index":
+      case "ag_index": {
+        const prev = this.index.get(subject);
         this.index.set(subject, f.sessions);
         this.reconcile(subject, f.sessions);
+        // 只有 updated 不同 (或完全相同) 的重报不广播
+        if (prev && indexSig(prev) === indexSig(f.sessions)) return;
         return this.broadcastHosts();
+      }
       case "ag_req":
         return this.request({ ...f.card, host: subject });
       case "ag_unreq":
-        return this.close(subject, f.sid, f.rid, f.by);
+        this.close(subject, f.sid, f.rid, f.by, true);
+        return;
+      case "ag_ack":
+        return this.ack(subject, f);
       case "ag_paired": {
         const p = this.pairs.get(f.pid);
         if (p && p.subject === subject) p.done(f);
@@ -129,20 +186,44 @@ export class AgentGui {
   }
 
   private async request(card: AgCard, now = Date.now()): Promise<void> {
-    const r = this.d.store.put(card, now);
+    // 新请求: 有人在电脑前看着就静默推, 否则正常推; 重发且 quiet 变假: 补一次正常推送 (卡片与 loud 标记同一次写)
+    const loud = !card.quiet;
+    const r = this.d.store.put(card, now, loud);
     if (r.kind === "done") return;
     this.d.toClients({ t: "ag_req", card });
-    // 新请求: 有人在电脑前看着就静默推, 否则正常推; 重发且 quiet 变假: 补一次正常推送
-    const loud = !card.quiet;
     if (r.kind === "update" && (!loud || r.loudBefore)) return;
-    if (loud) this.d.store.markLoud(card.host, card.rid);
     await this.d.push(pushOf(card), loud).catch((e) => console.error("Agent GUI 推送失败:", e));
   }
 
-  private close(host: string, sid: string, rid: string, by: AgUnreqBy, now = Date.now()): void {
-    if (!this.d.store.done(host, rid, by, now)) return;
+  // probe=true: 探针报的结果, 以它为准; Hub 已先按别的端收掉了也改正 by 并重新广播
+  private close(host: string, sid: string, rid: string, by: AgUnreqBy, probe = false, now = Date.now()): boolean {
+    const changed = this.d.store.done(host, rid, by, now) || (probe && this.d.store.setBy(host, rid, by));
+    if (!changed) return false;
     const f: AgUnreqFrame = { t: "ag_unreq", host, sid, rid, by };
     this.d.toClients(f);
+    return true;
+  }
+
+  // 探针对 Hub 转去的答复的确认: 生效回告 ok; 被别处抢先则改正并回告答题端 ok:false
+  private ack(host: string, f: AgAckFrame): void {
+    const w = this.acks.get(f.aid);
+    this.acks.delete(f.aid);
+    const mine = w && w.host === host && w.rid === f.rid ? w : undefined;
+    if (f.by === "hub") {
+      if (mine) this.tellAnswerer(mine.device, { t: "ag_answered", aid: f.aid, host, sid: f.sid, rid: f.rid, ok: true, by: mine.by });
+      return;
+    }
+    this.close(host, f.sid, f.rid, f.by, true);
+    if (mine) this.tellAnswerer(mine.device, { t: "ag_answered", aid: f.aid, host, sid: f.sid, rid: f.rid, ok: false, by: f.by });
+  }
+
+  private tellAnswerer(device: string, f: AgAnsweredFrame): void {
+    for (const ws of this.d.all()) if (attOf(ws).device === device) sendFrame(ws, f);
+  }
+
+  private waitAck(aid: string, w: AckWait): void {
+    for (const [k, v] of this.acks) if (v.at < w.at - AG_ACK_TIMEOUT_MS) this.acks.delete(k);
+    this.acks.set(aid, w);
   }
 
   // 探针重连 / 重启后, 已经没有待批请求的会话里残留的卡片收掉
@@ -151,7 +232,7 @@ export class AgentGui {
     for (const row of this.d.store.openOf(host)) {
       const s = live.get(row.sid);
       if (row.at > now - RECONCILE_GRACE_MS) continue;
-      if (!s || s.pending === 0 || s.state === "closed") this.close(host, row.sid, row.rid, "agent", now);
+      if (!s || s.pending === 0 || s.state === "closed") this.close(host, row.sid, row.rid, "agent", false, now);
     }
   }
 
@@ -172,6 +253,7 @@ export class AgentGui {
       return;
     }
     sendFrame(probe, { t: "ag_answer", aid: f.aid, sid: f.sid, rid: f.rid, option: f.option, text: f.text });
+    this.waitAck(f.aid, { device: att.device, host: f.host, sid: f.sid, rid: f.rid, by, at: Date.now() });
     this.d.toClients({ t: "ag_unreq", host: f.host, sid: f.sid, rid: f.rid, by } satisfies AgUnreqFrame);
   }
 

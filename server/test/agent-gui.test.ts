@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { AG_DONE_TTL_MS, AG_MAX_TOOL_CONTENT, AG_OPEN_TTL_MS, PATH_AGENT_GUI_INBOX, PATH_AGENT_GUI_PAIR, parseClientFrame, type AgCard, type HostCard, type WebPushPayload } from "@hx-aioa/protocol";
+import { AG_DONE_TTL_MS, AG_MAX_TOOL_CONTENT, AG_OPEN_TTL_MS, PATH_AGENT_GUI_INBOX, PATH_AGENT_GUI_PAIR, PATH_PROBE_SCOPE, agCtxBand, parseAgHostInfo, parseClientFrame, type AgCard, type HostCard, type WebPushPayload } from "@hx-aioa/protocol";
 import { AgentGui, pushOf } from "../src/agent-gui";
 import { AgentGuiStore } from "../src/agent-gui-store";
 import { AGENT_GUI_ROUTES } from "../src/api-agent-gui";
-import { resetPasswordFailures } from "../src/api-probes";
+import { PROBE_ROUTES, resetPasswordFailures } from "../src/api-probes";
+import { Registry } from "../src/registry";
 import { PROTO_V1 } from "../src/constants";
 import type { Core, Principal } from "../src/core";
 import { MetricRouter } from "../src/metrics";
@@ -13,7 +14,7 @@ import { OWNER_UID, call, memberWho, user } from "./chat-core";
 import { memSql } from "./sql";
 
 type Frame = Record<string, unknown>;
-type Fake = WebSocket & { frames: Frame[]; a: Attachment };
+type Fake = WebSocket & { frames: Frame[]; a: Attachment; closed?: number };
 const PUB = { kty: "EC", crv: "P-256", x: "abc", y: "def" };
 const ROUTES = [{ kind: "local", url: "http://127.0.0.1:7841" }];
 const PASSWORD = "pw";
@@ -52,6 +53,9 @@ function setup() {
       a: { device: `d${wss.length}`, proto: PROTO_V1, role: "client", ...att } as Attachment,
       deserializeAttachment: () => ws.a,
       serializeAttachment: (x: Attachment) => void (ws.a = x),
+      close(code: number) {
+        ws.closed = code;
+      },
       send(t: string) {
         const f = JSON.parse(t) as Frame;
         ws.frames.push(f);
@@ -101,9 +105,21 @@ test("主机卡片: key 没有 probe:agent 时去掉 agent 声明", () => {
   const metrics = new MetricRouter(() => [ws as unknown as WebSocket], sql);
   const info = { agent: { port: 1, v: 1, routes: [] } };
   metrics.host(ws as unknown as WebSocket, ws.a, { t: "host", subject: "pc", info });
-  assert.equal(ws.a.host?.info.agent, undefined);
+  assert.deepEqual(ws.a.host?.info.agent, { port: 1, v: 1, routes: [], denied: "scope" });
   metrics.host(ws as unknown as WebSocket, { ...ws.a, agent: true }, { t: "host", subject: "pc", info });
   assert.deepEqual(ws.a.host?.info.agent, info.agent);
+  // 有 scope 的探针自报 denied: 当没声明
+  metrics.host(ws as unknown as WebSocket, { ...ws.a, agent: true }, { t: "host", subject: "pc", info: { agent: { ...info.agent, denied: "scope" } } });
+  assert.equal(ws.a.host?.info.agent, undefined);
+});
+
+test("parseAgHostInfo 放行 {denied:\"scope\"}; 上下文分档", () => {
+  assert.deepEqual(parseAgHostInfo({ denied: "scope" }), { port: 0, v: 0, routes: [], denied: "scope" });
+  assert.deepEqual(parseAgHostInfo({ port: 7841, v: 1, routes: ROUTES, denied: "scope" }), { port: 7841, v: 1, routes: [], denied: "scope" });
+  assert.equal(parseAgHostInfo({ denied: "other" }), null);
+  assert.deepEqual([0.1, 0.5, 0.79, 0.8, 0.96, undefined].map(agCtxBand), [0, 0.5, 0.5, 0.8, 0.95, undefined]);
+  assert.deepEqual(parseClientFrame(JSON.stringify({ t: "ag_ack", aid: "a", sid: "s1", rid: "r1", by: "hub" })), { t: "ag_ack", aid: "a", sid: "s1", rid: "r1", by: "hub" });
+  assert.equal(parseClientFrame(JSON.stringify({ t: "ag_ack", aid: "a", sid: "s1", rid: "r1", by: "phone" })), null);
 });
 
 test("先答先得: 第一个答复转给探针并广播撤回, 第二个只收到 ag_unreq", async () => {
@@ -124,12 +140,101 @@ test("先答先得: 第一个答复转给探针并广播撤回, 第二个只收�
   assert.deepEqual(b.frames.at(-1), { t: "ag_unreq", host: "pc", sid: "s1", rid: "r1", by: "web" });
   assert.equal(p.frames.filter((f) => f.t === "ag_answer").length, 1);
   assert.equal(s.store.open().length, 0);
-  // 已答: 探针再撤回或重发都不再广播, 不再推
+  // 探针说其实是电脑上先答的: 以探针为准, 改正 by 并重新广播; 再重发不广播不推
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_unreq", sid: "s1", rid: "r1", by: "desktop" }));
+  assert.deepEqual(s.toClients.at(-1), { t: "ag_unreq", host: "pc", sid: "s1", rid: "r1", by: "desktop" });
+  assert.equal(s.store.get("pc", "r1")?.by, "desktop");
   const n = s.toClients.length;
   await s.gui.handle(p, p.a, s.frame({ t: "ag_unreq", sid: "s1", rid: "r1", by: "desktop" }));
   await s.gui.handle(p, p.a, s.frame({ t: "ag_req", card: card() }));
   assert.equal(s.toClients.length, n);
   assert.equal(s.pushes.length, 1);
+});
+
+test("ag_ack: 生效回告 ok, 被抢先则改正 by 并回告答题端 ok:false", async () => {
+  const s = setup();
+  const p = s.probe();
+  const web = s.connect({ device: "web-a" });
+  const phone = s.connect({ device: "android-b" });
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_req", card: card() }));
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_req", card: card({ rid: "r2" }) }));
+  await s.gui.handle(web, web.a, s.frame({ t: "ag_answer", aid: "w1", host: "pc", sid: "s1", rid: "r1", option: "allow" }));
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_ack", aid: "w1", sid: "s1", rid: "r1", by: "hub" }));
+  assert.deepEqual(web.frames.at(-1), { t: "ag_answered", aid: "w1", host: "pc", sid: "s1", rid: "r1", ok: true, by: "web" });
+  await s.gui.handle(phone, phone.a, s.frame({ t: "ag_answer", aid: "p1", host: "pc", sid: "s1", rid: "r2", option: "allow" }));
+  assert.deepEqual(s.toClients.at(-1), { t: "ag_unreq", host: "pc", sid: "s1", rid: "r2", by: "phone" });
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_ack", aid: "p1", sid: "s1", rid: "r2", by: "desktop" }));
+  assert.deepEqual(phone.frames.at(-1), { t: "ag_answered", aid: "p1", host: "pc", sid: "s1", rid: "r2", ok: false, by: "desktop" });
+  assert.deepEqual(s.toClients.at(-1), { t: "ag_unreq", host: "pc", sid: "s1", rid: "r2", by: "desktop" });
+  assert.equal(s.store.get("pc", "r2")?.by, "desktop");
+  // 别的主机伪造的 ack 不碰这一端
+  const n = phone.frames.length;
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_ack", aid: "p1", sid: "s1", rid: "r2", by: "agent" }));
+  assert.equal(phone.frames.length, n);
+});
+
+test("补推: 卡片与 loud 同一次写", async () => {
+  const sql = memSql();
+  const writes: string[] = [];
+  const spy = { exec: (q: string, ...b: unknown[]) => (/^\s*(update|insert)/i.test(q) && writes.push(q), sql.exec(q, ...b)) } as unknown as SqlStorage;
+  const store = new AgentGuiStore(spy);
+  store.put(card({ quiet: true }), 1, false);
+  writes.length = 0;
+  const r = store.put(card(), 2, true);
+  assert.equal(r.kind, "update");
+  assert.equal(writes.length, 1);
+  assert.equal(store.get("pc", "r1")?.loud, 1);
+  assert.equal(store.put(card({ quiet: true }), 3, false).loudBefore, true);
+  assert.equal(store.get("pc", "r1")?.loud, 1);
+});
+
+test("ag_reindex: DO 醒来索引为空时 welcome 向在线 Agent 探针要一次, 只要一次", async () => {
+  const s = setup();
+  const p = s.probe();
+  const q = s.probe("nas");
+  await s.gui.handle(q, q.a, s.frame({ t: "ag_index", sessions: [] }));
+  s.probe("old", false);
+  s.gui.welcomeFrame();
+  assert.deepEqual(p.frames, [{ t: "ag_reindex" }]);
+  assert.equal(q.frames.filter((f) => f.t === "ag_reindex").length, 0);
+  s.gui.welcomeFrame();
+  assert.equal(p.frames.length, 1);
+});
+
+test("ag_index: 只有 updated 变了不广播", async () => {
+  const s = setup();
+  const p = s.probe();
+  const item = { id: "s1", agent: "claude", title: "x", state: "running", pending: 0, updated: 1, ctx: 0.5 };
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_index", sessions: [item] }));
+  const n = s.toClients.length;
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_index", sessions: [{ ...item, updated: 99 }] }));
+  assert.equal(s.toClients.length, n);
+  await s.gui.handle(p, p.a, s.frame({ t: "ag_index", sessions: [{ ...item, state: "waiting", pending: 1 }] }));
+  assert.equal(s.toClients.length, n + 1);
+});
+
+test("主机 key 缺 probe:agent: ag_hosts 带 denied; scope 接口按主机名补上并断开探针", async () => {
+  const s = setup();
+  const registry = new Registry(memSql());
+  const { info } = await registry.createKey({ name: "探针 nas", scopes: ["probe"], subject: "nas" });
+  await registry.createKey({ name: "别的", scopes: ["events:write"], subject: "nas" });
+  const bad = s.connect({ role: "probe", device: "probe-nas", keyId: info.id, host: { subject: "nas", online: true, seen: 1, info: { agent: { port: 7841, v: 1, routes: [], denied: "scope" } } } });
+  assert.deepEqual(s.gui.hosts(), [{ subject: "nas", online: true, routes: [], sessions: [], denied: "scope" }]);
+  const core = { agentGui: s.gui, registry } as unknown as Core;
+  const owner: Principal = { owner: true, user: user(OWNER_UID) };
+  const path = PATH_PROBE_SCOPE.replace("{id}", "nas");
+  assert.equal((await call(core, PROBE_ROUTES, owner, "POST", path, { add: ["probe:shell"] })).status, 400);
+  assert.equal((await call(core, PROBE_ROUTES, owner, "POST", PATH_PROBE_SCOPE.replace("{id}", "nowhere"), { add: ["probe:agent"] })).status, 404);
+  assert.equal((await call(core, PROBE_ROUTES, memberWho("u2"), "POST", path, { add: ["probe:agent"] })).status, 403);
+  const ok = await call(core, PROBE_ROUTES, owner, "POST", path, { add: ["probe:agent"] });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.body, { ok: true });
+  assert.deepEqual(registry.key(info.id)?.scopes, ["probe", "probe:agent"]);
+  assert.equal(bad.closed, 4010);
+  // 再补一次: 已有, 不再断开
+  bad.closed = undefined;
+  assert.equal((await call(core, PROBE_ROUTES, owner, "POST", PATH_PROBE_SCOPE.replace("{id}", info.id), { add: ["probe:agent"] })).status, 200);
+  assert.equal(bad.closed, undefined);
 });
 
 test("静默推送后 quiet:false 重发补一次正常推送, 只补一次", async () => {

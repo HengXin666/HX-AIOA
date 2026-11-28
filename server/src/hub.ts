@@ -320,7 +320,7 @@ export class Hub extends DurableObject<Env> {
     // 装过的主机 (含离线) 一连上就给, 总览不必等到有在线探针才看得到它们
     sendFrame(server, this.core.metrics.hostsFrame());
     if (v1) sendFrame(server, { t: "agents", agents: this.core.agents.statuses() });
-    if (v1) sendFrame(server, this.core.agentGui.hostsFrame());
+    if (v1) sendFrame(server, this.core.agentGui.welcomeFrame());
     // 插件工作台按端给 (#156): 不支持的端不给, 组件级 clients 按端裁剪
     const spaces = v1 ? (await this.core.spaces.list()).map((sp) => spaceFor(this.core, sp, clientOfAtt(att))) : [];
     for (const space of spaces) if (space) sendFrame(server, { t: "space_update", id: space.id, space });
