@@ -1,11 +1,25 @@
 @import "tailwindcss";
 @import "@hx/ui/tailwind.css";
+/* 字体: 拉丁与数字用 Geist (HX-UI 令牌首选), 中文用思源黑体可变字重; 两者都按 unicode-range 分片, 只下载页面用到的字 */
+@import "@hx/ui/fonts.css";
+@import "@fontsource-variable/noto-sans-sc/wght.css";
+@import "./styles/shell.css";
+@import "./styles/overview.css";
 /* 不用的 HX-UI 目录 (见 web-arch.md 3.2) 不扫描, 少生成用不到的工具类 */
 @source not "../../../node_modules/@hx/ui/dist/backgrounds";
 @source not "../../../node_modules/@hx/ui/dist/stage";
 @source not "../../../node_modules/@hx/ui/dist/scroll";
 @source not "../../../node_modules/@hx/ui/dist/interactions";
 @source not "../../../node_modules/@hx/ui/dist/blueprint";
+
+/* 字体与断点令牌: 全站只认这两套字体; 3xl / 4xl 给 2K, 4K 大屏多排几列 */
+@theme {
+  --font-sans: "Geist Variable", "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Noto Sans SC Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "Geist Variable", "Noto Sans SC Variable", ui-sans-serif, sans-serif;
+  --breakpoint-3xl: 120rem;
+  --breakpoint-4xl: 160rem;
+}
 
 /* 只补 HX-UI 没有的: 全屏布局与安全区; 颜色一律用令牌类 */
 html,
@@ -15,67 +29,60 @@ body,
 }
 body {
   overscroll-behavior: none;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.005em;
+}
+/* 4K 原生分辨率 (缩放 100%) 下整体放大, 字与控件不至于小成一片; 布局仍按 24 列排 */
+@media (min-width: 160rem) {
+  #root {
+    zoom: 1.3;
+  }
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+/* 数字一律等宽, 跳动时不抖 */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
+  letter-spacing: -0.02em;
+}
 
-/* 底色: 静态细点阵 + 顶部一抹冷色, 不动画, 不用 backdrop-filter */
+/* 底色: 点阵 + 两团缓慢漂移的冷暖光; 只动 transform, 合成层完成, 不重排 */
 .app-canvas {
+  position: relative;
+  isolation: isolate;
   background-color: var(--background);
-  background-image:
-    radial-gradient(1200px 380px at 70% -120px, color-mix(in oklab, var(--info) 9%, transparent), transparent 70%),
-    radial-gradient(color-mix(in oklab, var(--foreground) 7%, transparent) 1px, transparent 1px);
-  background-size: auto, 18px 18px;
 }
-.side-surface {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--sidebar) 94%, var(--info) 6%), var(--sidebar) 240px);
+.app-canvas::before,
+.app-canvas::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
 }
-.brand-mark {
-  background: linear-gradient(140deg, color-mix(in oklab, var(--info) 75%, white 25%), var(--info) 45%, color-mix(in oklab, var(--info) 60%, black 40%));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.2);
+.app-canvas::before {
+  inset: 0;
+  background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(180deg, black, transparent 70%);
 }
-
-/* 侧栏行: 悬停淡底, 选中是卡面色加描边 */
-.nav-row:hover {
-  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+.app-canvas::after {
+  inset: -20%;
+  background:
+    radial-gradient(38% 30% at 72% 8%, color-mix(in oklab, var(--info) 16%, transparent), transparent 70%),
+    radial-gradient(30% 26% at 18% 92%, color-mix(in oklab, var(--chart-2) 12%, transparent), transparent 70%);
+  animation: canvas-drift 38s ease-in-out infinite alternate;
 }
-.nav-row.is-on {
-  background: var(--card);
-  outline: 1px solid var(--sidebar-border);
+@keyframes canvas-drift {
+  to {
+    transform: translate3d(-4%, 3%, 0) scale(1.06);
+  }
 }
-
-/* 图标块: --tile 由使用处给; 平时淡底有色图标, 选中实色渐变白图标 */
-.nav-tile {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  color: var(--tile);
-  background: color-mix(in oklab, var(--tile) 13%, transparent);
-  border: 1px solid color-mix(in oklab, var(--tile) 22%, transparent);
-  transition: background-color var(--dur-fast, 120ms) ease-out, color var(--dur-fast, 120ms) ease-out;
-}
-.nav-row:hover .nav-tile:not(.is-on) {
-  background: color-mix(in oklab, var(--tile) 22%, transparent);
-}
-.nav-tile.is-on {
-  color: white;
-  border-color: color-mix(in oklab, var(--tile) 70%, black 30%);
-  background: linear-gradient(160deg, color-mix(in oklab, var(--tile) 78%, white 22%), var(--tile) 55%, color-mix(in oklab, var(--tile) 80%, black 20%));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
-}
-.nav-tile svg {
-  stroke-width: 2;
-}
-
-/* 总览事实带: 格子之间 1px 缝露出描边色 */
-.stat-cell {
-  background: var(--card);
-  transition: background-color var(--dur-fast, 120ms) ease-out;
-}
-.stat-cell:hover {
-  background: color-mix(in oklab, var(--card) 94%, var(--foreground));
-}
-.stat-cell:hover .nav-tile {
-  background: color-mix(in oklab, var(--tile) 22%, transparent);
+@media (prefers-reduced-motion: reduce) {
+  .app-canvas::after {
+    animation: none;
+  }
 }

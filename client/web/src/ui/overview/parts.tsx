@@ -1,7 +1,7 @@
 import { Card } from "@hx/ui/ui/card";
 import { Empty, EmptyMedia, EmptyTitle } from "@hx/ui/ui/empty";
 import { m } from "motion/react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 // 总览的公共件 (对照安卓 kit: Panel, SectionTitle, Ring, Meter, CountUp)
 
@@ -19,7 +19,7 @@ export type Tone = keyof typeof TONE;
 // 颜色的淡底: 图标方块, 指标块, 选中行都用它
 export const tint = (color: string, pct = 14) => `color-mix(in oklab, ${color} ${pct}%, transparent)`;
 
-/** 一块区域: 左上带色的图标方块 + 标题 + 计数, 下一行说明, 右上角动作。 */
+/** 一块区域: 左上带色的图标方块 + 标题 + 计数, 下一行说明, 右上角动作; 卡面跟指针有一团淡光。 */
 export function Section({
   title,
   icon,
@@ -39,28 +39,36 @@ export function Section({
   className?: string;
   children: ReactNode;
 }) {
+  const color = TONE[tone];
   return (
-    <Card className={`h-full min-w-0 gap-0 overflow-hidden py-0 ${className ?? ""}`}>
-      <header className="flex items-center gap-3 px-4 pt-4 pb-3">
-        {icon && (
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg [&_svg]:size-4" style={{ background: tint(TONE[tone]), color: TONE[tone] }}>
-            {icon}
-          </span>
-        )}
+    <Card
+      effect="spotlight"
+      effectColor={tint(color, 10)}
+      className={`ov-card h-full min-w-0 gap-0 overflow-hidden rounded-2xl py-0 shadow-none ${className ?? ""}`}
+      style={{ "--tone": color } as CSSProperties}
+    >
+      <header className="flex items-center gap-3 px-5 pt-4 pb-3">
+        {icon && <span className="ov-icon grid size-9 shrink-0 place-items-center rounded-xl [&_svg]:size-[18px]">{icon}</span>}
         <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground">
             {title}
             {count !== undefined && count > 0 && (
-              <span className="rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground tabular-nums">
+              <m.span
+                key={count}
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="num rounded-full px-1.5 text-xs leading-5 font-semibold"
+                style={{ background: tint(color, 16), color }}
+              >
                 {count}
-              </span>
+              </m.span>
             )}
           </h2>
           {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
         </div>
         {action}
       </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-5 pb-5">{children}</div>
     </Card>
   );
 }
@@ -85,8 +93,8 @@ export function Quiet({ icon, children, tone = "muted" }: { icon?: ReactNode; ch
 /** 一项事实数据: 整数直接显示, 不做滚动 (滚动中间帧会出小数)。 */
 export function Feat({ value, label, color }: { value: ReactNode; label: string; color: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl px-3 py-2.5" style={{ background: tint(color, 12) }}>
-      <span className="text-xl font-semibold tabular-nums" style={{ color }}>
+    <div className="flex flex-col gap-0.5 rounded-xl px-3 py-2.5" style={{ background: tint(color, 10), boxShadow: `inset 0 0 0 1px ${tint(color, 18)}` }}>
+      <span className="num text-2xl font-semibold" style={{ color }}>
         {value ?? "-"}
       </span>
       <span className="text-xs text-muted-foreground">{label}</span>

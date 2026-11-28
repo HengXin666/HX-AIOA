@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "^5.3.1",
     "@hx-aioa/protocol": "0.1.0",
     "@hx/ui": "https://github.com/HengXin666/HX-UI/releases/download/v2.7.0/hx-ui-2.7.0.tgz",
     "lucide-react": "^1.77.0",
