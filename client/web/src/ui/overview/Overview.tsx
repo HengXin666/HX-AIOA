@@ -10,6 +10,7 @@ import { link } from "../../app/router";
 import { chats } from "../../core/chats";
 import { CLOUD_AGENT_LABEL, LOCALE } from "../../core/constants";
 import { Agents } from "./Agents";
+import { DevBoard } from "./Dev";
 import { Hosts } from "./Hosts";
 import { Sources } from "./Insights";
 import { Layer, NeedMe } from "./Layers";
@@ -20,6 +21,7 @@ import { ServerBoard } from "./Server";
 
 const BOARDS = [
   { id: "daily", label: "日常" },
+  { id: "dev", label: "开发" },
   { id: "server", label: "服务器" },
 ] as const;
 type Board = (typeof BOARDS)[number]["id"];
@@ -28,7 +30,7 @@ const NEED_ME = "need-me";
 const INT = { maximumFractionDigits: 0 } as const;
 const readBoard = (): Board => (BOARDS.some((b) => b.id === localStorage.getItem(BOARD_KEY)) ? (localStorage.getItem(BOARD_KEY) as Board) : "daily");
 
-// 总览 (对照安卓 OverviewPage + OverviewV2, #121 #138 #155): 五项计数, 然后需要我放在最前, 活跃, 消息来源, 正在发生, 值得一看, 群 Agent, 资源。
+// 总览 (对照安卓 OverviewPage + OverviewV2, #121 #138 #155): 日常 / 开发 (GitHub) / 服务器三个看板, 同安卓; 五项计数, 然后需要我放在最前, 活跃, 消息来源, 正在发生, 值得一看, 群 Agent, 资源。
 // 中性底色, 颜色只表达状态; 只放所有人都有的内置内容, 插件 (待办, GitHub 等) 不进这里。
 export default function Overview() {
   const owner = useUser()?.role === "owner";
@@ -61,7 +63,7 @@ export default function Overview() {
           )}
         </div>
         <Stats />
-        {board === "server" && owner ? <ServerBoard /> : <Daily />}
+        {board === "server" && owner ? <ServerBoard /> : board === "dev" && owner ? <DevBoard /> : <Daily />}
       </div>
     </div>
   );
