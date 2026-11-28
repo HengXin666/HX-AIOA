@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="system-ui,sans-serif" font-size="14">
+<rect width="960" height="560" fill="#0d0d0d"/>
+<style>.b{fill:#212121;stroke:#373737;rx:12}.t{fill:#fff;font-weight:600}.s{fill:#afafaf;font-size:12px}.a{stroke:#5b8def;stroke-width:2;fill:none;marker-end:url(#m)}.w{fill:#f0b429}.g{fill:#3ecf8e}</style>
+<defs><marker id="m" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5b8def"/></marker></defs>
+<text x="24" y="36" class="t" font-size="18">hxoa 协作改进: 从 "文件桥" 到 "项目上下文 + 协作门禁"</text>
+<text x="24" y="58" class="s">现状: 令牌即身份, 每个 worker 一棵工作树, 只有读写与 exec; 项目规范, 历史, 别人在做什么, 验收口径都靠 Agent 自觉</text>
+<rect class="b" x="24" y="84" width="200" height="190"/><text x="40" y="110" class="t">① hxoa brief</text>
+<text x="40" y="134" class="s">login / task 时自动下发:</text><text x="40" y="154" class="s">· AGENTS.md 必读段</text><text x="40" y="172" class="s">· .hxoa/brief.md (项目全景)</text><text x="40" y="190" class="s">· issue 评论 + 同主题记录</text><text x="40" y="208" class="s">· GLOSSARY / SCOPE (内置 vs 插件)</text><text x="40" y="226" class="s">· 其它 worker 的任务与改动路径</text><text x="40" y="256" class="w">读完回执才放开写权限</text>
+<rect class="b" x="252" y="84" width="200" height="190"/><text x="268" y="110" class="t">② hxoa plan / grill</text>
+<text x="268" y="134" class="s">动手前把计划写进</text><text x="268" y="152" class="s">docs/aegis/work/&lt;issue&gt;/10-intent</text><text x="268" y="176" class="s">· 影响范围 (blast radius)</text><text x="268" y="194" class="s">· 不确定点 → 问主人</text><text x="268" y="212" class="s">· 切片与各自验收</text><text x="268" y="256" class="w">面板上主人一键 批准 / 打回</text>
+<rect class="b" x="480" y="84" width="200" height="190"/><text x="496" y="110" class="t">③ 路径认领与旁路</text>
+<text x="496" y="134" class="s">hxoa task 记下要改的目录</text><text x="496" y="152" class="s">写同一路径时提示:</text><text x="496" y="170" class="s">"oa_1 正在改 client/web/ui"</text><text x="496" y="194" class="s">hxoa note: 每个 issue 一份</text><text x="496" y="212" class="s">共享日志, 所有 worker 可读</text><text x="496" y="256" class="w">冲突在写之前暴露, 不在合并时</text>
+<rect class="b" x="708" y="84" width="228" height="190"/><text x="724" y="110" class="t">④ hxoa check (门禁)</text>
+<text x="724" y="134" class="s">仓库在 .hxoa/checks.yml 声明:</text><text x="724" y="152" class="s">· typecheck / test / build</text><text x="724" y="170" class="s">· 界面截图 (暗色, 电脑 + 手机)</text><text x="724" y="188" class="s">· 规范脚本 (行数, 文案, 插件边界)</text><text x="724" y="212" class="s">commit 自动跑, 证据存</text><text x="724" y="230" class="s">90-evidence.md 并挂到面板</text><text x="724" y="256" class="w">没证据不能标 "完成"</text>
+<path class="a" d="M224 180H252"/><path class="a" d="M452 180H480"/><path class="a" d="M680 180H708"/>
+<rect class="b" x="24" y="300" width="912" height="110"/><text x="40" y="326" class="t">⑤ hxoa handoff / reflect (收尾)</text>
+<text x="40" y="350" class="s">做完或换人: 生成交接 (做了什么, 证据, 坑, 下一步) 写进 note 与 issue 评论; 主人打回的理由自动沉淀成仓库规则候选 (.hxoa/lessons.md),</text>
+<text x="40" y="370" class="s">下次 brief 一并下发。对应 mattpocock/skills 的 handoff 与 pstack 的 reflect / recall。</text>
+<text x="40" y="394" class="g">效果: 同一个坑只踩一次; 新 Agent 进来第一分钟就知道全景, 边界与验收口径</text>
+<rect class="b" x="24" y="430" width="912" height="106"/><text x="40" y="456" class="t">参考</text>
+<text x="40" y="480" class="s">mattpocock/skills (约 33 万 star): grill-me 先拷问再动手, GLOSSARY / SCOPE / .out-of-scope 统一术语与边界, triage, handoff</text>
+<text x="40" y="500" class="s">cursor/plugins 的 pstack (Lauren "poteto" Tan): create / maintain-verification-skill 与功能地图, blast-radius, recall, reflect</text>
+<text x="40" y="520" class="s">obra/superpowers: verification-before-completion, writing-plans</text>
+</svg>
