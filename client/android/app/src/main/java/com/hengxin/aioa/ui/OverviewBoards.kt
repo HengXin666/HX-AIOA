@@ -8,6 +8,9 @@ import com.hengxin.aioa.kit.Space
 const val BOARD_DAILY = "#daily"
 const val BOARD_DEV = "#dev"
 const val BOARD_SERVERS = "#servers"
+// 网盘 (#154): 内置空间, 默认不置顶 (不参与自动补空位), 在 "更多空间" 里; 网盘可用时才有
+const val BOARD_DRIVE = "#drive"
+private val DRIVE_SPACE = HomeSpace(BOARD_DRIVE, "网盘", "hard-drive")
 val BOARDS = listOf(BOARD_DAILY to "日常", BOARD_DEV to "开发", BOARD_SERVERS to "服务器")
 private const val OVERVIEW_TITLE = "总览"
 private const val SPACE_ICON = "layout-dashboard"
@@ -25,11 +28,12 @@ private fun pluginTab(s: Space) = HomeSpace(s.id, s.title, s.layout.icon ?: s.ic
 fun isTodoSpace(s: Space): Boolean =
     s.panels.isNotEmpty() && s.panels.all { p -> p.items.isNotEmpty() && p.items.all { it.type == ItemType.TODO } }
 
-/** 标题下的空间切换: 总览 (日常), 开发, 服务器, 再接插件空间。 */
-fun boardSpaces(spaces: List<Space>): List<HomeSpace> = listOf(
+/** 标题下的空间切换: 总览 (日常), 开发, 服务器, 网盘 (可用时), 再接插件空间。 */
+fun boardSpaces(spaces: List<Space>, drive: Boolean = false): List<HomeSpace> = listOfNotNull(
     HomeSpace(BOARD_DAILY, OVERVIEW_TITLE, "gauge"),
     HomeSpace(BOARD_DEV, "开发", "code-xml"),
     HomeSpace(BOARD_SERVERS, "服务器", "server"),
+    DRIVE_SPACE.takeIf { drive },
 ) + pluginSpaces(spaces)
 
 /**
@@ -44,13 +48,14 @@ fun homeTabs(
     pins: Map<String, Boolean> = emptyMap(),
     // 内置页面的自选图标 (#142, 账号设置 homeTabs.icons); 插件空间的在各自 state.icon
     icons: Map<String, String> = emptyMap(),
+    drive: Boolean = false,
 ): List<HomeSpace> {
-    val boards = boardSpaces(spaces)
+    val boards = boardSpaces(spaces, drive)
     val tab = { t: Tab -> HomeSpace(t.name, t.label, icons[t.name] ?: t.icon) }
     val plugins = if (withHidden) spaces.map(::pluginTab) else pluginSpaces(spaces)
     val board = { b: HomeSpace -> icons[b.id]?.let { b.copy(icon = it) } ?: b }
     val all = listOf(board(boards[0]), HomeSpace(Tab.CHAT.name, Tab.CHAT.label, icons[Tab.CHAT.name] ?: Tab.CHAT.icon, badge = unread), tab(Tab.AGENT)) +
-        boards.filter { it.id == BOARD_DEV }.map(board) + tab(Tab.RESOURCES) + plugins
+        boards.filter { it.id == BOARD_DEV }.map(board) + tab(Tab.RESOURCES) + boards.filter { it.id == BOARD_DRIVE }.map(board) + plugins
     val hidden = spaces.filter { it.layout.hidden }.map { it.id }.toSet()
     return pinTabs(ordered(all, order), pins, hidden, base = all)
 }
@@ -73,6 +78,8 @@ internal fun autoRank(s: HomeSpace): Int? = when {
         else -> 3
     }
     s.id == Tab.CHAT.name -> 0
+    // 网盘默认不置顶 (#154), 用户自己置顶才上顶部标签
+    s.id == BOARD_DRIVE -> null
     else -> 2
 }
 
@@ -117,12 +124,12 @@ fun ordered(all: List<HomeSpace>, order: List<String>): List<HomeSpace> {
 }
 
 /** 当前选中的一级页面 id: 总览下是看板 (看板没了回日常), 其余是栏名。 */
-fun homeSelected(tab: Tab, board: String, spaces: List<Space>): String = when {
+fun homeSelected(tab: Tab, board: String, spaces: List<Space>, drive: Boolean = false): String = when {
     tab != Tab.OVERVIEW -> tab.name
-    boardSpaces(spaces).any { it.id == board } -> board
+    boardSpaces(spaces, drive).any { it.id == board } -> board
     else -> BOARD_DAILY
 }
 
 /** 顶栏标题: 日常看板叫 "总览", 其它用看板名; 看板没了 (插件停用) 回到总览。 */
-fun boardTitle(board: String, spaces: List<Space>): String =
-    boardSpaces(spaces).firstOrNull { it.id == board }?.title ?: OVERVIEW_TITLE
+fun boardTitle(board: String, spaces: List<Space>, drive: Boolean = false): String =
+    boardSpaces(spaces, drive).firstOrNull { it.id == board }?.title ?: OVERVIEW_TITLE

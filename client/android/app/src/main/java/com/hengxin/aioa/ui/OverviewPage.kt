@@ -71,6 +71,8 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
         if (mail != null) com.hengxin.aioa.ui.chat.MailPeek(mail, mails) { detail = null }
         else EventSheet(ev, { detail = null }) { detail = null; chat.groups.openAt(ev.toMsg().groupKey(), ev.seq) }
     }
+    // 网盘 (#154) 整页是文件列表, 自己管滚动
+    if (board == BOARD_DRIVE && com.hengxin.aioa.ui.drive.DriveGate.on == true) return com.hengxin.aioa.ui.drive.DrivePage(chat)
     // 待办空间整页是看板 (#152): 看板自己管滚动, 不放进可滚动的卡片列
     if (picked != null && isTodoSpace(picked)) return Column(Modifier.fillMaxSize()) {
         if (!LocalShellBar.current) BoardChips(chat, spaces, board, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -94,6 +96,7 @@ fun OverviewPage(chat: ChatModel, openGithub: () -> Unit, open: (Tab) -> Unit) {
 private fun BoardChips(chat: ChatModel, spaces: List<com.hengxin.aioa.kit.Space>, board: String, modifier: Modifier = Modifier) {
     Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         BOARDS.forEach { (id, label) -> Chip(label, board == id) { chat.spaces.board = id } }
+        if (com.hengxin.aioa.ui.drive.DriveGate.on == true) Chip("网盘", board == BOARD_DRIVE) { chat.spaces.board = BOARD_DRIVE }
         spaces.forEach { s -> Chip(s.title, board == s.id) { chat.spaces.board = s.id } }
     }
 }

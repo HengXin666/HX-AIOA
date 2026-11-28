@@ -89,6 +89,7 @@ internal fun MessageMenu(msg: ServerFrame.Msg, a: BubbleActions, onCopy: () -> U
                 if (a.digests.isNotEmpty()) Act("sparkles", "精选") {
                     if (a.digests.size == 1) run { a.onDigest(msg, a.digests[0].first) }() else digest = !digest
                 }
+                if (msg.file != null) a.onSaveDrive?.let { save -> Act("hard-drive", "存到网盘", onClick = run { save(msg) }) }
                 if (canRecall(msg, a.admin)) Act("undo-2", "撤回", onClick = run { a.onRemove(msg, MessageDb.RECALL_MODE) })
                 Act("trash-2", "删除", c.danger) { confirm = true }
             }

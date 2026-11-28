@@ -82,6 +82,8 @@ class BubbleActions(
     val admin: Boolean = false,
     val look: (ServerFrame.Msg) -> SenderLook = { SenderLook() },
     val atNames: List<String> = emptyList(),
+    // 文件消息 "存到网盘" (#154); null 不显示
+    val onSaveDrive: ((ServerFrame.Msg) -> Unit)? = null,
 )
 
 /** 名字上面的身份: 群主 / 管理员 / 成员, 是不是群 Agent; avatar 为成员资料里的头像 id。 */

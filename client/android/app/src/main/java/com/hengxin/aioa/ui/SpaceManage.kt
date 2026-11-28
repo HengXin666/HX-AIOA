@@ -40,7 +40,7 @@ import com.hengxin.aioa.kit.pointerTap
 fun SpaceManageSheet(s: SpacesState, unread: Int, close: () -> Unit) {
     val c = Aioa.colors
     val pins = s.pins()
-    val all = homeTabs(s.spaces, unread, s.tabOrder, withHidden = true, pins = pins, icons = s.tabs.icons)
+    val all = homeTabs(s.spaces, unread, s.tabOrder, withHidden = true, pins = pins, icons = s.tabs.icons, drive = com.hengxin.aioa.ui.drive.DriveGate.on == true)
     var iconFor by remember { mutableStateOf<HomeSpace?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val pinnedCount = all.count { it.pinned }

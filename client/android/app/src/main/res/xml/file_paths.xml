@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="update" path="update/" />
     <files-path name="att" path="att/" />
+    <files-path name="drive" path="drive/" />
 </paths>
