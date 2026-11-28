@@ -18,12 +18,19 @@ export const TREE_MAX = 2000;
 export const RECENT_DIRS = 20;
 export const INDEX_MAX = 50;
 export const STATS_MS = 1000;
+// ag_index: 最后一次变化后 5 秒再发 (trailing 合并), 一直在变最迟 20 秒发一次; 上下文占比只报分档
 export const INDEX_MERGE_MS = 5000;
+export const INDEX_MAX_WAIT_MS = 20_000;
+export const CTX_BANDS = [0.5, 0.8, 0.95];
 export const SAVE_MS = 1000;
 export const HELLO_TIMEOUT_MS = 10_000;
 // 首次 npx 下载适配器 (dsh 还要拉私有运行时) 可能要几分钟
 export const INIT_TIMEOUT_MS = 300_000;
 export const NEW_TIMEOUT_MS = 120_000;
+// ACP authenticate 可能要等用户在浏览器里完成 OAuth
+export const AUTH_TIMEOUT_MS = 300_000;
+// session/new 要求登录后, 留着那个 Agent 进程等 agent/authenticate 的时长
+export const AUTH_WAIT_MS = 10 * 60_000;
 export const KILL_GRACE_MS = 3000;
 export const STDERR_TAIL = 4096;
 export const TERM_OUTPUT_MAX = 1024 * 1024;
@@ -47,12 +54,17 @@ export const PUSH_NONE = "none";
 export const PUSH_NORMAL = "normal";
 export const WATCH_PUSH = [PUSH_QUIET, PUSH_NONE, PUSH_NORMAL];
 export const USAGE_LIMIT = "usage_limit";
+export const AUTH_REQUIRED = "auth_required";
+// ACP: 需要认证的错误码 (-32000) 或错误文本像 "Authentication required"
+export const ACP_AUTH_CODE = -32000;
+export const AUTH_RE = /auth(entication)?[\s_-]*required|not\s+(logged|signed)\s+in|unauthenticated|login\s+required|未登录|需要登录/i;
 export const USAGE_LIMIT_RE = /usage.?limit|rate.?limit|quota|insufficient.?(balance|credit)|\b429\b|额度|限额/i;
 
 export const ST = { starting: "starting", running: "running", waiting: "waiting", idle: "idle", error: "error", closed: "closed" };
 
 export const M = {
   init: "initialize",
+  auth: "authenticate",
   newSession: "session/new",
   load: "session/load",
   resume: "session/resume",

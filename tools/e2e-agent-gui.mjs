@@ -29,6 +29,7 @@ const AG_REQ = "ag_req";
 const AG_UNREQ = "ag_unreq";
 const AG_PAIR = "ag_pair";
 const AG_INDEX = "ag_index";
+const AG_ACK = "ag_ack";
 const ATTACH = "attach";
 const READY = "ready";
 const RPC = "2.0";
@@ -118,7 +119,7 @@ async function main() {
   const cwd = gitRepo();
   const hub = [];
   process.env.AIOA_TOKEN = "must-not-leak";
-  const agent = await createAgent({ send: (f) => hub.push(f), subject: "pc", listen: "127.0.0.1:0", home });
+  const agent = await createAgent({ send: (f) => hub.push(f), subject: "pc", listen: "127.0.0.1:0", home, indexMergeMs: 300 });
   const base = `http://127.0.0.1:${agent.port}`;
   const wsUrl = `ws://127.0.0.1:${agent.port}/ws`;
   check("本地文件已生成", ["host-key.json", "devices.json", "instances.json", "settings.json", "rules.json"].every((f) => fs.existsSync(path.join(home, f))));
@@ -227,8 +228,9 @@ async function main() {
   const done2 = await B.wait((f) => f.t === PERM_DONE && f.rid === req2.rid, b0);
   check("Hub 答复 -> perm_done by hub", done2.by === "hub");
   check("Hub 答复不回 ag_unreq", !hub.some((f) => f.t === AG_UNREQ && f.rid === req2.rid));
+  check("Hub 答复 -> ag_ack by hub", hub.some((f) => f.t === AG_ACK && f.aid === "a_1" && f.rid === req2.rid && f.by === "hub"));
   agent.handle({ t: "ag_answer", aid: "a_2", sid, rid: card.rid, option: ALLOW });
-  check("Hub 晚答 -> ag_unreq by desktop", hub.some((f) => f.t === AG_UNREQ && f.rid === card.rid && f.by === DESKTOP && hub.indexOf(f) > hub.findIndex((x) => x.t === AG_REQ && x.card.rid === req2.rid)));
+  check("Hub 晚答 -> ag_ack by desktop (以探针为准)", hub.some((f) => f.t === AG_ACK && f.aid === "a_2" && f.rid === card.rid && f.by === DESKTOP));
   await B.wait((f) => f.t === ACP && f.m.id === 1 && f.m.result, b0);
   check("fs/write_text_file 落在 cwd", fs.readFileSync(path.join(cwd, "mock-out.txt"), "utf8") === "hello");
   const A2 = new Client(wsUrl, devA, true);
@@ -295,10 +297,58 @@ async function main() {
   const turns = JSON.parse(fs.readFileSync(path.join(home, "sessions", `${sid}.turns.json`), "utf8"));
   check("轮索引", turns.length === 4 && turns.every((t) => typeof t.off === "number"), JSON.stringify(turns));
 
+  // "不推": 有前台附着时不发 ag_req, 答完也不发 ag_unreq
+  await A2.hx(SETTINGS_SET, { watchPush: "none" });
+  m2 = A2.mark();
+  const h0 = hub.length;
+  A2.send({ t: ACP_OUT, sid, m: { jsonrpc: RPC, id: 11, method: PROMPT, params: { prompt: [{ type: "text", text: "第五轮" }] } } });
+  const req5 = await A2.wait((f) => f.t === PERM_REQ, m2);
+  A2.send({ t: "perm", sid, rid: req5.rid, option: ALLOW });
+  await A2.wait((f) => f.t === PERM_DONE && f.rid === req5.rid, m2);
+  await A2.wait((f) => f.t === ACP && f.m.id === 11 && f.m.result, m2);
+  const after5 = hub.slice(h0);
+  check("不推: 无 ag_req 也无 ag_unreq", !after5.some((f) => (f.t === AG_REQ && f.card.rid === req5.rid) || (f.t === AG_UNREQ && f.rid === req5.rid)), JSON.stringify(after5.map((f) => f.t)));
+  await A2.hx(SETTINGS_SET, { watchPush: "quiet" });
+  await A2.wait((f) => f.t === SESSION && f.info.id === sid && f.info.state === "idle", m2);
+
+  await sleep(400);
   hub.length = 0;
   agent.onConnect();
   const idx = hub.find((f) => f.t === AG_INDEX);
   check(AG_INDEX, idx?.sessions[0]?.id === sid && idx.sessions[0].title === "新标题" && !("cwd" in idx.sessions[0]));
+  check("ag_index 上下文只报分档 (26.5% -> 0)", idx?.sessions[0]?.ctx === 0, JSON.stringify(idx?.sessions[0]));
+  hub.length = 0;
+  agent.handle({ t: "ag_reindex" });
+  check("ag_reindex -> 立刻回 ag_index", hub.filter((f) => f.t === AG_INDEX).length === 1);
+  hub.length = 0;
+  await A2.hx("git/status", { sid });
+  m2 = A2.mark();
+  A2.send({ t: ACP_OUT, sid, m: { jsonrpc: RPC, id: 12, method: "session/set_mode", params: { modeId: "plan" } } });
+  await A2.wait((f) => f.t === ACP && f.m.id === 12, m2);
+  await sleep(600);
+  check("git/status 与 set_mode 回包不触发 ag_index", !hub.some((f) => f.t === AG_INDEX), JSON.stringify(hub.map((f) => f.t)));
+  await A2.hx("session/rename", { sid, title: "标题二" });
+  await A2.hx("session/rename", { sid, title: "标题三" });
+  await sleep(150);
+  check("trailing 合并: 窗口内不发", !hub.some((f) => f.t === AG_INDEX));
+  await sleep(500);
+  const idxs = hub.filter((f) => f.t === AG_INDEX);
+  check("标题变化合并成一次 ag_index", idxs.length === 1 && idxs[0].sessions[0].title === "标题三", JSON.stringify(idxs));
+
+  // 未登录的 Agent: session/new 报需要认证 -> auth_required 错误帧带 methods; agent/authenticate 后重试成功
+  await A2.hx("instances/save", { id: "mockauth", name: "要登录的假 Agent", kind: "custom", cmd: process.execPath, args: [MOCK], env: { MOCK_ACP_AUTH: "1" } });
+  m2 = A2.mark();
+  const createErr = await A2.hx("session/create", { instance: "mockauth", cwd }).then(() => "", (e) => e.message);
+  const authErr = await A2.wait((f) => f.t === "error" && f.code === "auth_required", m2);
+  check("auth_required 错误帧", !!createErr && authErr.instance === "mockauth" && authErr.methods?.[0]?.id === "mock-login" && authErr.methods[0].name === "假登录" && !authErr.sid, JSON.stringify(authErr));
+  const badAuth = await A2.hx("agent/authenticate", { instance: "mockauth", methodId: "nope" }).then(() => "", (e) => e.message);
+  check("agent/authenticate 未知方式报错", badAuth.includes("没有这个登录方式"), badAuth);
+  const authed = await A2.hx("agent/authenticate", { instance: "mockauth", methodId: "mock-login" });
+  check("agent/authenticate 后重试 session/new", authed.state === "idle" && authed.instance === "mockauth" && authed.id && !authed.acpSid, JSON.stringify(authed).slice(0, 200));
+  await A2.wait((f) => f.t === SESSION && f.info.id === authed.id && f.info.state === "idle", m2);
+  const once = await A2.hx("agent/authenticate", { instance: "mockauth", methodId: "mock-login" });
+  check("没有等登录的会话: 临时进程登录", once.authenticated === true);
+  await A2.hx("session/delete", { sid: authed.id });
   await A2.hx("session/delete", { sid });
   check("session/delete 删日志", !fs.existsSync(path.join(home, "sessions", `${sid}.jsonl`)));
   check("devices/remove 断开该设备连接", (await A2.hx("devices/remove", { id: devB.id })).length === 1 && (await Promise.race([B.closed.then(() => true), sleep(2000).then(() => false)])));

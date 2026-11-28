@@ -1,6 +1,7 @@
 #!/bin/sh
 # HX-AIOA 探针一行安装 (命令由 App "资源 → 添加主机" 生成):
-#   curl -fsSL -A hx-aioa-agent/1 <服务端>/install.sh | sh -s -- --server <服务端> --key <key> --name <名字> [--shell] [--agent]
+#   curl -fsSL -A hx-aioa-agent/1 <服务端>/install.sh | sh -s -- --server <服务端> --key <key> --name <名字> [--shell] [--agent] [--agent-listen <地址:端口>]
+#   --agent-listen: Agent GUI 直连监听地址, 默认 127.0.0.1:7841; 0.0.0.0:7841 开局域网 (隐含 --agent)
 # 卸载: 同一条命令把参数换成 --uninstall
 set -eu
 UA="hx-aioa-agent/1"
@@ -10,6 +11,7 @@ KEY=""
 NAME=""
 SHELL_ON=0
 AGENT_ON=0
+AGENT_LISTEN=""
 UNINSTALL=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -18,6 +20,7 @@ while [ $# -gt 0 ]; do
     --name) NAME=$2; shift 2 ;;
     --shell) SHELL_ON=1; shift ;;
     --agent) AGENT_ON=1; shift ;;
+    --agent-listen) AGENT_LISTEN=$2; AGENT_ON=1; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
     *) echo "未知参数: $1" >&2; exit 1 ;;
   esac
@@ -45,6 +48,10 @@ fi
 
 case "$SERVER" in https://*) ;; *) echo "--server 必须是 https 地址" >&2; exit 1 ;; esac
 [ -n "$KEY" ] && [ -n "$NAME" ] || { echo "需要 --key 和 --name" >&2; exit 1; }
+if [ -n "$AGENT_LISTEN" ]; then
+  case "$AGENT_LISTEN" in *:[0-9]*) ;; *) echo "--agent-listen 需要 地址:端口, 如 0.0.0.0:7841" >&2; exit 1 ;; esac
+  case "$AGENT_LISTEN" in *[!0-9A-Za-z.:\[\]-]*) echo "--agent-listen 含非法字符" >&2; exit 1 ;; esac
+fi
 command -v node >/dev/null 2>&1 || { echo "需要 Node.js 22 或更新版本" >&2; exit 1; }
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' || { echo "Node 版本太旧, 需要 22+" >&2; exit 1; }
 if [ "$SHELL_ON" = 1 ]; then
@@ -69,6 +76,7 @@ AIOA_SUBJECT=$NAME
 AIOA_SHELL=$SHELL_ON
 AIOA_AGENT=$AGENT_ON
 CONF
+[ -n "$AGENT_LISTEN" ] && echo "AIOA_AGENT_LISTEN=$AGENT_LISTEN" >> "$DIR/env"
 chmod 600 "$DIR/env"
 
 NODE=$(command -v node)

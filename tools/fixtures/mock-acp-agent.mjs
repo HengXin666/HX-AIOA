@@ -16,6 +16,10 @@ const call = (method, params) =>
   });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let cancelled = false;
+// MOCK_ACP_AUTH=1: session/new 先报需要登录 (-32000), authenticate {methodId:"mock-login"} 之后才放行
+const AUTH = process.env.MOCK_ACP_AUTH === "1";
+let authed = !AUTH;
+const authMethods = AUTH ? [{ id: "mock-login", name: "假登录", description: "测试用" }] : [];
 
 const modes = { currentModeId: "default", availableModes: [{ id: "default", name: "默认" }, { id: "plan", name: "计划" }] };
 const configOptions = [{ id: "model", name: "模型", category: "model", type: "select", currentValue: "mock-1", options: [{ value: "mock-1", name: "Mock 1" }, { value: "mock-2", name: "Mock 2" }] }];
@@ -72,8 +76,13 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   }
   switch (m.method) {
     case "initialize":
-      return out({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, promptCapabilities: { image: false } }, agentInfo: { name: "mock", version: "1", _meta: { token: process.env.AIOA_TOKEN ?? null } }, authMethods: [] } });
+      return out({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, promptCapabilities: { image: false } }, agentInfo: { name: "mock", version: "1", _meta: { token: process.env.AIOA_TOKEN ?? null } }, authMethods } });
+    case "authenticate":
+      if (m.params?.methodId !== "mock-login") return out({ id: m.id, error: { code: -32602, message: "未知登录方式" } });
+      authed = true;
+      return out({ id: m.id, result: {} });
     case "session/new":
+      if (!authed) return out({ id: m.id, error: { code: -32000, message: "Authentication required" } });
       return out({ id: m.id, result: { sessionId: SID, modes, configOptions } });
     case "session/load":
       update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "回放的旧消息" } });

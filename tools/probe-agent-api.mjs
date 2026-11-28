@@ -1,6 +1,6 @@
 // 直连的 hx 方法: 会话, 回放翻页, 实例, 设置, 设备, git, 文件
 import { gitStatus, gitDiff, fsTree, fsRead } from "./probe-agent-hx.mjs";
-import { INSTANCE_KINDS, WATCH_PUSH, RECENT_DIRS, PRESETS, ST } from "./probe-agent-const.mjs";
+import { INSTANCE_KINDS, WATCH_PUSH, RECENT_DIRS, PRESETS, ST, AUTH_REQUIRED } from "./probe-agent-const.mjs";
 
 const ID_RE = /^[\w.-]{1,40}$/;
 const REPUSH_RANGE = [5, 3600];
@@ -46,6 +46,7 @@ async function run(ctx, conn, m, p) {
       s.remove();
       sessions.delete(s.id);
       ctx.persistIndex();
+      ctx.indexSoon();
       ctx.toAll({ t: "session", info: { ...ctx.publicInfo(s.info), state: ST.closed, deleted: true } });
       return {};
     }
@@ -110,6 +111,8 @@ async function run(ctx, conn, m, p) {
       return fsRead(ctx.sess(p.sid).info.cwd, p.path);
     case "tool/output":
       return { content: ctx.sess(p.sid).toolOutput(p.toolCallId) };
+    case "agent/authenticate":
+      return ctx.authenticate(p);
     case "dirs/recent": {
       const dirs = [];
       for (const s of [...sessions.values()].sort((a, b) => b.info.updated - a.info.updated)) {
@@ -128,6 +131,13 @@ export async function handleHx(ctx, conn, f) {
     const r = await run(ctx, conn, f.m, f.p ?? {});
     conn.push({ t: "hx_res", id: f.id, ok: true, r });
   } catch (e) {
+    // Agent 要求先登录: 先发 auth_required 错误帧 (带 authMethods), 客户端选一个调 agent/authenticate
+    if (e.code === AUTH_REQUIRED) {
+      const frame = { t: "error", code: AUTH_REQUIRED, msg: e.message, methods: e.methods ?? [], id: f.id };
+      if (e.instance) frame.instance = e.instance;
+      if (e.sid) frame.sid = e.sid;
+      conn.push(frame);
+    }
     conn.push({ t: "hx_res", id: f.id, ok: false, err: e.message });
   }
 }

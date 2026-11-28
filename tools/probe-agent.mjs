@@ -6,11 +6,12 @@ import path from "node:path";
 import { randomBytes, sign, verify } from "node:crypto";
 import { openStore, devicePublicKey } from "./probe-agent-store.mjs";
 import { startServer } from "./probe-agent-ws.mjs";
-import { Session } from "./probe-agent-session.mjs";
+import { Session, AuthRequired } from "./probe-agent-session.mjs";
+import { AcpProc } from "./probe-agent-acp.mjs";
 import { handleHx } from "./probe-agent-api.mjs";
 import {
-  AGENT_V, AGENT_NAME, DEFAULT_LISTEN, BATCH_MS, STATS_MS, INDEX_MERGE_MS, SAVE_MS, HELLO_TIMEOUT_MS, INDEX_MAX, ST,
-  BY_HUB, BY_DESKTOP, BY_AGENT, PUSH_NONE, PUSH_NORMAL,
+  AGENT_V, AGENT_NAME, DEFAULT_LISTEN, BATCH_MS, STATS_MS, INDEX_MERGE_MS, INDEX_MAX_WAIT_MS, CTX_BANDS, SAVE_MS, HELLO_TIMEOUT_MS, INDEX_MAX, ST,
+  BY_HUB, BY_DESKTOP, BY_AGENT, PUSH_NONE, PUSH_NORMAL, AUTH_REQUIRED, AUTH_WAIT_MS, AUTH_TIMEOUT_MS, INIT_TIMEOUT_MS, M, CLIENT_INFO,
 } from "./probe-agent-const.mjs";
 
 const CALIB = "calib";
@@ -21,6 +22,17 @@ const SIG = { dsaEncoding: "ieee-p1363" };
 const SHA = "sha256";
 const ANSWERED_KEEP = 200;
 
+// 上下文占比 -> 分档下限 (0 / 0.5 / 0.8 / 0.95)
+export function ctxBand(ctx) {
+  if (typeof ctx !== "number" || !Number.isFinite(ctx)) return undefined;
+  let band = 0;
+  for (const b of CTX_BANDS) if (ctx >= b) band = b;
+  return band;
+}
+
+// 索引签名: 不看 updated 与顺序, 只有 状态 / 待批数 / 标题 / 上下文档 / 会话增删 变了才上报
+const indexSig = (items) => JSON.stringify(items.map(({ updated: _u, ...rest }) => rest).sort((a, b) => (a.id < b.id ? -1 : 1)));
+
 function parseListen(s) {
   const i = s.lastIndexOf(":");
   return { host: s.slice(0, i) || "127.0.0.1", port: Number(s.slice(i + 1)) };
@@ -30,11 +42,14 @@ function lanIp() {
   return Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address;
 }
 
-export async function createAgent({ send, subject, listen = process.env.AIOA_AGENT_LISTEN || DEFAULT_LISTEN, home, deflate = process.env.AIOA_AGENT_DEFLATE !== "0" }) {
+export async function createAgent({ send, subject, listen = process.env.AIOA_AGENT_LISTEN || DEFAULT_LISTEN, home, deflate = process.env.AIOA_AGENT_DEFLATE !== "0", indexMergeMs = INDEX_MERGE_MS }) {
   const store = openStore(home);
   const sessions = new Map();
   const conns = new Set();
   const timers = { index: null, save: null, calib: null };
+  const idx = { sig: null, first: 0 };
+  // 实例 id -> 等登录的会话 (session/new 或恢复时 Agent 要求先 authenticate)
+  const authWait = new Map();
   const { host: bindHost, port: wantPort } = parseListen(listen);
 
   for (const info of store.sessions) {
@@ -69,11 +84,40 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
   const toAttached = (sid, frame) => attached(sid).forEach((c) => c.push(frame));
   const toAll = (frame) => conns.forEach((c) => c.device && c.push(frame));
 
+  function indexItems() {
+    const list = [...sessions.values()].map((s) => s.info).sort((a, b) => b.updated - a.updated).slice(0, INDEX_MAX);
+    return list.map(({ id, agent, title, state, ctx, pending, updated }) => {
+      const item = { id, agent, title, state, pending, updated };
+      const band = ctxBand(ctx);
+      if (band !== undefined) item.ctx = band;
+      return item;
+    });
+  }
+
   function sendIndex() {
     clearTimeout(timers.index);
     timers.index = null;
-    const list = [...sessions.values()].map((s) => s.info).sort((a, b) => b.updated - a.updated).slice(0, INDEX_MAX);
-    send({ t: "ag_index", sessions: list.map(({ id, agent, title, state, ctx, pending, updated }) => ({ id, agent, title, state, ctx, pending, updated })) });
+    idx.first = 0;
+    const list = indexItems();
+    idx.sig = indexSig(list);
+    send({ t: "ag_index", sessions: list });
+  }
+
+  // trailing 合并: 每次相关变化把发送推后 INDEX_MERGE_MS, 但离第一次变化最迟 INDEX_MAX_WAIT_MS
+  function indexSoon() {
+    const sig = indexSig(indexItems());
+    if (sig === idx.sig) {
+      // 变了又变回去: 不用发
+      clearTimeout(timers.index);
+      timers.index = null;
+      idx.first = 0;
+      return;
+    }
+    const now = Date.now();
+    if (!idx.first) idx.first = now;
+    clearTimeout(timers.index);
+    timers.index = setTimeout(sendIndex, Math.max(0, Math.min(indexMergeMs, idx.first + INDEX_MAX_WAIT_MS - now)));
+    timers.index.unref?.();
   }
 
   // quiet: 有前台客户端附着; 按设置决定首推方式, 静默推后 quietRepushSec 秒没人答就正常重推一次
@@ -82,10 +126,16 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
     const mode = store.settings.watchPush;
     const isWatched = watched(sess.id);
     const quiet = isWatched && mode !== PUSH_NORMAL;
-    if (!(isWatched && mode === PUSH_NONE)) send({ t: "ag_req", card: { ...perm.card, quiet } });
+    // hubSent: Hub 见过这个请求; "不推" 下从没发过 ag_req 的, 答完也不必发 ag_unreq
+    if (!(isWatched && mode === PUSH_NONE)) {
+      send({ t: "ag_req", card: { ...perm.card, quiet } });
+      perm.hubSent = true;
+    }
     if (quiet) {
       perm.timer = setTimeout(() => {
-        if (!perm.done) send({ t: "ag_req", card: { ...perm.card, quiet: false } });
+        if (perm.done) return;
+        send({ t: "ag_req", card: { ...perm.card, quiet: false } });
+        perm.hubSent = true;
       }, store.settings.quietRepushSec * 1000);
       perm.timer.unref?.();
     }
@@ -112,9 +162,11 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
         }
       },
       info(sess) {
+        // 等登录、还没进列表的会话不广播
+        if (sessions.get(sess.id) !== sess) return;
         toAll({ t: "session", info: publicInfo(sess.info) });
         saveSoon("save");
-        if (!timers.index) timers.index = setTimeout(sendIndex, INDEX_MERGE_MS);
+        indexSoon();
       },
       permReq(sess, perm) {
         toAttached(sess.id, { t: "perm_req", sid: sess.id, rid: perm.rid, card: perm.card });
@@ -122,7 +174,7 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
       },
       permDone(sess, perm, by, option) {
         toAttached(sess.id, { t: "perm_done", sid: sess.id, rid: perm.rid, by, option });
-        if (by !== BY_HUB) send({ t: "ag_unreq", sid: sess.id, rid: perm.rid, by });
+        if (by !== BY_HUB && perm.hubSent) send({ t: "ag_unreq", sid: sess.id, rid: perm.rid, by });
         sess.answered = sess.answered ?? new Map();
         sess.answered.set(perm.rid, by);
         if (sess.answered.size > ANSWERED_KEEP) sess.answered.delete(sess.answered.keys().next().value);
@@ -153,12 +205,77 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
       await sess.start(inst, { mode: p.mode, model: p.model });
     } catch (e) {
       sessions.delete(id);
-      sess.remove();
       toAll({ t: "session", info: { ...publicInfo(info), state: ST.closed, deleted: true } });
       persistIndex();
+      indexSoon();
+      if (e.code === AUTH_REQUIRED) waitAuth(inst.id, sess, e);
+      else sess.remove();
       throw e;
     }
     return publicInfo(sess.info);
+  }
+
+  // 留着要求登录的那个进程 AUTH_WAIT_MS, 等 agent/authenticate; 同一实例只留最新一个
+  function waitAuth(instId, sess, e) {
+    const old = authWait.get(instId);
+    if (old && old.sess !== sess) dropAuth(instId);
+    clearTimeout(old?.timer);
+    const timer = setTimeout(() => dropAuth(instId), AUTH_WAIT_MS);
+    timer.unref?.();
+    authWait.set(instId, { sess, timer });
+    e.instance = instId;
+    if (sessions.has(sess.id)) e.sid = sess.id;
+  }
+
+  function dropAuth(instId) {
+    const w = authWait.get(instId);
+    if (!w) return;
+    clearTimeout(w.timer);
+    authWait.delete(instId);
+    if (sessions.get(w.sess.id) === w.sess) {
+      if (w.sess.live()) w.sess.close();
+    } else w.sess.remove();
+  }
+
+  // 没有等登录的会话时: 起临时进程 initialize + authenticate 后退出 (凭据由 Agent 自己落盘)
+  async function authOnce(inst, methodId) {
+    const proc = new AcpProc({ cmd: inst.cmd, args: inst.args, env: inst.env, cwd: os.homedir(), onRecord: () => {} });
+    try {
+      const init = await proc.request(M.init, { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: CLIENT_INFO }, INIT_TIMEOUT_MS);
+      if (!(init?.authMethods ?? []).some((m) => m?.id === methodId)) throw new Error(`没有这个登录方式: ${methodId}`);
+      await proc.request(M.auth, { methodId }, AUTH_TIMEOUT_MS);
+      return { authenticated: true };
+    } finally {
+      proc.kill();
+    }
+  }
+
+  async function authenticate(p) {
+    const inst = instance(p.instance);
+    const methodId = typeof p.methodId === "string" ? p.methodId : "";
+    if (!methodId) throw new Error("需要 methodId");
+    const w = authWait.get(inst.id);
+    const s = typeof p.sid === "string" && p.sid ? sess(p.sid) : w?.sess;
+    if (!s?.authWait) return authOnce(inst, methodId);
+    const fresh = sessions.get(s.id) !== s;
+    try {
+      await s.authenticate(methodId);
+    } catch (e) {
+      // 还在等登录 (方式不对 / 登录失败 / 重试又要求登录): 留着进程; 否则重试失败, 收掉
+      if (s.authWait) waitAuth(inst.id, s, e);
+      else if (authWait.get(inst.id)?.sess === s) dropAuth(inst.id);
+      throw e;
+    }
+    if (authWait.get(inst.id)?.sess === s) {
+      clearTimeout(authWait.get(inst.id).timer);
+      authWait.delete(inst.id);
+    }
+    if (fresh) {
+      sessions.set(s.id, s);
+      s.set({});
+      persistIndex();
+    }
+    return publicInfo(s.info);
   }
 
   function sess(sid) {
@@ -177,9 +294,22 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
     publicInfo,
     persistIndex,
     toAll,
+    indexSoon,
+    authenticate,
     async resume(s) {
+      const inst = instance(s.info.instance);
+      if (s.live() && s.authWait) {
+        const e = new AuthRequired("Agent 需要先登录", s.init?.authMethods ?? []);
+        waitAuth(inst.id, s, e);
+        throw e;
+      }
       if (s.live()) return publicInfo(s.info);
-      await s.start(instance(s.info.instance), { resume: true });
+      try {
+        await s.start(inst, { resume: true });
+      } catch (e) {
+        if (e.code === AUTH_REQUIRED) waitAuth(inst.id, s, e);
+        throw e;
+      }
       return publicInfo(s.info);
     },
   };
@@ -316,17 +446,18 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
     }
   }
 
+  // 每个 Hub 转来的答复都回 ag_ack: by=hub 表示生效; 已被别处答了 / Agent 取消了则报实际答复者, Hub 以它为准
   function hubAnswer(f) {
     const s = sessions.get(f.sid);
+    let ok = false;
     try {
-      if (s?.answer(f.rid, f.option ?? null, typeof f.text === "string" ? f.text : "", BY_HUB)) return;
+      ok = !!s?.answer(f.rid, f.option ?? null, typeof f.text === "string" ? f.text : "", BY_HUB);
     } catch (e) {
       console.error(`Hub 答复无效: ${e.message}`);
     }
-    // 已被别处答了: 告诉 Hub 以谁为准
-    const by = s?.answered?.get(f.rid);
-    if (by === BY_HUB) return;
-    send({ t: "ag_unreq", sid: f.sid, rid: f.rid, by: by ?? BY_AGENT });
+    const by = ok ? BY_HUB : (s?.answered?.get(f.rid) ?? BY_AGENT);
+    if (typeof f.aid === "string" && f.aid) send({ t: "ag_ack", aid: f.aid, sid: f.sid, rid: f.rid, by });
+    else if (by !== BY_HUB) send({ t: "ag_unreq", sid: f.sid, rid: f.rid, by });
   }
 
   return {
@@ -335,6 +466,8 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
     handle(f) {
       if (f.t === "ag_pair") return pair(f);
       if (f.t === "ag_answer") return hubAnswer(f);
+      // Hub 休眠醒来索引丢了: 立刻重报
+      if (f.t === "ag_reindex") return sendIndex();
     },
     // 探针连上 Hub (含重连): 重报索引与所有未答的请求
     onConnect() {
@@ -342,6 +475,7 @@ export async function createAgent({ send, subject, listen = process.env.AIOA_AGE
       for (const s of sessions.values()) for (const perm of s.perms.values()) hubReq(s, perm);
     },
     close() {
+      for (const id of [...authWait.keys()]) dropAuth(id);
       for (const s of sessions.values()) if (s.live()) s.close();
       persistIndex();
       store.save(CALIB);
