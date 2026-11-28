@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, Database, HardDrive, Info, Keyboard, Palette, UserRound, Users } from "lucide-react";
+import { Bell, ChevronRight, Database, HardDrive, Info, Keyboard, Palette, Puzzle, UserRound, Users } from "lucide-react";
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { useLinkState, useMyFace, useUser } from "../../app/hooks";
 import { link, nav } from "../../app/router";
@@ -13,6 +13,7 @@ const PAGES: Page[] = [
   { id: "notify", label: "通知", icon: <Bell />, group: "常用", load: lazy(() => import("./Notify")) },
   { id: "look", label: "外观", icon: <Palette />, group: "常用", load: lazy(() => import("./Look")) },
   { id: "sources", label: "数据源与接入", icon: <Database />, group: "数据", owner: true, load: lazy(() => import("./Sources")) },
+  { id: "plugins", label: "插件", icon: <Puzzle />, group: "数据", load: lazy(() => import("./Plugins")) },
   { id: "storage", label: "存储", icon: <HardDrive />, group: "数据", load: lazy(() => import("./Storage")) },
   { id: "members", label: "成员与邀请", icon: <Users />, group: "管理", admin: true, load: lazy(() => import("./Members")) },
   { id: "keys", label: "快捷键", icon: <Keyboard />, group: "系统", load: lazy(() => import("./About").then((m) => ({ default: m.Keys }))) },
