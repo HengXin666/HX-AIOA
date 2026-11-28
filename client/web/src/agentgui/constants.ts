@@ -5,6 +5,14 @@ export const STORAGE_AG_HOST = "aioa.ag.host";
 export const STORAGE_AG_MODE = "aioa.ag.mode";
 export const STORAGE_AG_RIGHT = "aioa.ag.right";
 export const STORAGE_AG_MOCK = "aioa.ag.mock";
+export const STORAGE_AG_PREFS = "aioa.ag.prefs";
+export const STORAGE_AG_DRAFTS = "aioa.ag.drafts";
+export const STORAGE_AG_NOTIFY = "aioa.ag.notify";
+// 每个会话最多暂存几条草稿; 本地诊断环形缓冲条数
+export const DRAFT_MAX = 20;
+export const DIAG_MAX = 500;
+export const MENTION_MAX = 50;
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const KEY_DB = "aioa-agentgui";
 export const KEY_STORE = "keys";
 export const KEY_DEVICE = "device";

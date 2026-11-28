@@ -12,6 +12,7 @@ export const GUI = "gui";
 export const INBOX = "inbox";
 export const SETTINGS = "settings";
 export const GUIDE = "guide";
+export const DIAG = "diag";
 export const guiLink = (...path: string[]): string => link("agent", GUI, ...path);
 export const sessionLink = (host: string, sid: string): string => guiLink(host, sid);
 

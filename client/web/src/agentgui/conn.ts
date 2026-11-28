@@ -1,5 +1,6 @@
 import { Emitter } from "../core/emitter";
 import { HANDSHAKE_TIMEOUT_MS, HELLO_TIMEOUT_MS, HX_TIMEOUT_MS, LIVENESS_TIMEOUT_MS, RETRY_MAX_MS, RETRY_MIN_MS, ROUTE_FAIL_ROUNDS, SLOW_RETRY_MS, TXT_APPROVE_ONLY, TXT_AUTH_FAIL, TXT_HOST_CHANGED, TXT_NOT_READY } from "./constants";
+import { diag } from "./diag";
 import { agHub } from "./hub";
 import { deviceKey, sameKey, signNonce } from "./keys";
 import { getPair, rememberRoute, routeBlock, routeOrder, type Pair } from "./pairs";
@@ -142,10 +143,15 @@ export class HostConn {
     this.set({ state: "connecting", skipped });
     for (const r of usable) {
       if (!this.running) return;
+      const end = diag.span(this.host, "route", r.kind);
       const ok = this.skipHello || (await this.hello(r, pair));
       if (ok === "changed") return this.schedule("changed", TXT_HOST_CHANGED);
-      if (!ok) continue;
+      if (!ok) {
+        end(false, "hello");
+        continue;
+      }
       const res = await this.handshake(r, pair);
+      end(res === "ok", res);
       if (res === "ok") return;
       if (res === "auth" || res === "changed") return this.schedule(res, res === "auth" ? TXT_AUTH_FAIL : TXT_HOST_CHANGED);
     }
@@ -214,11 +220,15 @@ export class HostConn {
     this.retry = RETRY_MIN_MS;
     this.fails = 0;
     rememberRoute(this.host, r.url);
+    diag.log({ host: this.host, kind: "ready", name: r.kind, ok: true });
     sock.onmessage = (e) => {
+      if (typeof e.data === "string") diag.frame(this.host, e.data.length);
       for (const x of parse(e.data)) this.onFrame(x);
     };
     sock.onclose = () => {
-      if (this.sock === sock) this.schedule("retry");
+      if (this.sock !== sock) return;
+      diag.log({ host: this.host, kind: "drop", name: r.kind, ok: false });
+      this.schedule("retry");
     };
     this.set({ state: "ready", route: r, sessions: f.sessions ?? [], instances: f.instances ?? [], settings: f.settings ?? null, err: "", stale: false });
     for (const sid of this.attached.keys()) this.sendAttach(sid);
@@ -292,7 +302,8 @@ export class HostConn {
 
   hx<T>(m: string, p: object = {}, timeout = HX_TIMEOUT_MS): Promise<T> {
     const id = ++this.hxId;
-    return new Promise<T>((resolve, reject) => {
+    const end = diag.span(this.host, "hx", m);
+    const p0 = new Promise<T>((resolve, reject) => {
       if (!this.write({ t: "hx", id, m, p })) return reject(new Error(TXT_NOT_READY));
       const timer = setTimeout(() => {
         this.hxWait.delete(id);
@@ -300,6 +311,11 @@ export class HostConn {
       }, timeout);
       this.hxWait.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
     });
+    p0.then(
+      () => end(true),
+      (e: Error) => end(false, e.message),
+    );
+    return p0;
   }
 
   // ACP 请求 id 由这里生成; 探针换成真实 sessionId 与自己的 id, 回包时还原

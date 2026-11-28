@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { matchCommand, type Command } from "../../../agentgui/keybindings";
+import { useTurnNotify } from "../../../agentgui/notify";
+import { agPrefs, key as prefKey, useAgPrefs } from "../../../agentgui/prefs";
+import { Emitter } from "../../../core/emitter";
+import { ShortcutsDialog } from "./Keys";
+import { Palette } from "./Palette";
 import { STORAGE_AG_HOST, STORAGE_AG_RIGHT } from "../../../agentgui/constants";
 import { conn, knownConn, startConns } from "../../../agentgui/conns";
 import { useAgHub, useConn, useConnsVersion, useInbox, usePairs } from "../../../agentgui/hooks";
 import { allPairs } from "../../../agentgui/pairs";
-import { BP_WIDE } from "../../../core/constants";
+import { BP_MID } from "../../../core/constants";
 import type { AreaProps } from "../../Shell";
 import { Ctx, type GuiCtx, type RightTab } from "./ctx";
+import { SidebarButton, useWide } from "./layout";
 import { Inbox } from "./Inbox";
 import { NewSession } from "./NewSession";
 import { GuidePage } from "./Guide";
@@ -13,7 +21,7 @@ import { GUIDE, guiLink, guiMode, INBOX, ModeToggle, SETTINGS, sessionLink } fro
 import { RightPane } from "./RightPane";
 import { SessionView } from "./Session";
 import { SettingsPage } from "./Settings";
-import { Sidebar } from "./Sidebar";
+import { SEARCH_ID, Sidebar } from "./Sidebar";
 import { useSession } from "../../../agentgui/hooks";
 
 let booted: Promise<void> | null = null;
@@ -74,27 +82,25 @@ export default function AgentGui({ loc }: AreaProps) {
 
   if (!ok) return null;
   if (page === "inbox") return <Inbox />;
-  return <Workbench page={page} routeHost={page === "session" ? path[0] : undefined} sid={page === "session" ? path[1] : undefined} />;
+  return <Workbench page={page} sub={path[1]} routeHost={page === "session" ? path[0] : undefined} sid={page === "session" ? path[1] : undefined} />;
 }
 
-function useWide(): boolean {
-  const [w, setW] = useState(() => window.innerWidth >= BP_WIDE);
-  useEffect(() => {
-    const q = matchMedia(`(min-width: ${BP_WIDE}px)`);
-    const on = () => setW(q.matches);
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
-  }, []);
-  return w;
-}
-
-function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "guide" | "session"; routeHost?: string; sid?: string }) {
+function Workbench({ page, sub, routeHost, sid }: { page: "new" | "settings" | "guide" | "session"; sub?: string; routeHost?: string; sid?: string }) {
   usePairs();
+  const prefs = useAgPrefs();
+  const [palette, setPalette] = useState(false);
+  const [keys, setKeys] = useState(false);
+  const [cmd] = useState(() => new Emitter<Command>());
+  useTurnNotify(sessionLink);
   const hub = useAgHub();
   const [picked, setPicked] = useState(() => localStorage.getItem(STORAGE_AG_HOST) ?? "");
   const fallback = allPairs()[0]?.host ?? hub.hosts[0]?.subject ?? "";
   const host = routeHost ?? (picked || fallback);
   const wide = useWide();
+  // 窄屏: 左栏改成盖在上面的抽屉, 切会话后自动收起
+  const narrow = !useWide(BP_MID);
+  const [sheet, setSheet] = useState(false);
+  useEffect(() => setSheet(false), [sid, page]);
   const [rightOn, setRightOn] = useState(localStorage.getItem(STORAGE_AG_RIGHT) !== "0");
   const [rightTab, setRightTab] = useState<RightTab>("changes");
   const [rightPath, setRightPath] = useState<string | undefined>();
@@ -127,26 +133,83 @@ function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "guide
         else setRightForced(true);
       },
       insert: (t) => draft.current?.(t),
+      cmd,
+      toggleSidebar: () => (narrow ? setSheet((v) => !v) : agPrefs.toggleSidebar()),
     }),
-    [host, sid, c.c, wide],
+    [host, sid, c.c, wide, cmd, narrow],
   );
 
-  useShortcuts(host, sid, c.sessions.map((s) => s.id));
+  // 侧栏顺序: 置顶在前, 其余按最近; 上下一个与 mod+数字都按它走
+  const order = [...c.sessions]
+    .filter((s) => !agPrefs.settled(prefKey(host, s.id)) || s.id === sid)
+    .sort((a, b) => Number(agPrefs.pinned(prefKey(host, b.id))) - Number(agPrefs.pinned(prefKey(host, a.id))) || b.updated - a.updated)
+    .map((s) => s.id);
+  const run = (k: Command) => {
+    const go = (id?: string) => id && (location.hash = sessionLink(host, id));
+    const at = sid ? order.indexOf(sid) : -1;
+    if (k.startsWith("thread.jump.")) return go(order[Number(k.slice("thread.jump.".length)) - 1]);
+    switch (k) {
+      case "commandPalette.toggle":
+        return setPalette((v) => !v);
+      case "shortcuts.open":
+        return setKeys(true);
+      case "sidebar.toggle":
+        return ctx.toggleSidebar();
+      case "chat.new":
+        return void (location.hash = guiLink());
+      case "chat.find":
+        if (narrow) setSheet(true);
+        else if (prefs.sidebarOff) agPrefs.toggleSidebar();
+        return void requestAnimationFrame(() => document.getElementById(SEARCH_ID)?.focus());
+      case "rightPanel.toggle":
+        return toggleRight();
+      case "diff.toggle":
+        return showRight && rightTab === "changes" ? toggleRight() : ctx.openRight("changes");
+      case "filePicker.toggle":
+        return ctx.openRight("files");
+      case "thread.previous":
+      case "thread.next":
+        return order.length > 0 && go(order[(at + (k === "thread.next" ? 1 : order.length - 1) + order.length) % order.length]);
+      case "thread.pin":
+        return sid && agPrefs.togglePin(prefKey(host, sid));
+      case "thread.settle":
+        return sid && agPrefs.toggleSettle(prefKey(host, sid));
+      case "thread.copyReference":
+        return sid && void navigator.clipboard.writeText(location.origin + location.pathname + sessionLink(host, sid)).then(() => toast.success("已复制会话链接"));
+      default:
+        return cmd.emit(k);
+    }
+  };
+  const runRef = useRef(run);
+  runRef.current = run;
+  useCommandKeys(page === "session", runRef);
 
   return (
     <Ctx.Provider value={ctx}>
       <div className="relative flex h-full min-h-0 w-full">
-        <Sidebar host={host} sid={sid} onHost={onHost} />
+        {narrow ? (
+          sheet && (
+            <>
+              <button type="button" aria-label="收起左栏" className="absolute inset-0 z-30 bg-black/40" onClick={() => setSheet(false)} />
+              <div className="absolute inset-y-0 left-0 z-40 shadow-lg">
+                <Sidebar host={host} sid={sid} onHost={onHost} />
+              </div>
+            </>
+          )
+        ) : (
+          !prefs.sidebarOff && <Sidebar host={host} sid={sid} onHost={onHost} />
+        )}
         <main className="flex min-w-0 flex-1 flex-col">
           {page === "session" && sid ? (
             <SessionView key={`${host}/${sid}`} right={showRight} toggleRight={toggleRight} draft={draft} />
           ) : (
             <>
               <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3">
+                <SidebarButton />
                 <h2 className="flex-1 text-sm font-semibold text-foreground">{page === "settings" ? "设置" : page === "guide" ? "使用指引" : "新会话"}</h2>
                 <ModeToggle mode="work" />
               </header>
-              {page === "settings" ? <SettingsPage host={host} /> : page === "guide" ? <GuidePage host={host} /> : <NewSession host={host} onHost={onHost} />}
+              {page === "settings" ? <SettingsPage host={host} focus={sub} /> : page === "guide" ? <GuidePage host={host} /> : <NewSession host={host} onHost={onHost} />}
             </>
           )}
         </main>
@@ -156,6 +219,8 @@ function Workbench({ page, routeHost, sid }: { page: "new" | "settings" | "guide
           </aside>
         )}
       </div>
+      {palette && <Palette open={palette} onOpenChange={setPalette} inSession={page === "session"} run={run} onHost={onHost} />}
+      <ShortcutsDialog open={keys} onOpenChange={setKeys} />
     </Ctx.Provider>
   );
 }
@@ -165,22 +230,20 @@ function RightBody({ host, sid, tab, setTab, path, onClose }: { host: string; si
   return <RightPane tab={tab} setTab={setTab} path={path} view={s.view} onClose={onClose} />;
 }
 
-// Ctrl+N 新会话, Ctrl+[ / Ctrl+] 上下一个会话
-function useShortcuts(host: string, sid: string | undefined, ids: string[]): void {
+// 工作台快捷键: 捕获阶段先于全局的 Ctrl+K 命令面板, 认领了就不再往外传
+function useCommandKeys(inSession: boolean, run: React.MutableRefObject<(c: Command) => void>): void {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-      if (e.key.toLowerCase() === "n" && !e.shiftKey) {
-        e.preventDefault();
-        location.hash = guiLink();
-      } else if ((e.key === "[" || e.key === "]") && ids.length) {
-        e.preventDefault();
-        const i = sid ? ids.indexOf(sid) : -1;
-        const next = ids[(i + (e.key === "]" ? 1 : ids.length - 1) + ids.length) % ids.length];
-        if (next) location.hash = sessionLink(host, next);
-      }
+      const t = e.target as HTMLElement | null;
+      const editable = Boolean(t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA"));
+      const c = matchCommand(e, { inSession, editableFocus: editable, composerFocus: t?.getAttribute("aria-label") === "消息" });
+      if (!c) return;
+      e.preventDefault();
+      e.stopPropagation();
+      run.current(c);
     };
-    window.addEventListener("keydown", on);
-    return () => window.removeEventListener("keydown", on);
-  }, [host, sid, ids]);
+    window.addEventListener("keydown", on, true);
+    return () => window.removeEventListener("keydown", on, true);
+  }, [inSession, run]);
 }
+

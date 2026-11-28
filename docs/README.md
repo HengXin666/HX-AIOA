@@ -86,6 +86,7 @@
 | [ui-spec/hx-ui-sync.md](design/ui-spec/hx-ui-sync.md) | 安卓端如何跟随 HX-UI: 令牌导出, 组件对照, 版本锁定 (#121) |
 | [agent-gui.md](design/agent-gui.md) | Agent GUI 方案: 全部 ACP, 探针多路代理, 直连 (本机 / 局域网 / CF Tunnel) 不占 Worker 与 DO, 审批模式, 实时统计 (#126) |
 | [agent-gui-ui.md](design/agent-gui-ui.md) | Agent GUI 界面方案: 桌面工作台, 手机工作 / 审批模式, 原型图 3-desktop.svg 4-mobile.svg (#126) |
+| [agent-gui-t3code.md](design/agent-gui-t3code.md) | Agent GUI 对齐 t3code 清单: 已搬的交互, 遥测换成本地诊断 (含端到端加密口径), 未搬项 (#126) |
 | [ui-spec/message-pages.md](design/ui-spec/message-pages.md) | 消息页: 人 / 群 / 域 / Agent 概念, 群会话与群资料页, 每个元素的请求数, 省 CF 额度的改法, 兼容性 (#121) |
 | [ui-spec/android-rebuild.md](design/ui-spec/android-rebuild.md) | 安卓前端全量重构: 分期, 接口对账 (够不够用), 对接是否合理与要改的地方 (#121) |
 | [web-arch.md](design/web-arch.md) | Web 端架构: 同源 CF 静态资源部署, HX-UI 2 电脑三栏布局, 额度规则, Web Push, 图表重做, 插件按端兼容声明与 CI 校验; 桌面客户端候选 (#155) |
