@@ -39,6 +39,8 @@ import java.time.LocalDate
 const val HEAT_DAYS = 140
 const val HEAT_ROWS = 7
 private const val HEAT_LEVELS = 4
+// 第一列不足一周时补位的格子: 不在范围内 (按年看是上一年), 不画 (#145)
+const val HEAT_PAD = -1
 private const val RECENT = 0
 private const val CACHE_HEATMAP = "gh-heatmap"
 // 按年看时每格 (含间隔) 的宽度, 一年 53 列横向滚动
@@ -67,7 +69,7 @@ fun parseHeatmap(b: JSONObject): GhHeatmap {
     return GhHeatmap(days, b.optLong("updated"), years, fill?.optInt("pending") ?: 0, fill?.optString("oldest")?.ifEmpty { null })
 }
 
-/** 按列 (一周一列, 周一在最上) 排好的格子级别 0..4; 第一列前面补空格对齐星期。 */
+/** 按列 (一周一列, 周一在最上) 排好的格子级别 0..4; 第一列前面补 HEAT_PAD 对齐星期, 这些格不画。 */
 fun heatLevels(h: GhHeatmap): List<Int> {
     val start = h.days.keys.minOrNull() ?: return emptyList()
     val end = h.days.keys.max()
@@ -75,7 +77,7 @@ fun heatLevels(h: GhHeatmap): List<Int> {
     val counts = (0 until n).map { h.days[start.plusDays(it.toLong())] ?: 0 }
     val max = counts.maxOrNull()?.takeIf { it > 0 } ?: 1
     val pad = start.dayOfWeek.value - DayOfWeek.MONDAY.value
-    return List(pad) { 0 } + counts.map { if (it == 0) 0 else ((it * HEAT_LEVELS + max - 1) / max).coerceIn(1, HEAT_LEVELS) }
+    return List(pad) { HEAT_PAD } + counts.map { if (it == 0) 0 else ((it * HEAT_LEVELS + max - 1) / max).coerceIn(1, HEAT_LEVELS) }
 }
 
 /** 本周 (周一起) 的提交数。 */

@@ -22,7 +22,7 @@ class GithubHeatTest {
         assertEquals(HEAT_DAYS + start.dayOfWeek.value - 1, levels.size)
         assertEquals(4, levels.last())
         assertEquals(1, levels[levels.size - 2])
-        assertTrue(levels.dropLast(2).all { it == 0 })
+        assertTrue(levels.dropLast(2).all { it == 0 || it == HEAT_PAD })
     }
 
     @Test
@@ -38,8 +38,22 @@ class GithubHeatTest {
         assertEquals("正在回填历史提交, 还有 2 个仓库", backfillLine(h))
         assertEquals("历史提交已覆盖到 2018-05-01", backfillLine(h.copy(pending = 0)))
         assertEquals(null, backfillLine(h.copy(pending = 0, oldest = null)))
-        // 2019-01-01 是周二, 前面补一格
-        assertEquals(listOf(0, 2, 4), heatLevels(h))
+        // 2019-01-01 是周二, 前面补一格 (不画)
+        assertEquals(listOf(HEAT_PAD, 2, 4), heatLevels(h))
+    }
+
+    @Test
+    fun 按年_首列只画本年的格_上一年的补位格不画() {
+        // #145: 2026-01-01 是周四, 首列前 3 格 (周一到周三) 是 2025 年, 标成补位不画; 1 月 1 日落在第 4 格
+        val start = LocalDate.parse("2026-01-01")
+        val today = LocalDate.parse("2026-11-28")
+        val n = (today.toEpochDay() - start.toEpochDay() + 1).toInt()
+        val h = GhHeatmap((0 until n).associate { start.plusDays(it.toLong()) to 0 }, 0, listOf(2026))
+        val levels = heatLevels(h)
+        assertEquals(listOf(HEAT_PAD, HEAT_PAD, HEAT_PAD), levels.take(3))
+        assertTrue(levels.drop(3).none { it == HEAT_PAD })
+        assertEquals(n + 3, levels.size)
+        assertEquals(3, todayIndex(h, start))
     }
 
     @Test

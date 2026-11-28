@@ -182,6 +182,8 @@ fun Heatmap(levels: List<Int>, rows: Int, color: Color, modifier: Modifier = Mod
         val cell = minOf((size.width - gap * (cols - 1)) / cols, (size.height - gap * (rows - 1)) / rows)
         val r = CornerRadius(3.dp.toPx())
         levels.forEachIndexed { i, lv ->
+            // 负数是对齐星期的补位格 (如按年看时上一年的几天), 留空不画
+            if (lv < 0) return@forEachIndexed
             val col = i / rows
             val shown = col.toFloat() / cols <= p
             val tint = if (lv <= 0 || !shown) empty else steps[(lv - 1).coerceAtMost(steps.lastIndex)]
