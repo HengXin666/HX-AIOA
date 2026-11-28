@@ -14,10 +14,11 @@ import { Button } from "@hx/ui/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@hx/ui/ui/sheet";
 import { Bot, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { useChats, usePresence } from "../app/hooks";
+import { useChats, usePresence, useUser } from "../app/hooks";
 import { api, fill } from "../core/auth";
 import { chats, titleOf } from "../core/chats";
 import { TXT_LOAD_MORE, TXT_LOADING } from "../core/constants";
+import { GroupActions } from "./chat/GroupActions";
 import { shortTime } from "./ChatList";
 import { UserAvatar } from "./UserAvatar";
 
@@ -59,6 +60,7 @@ function Inspector({ channel }: { channel: string }) {
   useChats();
   const meta = chats.meta(channel);
   const pres = usePresence(channel);
+  const me = useUser();
   if (!meta) return <p className="p-4 text-sm text-muted-foreground">{TXT_LOADING}</p>;
   const room = meta.members !== undefined || meta.kind === "dm";
   const listening = new Set(pres.listening.map((l) => l.id));
@@ -74,11 +76,12 @@ function Inspector({ channel }: { channel: string }) {
           </p>
         </div>
       </div>
-      <Section title="群公告">
+      {!(me?.role === "owner" || meta.role === "owner" || meta.role === "admin") && <Section title="群公告">
         <p className="whitespace-pre-wrap break-words text-sm text-foreground">{meta.notice || <span className="text-muted-foreground">暂无公告</span>}</p>
-      </Section>
+      </Section>}
       <Agents meta={meta} listening={listening} names={pres.listening.map((l) => l.name)} />
       {room && <Members key={channel} channel={channel} />}
+      <GroupActions meta={meta} />
     </div>
   );
 }
